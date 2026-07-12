@@ -1,0 +1,29 @@
+# AI Self-Improving Facebook Agent - Default Configuration
+
+agent:
+  name: "Facebook AI Agent"
+  version: "0.1.0"
+  debug: true
+
+facebook:
+  page_id: ""
+  access_token: ""
+  api_version: "v18.0"
+
+ai:
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+
+content:
+  max_posts_per_day: 5
+  languages: ["en", "ur"]
+  topics: []
+
+memory:
+  storage_path: "memory/"
+  max_memory_size: 1000
+
+logging:
+  level: "INFO"
+  path: "logs/"

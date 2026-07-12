@@ -1,0 +1,10 @@
+# Content Generation Prompts
+
+## Post Generation
+Create a Facebook post about {topic} that is engaging and informative.
+
+## Caption Writing
+Write a caption for this image: {image_description}
+
+## Hashtag Suggestions
+Suggest 5 relevant hashtags for: {content}
