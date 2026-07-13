@@ -147,3 +147,23 @@
 ### Stats
 - Layer 2 Progress: 4/10 modules complete
 - Total Tests: 698 (Layer 1: 360 + Layer 2: 338)
+
+## v0.2.4 — Layer 2 Module 5: Knowledge Collector + Confidence Engine (Complete)
+
+### Added
+- `shared/confidence_engine.py` — Global confidence scoring with evidence, risk levels, aggregation, comparison
+- `knowledge_entry.py` — Knowledge document model with credibility/freshness/relevance scoring
+- `source_registry.py` — Multi-source registration, reliability tracking, health monitoring
+- `content_cleaner.py` — HTML removal, whitespace normalization, language detection, URL/hashtag extraction
+- `deduplicator.py` — Exact hash matching, Jaccard similarity, fuzzy dedup, duplicate statistics
+- `metadata_extractor.py` — Keyword extraction, entity detection, category/sentiment analysis
+- `cache_manager.py` — LRU cache with TTL, hit/miss tracking, automatic eviction
+- `knowledge_collector_manager.py` — Central orchestrator with full pipeline, evidence-based confidence, persistence
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 108 new tests across 11 test classes (including 15 Confidence Engine tests)
+
+### Stats
+- Layer 2 Progress: 5/10 modules complete (50%)
+- Total Tests: 806 (Layer 1: 360 + Layer 2: 446)
