@@ -1,20 +1,25 @@
 # 📋 Changelog
 
+## [v0.1.7] - 2026-07-13
+### Added
+- Module 7: Scheduler / Task Orchestrator (Complete)
+  - `scheduler/scheduler_manager.py` — Core orchestrator with decision-based scheduling
+  - `scheduler/task_queue.py` — Priority queue with dependency management
+  - `scheduler/cron_parser.py` — Full cron expression support
+  - `scheduler/retry_manager.py` — Exponential backoff retry
+  - Tests: 28/28 passed
+
 ## [v0.1.6] - 2026-07-13
 ### Added
-- Module 6: Intelligent Logger (Complete)
-  - `logger/logger_manager.py` — 9 log levels, structured JSON, colored console
-  - `logger/decision_logger.py` — AI Decision tracking with reasoning + confidence
-  - `logger/log_rotation.py` — Auto-rotation, compression, backup cleanup
-  - Tests: 32/32 passed
+- Module 6: Intelligent Logger — 9 levels, Decision Logger, log rotation (32 tests)
 
 ## [v0.1.5] - 2026-07-13
 ### Added
-- Module 5: Memory Manager — 4-level memory (STM, Working, LTM, Episodic) (31 tests)
+- Module 5: Memory Manager — 4-level memory system (31 tests)
 
 ## [v0.1.4] - 2026-07-13
 ### Added
-- Module 4: Database Manager — SQLite, CRUD, migrations (29 tests)
+- Module 4: Database Manager (29 tests)
 
 ## [v0.1.3] - 2026-07-13
 ### Added
