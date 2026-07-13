@@ -1,15 +1,16 @@
 # 📋 Changelog
 
+## [v0.1.4] - 2026-07-13
+### Added
+- Module 4: Database Manager (Complete)
+  - `database_manager.py` — SQLite with WAL, CRUD, transactions, backup/restore
+  - `models.py` — 8 table schemas (config, memory, logs, versions, jobs, posts, analytics, learning)
+  - `migrations.py` — Schema versioning with migration registry
+  - Tests: 29/29 passed
+
 ## [v0.1.3] - 2026-07-13
 ### Added
-- Module 3: Environment Loader (Complete)
-  - `environment_loader.py` — Multi-profile loading, auto-reload, health check, snapshot
-  - `env_profiles.py` — dev/test/prod profile definitions
-  - Unit tests: 26/26 passed
-  - Integration tests: 4/4 passed
-  - Total Layer 1 tests: 77/77 passed
-### Updated
-- CHANGELOG, VERSION (v0.1.3)
+- Module 3: Environment Loader — Multi-profile, auto-reload, health check (26 tests)
 
 ## [v0.1.2] - 2026-07-13
 ### Added
@@ -17,7 +18,7 @@
 
 ## [v0.1.1] - 2026-07-13
 ### Updated
-- Module 1: Immutable settings + config versioning
+- Module 1: Immutable settings + config versioning (24 tests)
 
 ## [v0.1.0] - 2026-07-13
 ### Added
