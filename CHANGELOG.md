@@ -1,4 +1,20 @@
 # 📋 Changelog
+## [v0.1.11] - 2026-07-13
+### Added
+- Layer 1 Integration Test Suite
+  - `test_layer1_integration.py` — 25 tests covering all 10 modules together
+  - Config + Secrets + Settings pipeline
+  - Database + Memory pipeline
+  - Logger cross-module events
+  - Scheduler task execution
+  - File Manager full operations
+  - Backup + File Manager integration
+  - Complete agent cycle simulation
+  - Event system cross-module propagation
+  - Error handling across all modules
+  - Full Layer 1 suite: 360/360 passed
+  - **LAYER 1: 100% COMPLETE** 🎉
+
 ## [v0.1.10] - 2026-07-13
 ### Added
 - Module 10: Backup & Recovery (Complete)
