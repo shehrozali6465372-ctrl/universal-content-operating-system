@@ -5,9 +5,7 @@ Layer 2: Research Engine — Module 3
 Run: python -m pytest layers/layer02_research/tests/test_competitor_analysis.py -v
 """
 
-import json
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from layers.layer02_research.modules.competitor_analysis.competitor_profile import CompetitorProfile
 from layers.layer02_research.modules.competitor_analysis.content_analyzer import ContentAnalyzer, ContentPost
@@ -18,7 +16,7 @@ from layers.layer02_research.modules.competitor_analysis.gap_detector import Gap
 from layers.layer02_research.modules.competitor_analysis.opportunity_finder import OpportunityFinder, Opportunity
 from layers.layer02_research.modules.competitor_analysis.competitor_intel_manager import CompetitorIntelManager
 from layers.layer02_research.modules.competitor_analysis.exceptions import (
-    CompetitorNotFoundError, DuplicateCompetitorError, AnalysisError,
+    CompetitorNotFoundError, DuplicateCompetitorError,
 )
 
 

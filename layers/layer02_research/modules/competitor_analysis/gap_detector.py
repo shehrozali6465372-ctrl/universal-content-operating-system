@@ -11,7 +11,7 @@ Detects content gaps and weaknesses across competitors:
 - Quality gaps (low effort content)
 """
 
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 from layers.layer02_research.modules.competitor_analysis.competitor_profile import CompetitorProfile
 
 

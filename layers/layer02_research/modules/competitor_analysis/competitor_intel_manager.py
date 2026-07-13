@@ -28,7 +28,6 @@ from layers.layer02_research.modules.competitor_analysis.opportunity_finder impo
 from layers.layer02_research.modules.competitor_analysis.exceptions import (
     CompetitorNotFoundError,
     DuplicateCompetitorError,
-    AnalysisError,
 )
 
 

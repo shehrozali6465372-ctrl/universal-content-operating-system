@@ -10,8 +10,8 @@ Analyzes when and how often competitors post:
 - Consistency scoring
 """
 
-from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from collections import Counter
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from layers.layer02_research.modules.competitor_analysis.content_analyzer import ContentPost
 

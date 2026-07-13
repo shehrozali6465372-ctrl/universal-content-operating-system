@@ -15,7 +15,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from layers.layer02_research.modules.topic_intelligence.topic_entry import TopicEntry
 from layers.layer02_research.modules.topic_intelligence.topic_scorer import TopicScorer
@@ -23,7 +23,6 @@ from layers.layer02_research.modules.topic_intelligence.topic_categorizer import
 from layers.layer02_research.modules.topic_intelligence.exceptions import (
     TopicNotFoundError,
     DuplicateTopicError,
-    TopicIntelError,
 )
 
 

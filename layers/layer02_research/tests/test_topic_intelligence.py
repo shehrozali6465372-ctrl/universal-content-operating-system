@@ -5,7 +5,6 @@ Layer 2: Research Engine — Module 2
 Run: python -m pytest layers/layer02_research/tests/test_topic_intelligence.py -v
 """
 
-import json
 import pytest
 from datetime import datetime, timezone, timedelta
 
@@ -14,7 +13,7 @@ from layers.layer02_research.modules.topic_intelligence.topic_scorer import Topi
 from layers.layer02_research.modules.topic_intelligence.topic_categorizer import TopicCategorizer
 from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
 from layers.layer02_research.modules.topic_intelligence.exceptions import (
-    TopicNotFoundError, DuplicateTopicError, InvalidScoringError,
+    TopicNotFoundError, DuplicateTopicError,
 )
 
 

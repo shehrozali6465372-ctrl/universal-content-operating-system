@@ -10,7 +10,7 @@ Intelligent topic categorization and clustering:
 """
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Set
+from typing import Dict, List
 from layers.layer02_research.modules.topic_intelligence.topic_entry import TopicEntry
 
 

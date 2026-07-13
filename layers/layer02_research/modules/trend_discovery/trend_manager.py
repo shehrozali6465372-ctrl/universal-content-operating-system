@@ -14,12 +14,12 @@ Core trend discovery engine:
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 from threading import Lock
 
 from layers.layer02_research.modules.trend_discovery.trend_entry import TrendEntry
 from layers.layer02_research.modules.trend_discovery.exceptions import (
-    TrendSourceError, TrendNotFoundError, InvalidSourceError,
+    TrendSourceError, TrendNotFoundError,
 )
 
 

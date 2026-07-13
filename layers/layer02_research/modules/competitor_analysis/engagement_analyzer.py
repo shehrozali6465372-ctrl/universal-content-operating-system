@@ -12,7 +12,7 @@ Deep engagement analysis for competitor content:
 """
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from layers.layer02_research.modules.competitor_analysis.content_analyzer import ContentPost
 
 

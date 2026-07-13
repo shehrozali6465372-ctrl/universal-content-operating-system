@@ -5,14 +5,12 @@ Layer 2: Research Engine — Module 1
 Run: python -m pytest layers/layer02_research/tests/test_trend_discovery.py -v
 """
 
-import json
 import pytest
-from datetime import datetime, timezone, timedelta
 
-from layers.layer02_research.modules.trend_discovery.trend_manager import TrendManager, TrendSource
+from layers.layer02_research.modules.trend_discovery.trend_manager import TrendManager
 from layers.layer02_research.modules.trend_discovery.trend_entry import TrendEntry
 from layers.layer02_research.modules.trend_discovery.exceptions import (
-    TrendSourceError, TrendNotFoundError, InvalidSourceError,
+    TrendNotFoundError,
 )
 
 
