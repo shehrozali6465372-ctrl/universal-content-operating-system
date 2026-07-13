@@ -1,4 +1,14 @@
 # 📋 Changelog
+## [v0.1.10] - 2026-07-13
+### Added
+- Module 10: Backup & Recovery (Complete)
+  - `backup_manager/backup_manager.py` — Multi-source backup, compression, rotation, integrity, disaster recovery
+  - `backup_manager/backup_entry.py` — Backup metadata model
+  - `backup_manager/exceptions.py` — Custom exceptions
+  - Tests: 35/35 passed
+  - Full Layer 1 suite: 335/335 passed
+  - **Layer 1: CORE SYSTEM COMPLETE** 🎉
+
 ## [v0.1.9] - 2026-07-13
 ### Added
 - Module 9: Settings Manager (Complete)
