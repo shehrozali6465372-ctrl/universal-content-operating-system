@@ -1,20 +1,24 @@
 # 📋 Changelog
 
+## [v0.1.5] - 2026-07-13
+### Added
+- Module 5: Memory Manager (Complete)
+  - `memory_manager.py` — 4-level memory system (STM, Working, LTM, Episodic)
+  - `memory_store.py` — Memory level definitions and configs
+  - `memory_search.py` — Search engine (keyword-based, swappable for vector DB)
+  - Tests: 31/31 passed
+
 ## [v0.1.4] - 2026-07-13
 ### Added
-- Module 4: Database Manager (Complete)
-  - `database_manager.py` — SQLite with WAL, CRUD, transactions, backup/restore
-  - `models.py` — 8 table schemas (config, memory, logs, versions, jobs, posts, analytics, learning)
-  - `migrations.py` — Schema versioning with migration registry
-  - Tests: 29/29 passed
+- Module 4: Database Manager — SQLite, CRUD, migrations, backup/restore (29 tests)
 
 ## [v0.1.3] - 2026-07-13
 ### Added
-- Module 3: Environment Loader — Multi-profile, auto-reload, health check (26 tests)
+- Module 3: Environment Loader — Multi-profile, auto-reload (26 tests)
 
 ## [v0.1.2] - 2026-07-13
 ### Added
-- Module 2: Secrets Manager — Fernet encryption, audit, health check (23 tests)
+- Module 2: Secrets Manager — Fernet encryption, audit (23 tests)
 
 ## [v0.1.1] - 2026-07-13
 ### Updated
