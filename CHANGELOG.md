@@ -167,3 +167,22 @@
 ### Stats
 - Layer 2 Progress: 5/10 modules complete (50%)
 - Total Tests: 806 (Layer 1: 360 + Layer 2: 446)
+
+## v0.2.5 — Layer 2 Module 6: Fact Verification (Complete)
+
+### Added
+- `claim_extractor.py` — Extracts statistical, trend, causal, comparative claims from text
+- `evidence_matcher.py` — Jaccard similarity + keyword overlap matching with support/contradiction detection
+- `source_validator.py` — Source credibility scoring, cross-corroboration, authority level assessment
+- `contradiction_detector.py` — Negation, numerical, direction contradiction detection with severity scoring
+- `citation_builder.py` — Multi-format citation building (APA, MLA, inline, plain) with deduplication
+- `verification_engine.py` — Full verification pipeline: extract → match → validate → detect → cite → confidence
+- `verification_manager.py` — Central orchestrator with statistics, persistence, health check
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 64 new tests across 7 test classes
+
+### Stats
+- Layer 2 Progress: 6/10 modules complete (60%)
+- Total Tests: 870 (Layer 1: 360 + Layer 2: 510)
