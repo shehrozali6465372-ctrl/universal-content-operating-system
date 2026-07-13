@@ -5,12 +5,11 @@ Layer 1: Core System — Module 4
 Run: python -m pytest layers/layer01_core/tests/test_database_manager.py -v
 """
 
-import os
 import pytest
 import sqlite3
 from layers.layer01_core.modules.database_manager import DatabaseManager
-from layers.layer01_core.modules.models import get_all_table_names, get_table
-from layers.layer01_core.modules.migrations import MigrationManager, MigrationRegistry
+from layers.layer01_core.modules.models import get_all_table_names
+from layers.layer01_core.modules.migrations import MigrationRegistry
 
 
 @pytest.fixture
@@ -191,7 +190,6 @@ class TestBackupRestore:
     def test_backup_contains_data(self, db):
         db.insert("agent_config", {"key": "bk2", "value": "data"})
         backup = db.backup("backups/bk2.db")
-        import sqlite3
         conn = sqlite3.connect(str(backup))
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM agent_config").fetchall()

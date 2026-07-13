@@ -11,7 +11,7 @@ import pytest
 import json
 from layers.layer01_core.modules.environment_loader import EnvironmentLoader
 from layers.layer01_core.modules.env_profiles import (
-    get_profile, get_available_profiles, DEV_PROFILE, TEST_PROFILE, PROD_PROFILE,
+    get_profile, get_available_profiles,
 )
 from layers.layer01_core.modules.exceptions import InvalidConfig
 

@@ -10,7 +10,7 @@ import pytest
 from layers.layer01_core.modules.backup_manager.backup_manager import BackupManager
 from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
 from layers.layer01_core.modules.backup_manager.exceptions import (
-    BackupNotFoundError, BackupIntegrityError, RestoreError,
+    BackupNotFoundError, BackupIntegrityError,
 )
 
 

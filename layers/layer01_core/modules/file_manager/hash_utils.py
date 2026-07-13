@@ -7,7 +7,6 @@ SHA-256 hash calculation and verification for file integrity.
 
 import hashlib
 from pathlib import Path
-from typing import Optional
 
 
 def calculate_hash(filepath: str) -> str:

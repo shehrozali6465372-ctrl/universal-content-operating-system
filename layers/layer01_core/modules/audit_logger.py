@@ -13,7 +13,6 @@ Usage:
     audit.log("FACEBOOK_TOKEN", "ACCESSED", "DENIED")
 """
 
-import os
 import json
 from datetime import datetime, timezone
 from pathlib import Path

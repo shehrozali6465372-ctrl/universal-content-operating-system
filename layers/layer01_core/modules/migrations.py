@@ -7,8 +7,7 @@ Ensures old data is never lost when schema changes.
 """
 
 import sqlite3
-from typing import List, Dict, Callable
-from datetime import datetime, timezone
+from typing import List, Dict
 
 
 class MigrationRegistry:

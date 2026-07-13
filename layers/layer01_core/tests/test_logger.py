@@ -5,13 +5,11 @@ Layer 1: Core System — Module 6
 Run: python -m pytest layers/layer01_core/tests/test_logger.py -v
 """
 
-import os
 import json
 import pytest
 from layers.layer01_core.modules.logger.logger_manager import LoggerManager, LogLevel, LOG_LEVEL_PRIORITY
 from layers.layer01_core.modules.logger.log_rotation import LogRotation
 from layers.layer01_core.modules.logger.decision_logger import DecisionLogger
-from layers.layer01_core.modules.logger.log_rotation import LogRotation
 
 
 @pytest.fixture(autouse=True)

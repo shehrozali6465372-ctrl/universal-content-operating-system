@@ -5,7 +5,6 @@ Layer 1: Core System — Module 6
 Central logger with 9 levels, structured JSON output, colored console.
 """
 
-import os
 import json
 import sys
 from pathlib import Path

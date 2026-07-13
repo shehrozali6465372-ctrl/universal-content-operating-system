@@ -15,7 +15,7 @@ import time
 import traceback
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone
-from threading import Thread, Event
+from threading import Event
 
 from layers.layer01_core.modules.scheduler.task_queue import (
     Task, TaskQueue, TaskPriority, TaskStatus,

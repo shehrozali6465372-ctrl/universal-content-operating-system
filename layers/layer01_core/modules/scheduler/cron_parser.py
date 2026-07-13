@@ -6,7 +6,6 @@ Parses cron expressions into run times.
 Supports: minute hour day month weekday
 """
 
-import re
 from typing import Optional, List
 from datetime import datetime, timedelta
 

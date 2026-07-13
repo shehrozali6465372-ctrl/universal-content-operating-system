@@ -8,7 +8,6 @@ Run: python -m pytest layers/layer01_core/tests/test_memory_manager.py -v
 import pytest
 from layers.layer01_core.modules.memory_manager import MemoryManager
 from layers.layer01_core.modules.memory_store import MemoryLevel, get_level_config, get_persistent_levels
-from layers.layer01_core.modules.memory_search import SearchQuery, SearchResult
 
 
 @pytest.fixture

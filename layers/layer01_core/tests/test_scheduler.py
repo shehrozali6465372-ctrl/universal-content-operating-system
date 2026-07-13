@@ -5,7 +5,6 @@ Layer 1: Core System — Module 7
 Run: python -m pytest layers/layer01_core/tests/test_scheduler.py -v
 """
 
-import time
 import pytest
 from datetime import datetime
 from layers.layer01_core.modules.scheduler.cron_parser import CronParser

@@ -5,7 +5,6 @@ Layer 1: Core System — Module 6
 Handles log file rotation, compression, and cleanup.
 """
 
-import os
 import gzip
 import shutil
 from pathlib import Path

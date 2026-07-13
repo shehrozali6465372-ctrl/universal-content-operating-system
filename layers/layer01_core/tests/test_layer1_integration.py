@@ -6,7 +6,6 @@ Run: python -m pytest layers/layer01_core/tests/test_layer1_integration.py -v
 """
 
 import json
-import os
 import pytest
 from pathlib import Path
 

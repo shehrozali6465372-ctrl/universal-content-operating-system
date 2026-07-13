@@ -19,8 +19,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 
 from layers.layer01_core.modules.memory_store import (
-    MemoryLevel, MemoryLevelConfig, MEMORY_LEVELS,
-    get_level_config, get_persistent_levels,
+    MemoryLevel, get_level_config, get_persistent_levels,
 )
 from layers.layer01_core.modules.memory_search import (
     MemorySearchEngine, SearchQuery, SearchResult,

@@ -16,14 +16,14 @@ import json
 import gzip
 import shutil
 import hashlib
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
 from threading import Lock
 
 from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
 from layers.layer01_core.modules.backup_manager.exceptions import (
-    BackupNotFoundError, BackupIntegrityError, RestoreError,
+    BackupNotFoundError, BackupIntegrityError,
 )
 
 

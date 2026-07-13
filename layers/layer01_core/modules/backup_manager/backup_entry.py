@@ -6,7 +6,6 @@ Metadata model for each backup.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
 
 
 class BackupEntry:

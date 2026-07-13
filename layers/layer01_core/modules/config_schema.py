@@ -6,7 +6,7 @@ Defines required and optional configuration keys
 with their types, defaults, and validation rules.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 

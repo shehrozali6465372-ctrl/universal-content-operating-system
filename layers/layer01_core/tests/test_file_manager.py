@@ -5,10 +5,9 @@ Layer 1: Core System — Module 8
 Run: python -m pytest layers/layer01_core/tests/test_file_manager.py -v
 """
 
-import json
 import pytest
 from layers.layer01_core.modules.file_manager.file_manager import FileManager
-from layers.layer01_core.modules.file_manager.hash_utils import calculate_hash, calculate_string_hash, save_hash, verify_hash
+from layers.layer01_core.modules.file_manager.hash_utils import calculate_string_hash
 from layers.layer01_core.modules.file_manager.file_cache import FileCache
 
 

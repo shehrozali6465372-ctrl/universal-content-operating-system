@@ -3,7 +3,6 @@ Database Manager Module
 Layer 1: Core System — Module 4
 """
 
-import os
 import sqlite3
 import shutil
 from pathlib import Path
@@ -11,7 +10,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from contextlib import contextmanager
 
-from layers.layer01_core.modules.models import ALL_TABLES, get_all_table_names
+from layers.layer01_core.modules.models import get_all_table_names
 from layers.layer01_core.modules.migrations import MigrationManager
 
 

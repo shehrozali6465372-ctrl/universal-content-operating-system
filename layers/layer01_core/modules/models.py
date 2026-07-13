@@ -6,8 +6,8 @@ Defines all table schemas for SQLite.
 Each table has a CREATE statement and column definitions.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict
+from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
