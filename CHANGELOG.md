@@ -91,3 +91,20 @@
 ## [v0.1.0] - 2026-07-13
 ### Added
 - Initial project structure, 10-layer architecture
+
+## v0.2.1 — Layer 2 Module 2: Topic Intelligence (Complete)
+
+### Added
+- `topic_entry.py` — Topic data model with multi-dimensional scoring (engagement, audience fit, competition, opportunity, composite)
+- `topic_scorer.py` — Niche-specific scoring engine with weight customization, batch scoring, ranking, filtering, hashtag suggestion
+- `topic_categorizer.py` — Auto-categorization by keyword matching, topic clustering, related topic discovery, niche stats
+- `topic_intel_manager.py` — Central manager with CRUD, intelligence APIs, persistent storage, health check
+- `exceptions.py` — Custom exceptions (TopicNotFoundError, DuplicateTopicError, InvalidScoringError, ClusterError)
+
+### Tests
+- 92 new tests covering all Topic Intelligence functionality
+- Thread safety test included
+
+### Stats
+- Layer 2 Progress: 2/10 modules complete
+- Total Tests: 495 (Layer 1: 360 + Layer 2: 135)
