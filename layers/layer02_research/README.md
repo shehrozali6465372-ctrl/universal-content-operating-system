@@ -1,12 +1,12 @@
 # Research & Scraping
 
 **Layer:** Layer 02 — Research Engine
-**Status:** 🔄 In Progress (6/10 modules)
-**Version:** v0.2.5
+**Status:** 🔄 In Progress (7/10 modules)
+**Version:** v0.2.6
 
 ## Description
 
-Facebook topic research, trend discovery, competitor analysis, audience intelligence, knowledge collection, and fact verification engine.
+Facebook topic research, trend discovery, competitor analysis, audience intelligence, knowledge collection, fact verification, and research memory engine.
 
 ## Modules
 
@@ -17,8 +17,8 @@ Facebook topic research, trend discovery, competitor analysis, audience intellig
 | 3 | Competitor Analysis | Competitor profiling, engagement analysis, gap detection | ✅ Complete (109 tests) |
 | 4 | Audience Research | Audience profiling, interest mapping, behavior analysis | ✅ Complete (94 tests) |
 | 5 | Knowledge Collector | Multi-source collection, cleaning, dedup, caching, evidence confidence | ✅ Complete (108 tests) |
-| 6 | Fact Verification | Claim extraction, evidence matching, contradiction detection, citation building | ✅ Complete (64 tests) |
-| 7 | Research Memory | Research history and pattern recall | 🔜 Pending |
+| 6 | Fact Verification | Claim extraction, evidence matching, contradiction detection | ✅ Complete (64 tests) |
+| 7 | Research Memory | Research indexing, semantic search, knowledge graph, evidence store, decision traces | ✅ Complete (89 tests) |
 | 8 | Topic Scoring Engine | Advanced multi-factor topic ranking | 🔜 Pending |
 | 9 | Research Planner | Automated research scheduling | 🔜 Pending |
 | 10 | Research Orchestrator | End-to-end research pipeline | 🔜 Pending |

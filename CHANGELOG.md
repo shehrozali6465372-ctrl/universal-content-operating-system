@@ -186,3 +186,23 @@
 ### Stats
 - Layer 2 Progress: 6/10 modules complete (60%)
 - Total Tests: 870 (Layer 1: 360 + Layer 2: 510)
+
+## v0.2.6 — Layer 2 Module 7: Research Memory + Decision Trace Engine (Complete)
+
+### Added
+- `research_index.py` — Full-text indexing with category/tag/source/keyword facets
+- `semantic_search.py` — TF-IDF semantic search with query expansion
+- `knowledge_graph.py` — Entity-relationship graph with BFS path finding
+- `evidence_store.py` — Evidence CRUD with topic aggregation and confidence scoring
+- `citation_index.py` — Citation tracking with source/claim mapping
+- `memory_ranker.py` — Configurable weighted ranking across multiple factors
+- `decision_trace.py` — **Decision Trace Engine** — records full decision traces with module scores, outcomes, patterns
+- `research_memory_manager.py` — Central orchestrator integrating all sub-components
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 89 new tests across 8 test classes
+
+### Stats
+- Layer 2 Progress: 7/10 modules complete (70%)
+- Total Tests: 959 (Layer 1: 360 + Layer 2: 599)
