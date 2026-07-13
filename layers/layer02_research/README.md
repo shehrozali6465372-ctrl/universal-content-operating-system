@@ -1,8 +1,8 @@
 # Research & Scraping
 
 **Layer:** Layer 02 — Research Engine
-**Status:** 🔄 In Progress (2/10 modules)
-**Version:** v0.2.1
+**Status:** 🔄 In Progress (3/10 modules)
+**Version:** v0.2.2
 
 ## Description
 
@@ -14,7 +14,7 @@ Facebook topic research, trend discovery, competitor analysis, audience intellig
 |---|--------|-------------|--------|
 | 1 | Trend Discovery | Multi-source trend aggregation, scoring, filtering | ✅ Complete (43 tests) |
 | 2 | Topic Intelligence | Topic scoring, categorization, clustering, opportunities | ✅ Complete (92 tests) |
-| 3 | Competitor Analysis | Competitor tracking, content gap analysis | 🔜 Pending |
+| 3 | Competitor Analysis | Competitor profiling, engagement analysis, gap detection, opportunity finding | ✅ Complete (109 tests) |
 | 4 | Audience Research | Audience profiling, interest mapping | 🔜 Pending |
 | 5 | Knowledge Collector | Knowledge base building from research | 🔜 Pending |
 | 6 | Research Memory | Research history and pattern recall | 🔜 Pending |
@@ -26,18 +26,29 @@ Facebook topic research, trend discovery, competitor analysis, audience intellig
 ## Usage
 
 ```python
-from layers.layer02_research.modules.trend_discovery.trend_manager import TrendManager
-from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
+from layers.layer02_research.modules.competitor_analysis.competitor_intel_manager import CompetitorIntelManager
+from layers.layer02_research.modules.competitor_analysis.content_analyzer import ContentPost
 
-# Trend Discovery
-tm = TrendManager()
-tm.register_source("my_source", fetch_fn=my_fetch)
-tm.discover()
+# Initialize
+manager = CompetitorIntelManager()
 
-# Topic Intelligence
-tim = TopicIntelManager()
-topic = tim.add_topic("AI in Finance", niche="ai", engagement_score=8.0)
-top = tim.get_top_topics(count=5)
+# Add competitor
+comp = manager.add_competitor("Finance Hub", niche="finance", followers=50000)
+
+# Add posts for analysis
+posts = [ContentPost(topic="finance", text="...", likes=100)]
+manager.add_posts(comp.competitor_id, posts)
+
+# Run full analysis
+result = manager.run_full_analysis(comp.competitor_id)
+
+# Detect gaps and opportunities
+gaps = manager.detect_gaps(known_topics=["ai", "python"])
+opps = manager.find_opportunities()
+
+# Compare competitors
+comparison = manager.compare_two(comp_a, comp_b)
+leaderboard = manager.get_leaderboard()
 ```
 
 ## Tests

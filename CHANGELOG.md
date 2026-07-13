@@ -108,3 +108,24 @@
 ### Stats
 - Layer 2 Progress: 2/10 modules complete
 - Total Tests: 495 (Layer 1: 360 + Layer 2: 135)
+
+## v0.2.2 — Layer 2 Module 3: Competitor Analysis (Complete)
+
+### Added
+- `competitor_profile.py` — Rich competitor data model (follower tiers, opportunity scoring, engagement totals)
+- `content_analyzer.py` — ContentPost model + topic/format/hashtag/media/sentiment/theme analysis
+- `posting_pattern_analyzer.py` — Posting frequency, best times, consistency, dead zones, gap windows, exploitable hours
+- `engagement_analyzer.py` — Engagement rates, viral detection, trend analysis, weakness/strength identification
+- `writing_style_analyzer.py` — Tone/voice/formality detection, readability scoring, CTA patterns, differentiation engine
+- `gap_detector.py` — Topic/format/audience/depth gap detection across competitors
+- `opportunity_finder.py` — Weakness exploitation, format innovation, audience expansion, timing opportunities
+- `competitor_intel_manager.py` — Central orchestrator with full analysis pipeline, comparison, leaderboard, persistence
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 109 new tests across 11 test classes
+- Thread safety included
+
+### Stats
+- Layer 2 Progress: 3/10 modules complete
+- Total Tests: 604 (Layer 1: 360 + Layer 2: 244)
