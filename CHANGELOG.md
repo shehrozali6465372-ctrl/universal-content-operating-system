@@ -1,4 +1,14 @@
 # 📋 Changelog
+## [v0.1.9] - 2026-07-13
+### Added
+- Module 9: Settings Manager (Complete)
+  - `settings_manager/settings_manager.py` — Priority overrides, feature flags, rollback, persistence
+  - `settings_manager/setting_schema.py` — Metadata-rich setting entries with versioning
+  - `settings_manager/event_system.py` — Pub/sub event bus for change notifications
+  - `settings_manager/exceptions.py` — Custom exceptions
+  - Tests: 67/67 passed
+  - Full Layer 1 suite: 300/300 passed
+
 
 ## [v0.1.8] - 2026-07-13
 ### Added
