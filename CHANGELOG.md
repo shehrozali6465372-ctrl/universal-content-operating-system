@@ -206,3 +206,23 @@
 ### Stats
 - Layer 2 Progress: 7/10 modules complete (70%)
 - Total Tests: 959 (Layer 1: 360 + Layer 2: 599)
+
+## v0.2.7 — Layer 2 Module 8: Topic Scoring Engine (Complete)
+
+### Added
+- `scoring_rules.py` — Configurable scoring rules with condition evaluation and bonus/penalty system
+- `weight_manager.py` — Niche-specific weight management with 14 niches, interpolation, normalization
+- `score_normalizer.py` — Min-max, percentile, weighted average, geometric/harmonic mean normalization
+- `opportunity_scorer.py` — Market/content-gap/timing/audience-gap opportunity scoring
+- `risk_scorer.py` — Competition/trend/knowledge/audience risk assessment with mitigations
+- `confidence_fusion.py` — Bayesian-style multi-module confidence fusion with evidence boost
+- `scoring_engine.py` — Core engine combining all components with recommendation generation
+- `scoring_manager.py` — Central manager with batch scoring, comparison, statistics, persistence
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 62 new tests across 8 test classes
+
+### Stats
+- Layer 2 Progress: 8/10 modules complete (80%)
+- Total Tests: 1021 (Layer 1: 360 + Layer 2: 661)
