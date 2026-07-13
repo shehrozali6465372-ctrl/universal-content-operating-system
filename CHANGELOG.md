@@ -1,5 +1,15 @@
 # 📋 Changelog
 
+## [v0.1.8] - 2026-07-13
+### Added
+- Module 8: File Manager (Complete)
+  - `file_manager/file_manager.py` — Atomic write, backup, compression, file locking, import/export
+  - `file_manager/file_cache.py` — LRU cache with hit/miss stats
+  - `file_manager/hash_utils.py` — SHA-256 hash calculation and verification
+  - Tests: 36/36 passed
+  - Full Layer 1 suite: 233/233 passed
+
+
 ## [v0.1.7] - 2026-07-13
 ### Added
 - Module 7: Scheduler / Task Orchestrator (Complete)
