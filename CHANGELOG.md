@@ -1,4 +1,13 @@
 # 📋 Changelog
+## [v0.2.0] - 2026-07-13
+### Added
+- **Layer 2: Research Engine — Module 1: Trend Discovery** (Complete)
+  - `trend_discovery/trend_manager.py` — Multi-source aggregation, scoring, filtering, persistence
+  - `trend_discovery/trend_entry.py` — Trend metadata model with composite scoring
+  - `trend_discovery/exceptions.py` — Custom exceptions
+  - Tests: 43/43 passed
+  - **Layer 2 Started** 🚀
+
 ## [v0.1.11] - 2026-07-13
 ### Added
 - Layer 1 Integration Test Suite
