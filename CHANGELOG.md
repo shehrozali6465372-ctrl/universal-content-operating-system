@@ -129,3 +129,21 @@
 ### Stats
 - Layer 2 Progress: 3/10 modules complete
 - Total Tests: 604 (Layer 1: 360 + Layer 2: 244)
+
+## v0.2.3 — Layer 2 Module 4: Audience Research (Complete)
+
+### Added
+- `audience_profile.py` — Audience segment model (demographics, interests, behaviors, personas, buying stages)
+- `interest_mapper.py` — Interest clustering, hierarchy, overlap detection, content-fit scoring
+- `behavior_analyzer.py` — Online patterns, peak hours/days, sharing rates, consistency scoring
+- `demographic_analyzer.py` — Age/gender/location/language/device analysis, segment detection
+- `engagement_predictor.py` — Content engagement prediction, A/B test recommendations, multi-factor scoring
+- `audience_intel_manager.py` — Central orchestrator with full analysis pipeline, content recommendations
+- `exceptions.py` — Custom exceptions
+
+### Tests
+- 94 new tests across 9 test classes
+
+### Stats
+- Layer 2 Progress: 4/10 modules complete
+- Total Tests: 698 (Layer 1: 360 + Layer 2: 338)
