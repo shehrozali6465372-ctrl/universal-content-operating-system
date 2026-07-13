@@ -2,15 +2,11 @@
 Config Manager Module
 Layer 1: Core System
 
-Central configuration manager that loads from .env + YAML,
-validates against schema, and provides global access.
-
-Usage:
-    from layers.layer01_core.modules.config_manager import ConfigManager
-
-    config = ConfigManager()
-    config.load()
-    print(config.get("OPENAI_API_KEY"))
+Central configuration manager with:
+- Multi-source loading (.env + YAML + env vars)
+- Immutable settings protection
+- Config versioning for migration support
+- Schema validation
 """
 
 import os
@@ -23,18 +19,19 @@ from threading import Lock
 from layers.layer01_core.modules.config_schema import (
     get_all_fields,
     get_defaults,
-    get_required_keys,
 )
+from layers.layer01_core.modules.immutable_settings import IMMUTABLE_KEYS
 from layers.layer01_core.modules.validators import validate_config_value
 from layers.layer01_core.modules.exceptions import (
-    ConfigNotFound,
-    MissingAPIKey,
+    InvalidConfig,
     SchemaError,
 )
 
+CONFIG_VERSION = 1
+
 
 class ConfigManager:
-    """Singleton config manager with validation and multi-source loading."""
+    """Singleton config manager with immutable protection and versioning."""
 
     _instance = None
     _lock = Lock()
@@ -46,19 +43,17 @@ class ConfigManager:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: Optional[str] = None, admin_mode: bool = False):
         if hasattr(self, "_initialized") and self._initialized:
             return
         self._initialized = True
-
         self._project_root = (
             Path(project_root) if project_root
             else Path(__file__).resolve().parents[3]
         )
         self._config: Dict[str, Any] = {}
+        self._admin_mode = admin_mode
         self._loaded = False
-
-    # ── Properties ──────────────────────────
 
     @property
     def project_root(self) -> Path:
@@ -68,26 +63,26 @@ class ConfigManager:
     def is_loaded(self) -> bool:
         return self._loaded
 
+    @property
+    def config_version(self) -> int:
+        return self._config.get("CONFIG_VERSION", CONFIG_VERSION)
+
     # ── Loading ─────────────────────────────
 
     def load(self, env_file: str = ".env", yaml_file: str = "config/default.yaml") -> "ConfigManager":
-        """Load config from YAML + .env + environment variables."""
         self._config.clear()
-
-        # 1) Load YAML defaults
         self._load_yaml(self._project_root / yaml_file)
-
-        # 2) Load .env file
         self._load_env(self._project_root / env_file)
 
-        # 3) Apply schema defaults for missing optional keys
         defaults = get_defaults()
         for key, value in defaults.items():
             if key not in self._config:
                 self._config[key] = value
 
-        # 4) Apply environment overrides (AGENT_ prefix)
         self._apply_env_overrides()
+
+        # Always set config version
+        self._config["CONFIG_VERSION"] = CONFIG_VERSION
 
         self._loaded = True
         return self
@@ -134,6 +129,14 @@ class ConfigManager:
         return self._config.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        """Set config value. Blocked for immutable keys unless admin_mode."""
+        if key in IMMUTABLE_KEYS:
+            if not self._admin_mode:
+                raise InvalidConfig(
+                    key,
+                    f"'{key}' is immutable and cannot be changed at runtime. "
+                    f"Use admin_mode=True to override."
+                )
         self._config[key] = value
 
     def has(self, key: str) -> bool:
@@ -142,36 +145,29 @@ class ConfigManager:
     def all(self) -> Dict[str, Any]:
         return dict(self._config)
 
+    def get_immutable_keys(self) -> List[str]:
+        return list(IMMUTABLE_KEYS)
+
     # ── Validation ──────────────────────────
 
     def validate(self) -> List[str]:
-        """Validate all fields against schema. Returns list of errors."""
         errors = []
         fields = get_all_fields()
-
         for field_def in fields:
             value = self._config.get(field_def.key)
-
-            # Check required
             if field_def.required and (value is None or value == ""):
                 errors.append(f"Missing required key: {field_def.key}")
                 continue
-
-            # Skip validation if optional and not set
             if value is None:
                 continue
-
-            # Run validator
             if field_def.validator:
                 try:
                     validate_config_value(field_def.key, value, field_def.validator)
                 except Exception as e:
                     errors.append(str(e))
-
         return errors
 
     def validate_strict(self) -> None:
-        """Validate and raise SchemaError if any errors."""
         errors = self.validate()
         if errors:
             raise SchemaError(errors)
@@ -179,7 +175,6 @@ class ConfigManager:
     # ── Save ────────────────────────────────
 
     def save(self, filepath: str = "config/agent_config.json") -> None:
-        """Save current config to JSON file."""
         save_path = self._project_root / filepath
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "w") as f:

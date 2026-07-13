@@ -1,8 +1,14 @@
 # 📋 Changelog
 
-All notable changes to this project will be documented in this file.
+---
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+## [v0.1.1] - 2026-07-13
+
+### Updated
+- Module 1 (Config Manager) — Added immutable settings + config versioning
+- `immutable_settings.py` — New file: defines read-only keys
+- `config_manager.py` — set() blocks immutable keys, admin_mode override, CONFIG_VERSION
+- Tests expanded: 15 → 24 (all passed)
 
 ---
 
@@ -11,56 +17,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - Initial project structure with 10-layer architecture
 - Layer folders: layer01_core through layer10_monetization
-- Configuration files (`config/default.yaml`)
-- Basic entry point (`main.py`)
-- Documentation structure (`docs/`)
-- Test framework (`tests/`)
-- Prompt templates (`prompts/`)
-- Memory storage (`memory/state.json`)
-- Requirements (`requirements.txt`)
-- README with full architecture overview
-- ROADMAP with 10 phases
-- CHANGELOG for tracking versions
-- VERSION file for current version tracking
+- ROADMAP.md, CHANGELOG.md, VERSION
+- Module 1: Config Manager (4 files + tests)
+- Configuration schema with 3 required + 10 optional fields
+- Custom validators and exceptions
 
 ---
 
-## [v0.2.0] - Upcoming
-### Planned
-- Layer 1 (Core System) - 10 Modules
+## Upcoming
 
-## [v0.3.0] - Upcoming
-### Planned
-- Layer 2 (Research & Scraping) - Modules
-
-## [v0.4.0] - Upcoming
-### Planned
-- Layer 3 (AI Intelligence) - Modules
-
-## [v0.5.0] - Upcoming
-### Planned
-- Layer 4 (Content Writing) - Modules
-
-## [v0.6.0] - Upcoming
-### Planned
-- Layer 5 (Image & Visual) - Modules
-
-## [v0.7.0] - Upcoming
-### Planned
-- Layer 6 (Quality Check) - Modules
-
-## [v0.8.0] - Upcoming
-### Planned
-- Layer 7 (Facebook Publishing) - Modules
-
-## [v0.9.0] - Upcoming
-### Planned
-- Layer 8 (Analytics & Tracking) - Modules
-
-## [v0.9.5] - Upcoming
-### Planned
-- Layer 9 (Self-Learning) - Modules
-
-## [v1.0.0] - Upcoming
-### Planned
-- Layer 10 (Monetization) - Final Release
+| Version | Module | Status |
+|---------|--------|--------|
+| v0.1.2 | Module 2: Secrets Manager | 🔜 Next |
+| v0.1.3 | Module 3: Environment Loader | 🔜 |
+| v0.1.4 | Module 4: Database Manager | 🔜 |
+| v0.1.5 | Module 5: Memory Manager | 🔜 |
+| v0.1.6 | Module 6: Logger | 🔜 |
+| v0.1.7 | Module 7: Scheduler | 🔜 |
+| v0.1.8 | Module 8: File Manager | 🔜 |
+| v0.1.9 | Module 9: Settings Manager | 🔜 |
+| v0.2.0 | Module 10: Backup & Recovery | 🔜 |
