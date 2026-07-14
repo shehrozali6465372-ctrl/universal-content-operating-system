@@ -1,4 +1,19 @@
 # 📋 Changelog
+## [v0.3.9] - 2026-07-14
+### Added
+- **Module 3 Enhancements: 5 Advanced Capabilities**
+  - `decision_graph.py` — Decision dependency graph with critical path and weak link detection
+  - `counterfactual_reasoner.py` — What-if analysis with impact estimation
+  - `confidence_evolution.py` — Confidence tracking through pipeline stages with drop detection
+  - `decision_replay.py` — Decision sequence recording, replay, and common path analysis
+  - `multi_objective_optimizer.py` — Pareto-optimal solutions across competing objectives
+  - ReasoningManager now integrates all 15 sub-modules (10 original + 5 enhancements)
+  - 25 new tests for enhancements
+
+### Stats
+- Total Tests: 905 (all passing)
+- Layer 3 Module 3: 15 sub-modules with evidence, history, replay, and optimization
+
 ## [v0.3.8] - 2026-07-14
 ### Added
 - **Layer 3 Module 3: Reasoning Engine** (Complete)

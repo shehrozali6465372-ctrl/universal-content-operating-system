@@ -10,10 +10,18 @@ from layers.layer03_intelligence.modules.reasoning_engine.goal_evaluator import 
 from layers.layer03_intelligence.modules.reasoning_engine.decision_memory import DecisionMemory
 from layers.layer03_intelligence.modules.reasoning_engine.confidence_reasoner import ConfidenceReasoner
 from layers.layer03_intelligence.modules.reasoning_engine.explanation_generator import ExplanationGenerator
+from layers.layer03_intelligence.modules.reasoning_engine.decision_graph import DecisionGraph, DecisionNode
+from layers.layer03_intelligence.modules.reasoning_engine.counterfactual_reasoner import CounterfactualReasoner
+from layers.layer03_intelligence.modules.reasoning_engine.confidence_evolution import ConfidenceEvolutionTracker
+from layers.layer03_intelligence.modules.reasoning_engine.decision_replay import DecisionReplay, ReplayStore
+from layers.layer03_intelligence.modules.reasoning_engine.multi_objective_optimizer import MultiObjectiveOptimizer, Objective
 
 __all__ = [
     "ReasoningManager", "RuleEngine", "Rule", "DecisionEngine", "DecisionOption",
     "StrategySelector", "Strategy", "ConstraintSolver", "Constraint",
     "TradeoffAnalyzer", "HypothesisEngine", "GoalEvaluator", "Goal",
     "DecisionMemory", "ConfidenceReasoner", "ExplanationGenerator",
+    "DecisionGraph", "DecisionNode", "CounterfactualReasoner",
+    "ConfidenceEvolutionTracker", "DecisionReplay", "ReplayStore",
+    "MultiObjectiveOptimizer", "Objective",
 ]
