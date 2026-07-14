@@ -4,8 +4,8 @@ Tests for Sprint 3: Embeddings, Topic Hierarchy, Ambiguity, Confidence Calibrati
 import math
 from layers.layer03_intelligence.modules.content_understanding.embedding_engine import EmbeddingEngine
 from layers.layer03_intelligence.modules.content_understanding.topic_hierarchy import TopicHierarchy, TopicNode
-from layers.layer03_intelligence.modules.content_understanding.ambiguity_detector import AmbiguityDetector, AmbiguityResult
-from layers.layer03_intelligence.modules.content_understanding.confidence_calibrator import ConfidenceCalibrator, CalibratedConfidence
+from layers.layer03_intelligence.modules.content_understanding.ambiguity_detector import AmbiguityDetector
+from layers.layer03_intelligence.modules.content_understanding.confidence_calibrator import ConfidenceCalibrator
 
 
 # ═══════════════════════════════════════════════════════════════════

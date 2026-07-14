@@ -1,0 +1,79 @@
+{
+  "domain": "technology",
+  "cases": [
+    {
+      "id": "tech_001",
+      "text": "AI developers ki demand 2026 me bohat barhne wali hai.",
+      "expected": {
+        "topics": ["technology", "career", "artificial intelligence"],
+        "intent": "prediction",
+        "sentiment": "positive",
+        "context": "career",
+        "entities": [
+          {"text": "AI", "type": "TECHNOLOGY"},
+          {"text": "2026", "type": "DATE"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "tech_002",
+      "text": "GPT-5 and Claude 4 are competing to become the best LLM in the market.",
+      "expected": {
+        "topics": ["artificial intelligence", "technology", "competition"],
+        "intent": "comparison",
+        "sentiment": "neutral",
+        "context": "industry",
+        "entities": [
+          {"text": "GPT-5", "type": "TECHNOLOGY"},
+          {"text": "Claude 4", "type": "TECHNOLOGY"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "tech_003",
+      "text": "Python programming seekhna ab beginners ke liye bohat easy ho gaya hai.",
+      "expected": {
+        "topics": ["programming", "education", "technology"],
+        "intent": "explanation",
+        "sentiment": "positive",
+        "context": "education",
+        "entities": [
+          {"text": "Python", "type": "TECHNOLOGY"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "tech_004",
+      "text": "Quantum computing ka practical use abhi tak limited hai lekin future mein bohat promising hai.",
+      "expected": {
+        "topics": ["technology", "science", "quantum computing"],
+        "intent": "evaluation",
+        "sentiment": "positive",
+        "context": "technology",
+        "entities": [
+          {"text": "Quantum computing", "type": "TECHNOLOGY"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "tech_005",
+      "text": "Cloud computing services AWS, Azure aur Google Cloud mein intense competition chal raha hai.",
+      "expected": {
+        "topics": ["cloud computing", "technology", "competition"],
+        "intent": "observation",
+        "sentiment": "neutral",
+        "context": "industry",
+        "entities": [
+          {"text": "AWS", "type": "ORGANIZATION"},
+          {"text": "Azure", "type": "ORGANIZATION"},
+          {"text": "Google Cloud", "type": "ORGANIZATION"}
+        ],
+        "min_confidence": 0.6
+      }
+    }
+  ]
+}

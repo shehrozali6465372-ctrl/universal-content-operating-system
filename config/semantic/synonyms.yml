@@ -1,0 +1,25 @@
+groups:
+  technology:
+    - ["ai", "artificial intelligence", "machine intelligence", "generative ai"]
+    - ["ml", "machine learning", "statistical learning"]
+    - ["dl", "deep learning", "neural network"]
+    - ["llm", "large language model", "foundation model"]
+    - ["technology", "tech", "digital", "computing"]
+  general:
+    - ["increase", "rise", "grow", "boost", "surge", "expand"]
+    - ["decrease", "decline", "fall", "drop", "reduce", "shrink"]
+    - ["good", "great", "excellent", "wonderful", "fantastic"]
+    - ["bad", "terrible", "horrible", "awful", "poor"]
+    - ["amazing", "wonderful", "incredible", "remarkable", "awesome"]
+    - ["smart", "intelligent", "clever", "brilliant"]
+  career:
+    - ["job", "career", "position", "role", "employment", "work"]
+    - ["salary", "wage", "income", "compensation"]
+    - ["company", "corporation", "firm", "business", "enterprise"]
+  finance:
+    - ["money", "cash", "funds", "capital", "finance"]
+    - ["profit", "gain", "earnings", "revenue"]
+  health:
+    - ["exercise", "workout", "fitness"]
+    - ["mental health", "psychological wellbeing"]
+    - ["stress", "anxiety", "pressure"]

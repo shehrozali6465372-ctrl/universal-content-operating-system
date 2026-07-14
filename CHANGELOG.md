@@ -1,4 +1,29 @@
 # 📋 Changelog
+## [v0.3.5] - 2026-07-14
+### Added
+- **Benchmark Datasets** — Domain-specific test cases for quality regression detection
+  - `tests/benchmarks/semantic/technology.json` — 5 technology domain cases
+  - `tests/benchmarks/semantic/finance.json` — 5 finance domain cases
+  - `tests/benchmarks/semantic/health.json` — 5 health domain cases
+  - `tests/benchmarks/semantic/sports.json` — 5 sports domain cases
+  - `tests/benchmarks/semantic/politics.json` — 5 politics domain cases
+  - `tests/benchmarks/semantic/mixed_language.json` — 5 Hinglish/Urdu cases
+  - `tests/benchmarks/test_semantic_benchmarks.py` — Quality benchmark runner
+- **Performance Benchmarks**
+  - `tests/benchmarks/test_performance.py` — Latency, throughput, memory benchmarks
+  - Tests: 100/1000/10000 document throughput, P95 latency, memory bounds
+- **Configuration Externalization**
+  - `config/semantic/analyzer.yml` — Main analyzer config with version, thresholds, limits
+  - `config/semantic/synonyms.yml` — Synonym groups for duplicate detection
+  - `config/semantic/ambiguity.yml` — Ambiguous terms and thresholds
+  - `config/semantic/contradiction.yml` — Antonym pairs, direction words, negation words
+- 43 new benchmark tests (quality + performance)
+
+### Stats
+- Total Tests: 768 (all passing)
+- Benchmark Tests: 43
+- Config Files: 4 YAML
+
 ## [v0.3.4] - 2026-07-14
 ### Added
 - **Layer 3 Module 1: Semantic Analyzer — Sprint 4 Complete & FROZEN** 🔒

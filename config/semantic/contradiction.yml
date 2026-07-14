@@ -1,0 +1,52 @@
+antonym_pairs:
+  - [increase, decrease]
+  - [increase, decline]
+  - [grow, shrink]
+  - [positive, negative]
+  - [good, bad]
+  - [success, failure]
+  - [win, lose]
+  - [profit, loss]
+  - [high, low]
+  - [more, less]
+  - [best, worst]
+  - [strong, weak]
+  - [fast, slow]
+  - [love, hate]
+  - [build, destroy]
+  - [accept, reject]
+  - [enable, disable]
+direction_up:
+  - increase
+  - rise
+  - grow
+  - boost
+  - improve
+  - more
+  - higher
+  - gain
+  - surge
+  - expand
+direction_down:
+  - decrease
+  - decline
+  - fall
+  - shrink
+  - reduce
+  - less
+  - lower
+  - drop
+  - lose
+negation_words:
+  - not
+  - no
+  - never
+  - neither
+  - nor
+  - nobody
+  - nothing
+  - nowhere
+  - hardly
+  - without
+  - nahi
+  - na

@@ -1,0 +1,21 @@
+thresholds:
+  min_token_overlap: 0.3
+  max_ambiguity_score: 0.7
+  max_alternatives: 5
+ambiguous_terms:
+  - word: python
+    meanings: [programming language, snake species]
+  - word: apple
+    meanings: [technology company, fruit]
+  - word: bank
+    meanings: [financial institution, river bank]
+  - word: crane
+    meanings: [construction machine, bird]
+  - word: bat
+    meanings: [sports equipment, flying mammal]
+  - word: mercury
+    meanings: [planet, chemical element]
+  - word: jaguar
+    meanings: [car brand, animal]
+  - word: amazon
+    meanings: [e-commerce company, river]

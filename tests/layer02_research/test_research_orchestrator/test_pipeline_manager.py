@@ -1,7 +1,6 @@
 """Tests for PipelineManager."""
 
 from layers.layer02_research.modules.research_orchestrator.pipeline_manager import PipelineManager, PipelineResult
-from layers.layer02_research.modules.research_orchestrator.workflow_engine import WorkflowEngine
 from layers.layer02_research.modules.research_orchestrator.exceptions import PipelineError
 
 

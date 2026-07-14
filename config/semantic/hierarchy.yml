@@ -1,0 +1,69 @@
+# Topic hierarchy configuration
+
+hierarchy:
+  technology:
+    - artificial intelligence
+      - machine learning
+      - deep learning
+      - natural language processing
+      - computer vision
+    - programming
+      - python
+      - javascript
+      - rust
+    - cloud computing
+      - aws
+      - azure
+      - google cloud
+    - cybersecurity
+    - blockchain
+    - quantum computing
+
+  finance:
+    - stock market
+    - cryptocurrency
+      - bitcoin
+      - ethereum
+    - personal finance
+      - budgeting
+      - saving
+      - investing
+    - banking
+    - insurance
+    - real estate
+
+  health:
+    - fitness
+      - exercise
+      - yoga
+      - cardio
+    - nutrition
+      - diet
+      - supplements
+    - mental health
+      - stress management
+      - mindfulness
+    - medical
+      - diabetes
+      - heart disease
+      - cancer
+
+  sports:
+    - cricket
+      - t20
+      - test cricket
+      - ipl
+      - psl
+    - football
+      - world cup
+      - premier league
+    - olympics
+    - tennis
+    - basketball
+
+  politics:
+    - governance
+    - elections
+    - policy
+    - corruption
+    - democracy

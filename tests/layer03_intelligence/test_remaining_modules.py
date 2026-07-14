@@ -4,7 +4,7 @@ from layers.layer03_intelligence.modules.learning_signals.signal_collector impor
 from layers.layer03_intelligence.modules.knowledge_fusion.fusion_engine import FusionEngine
 from layers.layer03_intelligence.modules.strategy_engine.strategy_engine import StrategyEngine
 from layers.layer03_intelligence.modules.intelligence_memory.intel_cache import IntelligenceCache
-from layers.layer03_intelligence.modules.intelligence_orchestrator.intel_orchestrator import IntelligenceOrchestrator, IntelligenceResult
+from layers.layer03_intelligence.modules.intelligence_orchestrator.intel_orchestrator import IntelligenceOrchestrator
 
 
 class TestRecommendationEngine:

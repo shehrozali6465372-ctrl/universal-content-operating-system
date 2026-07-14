@@ -1,0 +1,74 @@
+{
+  "domain": "politics",
+  "cases": [
+    {
+      "id": "pol_001",
+      "text": "Pakistan mein election date announce ho gayi hai — 2026 ke end mein.",
+      "expected": {
+        "topics": ["politics", "election", "Pakistan"],
+        "intent": "announcement",
+        "sentiment": "neutral",
+        "context": "politics",
+        "entities": [
+          {"text": "Pakistan", "type": "LOCATION"},
+          {"text": "2026", "type": "DATE"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "pol_002",
+      "text": "Opposition party ne government ki policy ka strongly virodh kiya hai.",
+      "expected": {
+        "topics": ["politics", "government", "opposition"],
+        "intent": "observation",
+        "sentiment": "negative",
+        "context": "politics",
+        "entities": [
+          {"text": "Opposition party", "type": "ORGANIZATION"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "pol_003",
+      "text": "Education reform Pakistan ki sabse badi zaroorat hai.",
+      "expected": {
+        "topics": ["politics", "education", "policy"],
+        "intent": "recommendation",
+        "sentiment": "positive",
+        "context": "policy",
+        "entities": [
+          {"text": "Pakistan", "type": "LOCATION"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "pol_004",
+      "text": "Corruption ka khatma kab hoga? Ye sawal har Pakistani poochta hai.",
+      "expected": {
+        "topics": ["politics", "corruption", "governance"],
+        "intent": "question",
+        "sentiment": "negative",
+        "context": "governance",
+        "entities": [
+          {"text": "Pakistani", "type": "NATIONALITY"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "pol_005",
+      "text": "Youth ki voting percentage barh rahi hai jo democracy ke liye acha sign hai.",
+      "expected": {
+        "topics": ["politics", "democracy", "youth"],
+        "intent": "observation",
+        "sentiment": "positive",
+        "context": "politics",
+        "entities": [],
+        "min_confidence": 0.7
+      }
+    }
+  ]
+}

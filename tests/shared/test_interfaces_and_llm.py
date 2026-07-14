@@ -1,6 +1,6 @@
 """Tests for interfaces and LLM abstraction."""
 
-from layers.shared.interfaces import IResearchModule, IWritingModule, IPublisher, IAnalyticsProvider, ILearningModule
+from layers.shared.interfaces import IResearchModule, IWritingModule, IPublisher, IAnalyticsProvider
 from layers.shared.llm_provider import BaseLLMProvider, LLMResponse, LLMFactory
 
 

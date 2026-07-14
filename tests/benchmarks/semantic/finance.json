@@ -1,0 +1,75 @@
+{
+  "domain": "finance",
+  "cases": [
+    {
+      "id": "fin_001",
+      "text": "Bitcoin price 2026 mein $150K tak ja sakti hai according to analysts.",
+      "expected": {
+        "topics": ["cryptocurrency", "finance", "investment"],
+        "intent": "prediction",
+        "sentiment": "positive",
+        "context": "finance",
+        "entities": [
+          {"text": "Bitcoin", "type": "CRYPTOCURRENCY"},
+          {"text": "$150K", "type": "MONEY"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "fin_002",
+      "text": "Stock market mein correction aane ke chances hain kyunki interest rates barh rahe hain.",
+      "expected": {
+        "topics": ["stock market", "finance", "economy"],
+        "intent": "prediction",
+        "sentiment": "negative",
+        "context": "finance",
+        "entities": [
+          {"text": "interest rates", "type": "FINANCIAL_TERM"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "fin_003",
+      "text": "Personal finance manage karne ka sabse acha tareeqa budget banana hai.",
+      "expected": {
+        "topics": ["personal finance", "budgeting", "money management"],
+        "intent": "recommendation",
+        "sentiment": "positive",
+        "context": "personal_finance",
+        "entities": [],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "fin_004",
+      "text": "Gold investment safe hai ya risky? Experts ki raye mukhtalif hai.",
+      "expected": {
+        "topics": ["investment", "gold", "finance"],
+        "intent": "question",
+        "sentiment": "neutral",
+        "context": "investment",
+        "entities": [
+          {"text": "Gold", "type": "COMMODITY"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "fin_005",
+      "text": "Pakistan ka rupee dollar ke muqablay mein mazeed kamzor ho gaya hai.",
+      "expected": {
+        "topics": ["currency", "finance", "economy"],
+        "intent": "observation",
+        "sentiment": "negative",
+        "context": "economy",
+        "entities": [
+          {"text": "rupee", "type": "CURRENCY"},
+          {"text": "dollar", "type": "CURRENCY"}
+        ],
+        "min_confidence": 0.7
+      }
+    }
+  ]
+}

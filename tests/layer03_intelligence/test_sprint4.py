@@ -2,13 +2,13 @@
 Tests for Sprint 4: Contradiction, Clustering, Duplicates, Batch.
 """
 from layers.layer03_intelligence.modules.content_understanding.contradiction_detector import (
-    ContradictionDetector, ContradictionResult,
+    ContradictionDetector,
 )
 from layers.layer03_intelligence.modules.content_understanding.semantic_clusterer import (
-    SemanticClusterer, Cluster,
+    SemanticClusterer,
 )
 from layers.layer03_intelligence.modules.content_understanding.duplicate_detector import (
-    DuplicateDetector, DuplicateResult,
+    DuplicateDetector,
 )
 from layers.layer03_intelligence.modules.content_understanding.batch_processor import (
     BatchProcessor, BatchMetrics,

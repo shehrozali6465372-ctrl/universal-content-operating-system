@@ -1,9 +1,6 @@
 """Tests for PlannerManager."""
 
 from layers.layer02_research.modules.research_planner.planner_manager import PlannerManager
-from layers.layer02_research.modules.research_planner.exceptions import (
-    GoalCreationError, PlanOptimizationError, DependencyError,
-)
 
 
 class TestPlannerManager:

@@ -1,0 +1,71 @@
+{
+  "domain": "health",
+  "cases": [
+    {
+      "id": "health_001",
+      "text": "Exercise rozana 30 minute karna sehat ke liye bohat zaroori hai.",
+      "expected": {
+        "topics": ["health", "fitness", "exercise"],
+        "intent": "recommendation",
+        "sentiment": "positive",
+        "context": "health",
+        "entities": [],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "health_002",
+      "text": "Diabetes patients ko sugar intake kam karna chahiye.",
+      "expected": {
+        "topics": ["health", "diabetes", "nutrition"],
+        "intent": "recommendation",
+        "sentiment": "neutral",
+        "context": "health",
+        "entities": [
+          {"text": "Diabetes", "type": "MEDICAL_CONDITION"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "health_003",
+      "text": "Mental health awareness Pakistan mein ab barh rahi hai jo achi baat hai.",
+      "expected": {
+        "topics": ["mental health", "health", "awareness"],
+        "intent": "observation",
+        "sentiment": "positive",
+        "context": "health",
+        "entities": [
+          {"text": "Pakistan", "type": "LOCATION"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "health_004",
+      "text": "Yoga se stress kam hota hai aur body flexible banti hai.",
+      "expected": {
+        "topics": ["health", "yoga", "wellness"],
+        "intent": "explanation",
+        "sentiment": "positive",
+        "context": "wellness",
+        "entities": [
+          {"text": "Yoga", "type": "ACTIVITY"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "health_005",
+      "text": "Pani rozana 8 glass peena chahiye — yeh myth hai ya reality?",
+      "expected": {
+        "topics": ["health", "hydration", "nutrition"],
+        "intent": "question",
+        "sentiment": "neutral",
+        "context": "health",
+        "entities": [],
+        "min_confidence": 0.6
+      }
+    }
+  ]
+}

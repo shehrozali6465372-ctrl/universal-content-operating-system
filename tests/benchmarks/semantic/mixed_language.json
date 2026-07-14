@@ -1,0 +1,75 @@
+{
+  "domain": "mixed_language",
+  "cases": [
+    {
+      "id": "mix_001",
+      "text": "AI ka future bohat bright hai aur ismein Pakistan ka role bhi barh raha hai.",
+      "expected": {
+        "topics": ["artificial intelligence", "technology", "Pakistan"],
+        "intent": "observation",
+        "sentiment": "positive",
+        "context": "technology",
+        "entities": [
+          {"text": "AI", "type": "TECHNOLOGY"},
+          {"text": "Pakistan", "type": "LOCATION"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "mix_002",
+      "text": "Freelancing se paisa kamana ab popular ho raha hai especially youth mein.",
+      "expected": {
+        "topics": ["freelancing", "career", "economy"],
+        "intent": "observation",
+        "sentiment": "positive",
+        "context": "career",
+        "entities": [],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "mix_003",
+      "text": "Social media ka addiction ek serious problem ban chuka hai especially teenagers ke liye.",
+      "expected": {
+        "topics": ["social media", "health", "technology"],
+        "intent": "observation",
+        "sentiment": "negative",
+        "context": "health",
+        "entities": [
+          {"text": "Social media", "type": "TECHNOLOGY"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "mix_004",
+      "text": "E-commerce Pakistan mein tezi se barh raha hai — Daraz aur本地 platforms ka role hai.",
+      "expected": {
+        "topics": ["e-commerce", "business", "Pakistan"],
+        "intent": "observation",
+        "sentiment": "positive",
+        "context": "business",
+        "entities": [
+          {"text": "Daraz", "type": "ORGANIZATION"},
+          {"text": "Pakistan", "type": "LOCATION"}
+        ],
+        "min_confidence": 0.6
+      }
+    },
+    {
+      "id": "mix_005",
+      "text": "Remote work ka trend ab permanent ho gaya hai post-COVID world mein.",
+      "expected": {
+        "topics": ["remote work", "career", "technology"],
+        "intent": "observation",
+        "sentiment": "neutral",
+        "context": "career",
+        "entities": [
+          {"text": "COVID", "type": "EVENT"}
+        ],
+        "min_confidence": 0.7
+      }
+    }
+  ]
+}

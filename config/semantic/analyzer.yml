@@ -1,0 +1,38 @@
+config_version: 1
+confidence:
+  min_topic_confidence: 0.3
+  min_intent_confidence: 0.2
+  min_sentiment_confidence: 0.4
+  min_entity_confidence: 0.5
+topics:
+  max_topics: 10
+  min_relevance: 0.1
+entities:
+  min_confidence: 0.5
+  max_entities: 20
+intents:
+  supported:
+    - prediction
+    - recommendation
+    - explanation
+    - observation
+    - question
+    - comparison
+    - evaluation
+    - announcement
+    - instruction
+    - opinion
+sentiment:
+  scale: [very_negative, negative, neutral, positive, very_positive]
+complexity:
+  simple: 15
+  moderate: 30
+  complex: 50
+batch:
+  max_batch_size: 1000
+  cache_size: 500
+  cache_ttl_seconds: 3600
+performance:
+  max_text_length: 50000
+  timeout_seconds: 30
+  enable_caching: true

@@ -1,0 +1,81 @@
+{
+  "domain": "sports",
+  "cases": [
+    {
+      "id": "sport_001",
+      "text": "Pakistan cricket team ne T20 World Cup jeeta hai!",
+      "expected": {
+        "topics": ["cricket", "sports", "Pakistan"],
+        "intent": "announcement",
+        "sentiment": "positive",
+        "context": "sports",
+        "entities": [
+          {"text": "Pakistan", "type": "LOCATION"},
+          {"text": "T20 World Cup", "type": "EVENT"}
+        ],
+        "min_confidence": 0.8
+      }
+    },
+    {
+      "id": "sport_002",
+      "text": "Football World Cup 2026 USA, Canada aur Mexico mein hoga.",
+      "expected": {
+        "topics": ["football", "sports", "world cup"],
+        "intent": "announcement",
+        "sentiment": "neutral",
+        "context": "sports",
+        "entities": [
+          {"text": "2026", "type": "DATE"},
+          {"text": "USA", "type": "LOCATION"},
+          {"text": "Canada", "type": "LOCATION"},
+          {"text": "Mexico", "type": "LOCATION"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "sport_003",
+      "text": "Babar Azam duniya ke best batsmen mein se hain.",
+      "expected": {
+        "topics": ["cricket", "sports", "player evaluation"],
+        "intent": "evaluation",
+        "sentiment": "positive",
+        "context": "sports",
+        "entities": [
+          {"text": "Babar Azam", "type": "PERSON"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "sport_004",
+      "text": "Olympics mein Pakistan ko gold medal milna ab tak mushkil raha hai.",
+      "expected": {
+        "topics": ["olympics", "sports", "Pakistan"],
+        "intent": "observation",
+        "sentiment": "negative",
+        "context": "sports",
+        "entities": [
+          {"text": "Pakistan", "type": "LOCATION"},
+          {"text": "Olympics", "type": "EVENT"}
+        ],
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "id": "sport_005",
+      "text": "IPL aur PSL ka comparison karo — konsa league behtar hai?",
+      "expected": {
+        "topics": ["cricket", "sports", "leagues"],
+        "intent": "comparison",
+        "sentiment": "neutral",
+        "context": "sports",
+        "entities": [
+          {"text": "IPL", "type": "ORGANIZATION"},
+          {"text": "PSL", "type": "ORGANIZATION"}
+        ],
+        "min_confidence": 0.7
+      }
+    }
+  ]
+}
