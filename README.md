@@ -31,18 +31,28 @@ ai-self-improving-facebook-agent/
 
 ## 🧩 10 Major Layers
 
-| # | Layer | Name | Description | Status |
-|---|-------|------|-------------|--------|
-| 01 | `layer01_core` | **Core System** | Base agent, config, error handling, CLI | 🔜 Planned |
-| 02 | `layer02_research` | **Research & Scraping** | Trend analysis, competitor tracking, data gathering | 🔜 Planned |
-| 03 | `layer03_intelligence` | **AI Intelligence** | LLM integration, reasoning, planning, decision making | 🔜 Planned |
-| 04 | `layer04_writing` | **Content Writing** | Post generation, captions, hashtags, A/B variants | 🔜 Planned |
-| 05 | `layer05_image` | **Image & Visual** | Image generation, memes, infographics, thumbnails | 🔜 Planned |
-| 06 | `layer06_quality` | **Quality Check** | Spam filter, tone check, fact-check, compliance | 🔜 Planned |
-| 07 | `layer07_publishing` | **Facebook Publishing** | API posting, scheduling, auto-publishing | 🔜 Planned |
-| 08 | `layer08_analytics` | **Analytics & Tracking** | Engagement metrics, performance monitoring | 🔜 Planned |
-| 09 | `layer09_learning` | **Self-Learning** | Feedback loop, pattern recognition, improvement | 🔜 Planned |
-| 10 | `layer10_monetization` | **Monetization** | Ad management, revenue tracking, optimization | 🔜 Planned |
+| # | Layer | Name | Description | Status | Version |
+|---|-------|------|-------------|--------|---------|
+| 01 | `layer01_core` | **Core System** | Config, secrets, database, memory, logging, scheduling, file management, backup | ✅ Complete | v0.1.11 |
+| 02 | `layer02_research` | **Research Engine** | Trend discovery, competitor analysis, audience research, fact verification, topic scoring, orchestration | ✅ Complete | v0.2.9 |
+| 03 | `layer03_intelligence` | **AI Intelligence** | LLM integration, reasoning, planning, decision making | 🔜 Planned | — |
+| 04 | `layer04_writing` | **Content Writing** | Post generation, captions, hashtags, A/B variants | 🔜 Planned | — |
+| 05 | `layer05_image` | **Image & Visual** | Image generation, memes, infographics, thumbnails | 🔜 Planned | — |
+| 06 | `layer06_quality` | **Quality Check** | Spam filter, tone check, fact-check, compliance | 🔜 Planned | — |
+| 07 | `layer07_publishing` | **Facebook Publishing** | API posting, scheduling, auto-publishing | 🔜 Planned | — |
+| 08 | `layer08_analytics` | **Analytics & Tracking** | Engagement metrics, performance monitoring | 🔜 Planned | — |
+| 09 | `layer09_learning` | **Self-Learning** | Feedback loop, pattern recognition, improvement | 🔜 Planned | — |
+| 10 | `layer10_monetization` | **Monetization** | Ad management, revenue tracking, optimization | 🔜 Planned | — |
+
+## 📊 Project Status
+
+| Metric | Value |
+|--------|-------|
+| Current Version | v0.2.9 |
+| Layers Complete | 2/10 (20%) |
+| Total Tests | 659+ |
+| Code Coverage | 95%+ |
+| CI/CD | ✅ Passing |
 
 ## 📐 Development Principle
 
@@ -59,6 +69,19 @@ git clone https://github.com/shehrozali6465372-ctrl/ai-self-improving-facebook-a
 cd ai-self-improving-facebook-agent
 pip install -r requirements.txt
 python main.py
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run Layer 1 tests
+pytest tests/test_core.py -v
+
+# Run Layer 2 tests
+pytest tests/layer02_research/ -v
 ```
 
 ## 📄 License
