@@ -9,7 +9,6 @@ Main entry point for the Research Orchestrator:
 - Resume from failure
 """
 
-from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from layers.layer02_research.modules.research_orchestrator.execution_context import ExecutionContext
@@ -20,9 +19,6 @@ from layers.layer02_research.modules.research_orchestrator.metrics_collector imp
 from layers.layer02_research.modules.research_orchestrator.pipeline_manager import PipelineManager, PipelineResult
 from layers.layer02_research.modules.research_orchestrator.workflow_engine import WorkflowEngine
 from layers.layer02_research.modules.research_orchestrator.retry_coordinator import RetryPolicy
-from layers.layer02_research.modules.research_orchestrator.exceptions import (
-    OrchestratorError, ExecutionCancelledError,
-)
 
 
 class OrchestratorManager:

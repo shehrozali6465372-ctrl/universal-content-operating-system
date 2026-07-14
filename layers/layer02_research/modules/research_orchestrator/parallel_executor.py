@@ -9,7 +9,7 @@ Manages parallel execution of independent modules:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
 

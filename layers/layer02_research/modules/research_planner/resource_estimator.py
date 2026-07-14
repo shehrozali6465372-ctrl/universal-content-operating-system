@@ -10,7 +10,7 @@ Estimates resources for research plans:
 - Quality expectation
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 from layers.layer02_research.modules.research_planner.research_plan import PlanTask, ResearchPlan
 
 

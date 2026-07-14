@@ -10,7 +10,7 @@ Collects and aggregates execution metrics:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from layers.layer02_research.modules.research_orchestrator.execution_context import ExecutionContext
 

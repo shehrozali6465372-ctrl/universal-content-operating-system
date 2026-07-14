@@ -13,16 +13,15 @@ Central orchestrator for research planning:
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from layers.layer02_research.modules.research_planner.goal_manager import GoalManager, ResearchGoal
+from layers.layer02_research.modules.research_planner.goal_manager import GoalManager
 from layers.layer02_research.modules.research_planner.research_plan import PlanTask, ResearchPlan
 from layers.layer02_research.modules.research_planner.task_decomposer import TaskDecomposer
 from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
 from layers.layer02_research.modules.research_planner.priority_engine import PriorityEngine
-from layers.layer02_research.modules.research_planner.resource_estimator import ResourceEstimator, ResourceEstimate
+from layers.layer02_research.modules.research_planner.resource_estimator import ResourceEstimator
 from layers.layer02_research.modules.research_planner.plan_optimizer import PlanOptimizer, OptimizedPlan
 from layers.layer02_research.modules.research_planner.exceptions import (
     GoalCreationError, PlanOptimizationError, DependencyError,
-    InvalidPlanError, ResearchPlannerError,
 )
 
 

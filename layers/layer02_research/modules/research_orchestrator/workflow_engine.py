@@ -8,7 +8,7 @@ Defines and manages research workflows:
 - Pipeline configuration
 """
 
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 from layers.layer02_research.modules.research_orchestrator.exceptions import WorkflowError
 

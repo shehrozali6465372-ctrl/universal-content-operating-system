@@ -10,7 +10,7 @@ Optimizes research plans:
 - Plan merging
 """
 
-from typing import Dict, List, Optional, Set
+from typing import List, Set
 from layers.layer02_research.modules.research_planner.research_plan import PlanTask, ResearchPlan
 from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
 from layers.layer02_research.modules.research_planner.resource_estimator import ResourceEstimator
