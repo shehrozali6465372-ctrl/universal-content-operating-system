@@ -1,47 +1,93 @@
-"""Strategy Selector — picks best content strategy based on context."""
-
+"""Strategy Selector - Selects optimal strategy based on conditions."""
+from __future__ import annotations
 from typing import Dict, List, Optional
 
 
-STRATEGIES = {
-    "viral_hooks": {"engagement": 0.9, "reach": 0.8, "quality": 0.5},
-    "educational": {"engagement": 0.6, "reach": 0.5, "quality": 0.9},
-    "controversial": {"engagement": 0.8, "reach": 0.9, "quality": 0.3},
-    "inspirational": {"engagement": 0.7, "reach": 0.6, "quality": 0.7},
-    "data_driven": {"engagement": 0.5, "reach": 0.4, "quality": 0.95},
-    "storytelling": {"engagement": 0.85, "reach": 0.7, "quality": 0.8},
-}
+class Strategy:
+    """A named strategy with conditions and parameters."""
+    __slots__ = ("name", "description", "conditions", "parameters", "priority", "enabled")
+
+    def __init__(self, name: str = "", description: str = "",
+                 conditions: Optional[Dict] = None, parameters: Optional[Dict] = None,
+                 priority: int = 0):
+        self.name = name
+        self.description = description
+        self.conditions = conditions or {}
+        self.parameters = parameters or {}
+        self.priority = priority
+        self.enabled = True
+
+    def matches(self, context: Dict) -> float:
+        if not self.conditions:
+            return 0.5
+        match_count = 0
+        for key, expected in self.conditions.items():
+            actual = context.get(key)
+            if actual == expected or (isinstance(expected, list) and actual in expected):
+                match_count += 1
+            elif isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+                if abs(actual - expected) / max(abs(expected), 1) < 0.2:
+                    match_count += 1
+        return match_count / max(len(self.conditions), 1)
+
+    def to_dict(self) -> Dict:
+        return {"name": self.name, "description": self.description,
+                "conditions": dict(self.conditions), "parameters": dict(self.parameters),
+                "priority": self.priority, "enabled": self.enabled}
 
 
 class StrategyResult:
-    def __init__(self, name: str, score: float = 0.0, factors: Optional[Dict] = None):
-        self.name = name
-        self.score = score
-        self.factors = factors or {}
-    def to_dict(self) -> dict:
-        return {"name": self.name, "score": self.score, "factors": dict(self.factors)}
+    """Result of strategy selection."""
+    __slots__ = ("selected", "alternatives", "confidence", "reasoning")
+
+    def __init__(self) -> None:
+        self.selected: Optional[Strategy] = None
+        self.alternatives: List[Strategy] = []
+        self.confidence = 0.0
+        self.reasoning: List[str] = []
+
+    def to_dict(self) -> Dict:
+        return {
+            "selected": self.selected.to_dict() if self.selected else None,
+            "alternatives": [s.to_dict() for s in self.alternatives[:3]],
+            "confidence": round(self.confidence, 3),
+            "reasoning": list(self.reasoning),
+        }
 
 
 class StrategySelector:
-    def __init__(self, niche_weights: Optional[Dict[str, float]] = None):
-        self._strategies = dict(STRATEGIES)
-        self._weights = niche_weights or {"engagement": 0.4, "reach": 0.3, "quality": 0.3}
+    """Selects the best strategy based on context matching."""
 
-    def select(self, context: Optional[Dict] = None) -> StrategyResult:
-        best_name, best_score = "educational", 0.0
-        for name, factors in self._strategies.items():
-            score = sum(factors.get(f, 0) * w for f, w in self._weights.items())
-            if score > best_score:
-                best_score = score
-                best_name = name
-        return StrategyResult(best_name, round(best_score, 3), self._strategies[best_name])
+    def __init__(self) -> None:
+        self._strategies: List[Strategy] = []
 
-    def select_top_n(self, n: int = 3) -> List[StrategyResult]:
-        results = []
-        for name, factors in self._strategies.items():
-            score = sum(factors.get(f, 0) * w for f, w in self._weights.items())
-            results.append(StrategyResult(name, round(score, 3), factors))
-        return sorted(results, key=lambda r: -r.score)[:n]
+    def add_strategy(self, strategy: Strategy) -> None:
+        self._strategies.append(strategy)
+        self._strategies.sort(key=lambda s: s.priority, reverse=True)
 
-    def add_strategy(self, name: str, factors: Dict[str, float]):
-        self._strategies[name] = factors
+    def select(self, context: Dict) -> StrategyResult:
+        result = StrategyResult()
+        scored = []
+        for s in self._strategies:
+            if not s.enabled:
+                continue
+            score = s.matches(context)
+            scored.append((s, score))
+
+        scored.sort(key=lambda x: (x[1], x[0].priority), reverse=True)
+
+        if scored:
+            result.selected = scored[0][0]
+            result.alternatives = [s for s, _ in scored[1:3]]
+            result.confidence = scored[0][1]
+            result.reasoning.append(
+                f"Selected '{result.selected.name}' with match score {scored[0][1]:.2f}"
+            )
+
+        return result
+
+    def select_all_matching(self, context: Dict, threshold: float = 0.5) -> List[Strategy]:
+        return [s for s in self._strategies if s.enabled and s.matches(context) >= threshold]
+
+    def count(self) -> int:
+        return len(self._strategies)

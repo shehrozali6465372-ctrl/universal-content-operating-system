@@ -92,7 +92,7 @@ class IntelligenceOrchestrator:
             result.virality = self.virality_predictor.predict(text)
 
         # 4. Strategy Selection
-        result.strategy = self.strategy_selector.select()
+        result.strategy = self.strategy_selector.select({})
 
         # 5. Recommendations
         self.recommendation_engine.clear()

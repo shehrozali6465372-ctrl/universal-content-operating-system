@@ -1,4 +1,27 @@
 # 📋 Changelog
+## [v0.3.8] - 2026-07-14
+### Added
+- **Layer 3 Module 3: Reasoning Engine** (Complete)
+  - `rule_engine.py` — IF-THEN rule evaluation with priority, tags, enable/disable
+  - `decision_engine.py` — Weighted multi-criteria decision making
+  - `strategy_selector.py` — Context-based strategy matching and selection
+  - `constraint_solver.py` — Constraint checking with error/warning severity levels
+  - `tradeoff_analyzer.py` — Multi-dimension tradeoff analysis with recommendations
+  - `hypothesis_engine.py` — Hypothesis proposal, evidence tracking, verdict evaluation
+  - `goal_evaluator.py` — Goal progress tracking with status and recommendations
+  - `decision_memory.py` — Decision storage, outcome tracking, success rate calculation
+  - `confidence_reasoner.py` — Confidence breakdown with component analysis and risk levels
+  - `explanation_generator.py` — Human-readable explanations from analysis data
+  - `reasoning_manager.py` — Orchestrator combining all 10 sub-modules
+  - 46 new tests across 11 test classes
+
+### Fixed
+- StrategySelector.select() signature compatibility with IntelligenceOrchestrator
+
+### Stats
+- Total Tests: 880 (all passing)
+- Layer 3 Progress: 3/10 Modules (Module 1 frozen, Modules 2-3 complete)
+
 ## [v0.3.7] - 2026-07-14
 ### Added
 - **Module 2 Enhancement: Evidence, History, Events**
