@@ -1,4 +1,24 @@
 # 📋 Changelog
+## [v0.3.6] - 2026-07-14
+### Added
+- **Layer 3 Module 2: Trend Intelligence** (Complete)
+  - `trend_collector.py` — Multi-source trend data collection with deduplication
+  - `trend_normalizer.py` — Cross-source score normalization with source weights
+  - `momentum_analyzer.py` — Velocity, acceleration, and direction detection
+  - `lifecycle_detector.py` — Emerging/growing/peak/declining/dead stage detection
+  - `seasonality_analyzer.py` — Periodic pattern detection (weekly/monthly/yearly)
+  - `virality_predictor.py` — Viral potential prediction with multi-factor scoring
+  - `cross_platform_fusion.py` — Cross-platform trend signal fusion
+  - `trend_confidence.py` — Multi-factor confidence scoring
+  - `trend_explainer.py` — Human-readable trend explanations
+  - `trend_predictor.py` — Linear regression trend prediction with decay
+  - `trend_manager.py` — Orchestrator combining all 9 sub-modules
+  - 64 new tests across 11 test classes
+
+### Stats
+- Total Tests: 818 (all passing)
+- Layer 3 Progress: Module 1 (Frozen) + Module 2 (Complete)
+
 ## [v0.3.5] - 2026-07-14
 ### Added
 - **Benchmark Datasets** — Domain-specific test cases for quality regression detection

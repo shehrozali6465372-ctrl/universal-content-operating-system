@@ -1,83 +1,73 @@
-"""
-Trend Predictor
-Predicts future trend trajectory based on historical data.
-"""
-
+"""Trend Predictor - Predicts future trend trajectory from historical data."""
+from __future__ import annotations
+import math
 from typing import Dict, List
 
 
 class TrendPrediction:
-    """Prediction for a trend's future trajectory."""
+    """Prediction for a trend future trajectory."""
+    __slots__ = ("topic", "predicted_direction", "predicted_score", "confidence",
+                 "timeframe_days", "trend_line_slope")
 
-    __slots__ = ("topic", "predicted_direction", "predicted_score", "confidence", "timeframe_days")
-
-    def __init__(self, topic: str = ""):
+    def __init__(self, topic: str = "") -> None:
         self.topic = topic
-        self.predicted_direction = "stable"  # rising, falling, stable, peak
+        self.predicted_direction = "stable"
         self.predicted_score = 0.0
         self.confidence = 0.0
         self.timeframe_days = 7
+        self.trend_line_slope = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict:
         return {
-            "topic": self.topic,
-            "predicted_direction": self.predicted_direction,
-            "predicted_score": self.predicted_score,
-            "confidence": self.confidence,
+            "topic": self.topic, "predicted_direction": self.predicted_direction,
+            "predicted_score": round(self.predicted_score, 3),
+            "confidence": round(self.confidence, 3),
             "timeframe_days": self.timeframe_days,
+            "trend_line_slope": round(self.trend_line_slope, 4),
         }
 
 
 class TrendPredictor:
-    """Predicts trend trajectory using momentum and historical patterns."""
+    """Predicts trend trajectory using linear regression."""
 
     def predict(self, topic: str, history: List[float], timeframe_days: int = 7) -> TrendPrediction:
-        """Predict trend direction based on score history."""
-        pred = TrendPrediction(topic)
-        pred.timeframe_days = timeframe_days
+        result = TrendPrediction(topic)
+        result.timeframe_days = timeframe_days
 
-        if len(history) < 2:
-            pred.predicted_direction = "stable"
-            pred.predicted_score = history[0] if history else 0.0
-            pred.confidence = 0.3
-            return pred
+        if len(history) < 3:
+            return result
 
-        # Calculate momentum
-        recent = history[-3:] if len(history) >= 3 else history
-        avg_recent = sum(recent) / len(recent)
-        avg_older = sum(history[:-len(recent)]) / max(len(history) - len(recent), 1) if len(history) > len(recent) else avg_recent
+        n = len(history)
+        x_mean = (n - 1) / 2
+        y_mean = sum(history) / n
+        num = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(history))
+        den = sum((i - x_mean) ** 2 for i in range(n))
+        slope = num / den if den > 0 else 0.0
+        intercept = y_mean - slope * x_mean
 
-        momentum = avg_recent - avg_older
-        current = history[-1]
+        result.trend_line_slope = slope
+        result.predicted_score = max(0, intercept + slope * (n - 1 + timeframe_days))
 
-        if momentum > 2.0:
-            pred.predicted_direction = "rising"
-            pred.predicted_score = min(100.0, current + momentum * timeframe_days * 0.3)
-            pred.confidence = min(0.95, 0.5 + abs(momentum) * 0.05)
-        elif momentum < -2.0:
-            pred.predicted_direction = "falling"
-            pred.predicted_score = max(0.0, current + momentum * timeframe_days * 0.3)
-            pred.confidence = min(0.95, 0.5 + abs(momentum) * 0.05)
-        elif current > 70:
-            pred.predicted_direction = "peak"
-            pred.predicted_score = current
-            pred.confidence = 0.6
+        if slope > 0.05:
+            result.predicted_direction = "rising"
+        elif slope < -0.05:
+            result.predicted_direction = "falling"
         else:
-            pred.predicted_direction = "stable"
-            pred.predicted_score = current
-            pred.confidence = 0.7
+            result.predicted_direction = "stable"
 
-        pred.confidence = round(pred.confidence, 3)
-        pred.predicted_score = round(pred.predicted_score, 2)
-        return pred
+        ss_res = sum((history[i] - (intercept + slope * i)) ** 2 for i in range(n))
+        ss_tot = sum((v - y_mean) ** 2 for v in history)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+        result.confidence = max(0.0, min(1.0, r_squared))
 
-    def predict_batch(self, topics: Dict[str, List[float]], timeframe_days: int = 7) -> List[TrendPrediction]:
-        """Predict trends for multiple topics."""
-        return [self.predict(topic, history, timeframe_days) for topic, history in topics.items()]
+        return result
 
-    def rank_by_opportunity(self, predictions: List[TrendPrediction]) -> List[TrendPrediction]:
-        """Rank predictions by opportunity (rising + high confidence)."""
-        def opp_score(p: TrendPrediction) -> float:
-            direction_bonus = {"rising": 3, "stable": 2, "peak": 1, "falling": 0}
-            return p.predicted_score * p.confidence * direction_bonus.get(p.predicted_direction, 1)
-        return sorted(predictions, key=opp_score, reverse=True)
+    def predict_with_decay(self, topic: str, history: List[float],
+                           decay_rate: float = 0.1, timeframe_days: int = 7) -> TrendPrediction:
+        result = self.predict(topic, history, timeframe_days)
+        decay_factor = math.exp(-decay_rate * timeframe_days)
+        result.predicted_score *= decay_factor
+        if result.predicted_score < history[-1] * 0.5:
+            result.predicted_direction = "declining"
+        result.confidence *= decay_factor
+        return result

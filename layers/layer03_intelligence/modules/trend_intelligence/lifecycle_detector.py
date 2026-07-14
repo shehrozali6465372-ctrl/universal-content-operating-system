@@ -1,6 +1,6 @@
-"""Lifecycle Detector — detects where a trend is in its lifecycle."""
-
-from typing import List
+"""Lifecycle Detector - Detects where a trend is in its lifecycle."""
+from __future__ import annotations
+from typing import Dict, List
 
 
 class LifecycleStage:
@@ -12,37 +12,69 @@ class LifecycleStage:
 
 
 class LifecycleResult:
-    __slots__ = ("stage", "confidence", "progress_pct")
+    """Result of lifecycle detection."""
+    __slots__ = ("stage", "confidence", "progress_pct", "time_in_stage", "next_expected")
 
-    def __init__(self, stage: str = "emerging", confidence: float = 0.5, progress_pct: float = 0.0):
+    def __init__(self, stage: str = "emerging", confidence: float = 0.5,
+                 progress_pct: float = 0.0) -> None:
         self.stage = stage
         self.confidence = confidence
         self.progress_pct = progress_pct
+        self.time_in_stage = 0
+        self.next_expected = ""
 
-    def to_dict(self) -> dict:
-        return {"stage": self.stage, "confidence": self.confidence, "progress_pct": self.progress_pct}
+    def to_dict(self) -> Dict:
+        return {
+            "stage": self.stage, "confidence": round(self.confidence, 3),
+            "progress_pct": round(self.progress_pct, 3),
+            "time_in_stage": self.time_in_stage, "next_expected": self.next_expected,
+        }
 
 
 class LifecycleDetector:
-    def detect(self, scores: List[float]) -> LifecycleResult:
-        if len(scores) < 3:
+    """Detects the lifecycle stage of a trend based on data points."""
+
+    def detect(self, data_points: List[float]) -> LifecycleResult:
+        if len(data_points) < 3:
             return LifecycleResult(LifecycleStage.EMERGING, 0.3, 0.0)
 
-        peak = max(scores)
-        current = scores[-1]
-        ratio = current / max(peak, 0.1)
-        avg_first = sum(scores[:len(scores)//2]) / max(len(scores)//2, 1)
-        avg_second = sum(scores[len(scores)//2:]) / max(len(scores) - len(scores)//2, 1)
+        n = len(data_points)
+        first_third = data_points[:n // 3]
+        last_third = data_points[2 * n // 3:]
 
-        if ratio > 0.9 and avg_second > avg_first:
-            return LifecycleResult(LifecycleStage.GROWING, 0.8, 40.0)
-        elif ratio > 0.95:
-            return LifecycleResult(LifecycleStage.PEAK, 0.85, 70.0)
-        elif ratio < 0.3 and avg_second < avg_first:
-            return LifecycleResult(LifecycleStage.DECLINING, 0.8, 90.0)
-        elif ratio < 0.1:
-            return LifecycleResult(LifecycleStage.DEAD, 0.9, 100.0)
-        elif avg_second > avg_first * 1.2:
-            return LifecycleResult(LifecycleStage.GROWING, 0.7, 30.0)
+        avg_first = sum(first_third) / len(first_third) if first_third else 0
+        avg_last = sum(last_third) / len(last_third) if last_third else 0
+        max_val = max(data_points)
+        current = data_points[-1]
+        peak_idx = data_points.index(max_val)
+
+        growth = avg_last - avg_first
+        relative_growth = growth / max(max_val, 0.01)
+
+        if current < max_val * 0.3 and peak_idx < n * 0.6:
+            stage = LifecycleStage.DEAD
+            confidence = 0.7
+            progress = 1.0
+            next_exp = "N/A"
+        elif relative_growth < -0.2:
+            stage = LifecycleStage.DECLINING
+            confidence = 0.7
+            progress = 0.75
+            next_exp = "dead"
+        elif current >= max_val * 0.9 and n > 5 and peak_idx < n - 2:
+            stage = LifecycleStage.PEAK
+            confidence = 0.6
+            progress = 0.6
+            next_exp = "declining"
+        elif relative_growth > 0.15:
+            stage = LifecycleStage.GROWING
+            confidence = 0.7
+            progress = 0.3 + min(0.3, relative_growth)
+            next_exp = "peak"
         else:
-            return LifecycleResult(LifecycleStage.EMERGING, 0.6, 10.0)
+            stage = LifecycleStage.EMERGING
+            confidence = 0.5
+            progress = 0.1 + min(0.2, relative_growth + 0.2)
+            next_exp = "growing"
+
+        return LifecycleResult(stage, confidence, round(progress, 3))

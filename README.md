@@ -35,7 +35,7 @@ ai-self-improving-facebook-agent/
 |---|-------|------|-------------|--------|---------|
 | 01 | `layer01_core` | **Core System** | Config, secrets, database, memory, logging, scheduling, file management, backup | ✅ Complete | v0.1.11 |
 | 02 | `layer02_research` | **Research Engine** | Trend discovery, competitor analysis, audience research, fact verification, topic scoring, orchestration | ✅ Complete | v0.2.9 |
-| 03 | `layer03_intelligence` | **AI Intelligence** | Semantic analysis, entity linking, contradiction detection, clustering | ✅ Module 1 Frozen | v0.3.4 |
+| 03 | `layer03_intelligence` | **AI Intelligence** | Semantic analysis, trend intelligence, lifecycle detection, virality prediction | ✅ 2/10 Modules | v0.3.6 |
 | 04 | `layer04_writing` | **Content Writing** | Post generation, captions, hashtags, A/B variants | 🔜 Planned | — |
 | 05 | `layer05_image` | **Image & Visual** | Image generation, memes, infographics, thumbnails | 🔜 Planned | — |
 | 06 | `layer06_quality` | **Quality Check** | Spam filter, tone check, fact-check, compliance | 🔜 Planned | — |
@@ -48,9 +48,9 @@ ai-self-improving-facebook-agent/
 
 | Metric | Value |
 |--------|-------|
-| Current Version | v0.3.4 |
+| Current Version | v0.3.6 |
 | Layers Complete | 2/10 + Module 1 frozen (25%) |
-| Total Tests | 725 |
+| Total Tests | 818 |
 | Code Coverage | 95%+ |
 | CI/CD | ✅ Passing |
 
@@ -60,7 +60,7 @@ ai-self-improving-facebook-agent/
 | Module | Name | Status | Version |
 |--------|------|--------|---------|
 | 1 | Semantic Analyzer | ✅ **Frozen** | v0.3.4 |
-| 2 | Trend Intelligence | ⏳ Pending | — |
+| 2 | Trend Intelligence | ✅ Complete | v0.3.6 |
 | 3 | Reasoning Engine | ⏳ Pending | — |
 | 4 | Content Intelligence | ⏳ Pending | — |
 | 5 | Recommendation Engine | ⏳ Pending | — |
