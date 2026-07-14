@@ -14,6 +14,7 @@ from layers.shared.models.decision import DecisionTrace, DecisionRecord
 from layers.shared.models.content import ContentPost, ContentVariant
 from layers.shared.models.analytics import AnalyticsSnapshot, EngagementMetrics
 from layers.shared.models.event import Event, EventType
+from layers.shared.llm_provider import BaseLLMProvider, LLMResponse, LLMFactory
 
 __all__ = [
     "Topic", "TopicScore",
@@ -23,4 +24,5 @@ __all__ = [
     "ContentPost", "ContentVariant",
     "AnalyticsSnapshot", "EngagementMetrics",
     "Event", "EventType",
+    "BaseLLMProvider", "LLMResponse", "LLMFactory",
 ]
