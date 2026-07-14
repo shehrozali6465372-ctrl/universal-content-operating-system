@@ -1,4 +1,25 @@
 # 📋 Changelog
+## [v0.2.9] - 2026-07-14
+### Added
+- **Layer 2: Research Engine — Module 10: Research Orchestrator** (Complete) 🎉
+  - `research_orchestrator/orchestrator_manager.py` — Main conductor: create, execute, pause, resume, cancel
+  - `research_orchestrator/pipeline_manager.py` — Pipeline lifecycle, wave-based execution, result aggregation
+  - `research_orchestrator/workflow_engine.py` — Workflow definitions, module registration, default research pipeline
+  - `research_orchestrator/execution_context.py` — Execution state tracking, progress, serialization
+  - `research_orchestrator/state_manager.py` — State machine with valid transitions, history
+  - `research_orchestrator/checkpoint_manager.py` — Save/restore with SHA-256 integrity verification
+  - `research_orchestrator/retry_coordinator.py` — Exponential backoff, configurable retry limits
+  - `research_orchestrator/parallel_executor.py` — Dependency-aware parallel wave execution
+  - `research_orchestrator/failure_handler.py` — Error classification, recovery strategies, fallback execution
+  - `research_orchestrator/metrics_collector.py` — Module and execution metrics, performance analysis
+  - `research_orchestrator/exceptions.py` — 7 custom exception types
+  - Tests: 153/153 passed
+
+### Milestone
+- **LAYER 2: RESEARCH ENGINE — 100% COMPLETE** 🎉
+- Total Layer 2 tests: 299 (146 Planner + 153 Orchestrator)
+
+
 ## [v0.2.8] - 2026-07-14
 ### Added
 - **Layer 2: Research Engine — Module 9: Research Planner** (Complete)
