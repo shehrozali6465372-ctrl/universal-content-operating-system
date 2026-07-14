@@ -1,4 +1,19 @@
 # 📋 Changelog
+## [v0.2.8] - 2026-07-14
+### Added
+- **Layer 2: Research Engine — Module 9: Research Planner** (Complete)
+  - `research_planner/planner_manager.py` — Main orchestrator: create plan, optimize, execute, track
+  - `research_planner/goal_manager.py` — Research goal creation, tracking, achievement detection
+  - `research_planner/research_plan.py` — Plan and task data models with serialization
+  - `research_planner/task_decomposer.py` — Goal decomposition into module-specific tasks
+  - `research_planner/dependency_graph.py` — DAG with cycle detection, topological sort, ready nodes
+  - `research_planner/priority_engine.py` — Score-based priority assignment, failure adjustment, rebalancing
+  - `research_planner/resource_estimator.py` — Time, API, memory, cost, confidence estimation
+  - `research_planner/plan_optimizer.py` — Parallel execution waves, critical path, time/cost optimization
+  - `research_planner/exceptions.py` — 7 custom exception types
+  - Tests: 146/146 passed
+
+
 ## [v0.2.0] - 2026-07-13
 ### Added
 - **Layer 2: Research Engine — Module 1: Trend Discovery** (Complete)
