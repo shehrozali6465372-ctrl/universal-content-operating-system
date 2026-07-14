@@ -1,4 +1,34 @@
 # 📋 Changelog
+## [v0.3.4] - 2026-07-14
+### Added
+- **Layer 3 Module 1: Semantic Analyzer — Sprint 4 Complete & FROZEN** 🔒
+  - `contradiction_detector.py` — Semantic contradiction detection (negation, antonym, directional) with basic lemmatizer
+  - `semantic_clusterer.py` — Groups similar texts into clusters with configurable similarity threshold
+  - `duplicate_detector.py` — Duplicate meaning detection with synonym matching, word normalization, phrase matching
+  - `batch_processor.py` — Batch analysis with shared cache and performance metrics
+  - Basic English lemmatizer with common word form lookup for better matching
+  - Bidirectional synonym matching with word-level overlap detection
+  - Abbreviation normalization (AI → artificial_intelligence, ML → machine_learning)
+  - 49/49 Sprint 4 tests passed
+
+### Frozen
+- **Module 1: Semantic Analyzer — PUBLIC API FROZEN** 🔒
+  - SemanticAnalyzer (analyze, extract_topics, detect_intent, detect_context, semantic_score, semantic_similarity)
+  - EntityLinker (link_entities, get_entity)
+  - EmbeddingEngine (encode, cosine_similarity, batch_encode)
+  - TopicHierarchy (add_topic, get_children, get_parents, get_all)
+  - AmbiguityDetector (detect, is_ambiguous, get_ambiguity_score)
+  - ConfidenceCalibrator (calibrate, calibrate_batch, get_calibration_stats)
+  - ContradictionDetector (detect, detect_batch, has_contradiction, find_contradictions)
+  - SemanticClusterer (cluster, assign, get_cluster, merge_clusters, summary)
+  - DuplicateDetector (detect, find_duplicates, deduplicate, get_groups)
+  - BatchProcessor (analyze_many, analyze_with_cache, get_metrics, clear_cache)
+
+### Stats
+- Total Tests: 725 (all passing)
+- Lint: Clean (Ruff)
+- Layer 3 Progress: Module 1 frozen, Modules 2-10 pending
+
 ## [v0.3.1] - 2026-07-14
 ### Added
 - **Layer 3 Module 1: Semantic Analyzer v1** (Sprint 1 Complete)
