@@ -1,4 +1,18 @@
 # 📋 Changelog
+## [v0.3.1] - 2026-07-14
+### Added
+- **Layer 3 Module 1: Semantic Analyzer v1** (Sprint 1 Complete)
+  - `semantic_analyzer.py` — Production-grade semantic analysis
+  - Public API: analyze(), extract_topics(), detect_intent(), detect_context(),
+    semantic_score(), semantic_similarity()
+  - SemanticResult model with topic, intent, entities, sentiment, context,
+    complexity, confidence, and composite semantic_score
+  - Mixed Urdu/English (Hinglish) support
+  - Entity extraction: persons, organizations, dates, URLs, hashtags, mentions
+  - Event Bus integration (optional)
+  - Tests: 68/68 passed
+
+
 ## [v0.3.0] - 2026-07-14
 ### Added
 - **Layer 3: Intelligence Engine — All 10 Modules** (Complete) 🧠

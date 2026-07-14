@@ -12,7 +12,7 @@ Transforms raw research data into actionable intelligence — understanding cont
 
 | # | Module | Description | Status |
 |---|--------|-------------|--------|
-| 1 | Content Understanding | Topic extraction, intent detection, entity recognition, keyword analysis | ✅ |
+| 1 | Content Understanding | Topic extraction, intent detection, entity recognition, keyword analysis + **Semantic Analyzer v1** | ✅ |
 | 2 | Trend Intelligence | Trend prediction, momentum analysis, lifecycle detection | ✅ |
 | 3 | Reasoning Engine | Rule engine, decision engine, strategy selection | ✅ |
 | 4 | Content Intelligence | Quality estimation, virality prediction, audience fit | ✅ |
