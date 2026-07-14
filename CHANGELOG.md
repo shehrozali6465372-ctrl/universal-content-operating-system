@@ -1,4 +1,24 @@
 # 📋 Changelog
+## [v0.3.0] - 2026-07-14
+### Added
+- **Layer 3: Intelligence Engine — All 10 Modules** (Complete) 🧠
+  - `content_understanding/` — Topic extraction, intent detection, entity recognition, keyword analysis
+  - `trend_intelligence/` — Trend prediction, momentum analysis, lifecycle detection
+  - `reasoning_engine/` — Rule engine, decision engine, strategy selection
+  - `content_intelligence/` — Quality estimation, virality prediction, audience fit
+  - `recommendation_engine/` — Topic, content, and posting recommendations
+  - `learning_signals/` — Feedback normalization, success/failure signals
+  - `knowledge_fusion/` — Combine Layer 2 outputs, resolve conflicts
+  - `strategy_engine/` — Short-term and long-term strategy planning
+  - `intelligence_memory/` — Intelligence caching and reuse
+  - `intelligence_orchestrator/` — Full layer coordination with cache
+  - Tests: 89/89 passed
+
+### Milestone
+- **LAYER 3: INTELLIGENCE ENGINE — 100% COMPLETE** 🧠
+- Total tests: 499
+
+
 ## [v0.2.9] - 2026-07-14
 ### Added
 - **Layer 2: Research Engine — Module 10: Research Orchestrator** (Complete) 🎉
