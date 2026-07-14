@@ -12,13 +12,16 @@ from layers.layer03_intelligence.modules.trend_intelligence.virality_predictor i
 from layers.layer03_intelligence.modules.trend_intelligence.cross_platform_fusion import CrossPlatformFusion
 from layers.layer03_intelligence.modules.trend_intelligence.trend_confidence import TrendConfidence
 from layers.layer03_intelligence.modules.trend_intelligence.trend_explainer import TrendExplainer
+from layers.layer03_intelligence.modules.trend_intelligence.trend_evidence import TrendEvidence, TrendEvidenceBuilder
+from layers.layer03_intelligence.modules.trend_intelligence.trend_history import TrendHistory
+from layers.layer03_intelligence.modules.trend_intelligence.trend_events import TrendEventBus, TrendEventEmitter
 
 
 class TrendAnalysisResult:
     """Complete trend analysis result combining all sub-modules."""
     __slots__ = ("topic", "normalized", "momentum", "lifecycle", "seasonality",
                  "virality", "cross_platform", "confidence", "explanation",
-                 "recommendation", "timestamp")
+                 "evidence", "recommendation", "timestamp")
 
     def __init__(self, topic: str = "") -> None:
         self.topic = topic
@@ -30,6 +33,7 @@ class TrendAnalysisResult:
         self.cross_platform: Optional[Any] = None
         self.confidence: Optional[Any] = None
         self.explanation: Optional[Any] = None
+        self.evidence: Optional[TrendEvidence] = None
         self.recommendation = ""
         self.timestamp = time.time()
 
@@ -44,13 +48,25 @@ class TrendAnalysisResult:
             "cross_platform": self.cross_platform.to_dict() if self.cross_platform else None,
             "confidence": self.confidence.to_dict() if self.confidence else None,
             "explanation": self.explanation.to_dict() if self.explanation else None,
+            "evidence": self.evidence.to_dict() if self.evidence else None,
             "recommendation": self.recommendation,
             "timestamp": self.timestamp,
         }
 
 
 class TrendManager:
-    """Main orchestrator for trend intelligence analysis."""
+    """Main orchestrator for trend intelligence analysis.
+
+    Usage::
+
+        manager = TrendManager()
+        result = manager.analyze_topic("AI Jobs", {
+            "scores": [{"source": "google_trends", "score": 85, "volume": 5000}],
+            "momentum_data": [0.1, 0.3, 0.5, 0.7, 0.8],
+            "platform_data": {"twitter": 0.8, "reddit": 0.7, "google_trends": 0.9},
+        })
+        print(result.to_dict())
+    """
 
     def __init__(self) -> None:
         self.collector = TrendCollector()
@@ -62,6 +78,10 @@ class TrendManager:
         self.cross_platform = CrossPlatformFusion()
         self.confidence = TrendConfidence()
         self.explainer = TrendExplainer()
+        self.evidence_builder = TrendEvidenceBuilder()
+        self.history = TrendHistory()
+        self.event_bus = TrendEventBus()
+        self.event_emitter = TrendEventEmitter(self.event_bus)
 
     def analyze_topic(self, topic: str, data: Dict) -> TrendAnalysisResult:
         """Run full trend analysis pipeline for a topic."""
@@ -70,6 +90,8 @@ class TrendManager:
         scores = data.get("scores", [])
         if scores:
             result.normalized = self.normalizer.normalize(topic, scores)
+            for s in scores:
+                self.collector.collect(topic, s.get("source", ""), s.get("score", 0))
 
         momentum_data = data.get("momentum_data", [])
         if momentum_data:
@@ -99,16 +121,29 @@ class TrendManager:
         }
         result.confidence = self.confidence.calculate(topic, confidence_signals)
 
-        analysis_for_explainer = {
+        # Build evidence
+        analysis_dict = {
             "momentum": result.momentum.to_dict() if result.momentum else {},
             "lifecycle": result.lifecycle.to_dict() if result.lifecycle else {},
-            "platforms": result.cross_platform.to_dict() if result.cross_platform else {},
+            "cross_platform": result.cross_platform.to_dict() if result.cross_platform else {},
             "virality": result.virality.to_dict() if result.virality else {},
             "confidence": result.confidence.to_dict() if result.confidence else {},
+            "seasonality": result.seasonality.to_dict() if result.seasonality else {},
             "competition": data.get("competition", {}),
         }
-        result.explanation = self.explainer.explain(topic, analysis_for_explainer)
+        result.evidence = self.evidence_builder.build(topic, analysis_dict)
+        result.evidence.conclusion = f"Trend '{topic}' analysis complete"
+        result.evidence.calculate_strength()
+
+        # Explanation
+        result.explanation = self.explainer.explain(topic, analysis_dict)
         result.recommendation = result.explanation.recommendation
+
+        # Record history
+        self.history.record_analysis(topic, result)
+
+        # Emit events
+        self.event_emitter.analyze_and_emit(topic, result)
 
         return result
 
@@ -119,7 +154,8 @@ class TrendManager:
         def _score(r: TrendAnalysisResult) -> float:
             conf = r.confidence.overall_confidence if r.confidence else 0.0
             fused = r.cross_platform.fused_score if r.cross_platform else 0.0
-            return conf * 0.6 + fused * 0.4
+            evidence = r.evidence.overall_strength if r.evidence else 0.0
+            return conf * 0.4 + fused * 0.3 + evidence * 0.3
         return sorted(results, key=_score, reverse=True)
 
     def get_health(self) -> Dict:
@@ -128,7 +164,11 @@ class TrendManager:
                 "TrendCollector", "TrendNormalizer", "MomentumAnalyzer",
                 "LifecycleDetector", "SeasonalityAnalyzer", "ViralityPredictor",
                 "CrossPlatformFusion", "TrendConfidence", "TrendExplainer",
+                "TrendEvidenceBuilder", "TrendHistory", "TrendEventEmitter",
             ],
             "status": "healthy",
             "entries_collected": self.collector.count(),
+            "topics_tracked": self.history.get_stats()["total_topics"],
+            "total_snapshots": self.history.get_stats()["total_snapshots"],
+            "events_emitted": self.event_bus.get_event_count(),
         }

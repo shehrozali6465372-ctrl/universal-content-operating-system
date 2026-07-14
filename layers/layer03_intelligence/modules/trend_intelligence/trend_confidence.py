@@ -29,6 +29,16 @@ class TrendConfidenceResult:
             "consistency_confidence": round(self.consistency_confidence, 3),
             "risk_level": self.risk_level,
             "factors": list(self.factors), "explanation": self.explanation,
+            "breakdown": {
+                "data_quality": round(self.data_confidence, 3),
+                "source_reliability": round(self.source_confidence, 3),
+                "recency": round(self.recency_confidence, 3),
+                "consistency": round(self.consistency_confidence, 3),
+                "weighted_data": round(self.data_confidence * 0.3, 3),
+                "weighted_source": round(self.source_confidence * 0.25, 3),
+                "weighted_recency": round(self.recency_confidence * 0.25, 3),
+                "weighted_consistency": round(self.consistency_confidence * 0.2, 3),
+            },
         }
 
 

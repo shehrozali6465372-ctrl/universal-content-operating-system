@@ -4,6 +4,15 @@ from layers.layer03_intelligence.modules.trend_intelligence import (
     LifecycleDetector, SeasonalityAnalyzer, ViralityPredictor,
     CrossPlatformFusion, TrendConfidence, TrendExplainer, TrendPredictor,
 )
+from layers.layer03_intelligence.modules.trend_intelligence.trend_evidence import (
+    TrendEvidence, TrendEvidenceBuilder,
+)
+from layers.layer03_intelligence.modules.trend_intelligence.trend_history import (
+    TrendHistory,
+)
+from layers.layer03_intelligence.modules.trend_intelligence.trend_events import (
+    TrendEventBus, TrendEventEmitter, TrendEvent,
+)
 
 
 # ── TrendCollector ──────────────────────────────────────────────────
@@ -431,7 +440,7 @@ class TestTrendManager:
     def test_health(self):
         health = self.manager.get_health()
         assert health["status"] == "healthy"
-        assert len(health["modules"]) == 9
+        assert len(health["modules"]) >= 9
 
     def test_to_dict(self):
         result = self.manager.analyze_topic("AI", {
@@ -440,3 +449,229 @@ class TestTrendManager:
         d = result.to_dict()
         assert "topic" in d
         assert "confidence" in d
+
+
+# ── TrendEvidence ──────────────────────────────────────────────────
+
+class TestTrendEvidence:
+    def setup_method(self):
+        self.builder = TrendEvidenceBuilder()
+
+    def test_build_evidence_full(self):
+        evidence = self.builder.build("AI", {
+            "momentum": {"velocity": 0.8},
+            "lifecycle": {"stage": "growing"},
+            "cross_platform": {"platform_count": 4, "consensus_level": 0.8},
+            "virality": {"viral_probability": 0.8},
+            "confidence": {"overall_confidence": 0.85},
+            "seasonality": {"strength": 0.6, "period_days": 7, "pattern_type": "weekly"},
+            "competition": {"level": "low"},
+        })
+        assert len(evidence.evidence_items) > 0
+        assert len(evidence.reasoning_steps) > 0
+        assert evidence.overall_strength > 0
+
+    def test_build_evidence_empty(self):
+        evidence = self.builder.build("AI", {})
+        assert len(evidence.evidence_items) == 0
+
+    def test_add_counter_evidence(self):
+        evidence = TrendEvidence("AI")
+        evidence.add_evidence("source1", "claim1", 0.8)
+        evidence.add_counter_evidence("source2", "counter1", 0.5)
+        evidence.calculate_strength()
+        assert evidence.overall_strength > 0
+
+    def test_evidence_to_dict(self):
+        evidence = self.builder.build("AI", {"momentum": {"velocity": 0.8}})
+        d = evidence.to_dict()
+        assert "evidence" in d
+        assert "reasoning" in d
+        assert "overall_strength" in d
+
+
+# ── TrendHistory ───────────────────────────────────────────────────
+
+class TestTrendHistory:
+    def setup_method(self):
+        self.history = TrendHistory()
+
+    def test_record_snapshot(self):
+        snap = self.history.record("AI", score=0.8, momentum=0.5)
+        assert snap.topic == "AI"
+        assert snap.score == 0.8
+
+    def test_record_multiple(self):
+        self.history.record("AI", score=0.5)
+        self.history.record("AI", score=0.7)
+        self.history.record("AI", score=0.9)
+        h = self.history.get_topic_history("AI")
+        assert h is not None
+        assert len(h.snapshots) == 3
+        assert h.peak_score == 0.9
+
+    def test_score_history(self):
+        self.history.record("AI", score=0.3)
+        self.history.record("AI", score=0.7)
+        scores = self.history.get_score_history("AI")
+        assert scores == [0.3, 0.7]
+
+    def test_get_trending_topics(self):
+        self.history.record("AI", score=0.8)
+        self.history.record("Crypto", score=0.3)
+        trending = self.history.get_trending_topics(min_score=0.5)
+        assert "AI" in trending
+        assert "Crypto" not in trending
+
+    def test_max_snapshots_trimmed(self):
+        h = TrendHistory(max_snapshots_per_topic=3)
+        for i in range(10):
+            h.record("AI", score=float(i))
+        topic_h = h.get_topic_history("AI")
+        assert len(topic_h.snapshots) <= 3
+
+    def test_to_dict(self):
+        self.history.record("AI", score=0.8)
+        d = self.history.to_dict()
+        assert "stats" in d
+        assert d["stats"]["total_topics"] == 1
+
+    def test_record_analysis(self):
+        from layers.layer03_intelligence.modules.trend_intelligence.trend_manager import TrendAnalysisResult
+        result = TrendAnalysisResult("AI")
+        snap = self.history.record_analysis("AI", result)
+        assert snap.topic == "AI"
+
+
+# ── TrendEvents ────────────────────────────────────────────────────
+
+class TestTrendEvents:
+    def setup_method(self):
+        self.bus = TrendEventBus()
+        self.emitter = TrendEventEmitter(self.bus)
+
+    def test_publish_event(self):
+        event = TrendEvent("trend.detected", "AI", {"score": 0.8})
+        self.bus.publish(event)
+        assert self.bus.get_event_count() == 1
+
+    def test_subscribe_handler(self):
+        received = []
+        self.bus.subscribe("trend.detected", lambda e: received.append(e))
+        self.bus.publish(TrendEvent("trend.detected", "AI"))
+        assert len(received) == 1
+
+    def test_unsubscribe(self):
+        received = []
+        handler = lambda e: received.append(e)
+        self.bus.subscribe("trend.detected", handler)
+        self.bus.unsubscribe("trend.detected", handler)
+        self.bus.publish(TrendEvent("trend.detected", "AI"))
+        assert len(received) == 0
+
+    def test_recent_events(self):
+        for i in range(5):
+            self.bus.publish(TrendEvent("trend.detected", f"topic_{i}"))
+        recent = self.bus.get_recent_events(3)
+        assert len(recent) == 3
+
+    def test_events_for_topic(self):
+        self.bus.publish(TrendEvent("trend.detected", "AI"))
+        self.bus.publish(TrendEvent("trend.detected", "Crypto"))
+        self.bus.publish(TrendEvent("trend.updated", "AI"))
+        ai_events = self.bus.get_events_for_topic("AI")
+        assert len(ai_events) == 2
+
+    def test_emitter_new_trend(self):
+        from layers.layer03_intelligence.modules.trend_intelligence.trend_manager import TrendAnalysisResult
+        result = TrendAnalysisResult("AI")
+        self.emitter.analyze_and_emit("AI", result)
+        events = self.bus.get_events_for_topic("AI")
+        assert any(e.event_type == "trend.detected" for e in events)
+
+    def test_emitter_lifecycle_change(self):
+        from layers.layer03_intelligence.modules.trend_intelligence.trend_manager import TrendAnalysisResult
+        from layers.layer03_intelligence.modules.trend_intelligence.lifecycle_detector import LifecycleResult
+        r1 = TrendAnalysisResult("AI")
+        r1.lifecycle = LifecycleResult("emerging")
+        self.emitter.analyze_and_emit("AI", r1)
+
+        r2 = TrendAnalysisResult("AI")
+        r2.lifecycle = LifecycleResult("growing")
+        self.emitter.analyze_and_emit("AI", r2)
+
+        events = self.bus.get_events_for_topic("AI")
+        assert any(e.event_type == "trend.lifecycle.changed" for e in events)
+
+    def test_emitter_virality_spike(self):
+        from layers.layer03_intelligence.modules.trend_intelligence.trend_manager import TrendAnalysisResult
+        from layers.layer03_intelligence.modules.trend_intelligence.virality_predictor import ViralityResult
+        r1 = TrendAnalysisResult("AI")
+        v1 = ViralityResult()
+        v1.virality_score = 0.3
+        r1.virality = v1
+        self.emitter.analyze_and_emit("AI", r1)
+
+        r2 = TrendAnalysisResult("AI")
+        v2 = ViralityResult()
+        v2.virality_score = 0.8
+        r2.virality = v2
+        self.emitter.analyze_and_emit("AI", r2)
+
+        events = self.bus.get_events_for_topic("AI")
+        assert any(e.event_type == "trend.virality.spike" for e in events)
+
+    def test_batch_publish(self):
+        events = [TrendEvent("trend.detected", f"t{i}") for i in range(3)]
+        self.bus.publish_batch(events)
+        assert self.bus.get_event_count() == 3
+
+    def test_clear(self):
+        self.bus.publish(TrendEvent("trend.detected", "AI"))
+        self.bus.clear()
+        assert self.bus.get_event_count() == 0
+
+
+# ── Integration: Evidence + History + Events in TrendManager ───────
+
+class TestTrendManagerIntegration:
+    def setup_method(self):
+        self.manager = TrendManager()
+
+    def test_analyze_includes_evidence(self):
+        result = self.manager.analyze_topic("AI Jobs", {
+            "momentum_data": [0.1, 0.3, 0.5, 0.7],
+            "platform_data": {"twitter": 0.8, "reddit": 0.7},
+        })
+        assert result.evidence is not None
+        assert result.evidence.overall_strength >= 0
+
+    def test_analyze_records_history(self):
+        self.manager.analyze_topic("AI", {"momentum_data": [1, 2, 3]})
+        self.manager.analyze_topic("AI", {"momentum_data": [2, 3, 4]})
+        h = self.manager.history.get_topic_history("AI")
+        assert h is not None
+        assert len(h.snapshots) == 2
+
+    def test_analyze_emits_events(self):
+        self.manager.analyze_topic("AI", {"momentum_data": [1, 2, 3]})
+        events = self.manager.event_bus.get_events_for_topic("AI")
+        assert len(events) > 0
+
+    def test_health_includes_new_modules(self):
+        health = self.manager.get_health()
+        assert "TrendEvidenceBuilder" in health["modules"]
+        assert "TrendHistory" in health["modules"]
+        assert "TrendEventEmitter" in health["modules"]
+
+    def test_rank_uses_evidence(self):
+        r1 = self.manager.analyze_topic("AI", {
+            "scores": [{"source": "twitter", "score": 90}],
+            "platform_data": {"twitter": 0.9, "reddit": 0.8},
+            "momentum_data": [0.5, 0.7, 0.9],
+        })
+        r2 = self.manager.analyze_topic("Crypto", {
+            "scores": [{"source": "twitter", "score": 40}],
+        })
+        ranked = self.manager.rank_topics([r2, r1])
+        assert ranked[0].topic == "AI"

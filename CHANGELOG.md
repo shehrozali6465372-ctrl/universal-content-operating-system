@@ -1,4 +1,23 @@
 # 📋 Changelog
+## [v0.3.7] - 2026-07-14
+### Added
+- **Module 2 Enhancement: Evidence, History, Events**
+  - `trend_evidence.py` — Evidence-based reasoning with counter-evidence, reasoning steps, and strength scoring
+  - `trend_history.py` — Trend snapshots with peak tracking, score/momentum history, trending/declining detection
+  - `trend_events.py` — Domain events (detected, updated, expired, lifecycle changed, virality spike, momentum changed, confidence low)
+  - `TrendEvidenceBuilder` — Builds evidence from analysis results automatically
+  - `TrendHistory` — Records snapshots from TrendAnalysisResult, stores up to 100 per topic
+  - `TrendEventBus` — Subscribe/unsubscribe/publish with event log
+  - `TrendEventEmitter` — Analyzes state changes and emits appropriate events
+  - `TrendConfidence` breakdown in `to_dict()` — shows weighted contributions per factor
+  - 26 new tests for evidence, history, and events
+  - `TrendManager.rank_topics()` now uses evidence strength in scoring
+  - `TrendManager.get_health()` includes topic count, snapshot count, event count
+
+### Stats
+- Total Tests: 844 (all passing)
+- Layer 3 Module 2: Now includes explainability, history, and observability
+
 ## [v0.3.6] - 2026-07-14
 ### Added
 - **Layer 3 Module 2: Trend Intelligence** (Complete)

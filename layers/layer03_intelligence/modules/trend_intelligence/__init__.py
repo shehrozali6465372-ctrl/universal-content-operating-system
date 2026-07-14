@@ -10,9 +10,14 @@ from layers.layer03_intelligence.modules.trend_intelligence.cross_platform_fusio
 from layers.layer03_intelligence.modules.trend_intelligence.trend_confidence import TrendConfidence
 from layers.layer03_intelligence.modules.trend_intelligence.trend_explainer import TrendExplainer
 from layers.layer03_intelligence.modules.trend_intelligence.trend_predictor import TrendPredictor
+from layers.layer03_intelligence.modules.trend_intelligence.trend_evidence import TrendEvidence, TrendEvidenceBuilder
+from layers.layer03_intelligence.modules.trend_intelligence.trend_history import TrendHistory, TrendSnapshot
+from layers.layer03_intelligence.modules.trend_intelligence.trend_events import TrendEventBus, TrendEventEmitter
 
 __all__ = [
     "TrendManager", "TrendCollector", "TrendNormalizer", "MomentumAnalyzer",
     "LifecycleDetector", "SeasonalityAnalyzer", "ViralityPredictor",
     "CrossPlatformFusion", "TrendConfidence", "TrendExplainer", "TrendPredictor",
+    "TrendEvidence", "TrendEvidenceBuilder", "TrendHistory", "TrendSnapshot",
+    "TrendEventBus", "TrendEventEmitter",
 ]
