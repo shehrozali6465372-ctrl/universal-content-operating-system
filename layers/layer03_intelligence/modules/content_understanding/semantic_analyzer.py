@@ -30,6 +30,7 @@ import re
 from typing import Dict, List, Set, Tuple
 
 from layers.shared.models.event import Event, EventType
+from layers.layer03_intelligence.modules.content_understanding.entity_linker import EntityLinker
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ class SemanticResult:
         "topic", "topics", "intent", "intent_confidence",
         "entities", "sentiment", "sentiment_score",
         "context", "confidence", "complexity", "complexity_score",
-        "semantic_score", "word_count", "sentence_count",
+        "semantic_score", "word_count", "sentence_count", "reasoning", "linked_entities",
     )
 
     def __init__(self) -> None:
@@ -150,6 +151,8 @@ class SemanticResult:
         self.semantic_score: float = 0.0
         self.word_count: int = 0
         self.sentence_count: int = 0
+        self.reasoning: List[str] = []
+        self.linked_entities: List = []
 
     def to_dict(self) -> Dict:
         return {
@@ -167,6 +170,8 @@ class SemanticResult:
             "semantic_score": round(self.semantic_score, 2),
             "word_count": self.word_count,
             "sentence_count": self.sentence_count,
+            "reasoning": list(self.reasoning),
+            "linked_entities": [e.to_dict() for e in self.linked_entities],
         }
 
     def __repr__(self) -> str:
@@ -199,6 +204,7 @@ class SemanticAnalyzer:
                             the global EventBus after each analysis.
         """
         self.publish_events = publish_events
+        self.entity_linker = EntityLinker()
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -241,8 +247,16 @@ class SemanticAnalyzer:
         # 7. Semantic score (composite)
         result.semantic_score = self._compute_semantic_score(result)
 
-        # 8. Overall confidence
+        # 8. Overall confidence with reasoning
         result.confidence = self._compute_confidence(result)
+
+        # 9. Entity linking
+        raw_entities = self._extract_entities(clean)
+        result.entities = raw_entities
+        result.linked_entities = self.entity_linker.link(raw_entities, clean)
+
+        # 10. Build reasoning trail
+        result.reasoning = self._build_reasoning(result)
 
         # 9. Event Bus integration
         if self.publish_events:
@@ -543,6 +557,50 @@ class SemanticAnalyzer:
             return 0.0
 
         return round(sum(signals) / len(signals), 3)
+
+
+    def _build_reasoning(self, r: SemanticResult) -> List[str]:
+        """Build explainable reasoning trail for the analysis."""
+        reasons: List[str] = []
+
+        if r.topics:
+            reasons.append(
+                f"Topic detected as '{r.topic}' based on keyword frequency analysis."
+            )
+
+        if r.intent != "unknown":
+            reasons.append(
+                f"Intent classified as '{r.intent}' "
+                f"(confidence: {r.intent_confidence:.0%}) — "
+                f"intent keywords found in text."
+            )
+
+        if r.sentiment != "neutral":
+            polarity = "positive" if r.sentiment_score > 0 else "negative"
+            reasons.append(
+                f"Sentiment is {r.sentiment} ({r.sentiment_score:+.2f}) — "
+                f"{polarity} polarity words detected."
+            )
+
+        if r.context != "general":
+            reasons.append(
+                f"Context identified as '{r.context}' — "
+                f"domain-specific keywords matched."
+            )
+
+        if r.entities:
+            reasons.append(
+                f"Extracted {len(r.entities)} entities "
+                f"({len(r.linked_entities)} linked to knowledge base)."
+            )
+
+        reasons.append(
+            f"Complexity: {r.complexity} "
+            f"(score: {r.complexity_score:.2f}) — "
+            f"based on word length and sentence structure."
+        )
+
+        return reasons
 
     def _publish_event(self, result: SemanticResult) -> None:
         """Publish analysis completion event to the global EventBus."""

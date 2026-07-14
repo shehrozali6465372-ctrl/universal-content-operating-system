@@ -455,3 +455,92 @@ class TestPerformance:
             self.a.semantic_similarity("AI technology software", "AI data technology")
         elapsed = time.time() - start
         assert elapsed < 3.0, f"100 similarities took {elapsed:.2f}s"
+
+
+class TestReasoningField:
+    """Tests for explainable reasoning trail (Sprint 2)."""
+
+    def setup_method(self):
+        self.a = SemanticAnalyzer()
+
+    def test_reasoning_populated(self):
+        r = self.a.analyze("OpenAI released GPT-5 for AI research")
+        assert len(r.reasoning) > 0
+
+    def test_reasoning_contains_topic(self):
+        r = self.a.analyze("AI technology software programming")
+        topic_reasons = [x for x in r.reasoning if "Topic" in x]
+        assert len(topic_reasons) > 0
+
+    def test_reasoning_contains_intent(self):
+        r = self.a.analyze("How to learn Python guide tutorial")
+        intent_reasons = [x for x in r.reasoning if "Intent" in x]
+        assert len(intent_reasons) > 0
+
+    def test_reasoning_contains_sentiment(self):
+        r = self.a.analyze("Amazing wonderful excellent great fantastic")
+        sent_reasons = [x for x in r.reasoning if "Sentiment" in x]
+        assert len(sent_reasons) > 0
+
+    def test_reasoning_contains_complexity(self):
+        r = self.a.analyze("The implementation of sophisticated algorithms")
+        comp_reasons = [x for x in r.reasoning if "Complexity" in x]
+        assert len(comp_reasons) > 0
+
+    def test_reasoning_empty_text(self):
+        r = self.a.analyze("")
+        assert r.reasoning == []
+
+    def test_reasoning_in_dict(self):
+        r = self.a.analyze("AI technology")
+        d = r.to_dict()
+        assert "reasoning" in d
+        assert isinstance(d["reasoning"], list)
+
+
+class TestLinkedEntities:
+    """Tests for entity linking integration (Sprint 2)."""
+
+    def setup_method(self):
+        self.a = SemanticAnalyzer()
+
+    def test_linked_entities_populated(self):
+        r = self.a.analyze("OpenAI released GPT-5 at Google headquarters")
+        assert len(r.linked_entities) > 0
+
+    def test_linked_entity_canonical(self):
+        r = self.a.analyze("OpenAI is transforming AI")
+        openai = [e for e in r.linked_entities if "openai" in e.text.lower()]
+        assert len(openai) > 0
+        assert openai[0].canonical == "OpenAI"
+
+    def test_linked_entity_type(self):
+        r = self.a.analyze("OpenAI released GPT-5 for AI research")
+        linked = r.linked_entities
+        types = [e.entity_type for e in linked]
+        assert "ORG" in types or "TECH" in types
+
+    def test_linked_entity_confidence(self):
+        r = self.a.analyze("OpenAI is a leader in AI")
+        for e in r.linked_entities:
+            assert 0.0 <= e.confidence <= 1.0
+
+    def test_linked_in_dict(self):
+        r = self.a.analyze("Facebook announced new AI features")
+        d = r.to_dict()
+        assert "linked_entities" in d
+        assert isinstance(d["linked_entities"], list)
+
+    def test_no_entities_text(self):
+        r = self.a.analyze("hello world")
+        # May or may not have entities, but should not crash
+        assert isinstance(r.linked_entities, list)
+
+    def test_entity_linker_direct(self):
+        from layers.layer03_intelligence.modules.content_understanding.entity_linker import EntityLinker
+        linker = EntityLinker()
+        entities = [{"text": "openai", "type": "org"}, {"text": "python", "type": "tech"}]
+        linked = linker.link(entities)
+        assert len(linked) == 2
+        assert linked[0].canonical == "OpenAI"
+        assert linked[1].canonical == "Python"
