@@ -1,6 +1,22 @@
 # 📋 Changelog
 
 
+
+## [v0.3.16] - 2026-07-15
+### Added
+- **Layer 3 Integration Sprint** — End-to-end pipeline tests
+  - Full pipeline: Content → Trend → Quality → Strategy → Memory
+  - Confidence propagation across modules
+  - Cross-module data fusion verification
+  - Orchestrator batch analysis
+  - Strategy memory integration
+  - Performance timing validation
+  - 10 integration tests across full Layer 3
+### Stats
+- Total Tests: 1131 (all passing)
+- Lint: clean
+- Layer 3: Complete & integrated ✅
+
 ## [v0.3.15] - 2026-07-15
 ### Added
 - **Layer 3 Module 10: Intelligence Orchestrator** (Production-grade)
