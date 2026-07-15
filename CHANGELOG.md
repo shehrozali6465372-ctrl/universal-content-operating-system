@@ -1,4 +1,34 @@
 # 📋 Changelog
+## [v0.3.10] - 2026-07-15
+### Added
+- **Layer 3 Module 4: Content Intelligence** (Complete)
+  - `quality_estimator.py` — Multi-dimension quality scoring (grammar, clarity, engagement, relevance, originality)
+  - `readability_analyzer.py` — Flesch-Kincaid readability with grade level and reading time
+  - `emotional_analyzer.py` — 7-emotion detection (joy, sadness, anger, fear, surprise, trust, anticipation)
+  - `virality_predictor.py` — Content-level virality prediction (hook, emotion, uniqueness, shareability)
+  - `audience_fit_analyzer.py` — Content-audience alignment scoring
+  - `novelty_detector.py` — Content uniqueness detection with hash-based dedup
+  - `redundancy_detector.py` — N-gram repetition detection
+  - `hook_analyzer.py` — Opening hook type detection and scoring
+  - `cta_analyzer.py` — Call-to-action detection (engagement, traffic, conversion, community)
+  - `content_optimizer.py` — Automated improvement suggestions with priority
+  - `content_confidence.py` — Confidence scoring for content analysis
+  - `intelligence_manager.py` — Orchestrator combining all 11 sub-modules
+  - 24 new tests across 12 test classes
+- **Module 3 Enhancements** (v0.3.9)
+  - `decision_graph.py` — Decision dependency graph with critical path and weak link detection
+  - `counterfactual_reasoner.py` — What-if analysis with impact estimation
+  - `confidence_evolution.py` — Confidence tracking through pipeline stages
+  - `decision_replay.py` — Decision sequence recording and replay
+  - `multi_objective_optimizer.py` — Pareto-optimal solutions across competing objectives
+
+### Fixed
+- IntelligenceOrchestrator compatibility with updated QualityResult API
+
+### Stats
+- Total Tests: 920 (all passing)
+- Layer 3 Progress: 4/10 Modules complete
+
 ## [v0.3.9] - 2026-07-14
 ### Added
 - **Module 3 Enhancements: 5 Advanced Capabilities**

@@ -8,7 +8,7 @@ from layers.layer03_intelligence.modules.trend_intelligence.lifecycle_detector i
 from layers.layer03_intelligence.modules.reasoning_engine.decision_engine import DecisionEngine
 from layers.layer03_intelligence.modules.reasoning_engine.strategy_selector import StrategySelector
 from layers.layer03_intelligence.modules.content_intelligence.quality_estimator import QualityEstimator
-from layers.layer03_intelligence.modules.content_intelligence.virality_predictor import ViralityPredictor
+from layers.layer03_intelligence.modules.content_intelligence.virality_predictor import ContentViralityPredictor
 from layers.layer03_intelligence.modules.recommendation_engine.recommendation_engine import RecommendationEngine
 from layers.layer03_intelligence.modules.knowledge_fusion.fusion_engine import FusionEngine
 from layers.layer03_intelligence.modules.strategy_engine.strategy_engine import StrategyEngine
@@ -59,7 +59,7 @@ class IntelligenceOrchestrator:
         self.decision_engine = DecisionEngine()
         self.strategy_selector = StrategySelector()
         self.quality_estimator = QualityEstimator()
-        self.virality_predictor = ViralityPredictor()
+        self.virality_predictor = ContentViralityPredictor()
         self.recommendation_engine = RecommendationEngine()
         self.fusion_engine = FusionEngine()
         self.strategy_engine = StrategyEngine()
@@ -109,7 +109,7 @@ class IntelligenceOrchestrator:
         if result.trend_prediction:
             confidences.append(result.trend_prediction.confidence)
         if result.quality:
-            confidences.append(result.quality.score)
+            confidences.append(result.quality.overall_score)
         result.overall_confidence = round(sum(confidences) / max(len(confidences), 1), 3)
 
         # Cache result
