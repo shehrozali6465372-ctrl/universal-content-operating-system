@@ -1,40 +1,43 @@
-"""Signal Collector — normalizes feedback into learning signals."""
+"""Signal Collector - Collects raw signals from various sources."""
+from __future__ import annotations
+import time
 from typing import Dict, List
-from datetime import datetime, timezone
+
 
 class Signal:
-    __slots__ = ("signal_id", "signal_type", "source", "value", "confidence", "metadata", "timestamp")
-    def __init__(self, signal_type: str, source: str = "", value: float = 0.0, confidence: float = 0.8):
-        self.signal_id = f"sig_{hash(signal_type) % 1000000}"
-        self.signal_type = signal_type
+    """A single raw signal."""
+    __slots__ = ("source", "signal_type", "value", "timestamp", "metadata", "post_id")
+    def __init__(self, source: str = "", signal_type: str = "", value: float = 0.0, post_id: str = ""):
         self.source = source
+        self.signal_type = signal_type
         self.value = value
-        self.confidence = confidence
+        self.timestamp = time.time()
         self.metadata: Dict = {}
-        self.timestamp = datetime.now(timezone.utc).isoformat()
-    def to_dict(self) -> dict:
-        return {"signal_id": self.signal_id, "signal_type": self.signal_type,
-                "source": self.source, "value": self.value, "confidence": self.confidence,
-                "timestamp": self.timestamp}
+        self.post_id = post_id
+    def to_dict(self) -> Dict:
+        return {"source": self.source, "type": self.signal_type, "value": round(self.value, 4),
+                "post_id": self.post_id, "timestamp": self.timestamp}
+
 
 class SignalCollector:
-    def __init__(self):
+    """Collects raw signals from multiple sources."""
+    def __init__(self) -> None:
         self._signals: List[Signal] = []
-    def collect(self, signal: Signal):
+    def collect(self, signal: Signal) -> None:
         self._signals.append(signal)
+    def add(self, source: str, signal_type: str, value: float, post_id: str = "") -> Signal:
+        s = Signal(source, signal_type, value, post_id)
+        self.collect(s)
+        return s
     def get_by_type(self, signal_type: str) -> List[Signal]:
         return [s for s in self._signals if s.signal_type == signal_type]
-    def get_recent(self, n: int = 10) -> List[Signal]:
-        return self._signals[-n:]
-    def compute_average(self, signal_type: str) -> float:
-        sigs = self.get_by_type(signal_type)
-        if not sigs: return 0.0
-        return round(sum(s.value for s in sigs) / len(sigs), 3)
-    def compute_success_rate(self) -> float:
-        if not self._signals: return 0.0
-        success = sum(1 for s in self._signals if s.signal_type == "success")
-        return round(success / len(self._signals), 3)
+    def get_by_source(self, source: str) -> List[Signal]:
+        return [s for s in self._signals if s.source == source]
+    def get_by_post(self, post_id: str) -> List[Signal]:
+        return [s for s in self._signals if s.post_id == post_id]
     def count(self) -> int:
         return len(self._signals)
-    def clear(self):
+    def clear(self) -> None:
         self._signals.clear()
+    def to_dict(self) -> Dict:
+        return {"count": self.count(), "signals": [s.to_dict() for s in self._signals[-50:]]}

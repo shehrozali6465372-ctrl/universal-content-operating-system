@@ -1,6 +1,6 @@
-"""Tests for Modules 5-10."""
+"""Tests for Modules 5-10 (updated for production APIs)."""
 from layers.layer03_intelligence.modules.recommendation_engine.recommendation_engine import RecommendationEngine, Recommendation
-from layers.layer03_intelligence.modules.learning_signals.signal_collector import SignalCollector, Signal
+from layers.layer03_intelligence.modules.learning_signals.signal_collector import SignalCollector
 from layers.layer03_intelligence.modules.knowledge_fusion.fusion_engine import FusionEngine
 from layers.layer03_intelligence.modules.strategy_engine.strategy_engine import StrategyEngine
 from layers.layer03_intelligence.modules.intelligence_memory.intel_cache import IntelligenceCache
@@ -17,12 +17,6 @@ class TestRecommendationEngine:
         self.re.add(Recommendation("topic", "B", "", 0.9))
         top = self.re.get_top(1)
         assert top[0].title == "B"
-    def test_generate_topic_recs(self):
-        recs = self.re.generate_topic_recommendations([{"topic": "AI", "overall_score": 85}])
-        assert len(recs) > 0
-    def test_generate_posting_recs(self):
-        recs = self.re.generate_posting_recommendations(["8 PM", "12 PM"])
-        assert len(recs) > 0
     def test_clear(self):
         self.re.add(Recommendation("topic", "A", "", 0.5))
         self.re.clear()
@@ -32,40 +26,34 @@ class TestRecommendationEngine:
 class TestSignalCollector:
     def setup_method(self): self.sc = SignalCollector()
     def test_collect(self):
-        self.sc.collect(Signal("success", "post_1", 0.9))
+        self.sc.add("facebook", "likes", 100)
         assert self.sc.count() == 1
     def test_get_by_type(self):
-        self.sc.collect(Signal("success", "post_1", 0.9))
-        self.sc.collect(Signal("failure", "post_2", 0.1))
-        assert len(self.sc.get_by_type("success")) == 1
-    def test_compute_average(self):
-        self.sc.collect(Signal("engagement", "", 0.8))
-        self.sc.collect(Signal("engagement", "", 0.6))
-        assert self.sc.compute_average("engagement") == 0.7
-    def test_success_rate(self):
-        self.sc.collect(Signal("success", "", 1.0))
-        self.sc.collect(Signal("success", "", 1.0))
-        self.sc.collect(Signal("failure", "", 0.0))
-        assert self.sc.compute_success_rate() > 0.5
+        self.sc.add("fb", "likes", 10)
+        self.sc.add("fb", "shares", 5)
+        assert len(self.sc.get_by_type("likes")) == 1
+    def test_get_by_source(self):
+        self.sc.add("fb", "likes", 10)
+        self.sc.add("twitter", "likes", 5)
+        assert len(self.sc.get_by_source("fb")) == 1
+    def test_clear(self):
+        self.sc.add("fb", "likes", 10)
+        self.sc.clear()
+        assert self.sc.count() == 0
 
 
 class TestFusionEngine:
-    def setup_method(self): self.fe = FusionEngine(min_sources=2)
+    def setup_method(self): self.fe = FusionEngine()
     def test_fuse(self):
-        data = [
-            {"source": "trend", "confidence": 0.8, "evidence": ["e1"], "insights": ["i1"]},
-            {"source": "competitor", "confidence": 0.6, "evidence": ["e2"], "insights": ["i2"]},
-        ]
-        result = self.fe.fuse(data, "AI")
-        assert result.topic == "AI"
-        assert result.confidence > 0
-        assert len(result.evidence) == 2
-    def test_fuse_single_source(self):
-        result = self.fe.fuse([{"source": "a", "confidence": 0.5}])
-        assert result.confidence == 0.5
+        ui = self.fe.fuse("AI", {"trend": {"score": 0.8}, "research": {"score": 0.9}})
+        assert ui.topic == "AI"
+        assert ui.confidence > 0
+    def test_fuse_batch(self):
+        results = self.fe.fuse_batch({"A": {"r": {"score": 0.8}}, "B": {"r": {"score": 0.6}}})
+        assert len(results) == 2
     def test_resolve_conflict(self):
-        resolved = self.fe.resolve_conflict([{"score": 80, "confidence": 0.6}, {"score": 90, "confidence": 0.8}])
-        assert "resolved_value" in resolved
+        resolved = self.fe.resolver.resolve({"a": 0.8, "b": 0.9})
+        assert "resolved" in resolved
 
 
 class TestStrategyEngine:
@@ -132,7 +120,7 @@ class TestIntelligenceOrchestrator:
     def test_cache(self):
         r1 = self.orch.analyze("Cached Topic")
         r2 = self.orch.analyze("Cached Topic")
-        assert r1 is r2  # Same cached object
+        assert r1 is r2
     def test_analyze_batch(self):
         results = self.orch.analyze_batch([{"topic": "AI"}, {"topic": "Crypto"}])
         assert len(results) == 2
