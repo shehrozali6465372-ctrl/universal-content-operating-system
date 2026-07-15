@@ -35,8 +35,8 @@ ai-self-improving-facebook-agent/
 |---|-------|------|-------------|--------|---------|
 | 01 | `layer01_core` | **Core System** | Config, secrets, DB, memory, logging, scheduling, file management, backup | ✅ Complete | v0.1.11 |
 | 02 | `layer02_research` | **Research Engine** | Trend discovery, competitor, audience, fact-check, topic scoring, orchestration | ✅ Complete | v0.2.9 |
-| 03 | `layer03_intelligence` | **AI Intelligence** | Semantic analysis, trend intelligence, reasoning, recommendations, knowledge fusion, strategy, memory | ✅ 10/10 Modules | v0.4.0 |
-| 04 | `layer04_writing` | **Content Writing** | Content planning, generation, captions, hashtags, A/B variants | ✅ 1/10 Modules | v0.4.0 |
+| 03 | `layer03_intelligence` | **AI Intelligence** | Semantic analysis, trend intelligence, reasoning, recommendations, knowledge fusion, strategy, memory | ✅ 10/10 Modules | v0.4.1 |
+| 04 | `layer04_writing` | **Content Writing** | Content planning, generation, captions, hashtags, A/B variants | ✅ 2/10 Modules | v0.4.1 |
 | 05 | `layer05_image` | **Image & Visual** | Image generation, memes, infographics, thumbnails | 🔜 Planned | — |
 | 06 | `layer06_quality` | **Quality Check** | Spam filter, tone check, fact-check, compliance | 🔜 Planned | — |
 | 07 | `layer07_publishing` | **Facebook Publishing** | API posting, scheduling, auto-publishing | 🔜 Planned | — |
@@ -48,10 +48,10 @@ ai-self-improving-facebook-agent/
 
 | Metric | Value |
 |--------|-------|
-| Current Version | v0.4.0 |
+| Current Version | v0.4.1 |
 | Layers Complete | 2/10 (Core + Research) |
 | Layer 3 Progress | 10/10 Modules ✅ Complete |
-| Total Tests | 1200 |
+| Total Tests | 1245 |
 | Code Coverage | 95%+ |
 | CI/CD | ✅ Passing |
 
@@ -67,7 +67,7 @@ ai-self-improving-facebook-agent/
 | 6 | Learning Signals | ✅ Complete | v0.3.12 |
 | 7 | Knowledge Fusion | ✅ Complete | v0.3.12 |
 | 8 | Strategy Engine | ✅ Complete | v0.3.13 |
-| 9 | Intelligence Memory | ✅ Complete | v0.4.0 |
+| 9 | Intelligence Memory | ✅ Complete | v0.4.1 |
 | 8 | Strategy Engine | ⏳ Pending | — |
 | 9 | Intelligence Memory | ⏳ Pending | — |
 | 10 | Intelligence Orchestrator | ⏳ Pending | — |

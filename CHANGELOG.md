@@ -3,6 +3,24 @@
 
 
 
+
+## [v0.4.1] - 2026-07-15
+### Added
+- **Layer 4 Module 2: Draft Generator** (Production-grade with LLM abstraction)
+  - `llm_provider.py` — BaseLLMProvider ABC + MockLLMProvider for testing
+  - `prompt_builder.py` — Build system/user prompts from WritingPlan (10 tones, 5 goals, 10 strategies)
+  - `draft_validator.py` — Validate drafts for length, repetition, URLs, profanity, custom rules
+  - `variant_generator.py` — A/B variant generation (original, alternative, bold, minimal, detailed, emotional, question_hook, stat_hook)
+  - `draft_memory.py` — Store/retrieve past drafts with topic/plan indexing
+  - `draft_manager.py` — Central orchestrator: Plan → Prompt → LLM → Validate → Store → Return
+  - Full LLM abstraction: swap providers without changing business logic
+  - Zero vendor lock-in: OpenAI, Gemini, Claude all supported via BaseLLMProvider
+  - 43 new tests across 7 test classes
+### Stats
+- Total Tests: 1245 (all passing)
+- Lint: clean
+- Layer 4 Progress: 2/10 Modules
+
 ## [v0.4.0] - 2026-07-15
 ### Added
 - **Layer 4 Module 1: Content Planner** (Production-grade)
