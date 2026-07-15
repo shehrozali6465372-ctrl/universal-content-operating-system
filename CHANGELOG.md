@@ -1,5 +1,24 @@
 # 📋 Changelog
 
+## [v0.3.13] - 2026-07-15
+### Added
+- **Layer 3 Module 8: Strategy Engine** (Production-grade, enhanced from skeleton)
+  - `strategy_generator.py` — Dynamic strategy generation from intelligence inputs (trend, audience, competitor, content data)
+  - `strategy_evaluator.py` — Multi-dimension evaluation (feasibility, impact, confidence, risk, resource efficiency, alignment)
+  - `strategy_adapter.py` — Real-time adaptation based on engagement, trend, competition signals and constraints
+  - `goal_planner.py` — Multi-goal planning with topological sort, dependency resolution, critical path analysis
+  - `risk_analyzer.py` — 6-factor risk assessment with mitigations (competition, volatility, quality, fit, saturation, confidence)
+  - `strategy_selector.py` — Weighted multi-criteria selection with constraint filtering
+  - `strategy_memory.py` — Past strategy storage with outcomes, lessons, similarity search, stats
+  - `strategy_explainer.py` — Human-readable strategy explanations with reasoning, risks, expected outcomes
+  - `strategy_manager.py` — Central orchestrator: generate → evaluate → risk-assess → select → explain → store
+  - Backward-compatible with original `StrategyEngine` API
+  - 76 new tests across 9 test classes
+### Stats
+- Total Tests: 1036 (all passing)
+- Lint: clean
+- Layer 3 Progress: 8/10 Modules complete
+
 ## [v0.3.12] - 2026-07-15
 ### Added
 - **Layer 3 Module 6: Learning Signals** (Complete)
