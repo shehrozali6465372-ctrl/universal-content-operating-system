@@ -1,5 +1,24 @@
 # 📋 Changelog
 
+## [v0.3.14] - 2026-07-15
+### Added
+- **Layer 3 Module 9: Intelligence Memory** (Production-grade, enhanced from skeleton)
+  - `pattern_indexer.py` — Pattern indexing with frequency, confidence tracking, type/tag search
+  - `case_retriever.py` — Similar case retrieval by topic, tag, score range, text search
+  - `memory_consolidator.py` — Merge similar entries with frequency/confidence scoring
+  - `memory_pruner.py` — Age and value-based pruning with analysis reports
+  - `memory_versioning.py` — Version history with rollback support
+  - `intelligence_store.py` — Core storage with category/tag indexes, search, CRUD
+  - `confidence_history.py` — Confidence trend tracking, module averages, topic trends
+  - `memory_searcher.py` — Cross-store search with relevance scoring
+  - `intel_memory_manager.py` — Central orchestrator: remember, recall, learn, search, consolidate, prune
+  - Fixed timestamp-based ID collisions across all sub-modules (now uses counters)
+  - 58 new tests across 10 test classes
+### Stats
+- Total Tests: 1094 (all passing)
+- Lint: clean
+- Layer 3 Progress: 9/10 Modules complete
+
 ## [v0.3.13] - 2026-07-15
 ### Added
 - **Layer 3 Module 8: Strategy Engine** (Production-grade, enhanced from skeleton)
