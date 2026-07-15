@@ -1,4 +1,24 @@
 # 📋 Changelog
+## [v0.3.11] - 2026-07-15
+### Added
+- **Layer 3 Module 5: Recommendation Engine** (Complete)
+  - `candidate_generator.py` — Generates candidates from trends, audience gaps, competitor gaps, knowledge
+  - `ranking_engine.py` — Weighted multi-signal ranking with configurable weights
+  - `constraint_filter.py` — Custom constraint-based candidate filtering
+  - `diversity_engine.py` — Ensures recommendations span multiple categories/sources
+  - `novelty_engine.py` — Boosts novel/rare topics based on history
+  - `explanation_builder.py` — Generate why/why_not reasons for each recommendation
+  - `confidence_calculator.py` — Multi-factor confidence with risk levels
+  - `recommendation_memory.py` — Stores past recommendations and outcomes
+  - `feedback_collector.py` — Collects and aggregates feedback signals
+  - `recommendation_manager.py` — Orchestrator: generate -> filter -> rank -> diversify -> explain
+  - Each recommendation includes: score, confidence, why, why_not, alternatives
+  - 19 new tests across 10 test classes
+
+### Stats
+- Total Tests: 939 (all passing)
+- Layer 3 Progress: 5/10 Modules complete
+
 ## [v0.3.10] - 2026-07-15
 ### Added
 - **Layer 3 Module 4: Content Intelligence** (Complete)
