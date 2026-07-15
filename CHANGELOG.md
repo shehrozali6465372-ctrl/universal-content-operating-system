@@ -2,6 +2,26 @@
 
 
 
+
+## [v0.4.0] - 2026-07-15
+### Added
+- **Layer 4 Module 1: Content Planner** (Production-grade)
+  - `writing_plan.py` — Core WritingPlan data model with serialization
+  - `goal_analyzer.py` — 5-goal detection (educate, entertain, inspire, promote, engage) with keyword matching
+  - `audience_analyzer.py` — 7 audience profiles (students, professionals, tech, entrepreneurs, parents, creators, general)
+  - `platform_planner.py` — 5 platform specs (Facebook, Instagram, Twitter, LinkedIn, YouTube) with constraints
+  - `tone_selector.py` — 10 tone profiles with goal-audience-platform matching
+  - `content_structure.py` — 7 structure templates (educational, entertaining, promotional, inspiring, engaging, carousel, story)
+  - `constraint_manager.py` — Writing constraint system with must/should/prefer severity levels
+  - `plan_validator.py` — Comprehensive validation with error/warning/scoring
+  - `planner_manager.py` — Central orchestrator: goal→audience→platform→tone→structure→validate→plan
+  - Zero LLM API calls — pure planning module (LLM integration in Module 2)
+  - 69 new tests across 10 test classes
+### Stats
+- Total Tests: 1200 (all passing)
+- Lint: clean
+- Layer 4 Progress: 1/10 Modules
+
 ## [v0.3.16] - 2026-07-15
 ### Added
 - **Layer 3 Integration Sprint** — End-to-end pipeline tests
