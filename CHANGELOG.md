@@ -1,6 +1,25 @@
 # 📋 Changelog
 
+
+## [v0.3.15] - 2026-07-15
+### Added
+- **Layer 3 Module 10: Intelligence Orchestrator** (Production-grade)
+  - `IntelOrchestrator` — Full pipeline: content understanding → trend analysis → quality → strategy → recommendations
+  - `PipelineEvent` — Per-module events tracking for observability
+  - `ModuleMetrics` — Execution count, timing, success/failure rates per module
+  - `HealthStatus` — Module health monitoring with degraded detection
+  - Cache with metadata tracking (cached/not cached)
+  - Enhanced error handling with module-level exception catching
+  - `analyze_batch()` — Multi-topic analysis
+  - Backward-compatible with existing API
+  - 27 new tests across 5 test classes
+### Stats
+- Total Tests: 1121 (all passing)
+- Lint: clean
+- Layer 3 Progress: 10/10 Modules Complete ✅
+
 ## [v0.3.14] - 2026-07-15
+
 ### Added
 - **Layer 3 Module 9: Intelligence Memory** (Production-grade, enhanced from skeleton)
   - `pattern_indexer.py` — Pattern indexing with frequency, confidence tracking, type/tag search
