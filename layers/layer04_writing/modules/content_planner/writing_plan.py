@@ -13,7 +13,7 @@ class WritingPlan:
     """
     __slots__ = (
         "plan_id", "topic", "goal", "platform", "audience", "tone",
-        "length", "language", "content_type", "cta", "hashtags",
+        "length", "language", "content_type", "strategy", "cta", "hashtags",
         "emoji_level", "structure", "constraints", "metadata",
         "created_at", "updated_at", "version",
     )
@@ -28,6 +28,7 @@ class WritingPlan:
         self.length = "medium"        # short, medium, long
         self.language = "english"
         self.content_type = "post"    # post, story, reel, carousel, thread
+        self.strategy = "educational"  # educational, storytelling, debate, news, tutorial, comparison, case_study, opinion, listicle, qa
         self.cta = "engage"           # engage, share, comment, visit, subscribe
         self.hashtags = True
         self.emoji_level = "medium"   # none, low, medium, high
@@ -49,6 +50,7 @@ class WritingPlan:
             "length": self.length,
             "language": self.language,
             "content_type": self.content_type,
+            "strategy": self.strategy,
             "cta": self.cta,
             "hashtags": self.hashtags,
             "emoji_level": self.emoji_level,
@@ -64,7 +66,7 @@ class WritingPlan:
     def from_dict(cls, data: Dict[str, Any]) -> "WritingPlan":
         plan = cls(topic=data.get("topic", ""))
         for field in ("goal", "platform", "audience", "tone", "length",
-                       "language", "content_type", "cta", "emoji_level"):
+                       "language", "content_type", "strategy", "cta", "emoji_level"):
             if field in data:
                 setattr(plan, field, data[field])
         plan.hashtags = data.get("hashtags", True)

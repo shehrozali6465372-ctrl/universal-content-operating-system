@@ -12,6 +12,8 @@ VALID_TONES = {"friendly", "professional", "casual", "informative", "humorous",
 VALID_LENGTHS = {"short", "medium", "long"}
 VALID_CONTENT_TYPES = {"post", "story", "reel", "carousel", "thread", "article", "live"}
 VALID_CTAS = {"engage", "share", "comment", "visit", "subscribe", "learn_more"}
+VALID_STRATEGIES = {"educational", "storytelling", "debate", "news", "tutorial",
+                    "comparison", "case_study", "opinion", "listicle", "qa"}
 VALID_EMOJI_LEVELS = {"none", "low", "medium", "high"}
 
 
@@ -76,6 +78,10 @@ class PlanValidator:
         # Content type validation
         if plan.content_type not in VALID_CONTENT_TYPES:
             result.add_warning(f"Uncommon content type '{plan.content_type}'")
+
+        # Strategy validation
+        if plan.strategy not in VALID_STRATEGIES:
+            result.add_warning(f"Uncommon strategy '{plan.strategy}'")
 
         # CTA validation
         if plan.cta not in VALID_CTAS:

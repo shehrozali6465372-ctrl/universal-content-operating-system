@@ -400,3 +400,15 @@ class TestPlannerManager:
         for platform in ("facebook", "instagram", "twitter", "linkedin", "youtube"):
             r = self.pm.create_plan("AI", platform=platform)
             assert r.plan.platform == platform
+
+    def test_strategy_field(self):
+        plan = WritingPlan(topic="AI")
+        plan.strategy = "storytelling"
+        d = plan.to_dict()
+        assert d["strategy"] == "storytelling"
+
+    def test_strategy_from_dict(self):
+        data = {"topic": "AI", "strategy": "debate"}
+        plan = WritingPlan.from_dict(data)
+        assert plan.strategy == "debate"
+
