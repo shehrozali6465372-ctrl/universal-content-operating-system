@@ -4,6 +4,24 @@
 
 
 
+
+## [v0.4.2] - 2026-07-15
+### Added
+- **Layer 4 Module 3: Caption Engine** — Platform-specific caption generation (13 platforms)
+- **Layer 4 Module 4: Hashtag & Keyword Engine** — Hashtags + SEO keywords (6 categories)
+- **Layer 4 Module 5: Tone Adapter** — Cross-platform tone adaptation (12 tones)
+- **Layer 4 Module 6: Hook Engine** — Scroll-stopping hooks (6 types with alternatives)
+- **Layer 4 Module 7: CTA Engine** — Platform-specific CTAs (6 platforms, batch generation)
+- **Layer 4 Module 8: Content Optimizer** — SEO, readability, platform optimization
+- **Layer 4 Module 9: Writing Memory** — Brand voice consistency + draft storage
+- **Layer 4 Module 10: Writing Orchestrator** — One topic → multiple optimized platform outputs
+- **Universal design**: All modules platform-agnostic (Facebook, Instagram, Twitter, LinkedIn, TikTok, YouTube, Pinterest, Threads, Reddit, Medium)
+- 55 new tests across 8 test classes
+### Stats
+- Total Tests: 1300 (all passing)
+- Lint: clean
+- Layer 4: 10/10 Modules Complete ✅
+
 ## [v0.4.1] - 2026-07-15
 ### Added
 - **Layer 4 Module 2: Draft Generator** (Production-grade with LLM abstraction)
