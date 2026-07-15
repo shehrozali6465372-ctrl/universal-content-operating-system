@@ -5,6 +5,22 @@
 
 
 
+
+## [v0.4.3] - 2026-07-15
+### Added
+- **Layer 1-4 Integration Sprint** — End-to-end pipeline tests
+  - Topic → Research → Intelligence → Writing → Multi-platform output
+  - Confidence propagation across all layers
+  - Strategy goals → Writing plan → Draft generation
+  - Performance timing validation
+  - Memory persistence across pipeline runs
+  - A/B variant generation through pipeline
+  - 7 integration tests
+### Stats
+- Total Tests: 1307 (all passing)
+- Lint: clean
+- Layer 1-4: Fully integrated ✅
+
 ## [v0.4.2] - 2026-07-15
 ### Added
 - **Layer 4 Module 3: Caption Engine** — Platform-specific caption generation (13 platforms)
