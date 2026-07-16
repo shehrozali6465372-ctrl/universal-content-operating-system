@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+# 📋 Changelog
+
+## [v0.7.3] - 2026-07-16
+### Added
+- **Layer 7 Module 4: Scheduler & Queue** — Publishing execution system with 10 sub-modules:
+  - **PublishJob** — Priority-based job model (critical/high/normal/low/background)
+  - **JobQueue** — Priority queue with batch enqueue, platform filtering, peek
+  - **RetryManager** — Exponential backoff with configurable retry policy
+  - **DeadLetterQueue** — Failed job storage with recovery support
+  - **TimezoneManager** — UTC conversion, business hours, multi-timezone support
+  - **BatchPublisher** — Batch execution with platform grouping
+  - **WorkerManager** — Worker pool management with load tracking
+  - **QueueMetrics** — Snapshots, success rate, retry rate, history
+  - **QueueOrchestrator** — Full pipeline coordination, event tracking, dead letter recovery
+  - **Exceptions** — QueueError, JobNotFoundError, QueueFullError
+- **114 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2115 (all passing)
+- Lint: clean
+- Layer 7: 4/10 Modules Complete
+
 
 
 
