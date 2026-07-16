@@ -2,6 +2,27 @@
 
 # 📋 Changelog
 
+## [v0.7.6] - 2026-07-16
+### Added
+- **Layer 7 Module 7: Analytics Hook** — Collect, normalize, analyze, and store publish analytics with 10 sub-modules:
+  - **AnalyticsEvent** — Unified analytics event model with merge support
+  - **MetricsCollector** — Fetch analytics from plugins with batch collection
+  - **MetricsNormalizer** — Platform-specific → unified metric mapping (FB/IG/X/LI/YT/TikTok)
+  - **EngagementAnalyzer** — Weighted engagement scoring (likes×1, comments×3, shares×5, saves×4)
+  - **ReachAnalyzer** — Reach, impressions, views, frequency, completion rate
+  - **ConversionTracker** — Clicks, CTR, signups, revenue, ROAS
+  - **TrendTracker** — Growth trends, peak detection, viral detection
+  - **AnalyticsMemory** — Historical storage, comparison, platform filtering
+  - **PerformanceScorer** — Weighted scoring, letter grades (A+ → F), benchmark comparison
+  - **AnalyticsManager** — Full pipeline orchestration + Layer 9 learning signals
+  - **Exceptions** — AnalyticsError, FetchError, NormalizationError
+- **83 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2407 (all passing)
+- Lint: clean
+- Layer 7: 7/10 Modules Complete
+
 ## [v0.7.5] - 2026-07-16
 ### Added
 - **Layer 7 Module 6: Failure Recovery Engine** — Self-healing publishing pipeline with 10 sub-modules:
