@@ -2,6 +2,27 @@
 
 # 📋 Changelog
 
+## [v0.7.4] - 2026-07-16
+### Added
+- **Layer 7 Module 5: Publisher Engine** — Transactional, platform-agnostic publishing with 10 sub-modules:
+  - **PublishRequest** — Validated request model with media, scheduling, idempotency
+  - **PublishExecutor** — Execute publish, edit, delete, reschedule via plugins
+  - **UploadCoordinator** — Media upload with progress tracking and validation
+  - **ResponseParser** — Normalize API responses, classify errors, detect retryable
+  - **StatusTracker** — Lifecycle tracking (pending → uploading → publishing → published)
+  - **PublishTransaction** — Atomic execution with rollback support
+  - **PublishAudit** — Full audit trail with success rate and stats
+  - **PublisherResult** — Extended result model with error classification
+  - **PublisherMetrics** — Success rate, API latency, upload stats, snapshots
+  - **PublisherManager** — Full pipeline orchestration (validate → upload → publish → parse → audit)
+  - **Exceptions** — PublishError, PublishValidationError, PublishExecutionError, UploadError, RollbackError
+- **94 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2209 (all passing)
+- Lint: clean
+- Layer 7: 5/10 Modules Complete
+
 ## [v0.7.3] - 2026-07-16
 ### Added
 - **Layer 7 Module 4: Scheduler & Queue** — Publishing execution system with 10 sub-modules:
