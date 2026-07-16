@@ -2,6 +2,27 @@
 
 # 📋 Changelog
 
+## [v0.7.5] - 2026-07-16
+### Added
+- **Layer 7 Module 6: Failure Recovery Engine** — Self-healing publishing pipeline with 10 sub-modules:
+  - **FailureDetector** — Detect network/API/auth/rate-limit/media/content errors with severity
+  - **ErrorClassifier** — Classify errors as retryable/permanent/user_action/platform_specific
+  - **RetryStrategy** — Configurable retry policies (eager/normal/patient/rate_limit) with backoff
+  - **CircuitBreaker** — Open/half-open/closed states to prevent API flooding
+  - **RollbackManager** — Undo partial publishes and clean up resources
+  - **RecoveryActions** — Recovery step factory (refresh token, re-upload, switch endpoint, delay)
+  - **IncidentLogger** — Error history with context, timeline, and resolution tracking
+  - **RecoveryMetrics** — Recovery success rate, retry count, MTTR, failure statistics
+  - **FailureMemory** — Remember recurring failures, platform patterns, best recovery strategies
+  - **RecoveryManager** — Full pipeline orchestration: detect → classify → recover → retry/rollback
+  - **Exceptions** — RecoveryError, CircuitOpenError, RecoveryExhaustedError, RollbackFailedError
+- **115 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2324 (all passing)
+- Lint: clean
+- Layer 7: 6/10 Modules Complete
+
 ## [v0.7.4] - 2026-07-16
 ### Added
 - **Layer 7 Module 5: Publisher Engine** — Transactional, platform-agnostic publishing with 10 sub-modules:
