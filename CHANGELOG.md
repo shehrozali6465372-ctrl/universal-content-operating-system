@@ -6,6 +6,26 @@
 
 
 
+
+## [v0.5.0] - 2026-07-16
+### Added
+- **Layer 5 Module 1: Image Planner** — Platform-agnostic image planning (8 platforms, 10 image types)
+- **Layer 5 Module 2: Image Prompt Builder** — AI image generation prompts (10 style presets)
+- **Layer 5 Module 3: Image Provider** — BaseImageProvider ABC + MockImageProvider
+- **Layer 5 Module 4: Layout Engine** — Platform-specific layout specifications (7 layouts)
+- **Layer 5 Module 5: Thumbnail Engine** — Thumbnail planning for video platforms
+- **Layer 5 Module 6: Carousel Planner** — Multi-slide carousel content planning
+- **Layer 5 Module 7: Infographic Engine** — Data visualization planning (7 chart types)
+- **Layer 5 Module 8: Image Optimizer** — Platform-specific optimization
+- **Layer 5 Module 9: Image Memory** — Brand visual profiles + image history
+- **Layer 5 Module 10: Image Orchestrator** — Plan → Prompt → Layout → Generate → Optimize → Store
+- All modules platform-agnostic and independent from Writing layer
+- 34 new tests across 10 test classes
+### Stats
+- Total Tests: 1341 (all passing)
+- Lint: clean
+- Layer 5: 10/10 Modules Complete ✅
+
 ## [v0.4.3] - 2026-07-15
 ### Added
 - **Layer 1-4 Integration Sprint** — End-to-end pipeline tests
