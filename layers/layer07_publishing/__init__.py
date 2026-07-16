@@ -1,1 +1,1 @@
-"""layer07_publishing Module"""
+"""Layer 7 — Universal Publishing Engine."""
