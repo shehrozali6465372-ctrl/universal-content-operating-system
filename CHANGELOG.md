@@ -7,6 +7,24 @@
 
 
 
+
+## [v0.5.1] - 2026-07-16
+### Added
+- **Layer 5 Module 11: Accessibility Engine** — Alt text generation, WCAG contrast validation, text density checks
+- **Layer 5 Module 12: Visual Quality Scorer** — Composition, text density, safe margins, clickability scoring with grades
+- **Layer 5 Module 13: Prompt Evaluator** — Prompt clarity/specificity/style scoring with auto-refinement
+- **120+ comprehensive tests** covering all 13 modules:
+  - All 8 platform image specs verified
+  - All 10 prompt styles tested
+  - Accessibility: contrast, alt text, text density
+  - Quality: composition, clickability, grades
+  - Prompt: clarity, specificity, refinement
+  - Orchestrator: all platforms, types, styles
+### Stats
+- Total Tests: 1462 (all passing)
+- Lint: clean
+- Layer 5: 13/13 Modules Complete ✅ (hardened)
+
 ## [v0.5.0] - 2026-07-16
 ### Added
 - **Layer 5 Module 1: Image Planner** — Platform-agnostic image planning (8 platforms, 10 image types)
