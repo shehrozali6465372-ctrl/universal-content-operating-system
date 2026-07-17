@@ -1,5 +1,49 @@
 # 📋 Changelog
 
+## [v0.9.2] - 2026-07-17
+### Added
+- **Layer 9 Module 2: Prompt Optimization Engine** — Automatic prompt improvement with 11 sub-modules:
+  - **PromptProfile** — Versioned prompt model with performance fingerprint and fork support
+  - **PromptHistory** — Track version history, performance snapshots, and best versions
+  - **PromptComparator** — Compare prompt versions across engagement, quality, confidence metrics
+  - **PromptAnalyzer** — Analyze prompt effectiveness, identify improvement areas, health scoring
+  - **PromptOptimizer** — Generate optimization suggestions for templates, parameters, and metadata
+  - **PromptVariants** — A/B testing with variant management, outcome tracking, and winner evaluation
+  - **PromptMemory** — Store and retrieve optimization learnings with tagging and search
+  - **PromptMetrics** — Track optimization success rates, improvement rates, and efficiency
+  - **PromptValidator** — Validate prompts before deployment with scoring and batch support
+  - **PromptManager** — Full pipeline orchestration: Analyze → Optimize → Validate → Store
+  - **Exceptions** — Custom exception hierarchy for prompt optimization errors
+- **134 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3038 (all passing)
+- Lint: clean
+- Layer 9 Progress: 2/10 modules complete
+
+
+## [v0.9.1] - 2026-07-17
+### Added
+- **Layer 9 Module 1: Learning Engine** — Foundation for self-learning with 11 sub-modules:
+  - **LearningSignal** — Data model for learning signals from any source (analytics/human/platform)
+  - **FeedbackCollector** — Collect signals from multiple feedback sources with filtering
+  - **PerformanceComparator** — Compare previous vs current performance with significance levels
+  - **PatternDetector** — Detect success, failure, repeated, and correlation patterns
+  - **LessonGenerator** — Convert detected patterns into actionable lessons
+  - **ImprovementPlanner** — Plan and prioritize improvements from lessons
+  - **LearningMemory** — Store and retrieve lessons with version history and archiving
+  - **ConfidenceTracker** — Track confidence evolution and reliability over time
+  - **LearningMetrics** — Track learning score, improvement rate, and efficiency
+  - **LearningManager** — Full pipeline orchestration: Collect → Detect → Lessons → Improve → Store
+  - **LearningResult** — Unified result object with lessons, mistakes, improvements, and next actions
+- **168 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 2904 (all passing)
+- Lint: clean
+- Layer 9 Progress: 1/10 modules complete
+
+
 ## [v0.9.0] - 2026-07-17
 ### Added
 - **Layer 8: Analytics Engine** — Complete analytics platform with 10 modules:
