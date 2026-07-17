@@ -1,5 +1,29 @@
 # 📋 Changelog
 
+## [v1.0.0] - 2026-07-17
+### Added
+- **Layer 9 Module 10: Learning Orchestrator Engine** — Coordinate all 9 learning modules with 12 sub-modules:
+  - **LearningPipeline** — Topological sort with dependency-aware execution batches
+  - **EventRouter** — Route learning events to registered handlers
+  - **WorkflowEngine** — Execute workflows with state tracking and error handling
+  - **DependencyGraph** — Track and resolve module dependencies with cycle detection
+  - **OptimizationScheduler** — Schedule and track optimization runs with success rate metrics
+  - **HealthMonitor** — Track module health with degraded/critical status detection
+  - **LearningReport** — Unified report aggregating lessons, improvements, mistakes, and optimizations
+  - **OrchestratorMetrics** — Track success rate, duration, learning scores across runs
+  - **LearningEvents** — Event bus with typed events for learning_started/completed/failed
+  - **LearningOrchestrator** — Full pipeline: 9 stages with dependency-aware execution and event emission
+  - **Exceptions** — Custom exception hierarchy (PipelineError, ModuleExecutionError, AggregationError)
+- **96 comprehensive tests** covering all sub-modules + cross-platform integration tests
+
+### Stats
+- Total Tests: 3841 (all passing)
+
+### Milestone
+- Layer 9 (Self-Learning & Optimization Engine) — 10/10 modules complete ✅
+
+
+
 ## [v0.9.9] - 2026-07-17
 ### Added
 - **Layer 9 Module 9: Engagement Predictor Engine** — Predict engagement metrics before publishing with 11 sub-modules:
