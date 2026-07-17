@@ -1,6 +1,24 @@
 # 📋 Changelog
 
-# 📋 Changelog
+## [v0.9.0] - 2026-07-17
+### Added
+- **Layer 8: Analytics Engine** — Complete analytics platform with 10 modules:
+  - **Data Collector** — Collect data from multiple sources, manual + auto-fetch
+  - **Metric Engine** — Calculate sum/avg/median/std_dev/p95/p99/growth_rate
+  - **Report Generator** — Summary and comparison reports with sections and charts
+  - **Performance Analyzer** — Analyze across dimensions with benchmarks
+  - **Trend Detector** — Detect UP/DOWN/STABLE trends with anomaly detection (z-score)
+  - **A/B Test Engine** — Create, run, analyze A/B tests with statistical significance
+  - **Funnel Analyzer** — Analyze conversion funnels, identify drop-off points
+  - **Attribution Engine** — Attribute conversions (first/last/linear/weighted touch models)
+  - **Dashboard Service** — Dashboard layouts, widgets, snapshots
+  - **Analytics Orchestrator** — Full pipeline: collect → calculate → detect → report → dashboard
+- **82 comprehensive tests** covering all 10 modules
+
+### Stats
+- Total Tests: 2736 (all passing)
+- Lint: clean
+- Layer 8: Complete
 
 ## [v0.8.0] - 2026-07-17
 ### Added
