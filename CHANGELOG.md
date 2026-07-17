@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v0.9.4] - 2026-07-17
+### Added
+- **Layer 9 Module 4: Brand Voice Learning Engine** — Continuous brand voice learning with 11 sub-modules:
+  - **BrandProfile** — Complete brand identity with tones, vocabulary, terminology, style preferences
+  - **VoiceAnalyzer** — Analyze content for tone, formality, emoji density, sentence structure
+  - **ToneLearner** — Learn which tones perform best from content performance feedback
+  - **VocabularyLearner** — Learn vocabulary patterns: increase/decrease/avoid/maintain actions
+  - **StyleLearner** — Learn writing style preferences from performance data
+  - **TerminologyLearner** — Learn terminology emphasis/simplification needs
+  - **ConsistencyTracker** — Check content against brand voice with violation detection
+  - **BrandMemory** — Store and retrieve brand voice learnings with tagging
+  - **VoiceMetrics** — Track consistency scores, violation rates, adjustments
+  - **BrandManager** — Full pipeline: Analyze → Learn → Check → Store
+  - **Exceptions** — Custom exception hierarchy
+- **99 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3242 (all passing)
+- Lint: clean
+- Layer 9 Progress: 4/10 modules complete
+
+
 ## [v0.9.3] - 2026-07-17
 ### Added
 - **Layer 9 Module 3: Strategy Optimization Engine** — Automatic content strategy improvement with 11 sub-modules:
