@@ -2,6 +2,39 @@
 
 # 📋 Changelog
 
+## [v0.8.0] - 2026-07-17
+### Added
+- **Layer 7 Module 10: Publishing Orchestrator** — Final coordination layer with 10 sub-modules:
+  - **PipelineStage** — Define pipeline stages with order, required flag, and handlers
+  - **PipelineContext** — Shared context passed through all pipeline stages
+  - **PipelineExecutor** — Execute stages in order with error handling and early stop
+  - **PipelineMonitor** — Track pipeline execution health (success rate, avg duration)
+  - **ParallelExecutor** — Execute independent tasks in parallel with error isolation
+  - **EventHandler** — Event bus integration (subscribe/publish pipeline events)
+  - **ModuleRegistry** — Register and discover all 10 Layer 7 modules
+  - **HealthChecker** — Monitor pipeline component health status
+  - **MetricsCollector** — Collect pipeline execution metrics (success rate, error rate)
+  - **PublishingOrchestrator** — Full pipeline: validate→plan→policies→schedule→upload→publish→recover→analytics→memory
+- **71 comprehensive tests** covering all 10 sub-modules
+- **Layer 7 Integration Sprint Complete** — All 10 modules working together
+
+### Stats
+- Total Tests: 2654 (all passing)
+- Lint: clean
+- Layer 7: 10/10 Modules Complete ✅ FROZEN
+
+### Layer 7 Module Summary
+1. Publishing Planner ✅
+2. Platform Plugin Manager ✅
+3. Media Manager ✅
+4. Scheduler & Queue ✅
+5. Publisher Engine ✅
+6. Failure Recovery ✅
+7. Analytics Hook ✅
+8. Publishing Memory ✅
+9. Publishing Policies ✅
+10. Publishing Orchestrator ✅
+
 ## [v0.7.8] - 2026-07-17
 ### Added
 - **Layer 7 Module 9: Publishing Policies** — Centralized, versioned platform rules with 10 sub-modules:
