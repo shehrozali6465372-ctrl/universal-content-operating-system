@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v0.9.5] - 2026-07-17
+### Added
+- **Layer 9 Module 5: Memory Evolution Engine** — Optimize, merge, rank, archive memory with 11 sub-modules:
+  - **MemoryClassifier** — Classify entries by importance, lifecycle, category with composite scoring
+  - **MemoryMerger** — Merge similar/duplicate entries by keyword and type
+  - **MemoryCleanup** — Remove stale, expired, and low-value entries with configurable policies
+  - **MemoryRanker** — Rank entries by composite value with tier system (platinum/gold/silver/bronze)
+  - **MemoryExpiry** — Manage expiration policies with refresh-on-usage support
+  - **MemoryArchive** — Archive, search, and restore old entries
+  - **MemorySearch** — Multi-criteria search with relevance scoring
+  - **MemoryOptimizer** — Compact, deduplicate, and reorganize memory storage
+  - **MemoryEvolutionMetrics** — Track cleanup, merge, optimization, search metrics
+  - **MemoryManager** — Full pipeline: Classify → Rank → Merge → Cleanup → Optimize → Archive
+  - **Exceptions** — Custom exception hierarchy
+- **95 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3337 (all passing)
+- Lint: clean
+- Layer 9 Progress: 5/10 modules complete
+
+
 ## [v0.9.4] - 2026-07-17
 ### Added
 - **Layer 9 Module 4: Brand Voice Learning Engine** — Continuous brand voice learning with 11 sub-modules:
