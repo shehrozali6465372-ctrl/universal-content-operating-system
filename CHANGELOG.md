@@ -1,5 +1,26 @@
 # 📋 Changelog
 
+## [v0.9.8] - 2026-07-17
+### Added
+- **Layer 9 Module 8: Content Optimization Engine** — Analyze, optimize, rewrite, and validate content with 11 sub-modules:
+  - **OptimizationProfile** — Configure optimization goals (engagement, readability, SEO, conversion, brand_consistency, virality) and intensity levels
+  - **ContentAnalyzer** — Analyze content for strengths/weaknesses with readability, engagement, SEO, hook, and CTA scoring
+  - **RuleLibrary** — Pre-loaded optimization rules for titles, hooks, body, CTAs, SEO, engagement, and formatting
+  - **SuggestionGenerator** — Map weaknesses to prioritized optimization suggestions
+  - **RewriteEngine** — Apply suggestions to produce optimized content variants while preserving meaning
+  - **VariantEvaluator** — Compare original vs optimized versions with quality scoring
+  - **OptimizationMemory** — Store and search successful optimization patterns with tags
+  - **OptimizationMetrics** — Track optimization count, acceptance rate, improvement scores, variant generation
+  - **OptimizationValidator** — Ensure optimized content passes quality, safety, and brand compliance checks
+  - **OptimizationManager** — Full pipeline: Analyze → Suggest → Rewrite → Evaluate → Validate → Store
+  - **Exceptions** — Custom exception hierarchy (AnalysisError, RewriteError, ValidationError)
+- **83 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3614 (all passing)
+
+
+
 ## [v0.9.7] - 2026-07-17
 ### Added
 - **Layer 9 Module 7: Quality Calibration Engine** — Calibrate quality scoring against real feedback with 11 sub-modules:
