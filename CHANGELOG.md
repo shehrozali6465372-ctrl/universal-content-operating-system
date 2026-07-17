@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v0.9.3] - 2026-07-17
+### Added
+- **Layer 9 Module 3: Strategy Optimization Engine** — Automatic content strategy improvement with 11 sub-modules:
+  - **StrategyProfile** — Versioned strategy model with targeting, content pillars, and performance data
+  - **StrategyHistory** — Track version history, performance snapshots, and best versions
+  - **StrategyComparator** — Compare strategies across engagement, reach, conversion metrics
+  - **StrategyPatternDetector** — Detect high/low performers, platform patterns, frequency patterns
+  - **StrategyOptimizer** — Generate optimization suggestions for targeting, frequency, content, tactics
+  - **StrategyRecommender** — Recommend scale/optimize/deprecate/expand actions based on performance
+  - **StrategyMemory** — Store and retrieve strategy learnings with tagging and search
+  - **StrategyMetrics** — Track optimization success rates, recommendations, improvement rates
+  - **StrategyValidator** — Validate strategies before deployment with scoring and batch support
+  - **StrategyManager** — Full pipeline: Detect → Optimize → Recommend → Validate → Store
+  - **Exceptions** — Custom exception hierarchy for strategy optimization errors
+- **105 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3143 (all passing)
+- Lint: clean
+- Layer 9 Progress: 3/10 modules complete
+
+
 ## [v0.9.2] - 2026-07-17
 ### Added
 - **Layer 9 Module 2: Prompt Optimization Engine** — Automatic prompt improvement with 11 sub-modules:
