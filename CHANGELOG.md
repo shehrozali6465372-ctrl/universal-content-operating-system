@@ -1,5 +1,26 @@
 # 📋 Changelog
 
+## [v0.9.9] - 2026-07-17
+### Added
+- **Layer 9 Module 9: Engagement Predictor Engine** — Predict engagement metrics before publishing with 11 sub-modules:
+  - **PredictionProfile** — Configure prediction horizon (immediate/24h/7d/30d), confidence level, and platform
+  - **FeatureExtractor** — Extract content features: word count, hashtags, mentions, emojis, hooks, CTAs, readability
+  - **EngagementModel** — Core prediction engine with platform baselines, quality multipliers, and horizon scaling
+  - **ViralityEstimator** — Estimate viral probability, reach multiplier, and risk factor
+  - **TimingOptimizer** — Predict best publishing times with platform-aware peak hours and content type awareness
+  - **AudiencePredictor** — Predict audience segments, engagement distribution, and preferred content types
+  - **PredictionMemory** — Store predictions and compare with actual outcomes for accuracy tracking
+  - **PredictionMetrics** — Track MAE, RMSE, direction accuracy, and calibration score
+  - **PredictionValidator** — Validate prediction quality, detect model drift, and check anomaly bounds
+  - **EngagementManager** — Full pipeline: Extract → Predict → Virality → Timing → Audience → Validate → Store
+  - **Exceptions** — Custom exception hierarchy (FeatureExtractionError, PredictionError, ValidationError)
+- **131 comprehensive tests** covering all sub-modules + cross-platform integration tests
+
+### Stats
+- Total Tests: 3745 (all passing)
+
+
+
 ## [v0.9.8] - 2026-07-17
 ### Added
 - **Layer 9 Module 8: Content Optimization Engine** — Analyze, optimize, rewrite, and validate content with 11 sub-modules:
