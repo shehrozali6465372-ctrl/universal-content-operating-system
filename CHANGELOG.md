@@ -2,6 +2,27 @@
 
 # 📋 Changelog
 
+## [v0.7.8] - 2026-07-17
+### Added
+- **Layer 7 Module 9: Publishing Policies** — Centralized, versioned platform rules with 10 sub-modules:
+  - **PlatformRules** — Rule database for all platforms (FB/IG/X/LI/YT/TikTok)
+  - **ContentLimits** — Platform-specific text length, image count, hashtag limits
+  - **RateLimiter** — API rate limit enforcement (requests/minute, posts/day)
+  - **MediaPolicies** — Image/video format, size, aspect ratio rules per platform
+  - **SchedulePolicies** — Scheduling restrictions, business hours, timezone rules
+  - **ContentSafety** — Content safety rules (hate speech, violence, spam, misinformation)
+  - **APIVersionManager** — Track and manage platform API versions and deprecation
+  - **BrandSafety** — Brand-specific blocked topics, competitor mentions, disclaimers
+  - **PolicyValidator** — Validate content against all policies in one call
+  - **PolicyManager** — Full pipeline orchestration: validate → rate check → report
+  - **Exceptions** — PolicyError, PolicyViolationError, PolicyNotFoundError
+- **89 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2583 (all passing)
+- Lint: clean
+- Layer 7: 9/10 Modules Complete
+
 ## [v0.7.7] - 2026-07-17
 ### Added
 - **Layer 7 Module 8: Publishing Memory** — The publishing layer's brain with 10 sub-modules:
