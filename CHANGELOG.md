@@ -2,6 +2,27 @@
 
 # 📋 Changelog
 
+## [v0.7.7] - 2026-07-17
+### Added
+- **Layer 7 Module 8: Publishing Memory** — The publishing layer's brain with 10 sub-modules:
+  - **PublishHistory** — Record all published posts with platform, time, result, tags
+  - **PlatformMemory** — Track platform-specific behaviour, success rates, best content types
+  - **ScheduleMemory** — Learn best posting hours, weekdays, seasonal patterns
+  - **AudienceMemory** — Engagement history, audience preferences, content performance
+  - **PerformanceMemory** — Reach, CTR, conversion, ROI history with platform comparison
+  - **PublishFailureMemory** — Publishing failures, recovery effectiveness, error frequency
+  - **PatternLearner** — Detect recurring patterns (platform, content type, time, tags)
+  - **MemorySearch** — Flexible search by platform, content type, tags, text, date
+  - **MemoryRetention** — Archive, cleanup, compression, expiration policy
+  - **PublishingMemoryManager** — Full pipeline: store → learn → search → recommend → feed Layer 9
+  - **Exceptions** — MemoryError, StorageError, SearchError
+- **87 comprehensive tests** covering all 10 sub-modules
+
+### Stats
+- Total Tests: 2494 (all passing)
+- Lint: clean
+- Layer 7: 8/10 Modules Complete
+
 ## [v0.7.6] - 2026-07-16
 ### Added
 - **Layer 7 Module 7: Analytics Hook** — Collect, normalize, analyze, and store publish analytics with 10 sub-modules:
