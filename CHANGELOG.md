@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v0.9.7] - 2026-07-17
+### Added
+- **Layer 9 Module 7: Quality Calibration Engine** — Calibrate quality scoring against real feedback with 11 sub-modules:
+  - **CalibrationProfile** — Track calibration state per metric with bias tracking
+  - **ThresholdManager** — Context-aware quality thresholds with hard-stop support
+  - **ScoreAdjuster** — Adjust scores using calibration bias data
+  - **ConfidenceCalibrator** — Calibrate confidence scores using binning (ECE metric)
+  - **Evaluator** — Evaluate prediction accuracy with MAE, RMSE, direction analysis
+  - **BenchmarkManager** — Track benchmark runs and measure improvement over time
+  - **CalibrationHistory** — Record calibration changes with bias tracking
+  - **CalibrationMetrics** — Track calibration, evaluation, adjustment metrics
+  - **CalibrationValidator** — Validate calibration quality and consistency
+  - **CalibrationManager** — Full pipeline: Evaluate → Calibrate → Adjust → Validate → Benchmark
+  - **Exceptions** — Custom exception hierarchy
+- **82 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3531 (all passing)
+- Lint: clean
+- Layer 9 Progress: 7/10 modules complete
+
+
 ## [v0.9.6] - 2026-07-17
 ### Added
 - **Layer 9 Module 6: Self-Improvement Loop** — Continuous AI self-improvement with 11 sub-modules:
