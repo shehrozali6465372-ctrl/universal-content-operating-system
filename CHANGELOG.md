@@ -1,5 +1,26 @@
 # 📋 Changelog
 
+## [v1.2.0] - 2026-07-17
+### Added
+- **Layer 10 Module 2: Workflow Coordinator Engine** — Reliable multi-layer workflow execution with 12 sub-modules:
+  - **WorkflowCoordinator** — Start/execute/pause/resume/cancel/retry workflow lifecycle
+  - **WorkflowDefinition** — Workflow model with stages, dependencies, and priority
+  - **WorkflowStage** — Single execution stage with retry support
+  - **ExecutionController** — Sequential, parallel, conditional, and retry execution modes
+  - **StateManager** — Track workflow state with snapshots and rollback
+  - **SynchronizationManager** — Parallel joins, locks, shared state, and barrier sync
+  - **CheckpointManager** — Save/restore checkpoints for recovery
+  - **WorkflowEventBus** — Workflow lifecycle events with subscriber support
+  - **WorkflowMetrics** — Duration, success rate, retry count, stage metrics
+  - **WorkflowReport** — Timeline, executed stages, errors, recommendations
+  - **Exceptions** — 7 custom exception types (StageExecutionError, TimeoutError, etc.)
+- **112 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 4064 (all passing)
+
+
+
 ## [v1.1.0] - 2026-07-17
 ### Added
 - **Layer 10 Module 1: Master Orchestrator Engine** — Central brain coordinating all layers (1–9) with 12 sub-modules:
