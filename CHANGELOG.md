@@ -1,5 +1,26 @@
 # 📋 Changelog
 
+## [v1.3.0] - 2026-07-17
+### Added
+- **Layer 10 Module 3: Task Scheduler Engine** — Intelligent scheduling with 12 sub-modules:
+  - **TaskScheduler** — Schedule/pause/resume/cancel/retry/execute tasks
+  - **Task** — Task model with priority, deadline, retries, resource cost
+  - **PriorityQueue** — 5-level priority queue with push/pop/peek/remove/update
+  - **SchedulerPolicy** — FIFO, Priority, Round Robin, SJF, EDF, Weighted Fair algorithms
+  - **ResourceAllocator** — CPU, memory, GPU, API quota, worker slot allocation
+  - **WorkerPool** — Worker management with assign/release/heartbeat
+  - **LoadBalancer** — Least Loaded, Round Robin, Weighted, Random, Affinity algorithms
+  - **SchedulerEventBus** — Task scheduling events with subscriber support
+  - **SchedulerMetrics** — Throughput, latency, wait time, utilization, efficiency
+  - **SchedulerReport** — Queue, worker, resource, performance reports with recommendations
+  - **Exceptions** — 7 custom exception types (QueueFullError, WorkerUnavailableError, etc.)
+- **118 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 4182 (all passing)
+
+
+
 ## [v1.2.0] - 2026-07-17
 ### Added
 - **Layer 10 Module 2: Workflow Coordinator Engine** — Reliable multi-layer workflow execution with 12 sub-modules:
