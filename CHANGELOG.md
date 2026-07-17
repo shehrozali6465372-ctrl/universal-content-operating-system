@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v1.6.0] - 2026-07-17
+### Added
+- **Layer 10 Module 6: Content Generation Engine** — Universal content creation with 12 sub-modules:
+  - **ContentGenerator** — Generate content for 14 platforms with platform limits enforcement
+  - **ContentTemplate** — Reusable templates with variable substitution
+  - **TemplateLibrary** — Manage templates by platform and content type
+  - **PlatformAdapter** — Adapt content to platform-specific rules (tone, emoji, length)
+  - **ToneEngine** — 8 tone profiles (professional, casual, educational, etc.) with blending
+  - **HookGenerator** — 6 hook types (question, statistic, story, controversy, listicle, how_to)
+  - **CTAEngine** — Platform-specific calls to action (7 platforms supported)
+  - **SEOOptimizer** — Title/description optimization, keyword density, meta generation
+  - **ContentMemory** — Store generation patterns with quality scoring
+  - **GenerationMetrics** — Track throughput, quality, generation time by platform
+  - **GenerationReport** — Content generation reports with recommendations
+  - **ContentGenerationManager** — Full pipeline: Generate→Tone→Hooks→CTA→SEO→Adapt→Memory→Report
+- **62 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 4411 (all passing)
+
+
+
 ## [v1.5.0] - 2026-07-17
 ### Added
 - **Layer 10 Module 5: Autonomous Decision & Planning Engine** — Chief Planner with 12 sub-modules:
