@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v1.5.0] - 2026-07-17
+### Added
+- **Layer 10 Module 5: Autonomous Decision & Planning Engine** — Chief Planner with 12 sub-modules:
+  - **AutonomousPlanner** — Long-term plans with dynamic replanning (create_plan, replan, progress tracking)
+  - **GoalDecomposer** — Break goals→milestones→tasks with dependency mapping
+  - **DecisionMatrix** — Multi-factor scoring with risk/reward analysis and cost/benefit
+  - **ScenarioSimulator** — Create, simulate, compare, and choose best execution paths
+  - **ResourcePlanner** — CPU, GPU, memory, API quota, budget, time estimation
+  - **RiskManager** — Detect platform, resource, quality risks with rollback suggestions
+  - **AdaptivePlanner** — Adapt plans on failure, analytics feedback, or timeout
+  - **OpportunityDetector** — Scan for trending topics, viral potential, market gaps
+  - **PlanMemory** — Store successful/failed plans as reusable templates
+  - **PlanningMetrics** — Success rate, completion rate, execution time, decision accuracy
+  - **PlanningReportGenerator** — Planning, risk, resource, opportunity reports with recommendations
+  - **AutonomousPlanningManager** — Full pipeline: Decompose→Decide→Simulate→Plan Resources→Assess Risk→Adapt→Report
+- **66 comprehensive tests** covering all sub-modules + cross-platform integration tests
+
+### Stats
+- Total Tests: 4349 (all passing)
+
+
+
 ## [v1.4.0] - 2026-07-17
 ### Added
 - **Layer 10 Module 4: AI Meta Controller** — Universal supervisory AI brain with 15 sub-modules:
