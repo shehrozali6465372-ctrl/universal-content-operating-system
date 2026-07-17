@@ -1,5 +1,27 @@
 # 📋 Changelog
 
+## [v0.9.6] - 2026-07-17
+### Added
+- **Layer 9 Module 6: Self-Improvement Loop** — Continuous AI self-improvement with 11 sub-modules:
+  - **ImprovementCycle** — Define and track improvement cycles with lifecycle management
+  - **MistakeDetector** — Detect mistakes from metrics, quality scores, and feedback
+  - **WeaknessAnalyzer** — Analyze recurring weaknesses with severity and impact scoring
+  - **ImprovementActionManager** — Create and manage improvement actions from detected issues
+  - **ExperimentRunner** — Run controlled experiments with hypothesis testing and significance
+  - **ImprovementTracker** — Track improvement progress with snapshots and trend analysis
+  - **RollbackManager** — Save rollback points and restore previous states
+  - **ImprovementMetrics** — Track cycles, mistakes, actions, experiments, rollbacks
+  - **ImprovementHistory** — Track history with milestones and improvement deltas
+  - **SelfImprovementManager** — Full pipeline: Detect → Analyze → Actions → Track → History
+  - **Exceptions** — Custom exception hierarchy
+- **112 comprehensive tests** covering all sub-modules + integration tests
+
+### Stats
+- Total Tests: 3449 (all passing)
+- Lint: clean
+- Layer 9 Progress: 6/10 modules complete
+
+
 ## [v0.9.5] - 2026-07-17
 ### Added
 - **Layer 9 Module 5: Memory Evolution Engine** — Optimize, merge, rank, archive memory with 11 sub-modules:
