@@ -1403,3 +1403,308 @@ class TestRedisReport:
         self.rr.generate({}, {}, {})
         h = self.rr.get_history()
         assert len(h) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 4: Vector Database Platform
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.vector_database_platform.embedding_manager import EmbeddingManager
+from layers.layer13_persistence.modules.vector_database_platform.vector_store import VectorStore
+from layers.layer13_persistence.modules.vector_database_platform.similarity_search import SimilaritySearch
+from layers.layer13_persistence.modules.vector_database_platform.hybrid_search import HybridSearch
+from layers.layer13_persistence.modules.vector_database_platform.metadata_search import MetadataSearch
+from layers.layer13_persistence.modules.vector_database_platform.collection_manager import CollectionManager
+from layers.layer13_persistence.modules.vector_database_platform.vector_index import VectorIndex
+from layers.layer13_persistence.modules.vector_database_platform.vector_backup import VectorBackupManager
+from layers.layer13_persistence.modules.vector_database_platform.embedding_cache import EmbeddingCache
+from layers.layer13_persistence.modules.vector_database_platform.embedding_generator import EmbeddingGenerator
+from layers.layer13_persistence.modules.vector_database_platform.embedding_validator import EmbeddingValidator
+
+
+class TestEmbeddingManager:
+    def setup_method(self):
+        self.em = EmbeddingManager()
+
+    def test_generate(self):
+        result = self.em.generate("hello world")
+        assert result.dimensions == 1536
+        assert len(result.vector) == 1536
+
+    def test_batch_generate(self):
+        results = self.em.batch_generate(["a", "b", "c"])
+        assert len(results) == 3
+
+    def test_get(self):
+        result = self.em.generate("test")
+        found = self.em.get(result.embedding_id)
+        assert found is not None
+
+    def test_delete(self):
+        result = self.em.generate("test")
+        assert self.em.delete(result.embedding_id) is True
+        assert self.em.delete(result.embedding_id) is False
+
+    def test_similarity(self):
+        a = self.em.generate("hello")
+        b = self.em.generate("hello")
+        sim = self.em.similarity(a, b)
+        assert sim > 0.99
+
+    def test_cache_hit(self):
+        a = self.em.generate("cached_text")
+        b = self.em.generate("cached_text")
+        assert a.embedding_id == b.embedding_id
+
+    def test_stats(self):
+        self.em.generate("test")
+        s = self.em.stats()
+        assert s["embeddings"] == 1
+
+
+class TestVectorStore:
+    def setup_method(self):
+        self.vs = VectorStore(dimensions=128)
+
+    def test_upsert(self):
+        vec = [0.1] * 128
+        record = self.vs.upsert(vec, {"source": "test"})
+        assert record.record_id > 0
+
+    def test_search(self):
+        vec1 = [1.0] + [0.0] * 127
+        vec2 = [0.0] + [1.0] * 127
+        self.vs.upsert(vec1, {"label": "a"})
+        self.vs.upsert(vec2, {"label": "b"})
+        results = self.vs.search(vec1, top_k=1)
+        assert len(results) == 1
+        assert results[0][0].metadata["label"] == "a"
+
+    def test_search_with_filter(self):
+        vec = [0.5] * 128
+        self.vs.upsert(vec, {"type": "a"})
+        self.vs.upsert(vec, {"type": "b"})
+        results = self.vs.search(vec, top_k=10, filter_metadata={"type": "a"})
+        assert all(r.metadata["type"] == "a" for r, _ in results)
+
+    def test_delete(self):
+        record = self.vs.upsert([0.1] * 128)
+        assert self.vs.delete(record.record_id) is True
+
+    def test_count(self):
+        self.vs.upsert([0.1] * 128)
+        self.vs.upsert([0.2] * 128)
+        assert self.vs.count() == 2
+
+
+class TestSimilaritySearch:
+    def setup_method(self):
+        self.ss = SimilaritySearch()
+
+    def test_cosine(self):
+        vectors = [(1, [1.0, 0.0, 0.0]), (2, [0.0, 1.0, 0.0]), (3, [1.0, 0.0, 0.0])]
+        results = self.ss.search([1.0, 0.0, 0.0], vectors, top_k=2)
+        assert results[0][0] == 1
+
+    def test_euclidean(self):
+        self.ss.set_metric("euclidean")
+        vectors = [(1, [1.0, 0.0]), (2, [0.0, 1.0])]
+        results = self.ss.search([1.0, 0.0], vectors, top_k=1)
+        assert results[0][0] == 1
+
+    def test_batch_search(self):
+        vectors = [(1, [1.0, 0.0]), (2, [0.0, 1.0])]
+        queries = [[1.0, 0.0], [0.0, 1.0]]
+        results = self.ss.batch_search(queries, vectors, top_k=1)
+        assert len(results) == 2
+
+
+class TestHybridSearch:
+    def setup_method(self):
+        self.hs = HybridSearch(vector_weight=0.5, keyword_weight=0.5)
+
+    def test_search(self):
+        records = [
+            {"id": 1, "vector": [1.0, 0.0], "text": "machine learning guide"},
+            {"id": 2, "vector": [0.0, 1.0], "text": "cooking recipes"},
+        ]
+        results = self.hs.search([1.0, 0.0], ["machine", "learning"], records, top_k=1)
+        assert results[0]["id"] == 1
+
+
+class TestMetadataSearch:
+    def setup_method(self):
+        self.ms = MetadataSearch()
+
+    def test_filter_eq(self):
+        records = [
+            {"metadata": {"type": "a", "score": 0.9}},
+            {"metadata": {"type": "b", "score": 0.5}},
+        ]
+        results = self.ms.filter(records, {"type": "a"})
+        assert len(results) == 1
+
+    def test_filter_gt(self):
+        records = [
+            {"metadata": {"score": 0.9}},
+            {"metadata": {"score": 0.5}},
+        ]
+        results = self.ms.filter(records, {"score": {"gt": 0.7}})
+        assert len(results) == 1
+
+    def test_filter_in(self):
+        records = [
+            {"metadata": {"status": "active"}},
+            {"metadata": {"status": "deleted"}},
+        ]
+        results = self.ms.filter(records, {"status": {"in": ["active", "pending"]}})
+        assert len(results) == 1
+
+
+class TestCollectionManager:
+    def setup_method(self):
+        self.cm = CollectionManager()
+
+    def test_create(self):
+        col = self.cm.create("docs", 768)
+        assert col.name == "docs"
+        assert col.dimensions == 768
+
+    def test_delete(self):
+        self.cm.create("docs")
+        assert self.cm.delete("docs") is True
+        assert self.cm.delete("docs") is False
+
+    def test_get(self):
+        self.cm.create("docs")
+        assert self.cm.get("docs") is not None
+        assert self.cm.get("missing") is None
+
+    def test_list(self):
+        self.cm.create("a")
+        self.cm.create("b")
+        assert self.cm.count() == 2
+
+    def test_stats(self):
+        self.cm.create("a")
+        s = self.cm.stats()
+        assert s["collections"] == 1
+
+
+class TestVectorIndex:
+    def setup_method(self):
+        self.vi = VectorIndex(dimensions=3)
+
+    def test_add(self):
+        self.vi.add(1, [1.0, 0.0, 0.0])
+        assert self.vi.count() == 1
+
+    def test_search(self):
+        self.vi.add(1, [1.0, 0.0, 0.0])
+        self.vi.add(2, [0.0, 1.0, 0.0])
+        results = self.vi.search([1.0, 0.0, 0.0], top_k=1)
+        assert results[0][0] == 1
+
+    def test_remove(self):
+        self.vi.add(1, [1.0, 0.0, 0.0])
+        assert self.vi.remove(1) is True
+        assert self.vi.count() == 0
+
+    def test_rebuild(self):
+        assert self.vi.rebuild() is True
+
+
+class TestVectorBackupManager:
+    def setup_method(self):
+        self.vbm = VectorBackupManager()
+
+    def test_create_backup(self):
+        b = self.vbm.create_backup("docs", 1000)
+        assert b.record_count == 1000
+
+    def test_get_backup(self):
+        b = self.vbm.create_backup("docs", 500)
+        found = self.vbm.get_backup(b.backup_id)
+        assert found is not None
+
+    def test_list_backups(self):
+        self.vbm.create_backup("docs", 100)
+        self.vbm.create_backup("images", 200)
+        assert len(self.vbm.list_backups("docs")) == 1
+
+    def test_stats(self):
+        self.vbm.create_backup("docs", 100)
+        s = self.vbm.stats()
+        assert s["backups"] == 1
+
+
+class TestEmbeddingCache:
+    def setup_method(self):
+        self.ec = EmbeddingCache(max_size=100)
+
+    def test_set_get(self):
+        self.ec.set("hello", [0.1, 0.2])
+        result = self.ec.get("hello")
+        assert result == [0.1, 0.2]
+
+    def test_miss(self):
+        assert self.ec.get("missing") is None
+
+    def test_invalidate(self):
+        self.ec.set("hello", [0.1])
+        assert self.ec.invalidate("hello") is True
+        assert self.ec.get("hello") is None
+
+    def test_flush(self):
+        self.ec.set("a", [0.1])
+        count = self.ec.flush()
+        assert count == 1
+
+    def test_stats(self):
+        self.ec.set("k", [0.1])
+        self.ec.get("k")
+        s = self.ec.get_stats()
+        assert s["hits"] >= 1
+
+
+class TestEmbeddingGenerator:
+    def setup_method(self):
+        self.eg = EmbeddingGenerator()
+
+    def test_register_model(self):
+        self.eg.register_model("gpt", 1536, "OpenAI embedding")
+        assert "gpt" in self.eg.get_models()
+
+    def test_generate(self):
+        result = self.eg.generate("test text")
+        assert result.dimensions > 0
+
+    def test_batch(self):
+        results = self.eg.batch_generate(["a", "b"])
+        assert len(results) == 2
+
+    def test_stats(self):
+        self.eg.generate("test")
+        s = self.eg.stats()
+        assert "cache" in s
+
+
+class TestEmbeddingValidator:
+    def setup_method(self):
+        self.ev = EmbeddingValidator(expected_dimensions=3)
+
+    def test_valid(self):
+        assert self.ev.is_valid([0.1, 0.2, 0.3]) is True
+
+    def test_invalid_dimension(self):
+        errors = self.ev.validate([0.1, 0.2])
+        assert len(errors) > 0
+
+    def test_validate_batch(self):
+        result = self.ev.validate_batch([[0.1, 0.2, 0.3], [0.1, 0.2]])
+        assert result["valid"] == 1
+        assert result["invalid"] == 1
+
+    def test_fix(self):
+        fixed = self.ev.fix([0.1, 0.2])
+        assert len(fixed) == 3
