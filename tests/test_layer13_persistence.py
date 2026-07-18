@@ -983,3 +983,423 @@ class TestSQLReport:
         self.sr.generate({}, {}, {})
         h = self.sr.get_history()
         assert len(h) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 3: Redis Platform
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.redis_platform.redis_client import RedisClient
+from layers.layer13_persistence.modules.redis_platform.cache_manager import CacheManager
+from layers.layer13_persistence.modules.redis_platform.session_manager import SessionManager
+from layers.layer13_persistence.modules.redis_platform.distributed_lock import DistributedLockManager
+from layers.layer13_persistence.modules.redis_platform.pubsub import PubSub
+from layers.layer13_persistence.modules.redis_platform.queue_manager import QueueManager
+from layers.layer13_persistence.modules.redis_platform.stream_manager import StreamManager
+from layers.layer13_persistence.modules.redis_platform.rate_limiter import RateLimiter
+from layers.layer13_persistence.modules.redis_platform.ttl_manager import TTLManager
+from layers.layer13_persistence.modules.redis_platform.cache_analytics import CacheAnalytics
+from layers.layer13_persistence.modules.redis_platform.cluster_manager import ClusterManager, ClusterNode
+from layers.layer13_persistence.modules.redis_platform.redis_health import RedisHealth
+from layers.layer13_persistence.modules.redis_platform.redis_metrics import RedisMetrics
+from layers.layer13_persistence.modules.redis_platform.redis_report import RedisReport
+
+
+class TestRedisClient:
+    def setup_method(self):
+        self.rc = RedisClient()
+
+    def test_connect(self):
+        assert self.rc.connect() is True
+        assert self.rc.is_connected() is True
+
+    def test_disconnect(self):
+        self.rc.connect()
+        assert self.rc.disconnect() is True
+        assert self.rc.is_connected() is False
+
+    def test_set_get(self):
+        self.rc.connect()
+        self.rc.set("key1", "value1")
+        assert self.rc.get("key1") == "value1"
+
+    def test_delete(self):
+        self.rc.connect()
+        self.rc.set("key1", "value1")
+        assert self.rc.delete("key1") is True
+        assert self.rc.get("key1") is None
+
+    def test_exists(self):
+        self.rc.connect()
+        self.rc.set("k", "v")
+        assert self.rc.exists("k") is True
+
+    def test_mget_mset(self):
+        self.rc.connect()
+        self.rc.mset({"a": "1", "b": "2"})
+        vals = self.rc.mget(["a", "b", "c"])
+        assert vals[0] == "1"
+        assert vals[2] is None
+
+    def test_incr_decr(self):
+        self.rc.connect()
+        self.rc.set("counter", "0")
+        assert self.rc.incr("counter") == 1
+        assert self.rc.decr("counter") == 0
+
+    def test_flush(self):
+        self.rc.connect()
+        self.rc.set("a", "1")
+        assert self.rc.flush() is True
+        assert self.rc.dbsize() == 0
+
+    def test_ping(self):
+        self.rc.connect()
+        assert self.rc.ping() is True
+
+
+class TestCacheManager:
+    def setup_method(self):
+        self.cm = CacheManager(max_entries=100)
+
+    def test_set_get(self):
+        self.cm.set("k", "v")
+        assert self.cm.get("k") == "v"
+
+    def test_miss(self):
+        assert self.cm.get("missing") is None
+
+    def test_delete(self):
+        self.cm.set("k", "v")
+        assert self.cm.delete("k") is True
+        assert self.cm.get("k") is None
+
+    def test_exists(self):
+        self.cm.set("k", "v")
+        assert self.cm.exists("k") is True
+
+    def test_lru_eviction(self):
+        cm = CacheManager(max_entries=3)
+        cm.set("a", "1")
+        cm.set("b", "2")
+        cm.set("c", "3")
+        cm.set("d", "4")
+        assert len(cm._cache) <= 3
+
+    def test_invalidate_pattern(self):
+        self.cm.set("user:1", "a")
+        self.cm.set("user:2", "b")
+        self.cm.set("post:1", "c")
+        removed = self.cm.invalidate_pattern("user:*")
+        assert removed == 2
+
+    def test_flush(self):
+        self.cm.set("a", "1")
+        count = self.cm.flush()
+        assert count >= 1
+
+    def test_stats(self):
+        self.cm.set("k", "v")
+        self.cm.get("k")
+        s = self.cm.get_stats()
+        assert s["hits"] >= 1
+
+
+class TestSessionManager:
+    def setup_method(self):
+        self.sm = SessionManager()
+
+    def test_create_get(self):
+        session = self.sm.create("s1", "user1")
+        assert session.session_id == "s1"
+        found = self.sm.get("s1")
+        assert found is not None
+
+    def test_destroy(self):
+        self.sm.create("s1", "user1")
+        assert self.sm.destroy("s1") is True
+        assert self.sm.get("s1") is None
+
+    def test_get_user_sessions(self):
+        self.sm.create("s1", "u1")
+        self.sm.create("s2", "u1")
+        self.sm.create("s3", "u2")
+        assert len(self.sm.get_user_sessions("u1")) == 2
+
+    def test_active_count(self):
+        self.sm.create("s1", "u1")
+        assert self.sm.active_count() == 1
+
+
+class TestDistributedLockManager:
+    def setup_method(self):
+        self.dlm = DistributedLockManager()
+
+    def test_acquire(self):
+        lock = self.dlm.acquire("resource1", "owner1")
+        assert lock is not None
+
+    def test_acquire_blocks(self):
+        self.dlm.acquire("resource1", "owner1")
+        lock2 = self.dlm.acquire("resource1", "owner2")
+        assert lock2 is None
+
+    def test_release(self):
+        self.dlm.acquire("resource1", "owner1")
+        assert self.dlm.release("resource1", "owner1") is True
+
+    def test_is_locked(self):
+        self.dlm.acquire("r1", "o1")
+        assert self.dlm.is_locked("r1") is True
+
+    def test_force_release(self):
+        self.dlm.acquire("r1", "o1")
+        assert self.dlm.force_release("r1") is True
+
+    def test_stats(self):
+        self.dlm.acquire("r1", "o1")
+        s = self.dlm.stats()
+        assert s["active_locks"] == 1
+
+
+class TestPubSub:
+    def setup_method(self):
+        self.ps = PubSub()
+
+    def test_subscribe_publish(self):
+        received = []
+        self.ps.subscribe("channel1", lambda m: received.append(m.data))
+        self.ps.publish("channel1", "hello")
+        assert len(received) == 1
+        assert received[0] == "hello"
+
+    def test_unsubscribe(self):
+        handler = lambda m: None
+        self.ps.subscribe("ch", handler)
+        assert self.ps.unsubscribe("ch", handler) is True
+
+    def test_messages(self):
+        self.ps.publish("ch", "m1")
+        self.ps.publish("ch", "m2")
+        msgs = self.ps.get_messages("ch")
+        assert len(msgs) == 2
+
+    def test_stats(self):
+        self.ps.subscribe("ch", lambda m: None)
+        s = self.ps.stats()
+        assert s["channels"] == 1
+
+
+class TestQueueManager:
+    def setup_method(self):
+        self.qm = QueueManager()
+
+    def test_enqueue_dequeue(self):
+        self.qm.enqueue("q1", "item1")
+        item = self.qm.dequeue("q1")
+        assert item is not None
+        assert item.data == "item1"
+
+    def test_priority(self):
+        self.qm.enqueue("q1", "low", priority=1)
+        self.qm.enqueue("q1", "high", priority=10)
+        item = self.qm.dequeue("q1")
+        assert item.data == "high"
+
+    def test_peek(self):
+        self.qm.enqueue("q1", "item1")
+        item = self.qm.peek("q1")
+        assert item.data == "item1"
+        assert self.qm.size("q1") == 1
+
+    def test_dequeue_empty(self):
+        assert self.qm.dequeue("empty") is None
+
+    def test_stats(self):
+        self.qm.enqueue("q1", "a")
+        s = self.qm.stats()
+        assert s["queues"] == 1
+
+
+class TestStreamManager:
+    def setup_method(self):
+        self.sm = StreamManager()
+
+    def test_add_read(self):
+        self.sm.add("stream1", {"event": "login"})
+        entries = self.sm.read("stream1")
+        assert len(entries) == 1
+
+    def test_trim(self):
+        for i in range(10):
+            self.sm.add("stream1", {"i": str(i)})
+        self.sm.trim("stream1", 5)
+        assert self.sm.length("stream1") == 5
+
+    def test_delete(self):
+        self.sm.add("s1", {"a": "b"})
+        assert self.sm.delete_stream("s1") is True
+
+    def test_list_streams(self):
+        self.sm.add("s1", {"a": "b"})
+        assert "s1" in self.sm.list_streams()
+
+
+class TestRateLimiter:
+    def setup_method(self):
+        self.rl = RateLimiter(max_requests=3, window_seconds=1.0)
+
+    def test_allow(self):
+        assert self.rl.is_allowed("user1") is True
+
+    def test_block(self):
+        for _ in range(3):
+            self.rl.is_allowed("user1")
+        assert self.rl.is_allowed("user1") is False
+
+    def test_remaining(self):
+        self.rl.is_allowed("u1")
+        remaining = self.rl.get_remaining("u1")
+        assert remaining == 2
+
+    def test_reset(self):
+        for _ in range(3):
+            self.rl.is_allowed("u1")
+        self.rl.reset("u1")
+        assert self.rl.is_allowed("u1") is True
+
+
+class TestTTLManager:
+    def setup_method(self):
+        self.ttl = TTLManager()
+
+    def test_set_get(self):
+        self.ttl.set("k", 60)
+        remaining = self.ttl.get_ttl("k")
+        assert remaining is not None
+        assert remaining > 0
+
+    def test_expired(self):
+        self.ttl.set("k", 0)
+        import time
+        time.sleep(0.01)
+        assert self.ttl.is_expired("k") is True
+
+    def test_delete(self):
+        self.ttl.set("k", 60)
+        assert self.ttl.delete("k") is True
+
+    def test_cleanup(self):
+        self.ttl.set("k1", 0)
+        import time
+        time.sleep(0.01)
+        count = self.ttl.cleanup_expired()
+        assert count >= 1
+
+
+class TestCacheAnalytics:
+    def setup_method(self):
+        self.ca = CacheAnalytics()
+
+    def test_hit_miss(self):
+        self.ca.record_hit("user:1")
+        self.ca.record_miss("user:2")
+        rate = self.ca.get_hit_rate()
+        assert rate == 0.5
+
+    def test_pattern_stats(self):
+        self.ca.record_hit("user:1")
+        self.ca.record_miss("user:2")
+        ps = self.ca.get_pattern_stats()
+        assert "user" in ps
+
+    def test_to_dict(self):
+        self.ca.record_hit("k")
+        d = self.ca.to_dict()
+        assert "hit_rate" in d
+
+
+class TestClusterManager:
+    def setup_method(self):
+        self.cm = ClusterManager()
+
+    def test_enable_disable(self):
+        self.cm.enable_cluster()
+        assert self.cm._is_cluster is True
+
+    def test_add_remove_node(self):
+        node = ClusterNode("node1.local", 6379, "master")
+        assert self.cm.add_node(node) is True
+        assert self.cm.remove_node(node.node_id) is True
+
+    def test_get_masters_replicas(self):
+        self.cm.add_node(ClusterNode("m1", 6379, "master"))
+        self.cm.add_node(ClusterNode("r1", 6380, "replica"))
+        assert len(self.cm.get_masters()) == 1
+        assert len(self.cm.get_replicas()) == 1
+
+    def test_is_healthy(self):
+        self.cm.add_node(ClusterNode("n1"))
+        assert self.cm.is_healthy() is True
+
+    def test_stats(self):
+        self.cm.add_node(ClusterNode("n1"))
+        s = self.cm.stats()
+        assert s["nodes"] == 1
+
+
+class TestRedisHealth:
+    def setup_method(self):
+        self.rh = RedisHealth()
+
+    def test_check(self):
+        result = self.rh.check("connection", True, 1.5)
+        assert result["healthy"] is True
+
+    def test_is_healthy(self):
+        self.rh.check("conn", True)
+        self.rh.check("memory", True)
+        assert self.rh.is_healthy() is True
+
+    def test_degraded(self):
+        self.rh.check("conn", True)
+        self.rh.check("memory", False)
+        assert self.rh.is_healthy() is False
+
+
+class TestRedisMetrics:
+    def setup_method(self):
+        self.rm = RedisMetrics()
+
+    def test_record(self):
+        self.rm.record("GET", 0.5, True)
+        assert self.rm._operations == 1
+
+    def test_error_rate(self):
+        self.rm.record("GET", 0.5, True)
+        self.rm.record("SET", 0.5, False)
+        assert self.rm.get_error_rate() == 0.5
+
+    def test_reset(self):
+        self.rm.record("GET", 0.5)
+        self.rm.reset()
+        assert self.rm._operations == 0
+
+    def test_to_dict(self):
+        self.rm.record("GET", 0.5)
+        d = self.rm.to_dict()
+        assert "operations" in d
+
+
+class TestRedisReport:
+    def setup_method(self):
+        self.rr = RedisReport()
+
+    def test_generate(self):
+        report = self.rr.generate({"ops": 100}, {"healthy": True}, {"entries": 50})
+        assert "metrics" in report
+
+    def test_history(self):
+        self.rr.generate({}, {}, {})
+        h = self.rr.get_history()
+        assert len(h) == 1
