@@ -2029,3 +2029,462 @@ class TestStorageHealth:
         self.sh.check("s3", True)
         self.sh.check("minio", False)
         assert self.sh.is_healthy() is False
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 6: AI Memory Persistence
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.ai_memory_persistence.conversation_memory_store import ConversationMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.semantic_memory_store import SemanticMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.episodic_memory_store import EpisodicMemoryStore, EpisodicMemory
+from layers.layer13_persistence.modules.ai_memory_persistence.business_memory_store import BusinessMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.knowledge_memory_store import KnowledgeMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.prompt_memory_store import PromptMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.learning_memory_store import LearningMemoryStore, Lesson
+from layers.layer13_persistence.modules.ai_memory_persistence.strategy_memory_store import StrategyMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.brand_memory_store import BrandMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.analytics_memory_store import AnalyticsMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.research_memory_store import ResearchMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.context_memory_store import ContextMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.working_memory_store import WorkingMemoryStore
+from layers.layer13_persistence.modules.ai_memory_persistence.goal_memory_store import GoalMemoryStore, Goal
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_recovery import MemoryRecovery
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_snapshot import MemorySnapshotManager
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_version import MemoryVersionManager
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_compaction import MemoryCompactor
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_indexer import MemoryIndexer
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_search import MemorySearch
+
+
+class TestConversationMemoryStore:
+    def setup_method(self):
+        self.store = ConversationMemoryStore()
+
+    def test_store_retrieve(self):
+        entry = self.store.store("conv1", {"role": "user", "content": "hi"})
+        found = self.store.retrieve("conv1")
+        assert found is not None
+
+    def test_add_message(self):
+        self.store.add_message("c1", "user", "hello")
+        self.store.add_message("c1", "assistant", "hi there")
+        msgs = self.store.get_conversation("c1")
+        assert len(msgs) == 2
+
+    def test_recent_messages(self):
+        for i in range(20):
+            self.store.add_message("c1", "user", f"msg{i}")
+        recent = self.store.get_recent_messages("c1", 5)
+        assert len(recent) == 5
+
+    def test_conversation_count(self):
+        self.store.add_message("c1", "user", "a")
+        self.store.add_message("c2", "user", "b")
+        assert self.store.conversation_count() == 2
+
+
+class TestSemanticMemoryStore:
+    def setup_method(self):
+        self.store = SemanticMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("fact1", "Python is a programming language")
+        entry = self.store.retrieve("fact1")
+        assert entry is not None
+
+    def test_with_embedding(self):
+        emb = [0.1, 0.2, 0.3]
+        self.store.store_with_embedding("fact1", "test", emb)
+        found = self.store.get_embedding("fact1")
+        assert found == emb
+
+    def test_similarity_search(self):
+        self.store.store_with_embedding("a", "hello", [1.0, 0.0, 0.0])
+        self.store.store_with_embedding("b", "world", [0.0, 1.0, 0.0])
+        results = self.store.search_by_similarity([1.0, 0.0, 0.0], top_k=1)
+        assert results[0].key == "a"
+
+
+class TestEpisodicMemoryStore:
+    def setup_method(self):
+        self.store = EpisodicMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("e1", "Published post")
+        assert self.store.retrieve("e1") is not None
+
+    def test_store_episode(self):
+        ep = EpisodicMemory("User liked post", {"platform": "facebook"}, "engagement up")
+        ep.importance = 0.9
+        self.store.store_episode("e1", ep)
+        found = self.store.get_episode("e1")
+        assert found.importance == 0.9
+
+    def test_search_by_importance(self):
+        ep1 = EpisodicMemory("minor event")
+        ep1.importance = 0.2
+        ep2 = EpisodicMemory("major event")
+        ep2.importance = 0.9
+        self.store.store_episode("e1", ep1)
+        self.store.store_episode("e2", ep2)
+        results = self.store.search_by_importance(0.5)
+        assert len(results) == 1
+
+    def test_recent(self):
+        for i in range(5):
+            self.store.store_episode(f"e{i}", EpisodicMemory(f"event{i}"))
+        recent = self.store.get_recent(3)
+        assert len(recent) == 3
+
+
+class TestBusinessMemoryStore:
+    def setup_method(self):
+        self.store = BusinessMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("b1", {"campaign": "summer_sale"})
+        assert self.store.retrieve("b1") is not None
+
+    def test_campaigns(self):
+        self.store.store_campaign("c1", {"name": "Summer Sale", "budget": 5000})
+        c = self.store.get_campaign("c1")
+        assert c["budget"] == 5000
+
+    def test_revenue(self):
+        self.store.record_revenue(100.0, "ads")
+        self.store.record_revenue(200.0, "sponsorship")
+        assert self.store.total_revenue() == 300.0
+
+
+class TestKnowledgeMemoryStore:
+    def setup_method(self):
+        self.store = KnowledgeMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("k1", "AI content agent architecture")
+        assert self.store.retrieve("k1") is not None
+
+    def test_graph(self):
+        g = self.store.get_graph()
+        g.add_entity("Python", "language")
+        g.add_entity("AI", "field")
+        g.add_relationship("Python", "AI", "used_in")
+        assert g.entity_count() == 2
+        assert g.relationship_count() == 1
+
+
+class TestPromptMemoryStore:
+    def setup_method(self):
+        self.store = PromptMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("p1", "Write a tweet about AI")
+        assert self.store.retrieve("p1") is not None
+
+    def test_performance(self):
+        self.store.store("p1", "prompt1")
+        self.store.record_performance("p1", 0.8)
+        self.store.record_performance("p1", 0.9)
+        perf = self.store.get_performance("p1")
+        assert perf["count"] == 2
+
+    def test_best_prompts(self):
+        self.store.store("p1", "prompt1")
+        self.store.store("p2", "prompt2")
+        self.store.record_performance("p1", 0.9)
+        self.store.record_performance("p2", 0.5)
+        best = self.store.get_best_prompts(1)
+        assert best[0].key == "p1"
+
+
+class TestLearningMemoryStore:
+    def setup_method(self):
+        self.store = LearningMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("l1", "Shorter captions get more engagement")
+        assert self.store.retrieve("l1") is not None
+
+    def test_lessons(self):
+        lesson = Lesson("writing", "Keep posts under 150 words", "high")
+        lesson.confidence = 0.85
+        self.store.add_lesson(lesson)
+        lessons = self.store.get_lessons("writing")
+        assert len(lessons) == 1
+
+    def test_mistakes(self):
+        self.store.record_mistake({"type": "grammar", "text": "typo"})
+        mistakes = self.store.get_mistakes()
+        assert len(mistakes) == 1
+
+
+class TestStrategyMemoryStore:
+    def setup_method(self):
+        self.store = StrategyMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("s1", "Video content strategy")
+        assert self.store.retrieve("s1") is not None
+
+    def test_outcomes(self):
+        self.store.record_outcome("s1", {"score": 0.8, "engagement": "high"})
+        self.store.record_outcome("s1", {"score": 0.6, "engagement": "medium"})
+        outcomes = self.store.get_outcomes("s1")
+        assert len(outcomes) == 2
+
+    def test_best(self):
+        self.store.record_outcome("s1", {"score": 0.5})
+        self.store.record_outcome("s2", {"score": 0.9})
+        assert self.store.get_best_strategy() == "s2"
+
+
+class TestBrandMemoryStore:
+    def setup_method(self):
+        self.store = BrandMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("br1", "Professional tone")
+        assert self.store.retrieve("br1") is not None
+
+    def test_guidelines(self):
+        self.store.set_guideline("tone", "Professional yet friendly")
+        assert self.store.get_guideline("tone") == "Professional yet friendly"
+
+    def test_voice_samples(self):
+        self.store.add_voice_sample({"text": "We're excited to announce...", "platform": "linkedin"})
+        samples = self.store.get_voice_samples()
+        assert len(samples) == 1
+
+
+class TestAnalyticsMemoryStore:
+    def setup_method(self):
+        self.store = AnalyticsMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("a1", {"metric": "engagement"})
+        assert self.store.retrieve("a1") is not None
+
+    def test_time_series(self):
+        self.store.record_metric("engagement", 0.8)
+        self.store.record_metric("engagement", 0.9)
+        ts = self.store.get_time_series("engagement")
+        assert len(ts) == 2
+
+    def test_insights(self):
+        self.store.add_insight({"type": "trend", "description": "Video outperforms images"})
+        insights = self.store.get_insights()
+        assert len(insights) == 1
+
+
+class TestResearchMemoryStore:
+    def setup_method(self):
+        self.store = ResearchMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("r1", "Trending hashtags analysis")
+        assert self.store.retrieve("r1") is not None
+
+    def test_cache(self):
+        self.store.cache_result("query1", {"results": [1, 2, 3]})
+        cached = self.store.get_cached("query1")
+        assert cached["results"] == [1, 2, 3]
+
+    def test_sources(self):
+        self.store.register_source("google_news", 0.9)
+        sources = self.store.get_sources()
+        assert "google_news" in sources
+
+
+class TestContextMemoryStore:
+    def setup_method(self):
+        self.store = ContextMemoryStore()
+
+    def test_store_retrieve(self):
+        self.store.store("ctx1", {"session": "active"})
+        assert self.store.retrieve("ctx1") is not None
+
+    def test_save_load(self):
+        self.store.save_context("s1", {"user_id": "u1", "platform": "twitter"})
+        ctx = self.store.load_context("s1")
+        assert ctx["platform"] == "twitter"
+
+    def test_delete(self):
+        self.store.save_context("s1", {"a": 1})
+        assert self.store.delete_context("s1") is True
+
+
+class TestWorkingMemoryStore:
+    def setup_method(self):
+        self.store = WorkingMemoryStore(default_ttl=1.0)
+
+    def test_store_retrieve(self):
+        self.store.store("w1", "current task")
+        assert self.store.retrieve("w1") is not None
+
+    def test_expiry(self):
+        import time
+        self.store.store("w1", "ephemeral")
+        time.sleep(1.1)
+        assert self.store.retrieve("w1") is None
+
+    def test_cleanup(self):
+        import time
+        self.store.store("w1", "old")
+        time.sleep(1.1)
+        removed = self.store.cleanup_expired()
+        assert removed >= 1
+
+
+class TestGoalMemoryStore:
+    def setup_method(self):
+        self.store = GoalMemoryStore()
+
+    def test_add_goal(self):
+        goal = Goal("Grow followers", "Reach 10K followers")
+        self.store.add_goal(goal)
+        found = self.store.get_goal(str(goal.goal_id))
+        assert found is not None
+
+    def test_active_goals(self):
+        g1 = Goal("Active goal")
+        self.store.add_goal(g1)
+        active = self.store.get_active_goals()
+        assert len(active) >= 1
+
+    def test_complete_goal(self):
+        g1 = Goal("Complete me")
+        self.store.add_goal(g1)
+        assert self.store.complete_goal(str(g1.goal_id)) is True
+        assert g1.status == "completed"
+
+
+class TestMemoryRecovery:
+    def setup_method(self):
+        self.recovery = MemoryRecovery()
+
+    def test_snapshot(self):
+        snap = self.recovery.create_snapshot({"mem1": "data"})
+        assert snap.snapshot_id > 0
+
+    def test_get_latest(self):
+        self.recovery.create_snapshot({"a": 1})
+        self.recovery.create_snapshot({"b": 2})
+        latest = self.recovery.get_latest_snapshot()
+        assert latest.stores == {"b": 2}
+
+    def test_restore(self):
+        snap = self.recovery.create_snapshot({"data": "value"})
+        restored = self.recovery.restore(snap.snapshot_id)
+        assert restored == {"data": "value"}
+
+    def test_max_snapshots(self):
+        for i in range(15):
+            self.recovery.create_snapshot({f"s{i}": i})
+        assert self.recovery.snapshot_count() <= 10
+
+
+class TestMemorySnapshotManager:
+    def setup_method(self):
+        self.sm = MemorySnapshotManager(interval_seconds=0.1)
+
+    def test_take_snapshot(self):
+        snap = self.sm.take_snapshot({"key": "value"})
+        assert "timestamp" in snap
+
+    def test_should_snapshot(self):
+        self.sm.take_snapshot({"a": 1})
+        import time
+        time.sleep(0.15)
+        assert self.sm.should_snapshot() is True
+
+    def test_latest(self):
+        self.sm.take_snapshot({"a": 1})
+        self.sm.take_snapshot({"b": 2})
+        latest = self.sm.get_latest()
+        assert latest["data"] == {"b": 2}
+
+
+class TestMemoryVersionManager:
+    def setup_method(self):
+        self.vm = MemoryVersionManager()
+
+    def test_create_version(self):
+        v = self.vm.create_version("key1", "v1")
+        assert v.is_current is True
+
+    def test_get_current(self):
+        self.vm.create_version("k", "v1")
+        self.vm.create_version("k", "v2")
+        current = self.vm.get_current("k")
+        assert current.value == "v2"
+
+    def test_rollback(self):
+        v1 = self.vm.create_version("k", "v1")
+        self.vm.create_version("k", "v2")
+        assert self.vm.rollback("k", v1.version_id) is True
+        current = self.vm.get_current("k")
+        assert current.value == "v1"
+
+    def test_history(self):
+        self.vm.create_version("k", "v1")
+        self.vm.create_version("k", "v2")
+        h = self.vm.get_history("k")
+        assert len(h) == 2
+
+
+class TestMemoryCompactor:
+    def setup_method(self):
+        self.compactor = MemoryCompactor()
+
+    def test_compact(self):
+        store = ConversationMemoryStore()
+        store.store("old", "data")
+        result = self.compactor.compact(store, max_age_seconds=0)
+        assert result["removed"] >= 1
+
+    def test_compact_by_access(self):
+        store = ConversationMemoryStore()
+        store.store("rare", "data")
+        result = self.compactor.compact_by_access(store, min_access=1)
+        assert result["removed"] >= 1
+
+
+class TestMemoryIndexer:
+    def setup_method(self):
+        self.indexer = MemoryIndexer()
+
+    def test_index_search(self):
+        self.indexer.index_entry("doc1", "Python machine learning tutorial")
+        results = self.indexer.search("machine learning")
+        assert "doc1" in results
+
+    def test_remove(self):
+        self.indexer.index_entry("d1", "test content")
+        self.indexer.remove_key("d1")
+        results = self.indexer.search("test")
+        assert "d1" not in results
+
+    def test_stats(self):
+        self.indexer.index_entry("d1", "hello world")
+        s = self.indexer.stats()
+        assert s["words"] >= 2
+
+
+class TestMemorySearch:
+    def setup_method(self):
+        self.ms = MemorySearch()
+
+    def test_register_search(self):
+        conv = ConversationMemoryStore()
+        conv.store("c1", "user asked about pricing")
+        self.ms.register_store("conversation", conv)
+        results = self.ms.search("pricing")
+        assert len(results) >= 1
+
+    def test_count_all(self):
+        conv = ConversationMemoryStore()
+        conv.store("k", "v")
+        self.ms.register_store("conv", conv)
+        counts = self.ms.count_all()
+        assert counts["conv"] == 1
