@@ -2867,3 +2867,278 @@ class TestPlatformRepository:
         self.repo.create(p1)
         self.repo.create(p2)
         assert len(self.repo.find_enabled()) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 8: Event Store
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.event_store.event import Event
+from layers.layer13_persistence.modules.event_store.event_store import EventStore
+from layers.layer13_persistence.modules.event_store.event_stream import EventStream
+from layers.layer13_persistence.modules.event_store.snapshot_manager import SnapshotManager
+from layers.layer13_persistence.modules.event_store.replay_engine import ReplayEngine
+from layers.layer13_persistence.modules.event_store.event_archive import EventArchive
+from layers.layer13_persistence.modules.event_store.event_compression import EventCompressor
+from layers.layer13_persistence.modules.event_store.event_replication import EventReplicator
+from layers.layer13_persistence.modules.event_store.event_versioning import EventVersionManager
+from layers.layer13_persistence.modules.event_store.event_search import EventSearcher
+from layers.layer13_persistence.modules.event_store.event_recovery import EventRecovery
+from layers.layer13_persistence.modules.event_store.event_metrics import EventMetrics
+from layers.layer13_persistence.modules.event_store.event_report import EventReport
+
+
+class TestEvent:
+    def test_create(self):
+        e = Event("PostCreated", "agg_1", {"title": "Hello"})
+        assert e.event_type == "PostCreated"
+        assert e.aggregate_id == "agg_1"
+
+    def test_to_dict(self):
+        e = Event("Test", "a1", {"k": "v"})
+        d = e.to_dict()
+        assert "type" in d
+        assert d["data"]["k"] == "v"
+
+
+class TestEventStore:
+    def setup_method(self):
+        self.es = EventStore()
+
+    def test_append(self):
+        e = Event("Created", "agg1", {"name": "test"})
+        result = self.es.append(e)
+        assert result.version == 1
+
+    def test_get_events(self):
+        self.es.append(Event("Created", "agg1"))
+        self.es.append(Event("Updated", "agg1"))
+        events = self.es.get_events("agg1")
+        assert len(events) == 2
+
+    def test_versioning(self):
+        self.es.append(Event("A", "agg1"))
+        self.es.append(Event("B", "agg1"))
+        assert self.es.get_version("agg1") == 2
+
+    def test_get_from_version(self):
+        self.es.append(Event("A", "agg1"))
+        self.es.append(Event("B", "agg1"))
+        events = self.es.get_events_from("agg1", from_version=1)
+        assert len(events) == 1
+
+    def test_global_events(self):
+        self.es.append(Event("A", "agg1"))
+        self.es.append(Event("B", "agg2"))
+        assert len(self.es.get_global_events()) == 2
+
+    def test_by_type(self):
+        self.es.append(Event("Created", "a1"))
+        self.es.append(Event("Updated", "a1"))
+        assert len(self.es.get_events_by_type("Created")) == 1
+
+    def test_stats(self):
+        self.es.append(Event("A", "a1"))
+        s = self.es.stats()
+        assert s["total_events"] == 1
+
+
+class TestEventStream:
+    def setup_method(self):
+        self.stream = EventStream()
+
+    def test_publish_subscribe(self):
+        received = []
+        self.stream.subscribe("test", lambda e: received.append(e))
+        self.stream.publish(Event("test", "a1"))
+        assert len(received) == 1
+
+    def test_wildcard(self):
+        received = []
+        self.stream.subscribe("*", lambda e: received.append(e))
+        self.stream.publish(Event("any", "a1"))
+        assert len(received) == 1
+
+    def test_history(self):
+        self.stream.publish(Event("A", "a1"))
+        h = self.stream.get_history()
+        assert len(h) == 1
+
+    def test_clear(self):
+        self.stream.publish(Event("A", "a1"))
+        count = self.stream.clear_history()
+        assert count == 1
+
+
+class TestSnapshotManager:
+    def setup_method(self):
+        self.sm = SnapshotManager(snapshot_interval=5)
+
+    def test_save_get(self):
+        snap = self.sm.save("agg1", 10, {"count": 5})
+        found = self.sm.get("agg1")
+        assert found.version == 10
+
+    def test_should_snapshot(self):
+        self.sm.save("agg1", 1, {})
+        assert self.sm.should_snapshot("agg1", 6) is True
+        assert self.sm.should_snapshot("agg1", 3) is False
+
+    def test_delete(self):
+        self.sm.save("agg1", 1, {})
+        assert self.sm.delete("agg1") is True
+
+
+class TestReplayEngine:
+    def setup_method(self):
+        self.engine = ReplayEngine()
+
+    def test_replay(self):
+        self.engine.register_handler("Created", lambda s, e: {**s, "created": True})
+        self.engine.register_handler("Updated", lambda s, e: {**s, "updated": True})
+        events = [Event("Created", "a1"), Event("Updated", "a1")]
+        state = self.engine.replay(events)
+        assert state["created"] is True
+        assert state["updated"] is True
+
+    def test_replay_aggregate(self):
+        self.engine.register_handler("Test", lambda s, e: {**s, "done": True})
+        events = [Event("Test", "a1"), Event("Test", "a2")]
+        state = self.engine.replay_aggregate("a1", events)
+        assert state["done"] is True
+
+
+class TestEventArchive:
+    def setup_method(self):
+        self.archive = EventArchive(max_age_days=0)
+
+    def test_archive(self):
+        import time
+        e = Event("Old", "a1")
+        e.timestamp = time.time() - 100000
+        archived = self.archive.archive([e])
+        assert len(archived) == 1
+
+    def test_archived_count(self):
+        import time
+        e = Event("Old", "a1")
+        e.timestamp = time.time() - 100000
+        self.archive.archive([e])
+        assert self.archive.archived_count() == 1
+
+
+class TestEventCompressor:
+    def setup_method(self):
+        self.comp = EventCompressor()
+
+    def test_compress(self):
+        events = [Event("A", "a1", {"k": "v"}), Event("B", "a2")]
+        compressed = self.comp.compress_events(events)
+        assert isinstance(compressed, bytes)
+
+    def test_ratio(self):
+        original = b"hello world " * 100
+        compressed = self.comp.compress_events([])
+        ratio = self.comp.get_compression_ratio(original, original[:50])
+        assert ratio < 1.0
+
+
+class TestEventReplicator:
+    def setup_method(self):
+        self.rep = EventReplicator()
+
+    def test_register_replicate(self):
+        self.rep.register_node("node1")
+        self.rep.register_node("node2")
+        e = Event("Test", "a1")
+        count = self.rep.replicate(e)
+        assert count == 2
+
+    def test_replicate_specific(self):
+        self.rep.register_node("node1")
+        self.rep.register_node("node2")
+        count = self.rep.replicate(Event("T", "a1"), ["node1"])
+        assert count == 1
+
+
+class TestEventVersionManager:
+    def setup_method(self):
+        self.vm = EventVersionManager()
+
+    def test_register(self):
+        self.vm.register("PostCreated", 1, {"title": "string"})
+        latest = self.vm.get_latest("PostCreated")
+        assert latest.version == 1
+
+    def test_multiple_versions(self):
+        self.vm.register("E", 1)
+        self.vm.register("E", 2)
+        assert self.vm.get_latest("E").version == 2
+
+    def test_stats(self):
+        self.vm.register("A", 1)
+        self.vm.register("B", 1)
+        s = self.vm.stats()
+        assert s["types"] == 2
+
+
+class TestEventSearcher:
+    def setup_method(self):
+        self.searcher = EventSearcher()
+
+    def test_index_search(self):
+        e1 = Event("PostCreated", "a1", {"title": "AI trends"})
+        e2 = Event("PostUpdated", "a2", {"title": "Marketing tips"})
+        self.searcher.index([e1, e2])
+        results = self.searcher.search("AI", [e1, e2])
+        assert len(results) == 1
+
+
+class TestEventRecovery:
+    def setup_method(self):
+        self.recovery = EventRecovery()
+
+    def test_recover(self):
+        events = [Event("A", "a1"), Event("B", "a2"), Event("C", "a3")]
+        events[0].version = 1
+        events[1].version = 2
+        events[2].version = 3
+        recovered = self.recovery.recover_from_store(events, from_version=2)
+        assert len(recovered) == 2
+
+    def test_log(self):
+        self.recovery.recover_from_store([Event("A", "a1")])
+        log = self.recovery.get_recovery_log()
+        assert len(log) == 1
+
+
+class TestEventMetrics:
+    def setup_method(self):
+        self.metrics = EventMetrics()
+
+    def test_record(self):
+        self.metrics.record_append("PostCreated")
+        self.metrics.record_read(5)
+        d = self.metrics.to_dict()
+        assert d["appended"] == 1
+
+    def test_by_type(self):
+        self.metrics.record_append("A")
+        self.metrics.record_append("A")
+        self.metrics.record_append("B")
+        d = self.metrics.to_dict()
+        assert d["by_type"]["A"] == 2
+
+
+class TestEventReport:
+    def setup_method(self):
+        self.report = EventReport()
+
+    def test_generate(self):
+        r = self.report.generate({"appended": 10}, {"total": 100})
+        assert "metrics" in r
+
+    def test_history(self):
+        self.report.generate({}, {})
+        h = self.report.get_history()
+        assert len(h) == 1
