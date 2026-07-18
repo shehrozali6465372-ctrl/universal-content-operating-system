@@ -3142,3 +3142,478 @@ class TestEventReport:
         self.report.generate({}, {})
         h = self.report.get_history()
         assert len(h) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 9: Backup & DR
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.backup_dr.backup_scheduler import BackupScheduler, BackupSchedule
+from layers.layer13_persistence.modules.backup_dr.incremental_backup import IncrementalBackupManager
+from layers.layer13_persistence.modules.backup_dr.full_backup import FullBackupManager
+from layers.layer13_persistence.modules.backup_dr.snapshot_engine import SnapshotEngine
+from layers.layer13_persistence.modules.backup_dr.recovery_engine import RecoveryEngine
+from layers.layer13_persistence.modules.backup_dr.replication_engine import ReplicationEngine
+from layers.layer13_persistence.modules.backup_dr.failover_manager import FailoverManager
+from layers.layer13_persistence.modules.backup_dr.disaster_recovery import DisasterRecoveryManager
+from layers.layer13_persistence.modules.backup_dr.backup_validator import BackupValidator
+from layers.layer13_persistence.modules.backup_dr.backup_encryption import BackupEncryptor
+from layers.layer13_persistence.modules.backup_dr.recovery_testing import RecoveryTestManager
+from layers.layer13_persistence.modules.backup_dr.recovery_metrics import RecoveryMetrics
+
+
+class TestBackupScheduler:
+    def setup_method(self):
+        self.bs = BackupScheduler()
+
+    def test_add_schedule(self):
+        s = BackupSchedule("daily_backup", "full", 86400)
+        self.bs.add_schedule(s)
+        assert len(self.bs.list_schedules()) == 1
+
+    def test_get_due(self):
+        s = BackupSchedule("due", "full", 0)
+        s.next_run = 0
+        self.bs.add_schedule(s)
+        assert len(self.bs.get_due_schedules()) == 1
+
+    def test_mark_completed(self):
+        s = BackupSchedule("test", "full", 100)
+        self.bs.add_schedule(s)
+        self.bs.mark_completed(s.schedule_id)
+        assert len(self.bs._history) == 1
+
+
+class TestIncrementalBackupManager:
+    def setup_method(self):
+        self.ibm = IncrementalBackupManager()
+
+    def test_create(self):
+        b = self.ibm.create(changes=[{"table": "users", "op": "insert"}])
+        assert b.status == "completed"
+
+    def test_chain(self):
+        b1 = self.ibm.create()
+        b2 = self.ibm.create(parent_id=b1.backup_id)
+        chain = self.ibm.get_chain(b2.backup_id)
+        assert len(chain) == 2
+
+
+class TestFullBackupManager:
+    def setup_method(self):
+        self.fbm = FullBackupManager(max_backups=5)
+
+    def test_create(self):
+        b = self.fbm.create("weekly", ["users", "posts"])
+        assert len(self.fbm.get_all()) == 1
+
+    def test_max_limit(self):
+        for i in range(10):
+            self.fbm.create(f"backup_{i}")
+        assert len(self.fbm.get_all()) <= 5
+
+    def test_latest(self):
+        self.fbm.create("first")
+        self.fbm.create("second")
+        assert self.fbm.get_latest().name == "second"
+
+
+class TestSnapshotEngine:
+    def setup_method(self):
+        self.se = SnapshotEngine()
+
+    def test_take_snapshot(self):
+        snap = self.se.take_snapshot({"users": 100, "posts": 500})
+        assert snap.snapshot_id > 0
+
+    def test_restore(self):
+        snap = self.se.take_snapshot({"data": "value"})
+        state = self.se.restore(snap.snapshot_id)
+        assert state["data"] == "value"
+
+    def test_latest(self):
+        self.se.take_snapshot({"a": 1})
+        self.se.take_snapshot({"b": 2})
+        latest = self.se.get_latest()
+        assert latest.state["b"] == 2
+
+
+class TestRecoveryEngine:
+    def setup_method(self):
+        self.re = RecoveryEngine()
+
+    def test_create_execute(self):
+        plan = self.re.create_plan(["check_db", "restore_backup", "verify"])
+        assert self.re.execute(plan.plan_id) is True
+
+    def test_get_executed(self):
+        plan = self.re.create_plan(["step1"])
+        self.re.execute(plan.plan_id)
+        assert len(self.re.get_executed()) == 1
+
+
+class TestReplicationEngine:
+    def setup_method(self):
+        self.re = ReplicationEngine()
+
+    def test_add_replicate(self):
+        n1 = self.re.add_node("node1.local")
+        n2 = self.re.add_node("node2.local")
+        count = self.re.replicate({"data": 1})
+        assert count == 2
+
+    def test_is_healthy(self):
+        self.re.add_node("n1")
+        assert self.re.is_healthy() is True
+
+    def test_remove(self):
+        n = self.re.add_node("n1")
+        assert self.re.remove_node(n.node_id) is True
+
+
+class TestFailoverManager:
+    def setup_method(self):
+        self.fm = FailoverManager()
+
+    def test_set_active(self):
+        self.fm.set_active("node1")
+        assert self.fm.get_active_node() == "node1"
+
+    def test_failover(self):
+        self.fm.set_active("node1")
+        event = self.fm.trigger_failover("node1", "node2", "node1 down")
+        assert self.fm.get_active_node() == "node2"
+        assert len(self.fm.get_events()) == 1
+
+
+class TestDisasterRecoveryManager:
+    def setup_method(self):
+        self.drm = DisasterRecoveryManager()
+
+    def test_create_plan(self):
+        plan = self.drm.create_plan("Primary DR", rto=1800, rpo=300)
+        assert plan.name == "Primary DR"
+
+    def test_drill(self):
+        plan = self.drm.create_plan("Test DR")
+        assert self.drm.run_drill(plan.plan_id) is True
+
+    def test_stats(self):
+        self.drm.create_plan("DR1")
+        s = self.drm.stats()
+        assert s["plans"] == 1
+
+
+class TestBackupValidator:
+    def setup_method(self):
+        self.bv = BackupValidator()
+
+    def test_valid(self):
+        result = self.bv.validate(1, 1000, 1000, True)
+        assert result["valid"] is True
+
+    def test_invalid(self):
+        result = self.bv.validate(1, 1000, 500, True)
+        assert result["valid"] is False
+
+
+class TestBackupEncryptor:
+    def setup_method(self):
+        self.be = BackupEncryptor()
+
+    def test_encrypt_decrypt(self):
+        original = b"backup data"
+        encrypted = self.be.encrypt(original, "key123")
+        decrypted = self.be.decrypt(encrypted, "key123")
+        assert decrypted == original
+
+    def test_verify(self):
+        original = b"test"
+        encrypted = self.be.encrypt(original, "key")
+        assert self.be.verify(original, encrypted, "key") is True
+
+
+class TestRecoveryTestManager:
+    def setup_method(self):
+        self.rtm = RecoveryTestManager()
+
+    def test_run(self):
+        test = self.rtm.run_test(1, success=True, duration_ms=500)
+        assert test.success is True
+
+    def test_success_rate(self):
+        self.rtm.run_test(1, True)
+        self.rtm.run_test(1, False)
+        assert self.rtm.success_rate() == 0.5
+
+
+class TestRecoveryMetrics:
+    def setup_method(self):
+        self.rm = RecoveryMetrics()
+
+    def test_record(self):
+        self.rm.record_backup(True)
+        self.rm.record_backup(False)
+        self.rm.record_restore(True)
+        d = self.rm.to_dict()
+        assert d["backups"] == 2
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 10: Universal Orchestrator
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.universal_orchestrator.storage_router import StorageRouter
+from layers.layer13_persistence.modules.universal_orchestrator.persistence_orchestrator import PersistenceOrchestrator
+from layers.layer13_persistence.modules.universal_orchestrator.transaction_coordinator import TransactionCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.cache_coordinator import CacheCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.replication_coordinator import ReplicationCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.recovery_coordinator import RecoveryCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.health_coordinator import HealthCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.backup_coordinator import BackupCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.migration_coordinator import MigrationCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.optimization_coordinator import OptimizationCoordinator
+from layers.layer13_persistence.modules.universal_orchestrator.consistency_checker import ConsistencyChecker
+from layers.layer13_persistence.modules.universal_orchestrator.garbage_collector import GarbageCollector
+from layers.layer13_persistence.modules.universal_orchestrator.performance_tuner import PerformanceTuner
+from layers.layer13_persistence.modules.universal_orchestrator.cost_optimizer import CostOptimizer
+from layers.layer13_persistence.modules.universal_orchestrator.storage_balancer import StorageBalancer
+from layers.layer13_persistence.modules.universal_orchestrator.auto_scaler import AutoScaler
+from layers.layer13_persistence.modules.universal_orchestrator.storage_advisor import StorageAdvisor
+from layers.layer13_persistence.modules.universal_orchestrator.persistence_ai import PersistenceAI
+
+
+class TestStorageRouter:
+    def setup_method(self):
+        self.sr = StorageRouter()
+
+    def test_route(self):
+        self.sr.route("users", "postgresql")
+        assert self.sr.get_backend("users") == "postgresql"
+
+    def test_default(self):
+        assert self.sr.get_backend("unknown") == "memory"
+
+    def test_register(self):
+        self.sr.register_backend("pg", {"type": "sql"})
+        self.sr.route("users", "pg")
+        assert self.sr.get_backend_instance("users") is not None
+
+
+class TestPersistenceOrchestrator:
+    def setup_method(self):
+        self.po = PersistenceOrchestrator()
+
+    def test_initialize(self):
+        assert self.po.initialize() is True
+        assert self.po.is_initialized() is True
+
+    def test_shutdown(self):
+        self.po.initialize()
+        assert self.po.shutdown() is True
+
+    def test_route(self):
+        self.po.route_data("users", "postgres")
+        assert self.po.get_router().get_backend("users") == "postgres"
+
+
+class TestTransactionCoordinator:
+    def setup_method(self):
+        self.tc = TransactionCoordinator()
+
+    def test_begin_commit(self):
+        tx = self.tc.begin()
+        self.tc.add_operation(tx.tx_id, "db", "insert", {"user": "alice"})
+        assert self.tc.commit(tx.tx_id) is True
+
+    def test_rollback(self):
+        tx = self.tc.begin()
+        assert self.tc.rollback(tx.tx_id) is True
+        assert tx.status == "rolled_back"
+
+    def test_active(self):
+        self.tc.begin()
+        self.tc.begin()
+        assert len(self.tc.get_active()) == 2
+
+
+class TestCacheCoordinator:
+    def setup_method(self):
+        self.cc = CacheCoordinator()
+
+    def test_invalidate(self):
+        self.cc.invalidate("cache1", "user:*")
+        assert len(self.cc.get_pending()) == 1
+
+    def test_invalidate_all(self):
+        self.cc.invalidate("c", "k")
+        count = self.cc.invalidate_all()
+        assert count == 1
+
+    def test_patterns(self):
+        self.cc.invalidate("c", "a:*")
+        self.cc.invalidate("c", "b:*")
+        assert len(self.cc.get_patterns("c")) == 2
+
+
+class TestReplicationCoordinator:
+    def setup_method(self):
+        self.rc = ReplicationCoordinator()
+
+    def test_register_replicate(self):
+        self.rc.register_store("users", ["replica1", "replica2"])
+        count = self.rc.replicate("users")
+        assert count == 2
+
+    def test_is_replicated(self):
+        self.rc.register_store("s1", ["r1"])
+        assert self.rc.is_replicated("s1") is True
+
+
+class TestRecoveryCoordinator:
+    def setup_method(self):
+        self.rec = RecoveryCoordinator()
+
+    def test_register_execute(self):
+        self.rec.register_plan("db1", ["check", "restore", "verify"])
+        assert self.rec.execute_recovery("db1") is True
+
+
+class TestHealthCoordinator:
+    def setup_method(self):
+        self.hc = HealthCoordinator()
+
+    def test_check(self):
+        self.hc.check("db1", True, 5.0)
+        assert self.hc.is_healthy() is True
+
+    def test_degraded(self):
+        self.hc.check("db1", True)
+        self.hc.check("db2", False)
+        assert self.hc.is_healthy() is False
+
+
+class TestBackupCoordinator:
+    def setup_method(self):
+        self.bc = BackupCoordinator()
+
+    def test_schedule_trigger(self):
+        self.bc.schedule_backup("db", 3600)
+        assert self.bc.trigger_backup("db") is True
+
+
+class TestMigrationCoordinator:
+    def setup_method(self):
+        self.mc = MigrationCoordinator()
+
+    def test_register_apply(self):
+        self.mc.register_migration("db", "1.0", "CREATE TABLE t")
+        count = self.mc.apply_pending("db")
+        assert count == 1
+
+    def test_pending(self):
+        self.mc.register_migration("db", "1.0", "SQL")
+        self.mc.register_migration("db", "2.0", "SQL")
+        applied = self.mc.apply_pending("db")
+        assert applied == 2
+        assert len(self.mc.get_pending("db")) == 0
+
+
+class TestOptimizationCoordinator:
+    def setup_method(self):
+        self.oc = OptimizationCoordinator()
+
+    def test_suggest_apply(self):
+        self.oc.suggest("db", "add index", "high")
+        assert self.oc.apply(0) is True
+        assert len(self.oc.get_applied()) == 1
+
+
+class TestConsistencyChecker:
+    def setup_method(self):
+        self.cc = ConsistencyChecker()
+
+    def test_check(self):
+        result = self.cc.check({"db1": "data", "db2": "data"})
+        assert result["consistent"] is True
+
+
+class TestGarbageCollector:
+    def setup_method(self):
+        self.gc = GarbageCollector()
+
+    def test_collect(self):
+        self.gc.collect("db1", 100)
+        assert self.gc.get_stats("db1") == 100
+
+
+class TestPerformanceTuner:
+    def setup_method(self):
+        self.pt = PerformanceTuner()
+
+    def test_analyze(self):
+        result = self.pt.analyze("db1", {"latency_ms": 200})
+        assert result["suggestion"] == "add_index"
+
+
+class TestCostOptimizer:
+    def setup_method(self):
+        self.co = CostOptimizer(budget=100.0)
+
+    def test_record(self):
+        self.co.record_cost("db", 50.0)
+        assert self.co.get_total_cost() == 50.0
+
+    def test_budget(self):
+        self.co.record_cost("db", 100.0)
+        assert self.co.get_remaining_budget() == 0.0
+
+
+class TestStorageBalancer:
+    def setup_method(self):
+        self.sb = StorageBalancer()
+
+    def test_distribute(self):
+        self.sb.register("s1", 100)
+        self.sb.register("s2", 100)
+        target = self.sb.distribute("users", {"data": 1})
+        assert target in ("s1", "s2")
+
+
+class TestAutoScaler:
+    def setup_method(self):
+        self.as_ = AutoScaler(min_capacity=1, max_capacity=10)
+
+    def test_scale_up(self):
+        assert self.as_.should_scale_up(0.9) is True
+        self.as_.scale_up(2)
+        assert self.as_.get_capacity() == 3
+
+    def test_scale_down(self):
+        self.as_.scale_up(5)
+        assert self.as_.should_scale_down(0.1) is True
+        self.as_.scale_down(3)
+        assert self.as_.get_capacity() == 3
+
+
+class TestStorageAdvisor:
+    def setup_method(self):
+        self.sa = StorageAdvisor()
+
+    def test_analyze(self):
+        recs = self.sa.analyze({"storage_used_gb": 200, "cache_hit_rate": 0.3,
+                                 "query_latency_ms": 300})
+        assert len(recs) >= 2
+
+
+class TestPersistenceAI:
+    def setup_method(self):
+        self.ai = PersistenceAI()
+
+    def test_patterns(self):
+        insight = self.ai.analyze_patterns({"write_heavy": True})
+        assert "write_heavy" in insight["patterns"]
+
+    def test_growth(self):
+        pred = self.ai.predict_growth(100, [50, 75, 100])
+        assert pred["predicted_next"] > 100
