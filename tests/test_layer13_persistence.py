@@ -3617,3 +3617,638 @@ class TestPersistenceAI:
     def test_growth(self):
         pred = self.ai.predict_growth(100, [50, 75, 100])
         assert pred["predicted_next"] > 100
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 1 EXPANSION: Kernel extras
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.persistence_kernel.persistence_state import PersistenceState
+from layers.layer13_persistence.modules.persistence_kernel.persistence_capabilities import PersistenceCapabilities
+from layers.layer13_persistence.modules.persistence_kernel.persistence_registry import PersistenceRegistry
+from layers.layer13_persistence.modules.persistence_kernel.persistence_clock import PersistenceClock
+from layers.layer13_persistence.modules.persistence_kernel.persistence_telemetry import PersistenceTelemetry
+from layers.layer13_persistence.modules.persistence_kernel.persistence_monitor import PersistenceMonitor
+from layers.layer13_persistence.modules.persistence_kernel.persistence_hooks import PersistenceHooks
+from layers.layer13_persistence.modules.persistence_kernel.persistence_validator import PersistenceValidator
+
+
+class TestPersistenceState:
+    def setup_method(self):
+        self.ps = PersistenceState()
+
+    def test_initial_state(self):
+        assert self.ps.get_state() == "uninitialized"
+
+    def test_set_state(self):
+        assert self.ps.set_state("ready") is True
+        assert self.ps.get_state() == "ready"
+
+    def test_invalid_state(self):
+        assert self.ps.set_state("bogus") is False
+
+    def test_sub_state(self):
+        self.ps.set_sub_state("sql", "healthy")
+        assert self.ps.get_sub_state("sql") == "healthy"
+
+    def test_is_ready(self):
+        self.ps.set_state("ready")
+        assert self.ps.is_ready() is True
+
+    def test_transitions(self):
+        self.ps.set_state("initializing")
+        self.ps.set_state("ready")
+        assert len(self.ps.get_transitions()) == 2
+
+
+class TestPersistenceCapabilities:
+    def setup_method(self):
+        self.pc = PersistenceCapabilities()
+
+    def test_register(self):
+        self.pc.register("sql", "SQL support", ["postgresql", "mysql"])
+        assert self.pc.has("sql") is True
+
+    def test_enable_disable(self):
+        self.pc.register("redis")
+        self.pc.disable("redis")
+        assert self.pc.has("redis") is False
+        self.pc.enable("redis")
+        assert self.pc.has("redis") is True
+
+    def test_features(self):
+        self.pc.register("vector", features=["qdrant", "milvus"])
+        assert "qdrant" in self.pc.get_features("vector")
+
+
+class TestPersistenceRegistry:
+    def setup_method(self):
+        self.pr = PersistenceRegistry()
+
+    def test_register_get(self):
+        self.pr.register("sql", {"type": "database"}, "storage")
+        assert self.pr.get("sql") is not None
+        assert self.pr.has("sql") is True
+
+    def test_unregister(self):
+        self.pr.register("sql", {})
+        assert self.pr.unregister("sql") is True
+        assert self.pr.has("sql") is False
+
+    def test_count(self):
+        self.pr.register("a", {})
+        self.pr.register("b", {})
+        assert self.pr.count() == 2
+
+    def test_stats(self):
+        self.pr.register("a", {}, "storage")
+        s = self.pr.stats()
+        assert s["total"] == 1
+
+
+class TestPersistenceClock:
+    def setup_method(self):
+        self.pc = PersistenceClock()
+
+    def test_tick(self):
+        t1 = self.pc.tick()
+        t2 = self.pc.tick()
+        assert t2 > t1
+
+    def test_update_if_greater(self):
+        self.pc.tick()
+        assert self.pc.update_if_greater(100) is True
+        assert self.pc.now() == 100
+
+    def test_reset(self):
+        self.pc.tick()
+        self.pc.reset()
+        assert self.pc.now() == 0
+
+
+class TestPersistenceTelemetry:
+    def setup_method(self):
+        self.pt = PersistenceTelemetry()
+
+    def test_span(self):
+        span = self.pt.start_span("query")
+        span.finish()
+        assert len(self.pt.get_spans()) == 1
+
+    def test_increment(self):
+        self.pt.increment("queries")
+        self.pt.increment("queries")
+        assert self.pt.get_counters()["queries"] == 2
+
+
+class TestPersistenceMonitor:
+    def setup_method(self):
+        self.pm = PersistenceMonitor()
+
+    def test_record(self):
+        self.pm.set_threshold("latency", 100.0)
+        self.pm.record("latency", 150.0)
+        assert len(self.pm.get_alerts()) == 1
+
+    def test_no_alert(self):
+        self.pm.set_threshold("latency", 100.0)
+        self.pm.record("latency", 50.0)
+        assert len(self.pm.get_alerts()) == 0
+
+    def test_clear_alerts(self):
+        self.pm.record("x", 999)
+        self.pm.clear_alerts()
+        assert len(self.pm.get_alerts()) == 0
+
+
+class TestPersistenceHooks:
+    def setup_method(self):
+        self.ph = PersistenceHooks()
+
+    def test_register_fire(self):
+        received = []
+        self.ph.register("before_save", lambda d: received.append(d))
+        self.ph.fire("before_save", {"table": "users"})
+        assert len(received) == 1
+
+    def test_unregister(self):
+        handler = lambda d: None
+        self.ph.register("test", handler)
+        assert self.ph.unregister("test", handler) is True
+
+    def test_history(self):
+        self.ph.fire("event1")
+        h = self.ph.get_history()
+        assert len(h) == 1
+
+
+class TestPersistenceValidator:
+    def setup_method(self):
+        self.pv = PersistenceValidator()
+
+    def test_valid_config(self):
+        cfg = PersistenceConfiguration()
+        result = self.pv.validate_config(cfg)
+        assert result.valid is True
+
+    def test_invalid_config(self):
+        cfg = PersistenceConfiguration()
+        cfg.pool_size = -1
+        result = self.pv.validate_config(cfg)
+        assert result.valid is False
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 2 EXPANSION: SQL extras
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.sql_database_platform.database_engine import DatabaseEngine
+from layers.layer13_persistence.modules.sql_database_platform.database_factory import DatabaseFactory
+from layers.layer13_persistence.modules.sql_database_platform.query_builder import QueryBuilder
+from layers.layer13_persistence.modules.sql_database_platform.unit_of_work import UnitOfWork
+from layers.layer13_persistence.modules.sql_database_platform.sql_compiler import SQLCompiler
+from layers.layer13_persistence.modules.sql_database_platform.savepoint_manager import SavePointManager
+from layers.layer13_persistence.modules.sql_database_platform.isolation_level import IsolationLevel, IsolationManager
+from layers.layer13_persistence.modules.sql_database_platform.constraint_manager import ConstraintManager, DatabaseConstraint
+from layers.layer13_persistence.modules.sql_database_platform.view_manager import ViewManager, DatabaseView
+from layers.layer13_persistence.modules.sql_database_platform.read_replica_manager import ReadReplicaManager
+from layers.layer13_persistence.modules.sql_database_platform.retry_policy import RetryPolicy
+from layers.layer13_persistence.modules.sql_database_platform.sequence_manager import SequenceManager
+from layers.layer13_persistence.modules.sql_database_platform.stored_procedure_manager import StoredProcedureManager, StoredProcedure
+from layers.layer13_persistence.modules.sql_database_platform.materialized_view_manager import MaterializedViewManager, MaterializedView
+from layers.layer13_persistence.modules.sql_database_platform.statistics_collector import StatisticsCollector
+from layers.layer13_persistence.modules.sql_database_platform.connection_monitor import ConnectionMonitor
+
+
+class TestDatabaseEngine:
+    def test_create(self):
+        e = DatabaseEngine("postgresql")
+        assert e.get_type() == "postgresql"
+    def test_connect(self):
+        e = DatabaseEngine()
+        assert e.connect() is True
+        assert e.is_connected() is True
+    def test_disconnect(self):
+        e = DatabaseEngine()
+        e.connect()
+        e.disconnect()
+        assert e.is_connected() is False
+
+class TestDatabaseFactory:
+    def test_create(self):
+        e = DatabaseFactory.create("postgresql")
+        assert e is not None
+    def test_supported(self):
+        assert "postgresql" in DatabaseFactory.supported()
+
+class TestQueryBuilder:
+    def test_simple(self):
+        sql = QueryBuilder().table("users").select("id", "name").build()
+        assert "SELECT id, name FROM users" in sql
+    def test_where(self):
+        sql = QueryBuilder().table("users").where("active = 1").build()
+        assert "WHERE active = 1" in sql
+    def test_order_limit(self):
+        sql = QueryBuilder().table("t").order_by("id").limit(10).build()
+        assert "ORDER BY id ASC" in sql
+        assert "LIMIT 10" in sql
+
+class TestUnitOfWork:
+    def test_register(self):
+        uow = UnitOfWork()
+        uow.register_new("entity1")
+        uow.register_dirty("entity2")
+        pending = uow.get_pending()
+        assert pending["new"] == 1
+    def test_commit(self):
+        uow = UnitOfWork()
+        assert uow.commit() is True
+        assert uow.is_committed() is True
+    def test_rollback(self):
+        uow = UnitOfWork()
+        uow.register_new("e")
+        uow.rollback()
+        assert uow.get_pending()["new"] == 0
+
+class TestSQLCompiler:
+    def test_select(self):
+        sql = SQLCompiler().compile_select("users", ["id", "name"])
+        assert "SELECT id, name FROM users" in sql
+    def test_insert(self):
+        sql = SQLCompiler().compile_insert("users", {"name": "alice"})
+        assert "INSERT INTO users" in sql
+    def test_update(self):
+        sql = SQLCompiler().compile_update("users", {"name": "bob"}, {"id": 1})
+        assert "UPDATE users SET" in sql
+    def test_delete(self):
+        sql = SQLCompiler().compile_delete("users", {"id": 1})
+        assert "DELETE FROM users WHERE" in sql
+
+class TestSavePointManager:
+    def test_create_release(self):
+        spm = SavePointManager()
+        sp = spm.create("sp1")
+        assert spm.release("sp1") is True
+    def test_rollback_to(self):
+        spm = SavePointManager()
+        spm.create("sp1")
+        assert spm.rollback_to("sp1") is True
+
+class TestIsolationManager:
+    def test_set_get(self):
+        im = IsolationManager()
+        im.set_level(IsolationLevel.SERIALIZABLE)
+        assert im.get_level() == IsolationLevel.SERIALIZABLE
+    def test_name(self):
+        im = IsolationManager()
+        assert im.get_level_name() == "READ COMMITTED"
+
+class TestConstraintManager:
+    def test_add(self):
+        cm = ConstraintManager()
+        c = DatabaseConstraint("pk_users", "users", "primary_key", ["id"])
+        cm.add(c)
+        assert cm.get("pk_users") is not None
+    def test_by_table(self):
+        cm = ConstraintManager()
+        cm.add(DatabaseConstraint("c1", "users", "unique", ["email"]))
+        assert len(cm.get_for_table("users")) == 1
+
+class TestViewManager:
+    def test_create(self):
+        vm = ViewManager()
+        v = DatabaseView("v_users", "SELECT * FROM users")
+        vm.create(v)
+        assert vm.get("v_users") is not None
+    def test_materialized(self):
+        vm = ViewManager()
+        vm.create(DatabaseView("mv1", "SELECT 1", materialized=True))
+        assert len(vm.list_materialized()) == 1
+
+class TestReadReplicaManager:
+    def test_add_next(self):
+        rm = ReadReplicaManager()
+        rm.add("replica1.local")
+        rm.add("replica2.local")
+        r = rm.get_next()
+        assert r is not None
+    def test_empty(self):
+        rm = ReadReplicaManager()
+        assert rm.get_next() is None
+
+class TestRetryPolicy:
+    def test_execute(self):
+        rp = RetryPolicy(max_retries=2)
+        result = rp.execute(lambda: "ok")
+        assert result == "ok"
+    def test_delay(self):
+        rp = RetryPolicy()
+        d = rp.get_delay(0)
+        assert d > 0
+
+class TestSequenceManager:
+    def test_next(self):
+        sm = SequenceManager()
+        sm.create("seq1")
+        v1 = sm.next_value("seq1")
+        v2 = sm.next_value("seq1")
+        assert v2 > v1
+
+class TestStoredProcedureManager:
+    def test_register_call(self):
+        spm = StoredProcedureManager()
+        sp = StoredProcedure("get_user", lambda p: {"id": 1})
+        spm.register(sp)
+        result = spm.call("get_user")
+        assert result["id"] == 1
+
+class TestMaterializedViewManager:
+    def test_create_refresh(self):
+        mvm = MaterializedViewManager()
+        mv = MaterializedView("mv1", "SELECT 1")
+        mvm.create(mv)
+        assert mvm.refresh("mv1") is True
+
+class TestStatisticsCollector:
+    def test_record(self):
+        sc = StatisticsCollector()
+        sc.record_table_stat("users", 1000, 50000)
+        assert sc.get_table_stat("users")["rows"] == 1000
+
+class TestConnectionMonitor:
+    def test_record(self):
+        cm = ConnectionMonitor()
+        cm.record_connect("db1", 5.0)
+        assert cm.get_connection("db1")["status"] == "connected"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 3 EXPANSION: Redis extras
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.redis_platform.bloom_filter import BloomFilter
+from layers.layer13_persistence.modules.redis_platform.hyperloglog import HyperLogLog
+from layers.layer13_persistence.modules.redis_platform.redis_sentinel import RedisSentinel
+from layers.layer13_persistence.modules.redis_platform.redis_config import RedisConfig
+
+
+class TestBloomFilter:
+    def test_add_might(self):
+        bf = BloomFilter(size=1000)
+        bf.add("hello")
+        assert bf.might_contain("hello") is True
+        assert bf.might_contain("world") is False
+    def test_fill_rate(self):
+        bf = BloomFilter(size=100)
+        for i in range(50):
+            bf.add(str(i))
+        assert bf.fill_rate() > 0
+
+class TestHyperLogLog:
+    def test_add_count(self):
+        hll = HyperLogLog()
+        for i in range(1000):
+            hll.add(f"item_{i}")
+        count = hll.count()
+        assert count > 0
+
+class TestRedisSentinel:
+    def test_master_failover(self):
+        s = RedisSentinel()
+        s.set_master("m1", 6379)
+        r1 = s.add_sentinel("r1", 6380)
+        r1.role = "replica"
+        s.failover()
+        assert s.get_master().host == "r1"
+
+class TestRedisConfig:
+    def test_defaults(self):
+        cfg = RedisConfig()
+        assert cfg.port == 6379
+    def test_from_dict(self):
+        cfg = RedisConfig.from_dict({"host": "remote.host", "port": 6380})
+        assert cfg.host == "remote.host"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 4 EXPANSION: Vector extras
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.vector_database_platform.vector_manager import VectorManager
+from layers.layer13_persistence.modules.vector_database_platform.namespace_manager import NamespaceManager
+from layers.layer13_persistence.modules.vector_database_platform.embedding_version import EmbeddingVersionManager
+from layers.layer13_persistence.modules.vector_database_platform.embedding_health import EmbeddingHealth
+from layers.layer13_persistence.modules.vector_database_platform.vector_events import VectorEvents
+
+
+class TestVectorManager:
+    def test_create_search(self):
+        vm = VectorManager()
+        store = vm.create_store("docs", 3)
+        vm.upsert("docs", [1.0, 0.0, 0.0], {"label": "a"})
+        results = vm.search("docs", [1.0, 0.0, 0.0], top_k=1)
+        assert len(results) == 1
+
+class TestNamespaceManager:
+    def test_create(self):
+        nm = NamespaceManager()
+        ns = nm.create("users", 768)
+        assert ns.dimensions == 768
+    def test_count(self):
+        nm = NamespaceManager()
+        nm.create("a")
+        assert nm.count() == 1
+
+class TestEmbeddingVersionManager:
+    def test_add_latest(self):
+        evm = EmbeddingVersionManager()
+        evm.add_version("gpt", 1536)
+        evm.add_version("gpt", 3072)
+        latest = evm.get_latest("gpt")
+        assert latest.dimensions == 3072
+
+class TestEmbeddingHealth:
+    def test_check(self):
+        eh = EmbeddingHealth()
+        eh.check("qdrant", True, 2.0)
+        assert eh.is_healthy() is True
+
+class TestVectorEvents:
+    def test_publish_subscribe(self):
+        ve = VectorEvents()
+        received = []
+        ve.subscribe("inserted", lambda e: received.append(e))
+        ve.publish("inserted", {"id": 1})
+        assert len(received) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 5 EXPANSION: Object Storage extras
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.object_storage_platform.bucket_manager import BucketManager
+from layers.layer13_persistence.modules.object_storage_platform.lifecycle_policy import LifecyclePolicyManager, LifecyclePolicy
+from layers.layer13_persistence.modules.object_storage_platform.file_validator import FileValidator
+from layers.layer13_persistence.modules.object_storage_platform.storage_events import StorageEvents
+from layers.layer13_persistence.modules.object_storage_platform.storage_cleaner import StorageCleaner
+
+
+class TestBucketManager:
+    def test_create(self):
+        bm = BucketManager()
+        b = bm.create("mybucket", "eu-west-1")
+        assert b.region == "eu-west-1"
+    def test_delete(self):
+        bm = BucketManager()
+        bm.create("b")
+        assert bm.delete("b") is True
+
+class TestLifecyclePolicyManager:
+    def test_evaluate(self):
+        lpm = LifecyclePolicyManager()
+        p = LifecyclePolicy("archive", "logs/")
+        p.expiration_days = 90
+        lpm.add(p)
+        assert lpm.evaluate("logs/2024.log", 91) == "expired"
+
+class TestFileValidator:
+    def test_valid(self):
+        fv = FileValidator(max_size_bytes=1024)
+        assert fv.is_valid("file.txt", 500) is True
+    def test_too_large(self):
+        fv = FileValidator(max_size_bytes=100)
+        assert fv.is_valid("file.txt", 200) is False
+
+class TestStorageEvents:
+    def test_publish(self):
+        se = StorageEvents()
+        received = []
+        se.subscribe("uploaded", lambda e: received.append(e))
+        se.publish("uploaded", {"key": "photo.jpg"})
+        assert len(received) == 1
+
+class TestStorageCleaner:
+    def test_clean(self):
+        sc = StorageCleaner()
+        sc.add_rule("old", max_age_days=30)
+        objects = [{"created_at": 0}]  # very old
+        removed = sc.clean(objects)
+        assert removed == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 6 EXPANSION: Memory Router
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.ai_memory_persistence.memory_router import MemoryRouter
+
+
+class TestMemoryRouter:
+    def test_route(self):
+        mr = MemoryRouter()
+        cs = ConversationMemoryStore()
+        mr.register_store("conv", cs)
+        mr.route("conversation", "conv")
+        mr.store("conversation", "k1", {"role": "user"})
+        assert mr.retrieve("conversation", "k1") is not None
+
+    def test_no_route(self):
+        mr = MemoryRouter()
+        assert mr.retrieve("unknown", "k") is None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 7 EXPANSION: Entity Manager
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.repository_layer.entity_manager import EntityManager
+
+
+class TestEntityManager:
+    def test_register(self):
+        em = EntityManager()
+        repo = BaseRepository("test")
+        em.register("test", repo)
+        assert em.get_repository("test") is not None
+
+    def test_stats(self):
+        em = EntityManager()
+        s = em.stats()
+        assert s["repositories"] == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 8 EXPANSION: Event Bus + Backup History
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.event_store.event_bus import PersistenceEventBus
+from layers.layer13_persistence.modules.backup_dr.backup_history import BackupHistory
+
+
+class TestPersistenceEventBus:
+    def test_publish_subscribe(self):
+        bus = PersistenceEventBus()
+        received = []
+        bus.subscribe("saved", lambda d: received.append(d))
+        bus.publish("saved", {"key": "k1"})
+        assert len(received) == 1
+    def test_get_events(self):
+        bus = PersistenceEventBus()
+        bus.publish("a", {})
+        bus.publish("b", {})
+        assert len(bus.get_events()) == 2
+
+class TestBackupHistory:
+    def test_record(self):
+        bh = BackupHistory()
+        entry = bh.record("full", 1024, 50.0)
+        assert entry.size_bytes == 1024
+    def test_total_size(self):
+        bh = BackupHistory()
+        bh.record("full", 500)
+        bh.record("incr", 200)
+        assert bh.total_size() == 700
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 10 EXPANSION: Security + API
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.universal_orchestrator.persistence_security import PersistenceSecurity
+from layers.layer13_persistence.modules.universal_orchestrator.persistence_api import PersistenceAPI
+
+
+class TestPersistenceSecurity:
+    def test_allowed(self):
+        ps = PersistenceSecurity()
+        ps.allow_origin("app.local")
+        assert ps.is_allowed("app.local") is True
+    def test_blocked(self):
+        ps = PersistenceSecurity()
+        ps.block_pattern("malicious")
+        assert ps.is_allowed("malicious_site") is False
+    def test_audit(self):
+        ps = PersistenceSecurity()
+        ps.audit("write", "user1")
+        assert len(ps.get_audit_log()) == 1
+    def test_hash(self):
+        ps = PersistenceSecurity()
+        h = ps.hash_data(b"test")
+        assert len(h) == 64
+
+class TestPersistenceAPI:
+    def test_store_retrieve(self):
+        api = PersistenceAPI()
+        from layers.layer13_persistence.modules.redis_platform.redis_client import RedisClient
+        rc = RedisClient()
+        rc.connect()
+        api.register_backend("redis", rc)
+        assert api.store("redis", "k1", "v1") is True
+        assert api.retrieve("redis", "k1") == "v1"
+    def test_delete(self):
+        api = PersistenceAPI()
+        rc = RedisClient()
+        rc.connect()
+        api.register_backend("redis", rc)
+        api.store("redis", "k1", "v1")
+        assert api.delete("redis", "k1") is True
