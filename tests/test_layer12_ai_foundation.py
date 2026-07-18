@@ -3199,3 +3199,829 @@ class TestPromptOrchestrator:
         o = PromptOrchestrator()
         h = o.get_health()
         assert "uptime" in h
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 5: AI Memory Layer
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_memory_layer.models import (
+    MemoryEntry, MemoryType, MemoryQuery,
+)
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_router import MemoryRouter
+from layers.layer12_ai_foundation.modules.ai_memory_layer.semantic_memory import SemanticMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.episodic_memory import EpisodicMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.vector_memory import VectorMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.conversation_memory import ConversationMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.long_term_memory import LongTermMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.working_memory import WorkingMemory
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_sync import MemorySync
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_cache import MemoryCache
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_metrics import MemoryMetrics
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_indexer import MemoryIndexer
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_consolidation import MemoryConsolidation
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_forgetting import MemoryForgetting
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_health import MemoryHealth
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_events import MemoryEvents
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_profiler import MemoryProfiler
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_report import MemoryReportGenerator
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_config import MemoryConfig
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_ranker import MemoryRanker
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_analyzer import MemoryAnalyzer
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_compression import MemoryCompression
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_search import MemorySearch
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_lifecycle import MemoryLifecycle
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_validator import MemoryValidator
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_fallback import MemoryFallback
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_context import MemoryContext
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_registry import MemoryRegistry
+from layers.layer12_ai_foundation.modules.ai_memory_layer.memory_orchestrator import MemoryOrchestrator
+
+
+# ─── Models ──────────────────────────────────────────────────────────
+
+class TestMemoryModels:
+    def test_memory_entry(self):
+        e = MemoryEntry(content="AI is fascinating", memory_type=MemoryType.SEMANTIC, importance=0.8)
+        assert e.content == "AI is fascinating"
+        assert e.importance == 0.8
+
+    def test_entry_not_expired(self):
+        e = MemoryEntry(content="test")
+        assert not e.is_expired
+
+    def test_entry_expired(self):
+        import time
+        e = MemoryEntry(content="test", expires_at=time.time() - 100)
+        assert e.is_expired
+
+    def test_entry_touch(self):
+        e = MemoryEntry(content="test")
+        e.touch()
+        assert e.access_count == 1
+
+    def test_entry_to_dict(self):
+        e = MemoryEntry(content="test", memory_type=MemoryType.WORKING, tags=["a"])
+        d = e.to_dict()
+        assert d["memory_type"] == "working"
+        assert "a" in d["tags"]
+
+    def test_memory_type(self):
+        assert MemoryType.SEMANTIC.value == "semantic"
+        assert MemoryType.EPISODIC.value == "episodic"
+        assert MemoryType.WORKING.value == "working"
+
+    def test_memory_query(self):
+        q = MemoryQuery(query_text="test", limit=5)
+        d = q.to_dict()
+        assert d["limit"] == 5
+
+
+# ─── MemoryRouter ────────────────────────────────────────────────────
+
+class TestMemoryRouter:
+    def setup_method(self):
+        self.router = MemoryRouter()
+
+    def test_store_retrieve(self):
+        e = MemoryEntry(content="hello", memory_type=MemoryType.SEMANTIC)
+        assert self.router.store(e)
+        found = self.router.retrieve(e.entry_id)
+        assert found is not None
+        assert found.content == "hello"
+
+    def test_retrieve_miss(self):
+        assert self.router.retrieve("nonexistent") is None
+
+    def test_search(self):
+        self.router.store(MemoryEntry(content="AI learning", memory_type=MemoryType.SEMANTIC, tags=["ai"]))
+        q = MemoryQuery(query_text="AI", limit=5)
+        results = self.router.search(q)
+        assert len(results) >= 1
+
+    def test_search_by_tags(self):
+        self.router.store(MemoryEntry(content="test", memory_type=MemoryType.SEMANTIC, tags=["python"]))
+        self.router.store(MemoryEntry(content="test2", memory_type=MemoryType.SEMANTIC, tags=["java"]))
+        q = MemoryQuery(tags=["python"])
+        results = self.router.search(q)
+        assert len(results) == 1
+
+    def test_count(self):
+        self.router.store(MemoryEntry(content="a", memory_type=MemoryType.SEMANTIC))
+        self.router.store(MemoryEntry(content="b", memory_type=MemoryType.EPISODIC))
+        assert self.router.count(MemoryType.SEMANTIC) == 1
+        assert self.router.count() == 2
+
+    def test_clear(self):
+        self.router.store(MemoryEntry(content="a", memory_type=MemoryType.SEMANTIC))
+        self.router.clear(MemoryType.SEMANTIC)
+        assert self.router.count(MemoryType.SEMANTIC) == 0
+
+    def test_stats(self):
+        self.router.store(MemoryEntry(content="a", memory_type=MemoryType.WORKING))
+        stats = self.router.stats()
+        assert stats["working"] == 1
+
+    def test_evict_if_full(self):
+        router = MemoryRouter()
+        router._max_per_type = 2
+        router.store(MemoryEntry(content="a", memory_type=MemoryType.WORKING, importance=0.1))
+        router.store(MemoryEntry(content="b", memory_type=MemoryType.WORKING, importance=0.5))
+        router.store(MemoryEntry(content="c", memory_type=MemoryType.WORKING, importance=0.9))
+        assert router.count(MemoryType.WORKING) == 2
+
+
+# ─── SemanticMemory ──────────────────────────────────────────────────
+
+class TestSemanticMemory:
+    def test_store_retrieve(self):
+        m = SemanticMemory()
+        e = m.store("Python is a programming language", tags=["python", "coding"])
+        assert e.content == "Python is a programming language"
+        found = m.retrieve(e.entry_id)
+        assert found is not None
+
+    def test_search(self):
+        m = SemanticMemory()
+        m.store("Python is great for AI", tags=["python"])
+        m.store("JavaScript for web", tags=["javascript"])
+        results = m.search("Python AI")
+        assert len(results) >= 1
+
+    def test_get_by_tag(self):
+        m = SemanticMemory()
+        m.store("a", tags=["python"])
+        m.store("b", tags=["java"])
+        results = m.get_by_tag("python")
+        assert len(results) == 1
+
+    def test_count(self):
+        m = SemanticMemory()
+        m.store("a")
+        m.store("b")
+        assert m.count() == 2
+
+
+# ─── EpisodicMemory ─────────────────────────────────────────────────
+
+class TestEpisodicMemory:
+    def test_store_event(self):
+        m = EpisodicMemory()
+        e = m.store_event("Published a blog post", importance=0.8)
+        assert e.content == "Published a blog post"
+
+    def test_recall_recent(self):
+        m = EpisodicMemory()
+        m.store_event("Event 1")
+        m.store_event("Event 2")
+        recent = m.recall_recent(limit=1)
+        assert len(recent) == 1
+
+    def test_recall_important(self):
+        m = EpisodicMemory()
+        m.store_event("Minor event", importance=0.2)
+        m.store_event("Major event", importance=0.9)
+        important = m.recall_important(min_importance=0.7)
+        assert len(important) == 1
+
+    def test_search(self):
+        m = EpisodicMemory()
+        m.store_event("Published blog about AI")
+        results = m.search("blog")
+        assert len(results) >= 1
+
+
+# ─── VectorMemory ────────────────────────────────────────────────────
+
+class TestVectorMemory:
+    def test_store_retrieve(self):
+        m = VectorMemory()
+        e = m.store("AI is amazing", importance=0.9)
+        assert e.content == "AI is amazing"
+
+    def test_similarity_search(self):
+        m = VectorMemory()
+        m.store("AI machine learning")
+        m.store("cooking recipes")
+        results = m.similarity_search("AI deep learning")
+        assert len(results) >= 1
+
+    def test_find_similar(self):
+        m = VectorMemory()
+        e1 = m.store("first entry")
+        e2 = m.store("second entry")
+        m.store("third entry")
+        similar = m.find_similar(e1.entry_id, top_k=2)
+        assert len(similar) >= 1
+
+    def test_delete(self):
+        m = VectorMemory()
+        e = m.store("to delete")
+        assert m.delete(e.entry_id)
+        assert not m.delete("nonexistent")
+
+    def test_embedding_generation(self):
+        emb = VectorMemory._generate_embedding("test text")
+        assert len(emb) == 128
+
+    def test_cosine_similarity(self):
+        a = [1.0, 0.0, 0.0]
+        b = [1.0, 0.0, 0.0]
+        assert VectorMemory._cosine_similarity(a, b) == 1.0
+
+    def test_cosine_different(self):
+        a = [1.0, 0.0, 0.0]
+        b = [0.0, 1.0, 0.0]
+        assert VectorMemory._cosine_similarity(a, b) == 0.0
+
+
+# ─── ConversationMemory ─────────────────────────────────────────────
+
+class TestConversationMemory:
+    def test_add_turn(self):
+        m = ConversationMemory()
+        m.add_turn("s1", "user", "Hello")
+        m.add_turn("s1", "assistant", "Hi there")
+        history = m.get_history("s1")
+        assert len(history) == 2
+
+    def test_get_last_user_message(self):
+        m = ConversationMemory()
+        m.add_turn("s1", "user", "Question?")
+        m.add_turn("s1", "assistant", "Answer")
+        assert m.get_last_user_message("s1") == "Question?"
+
+    def test_get_summary(self):
+        m = ConversationMemory()
+        m.add_turn("s1", "user", "a")
+        m.add_turn("s1", "assistant", "b")
+        summary = m.get_summary("s1")
+        assert summary["total_turns"] == 2
+
+    def test_clear_session(self):
+        m = ConversationMemory()
+        m.add_turn("s1", "user", "a")
+        m.clear_session("s1")
+        assert m.get_history("s1") == []
+
+    def test_max_turns(self):
+        m = ConversationMemory(max_turns=3)
+        for i in range(5):
+            m.add_turn("s1", "user", f"msg {i}")
+        history = m.get_history("s1")
+        assert len(history) == 3
+
+
+# ─── LongTermMemory ─────────────────────────────────────────────────
+
+class TestLongTermMemory:
+    def test_store_retrieve(self):
+        m = LongTermMemory()
+        e = m.store("Important knowledge", importance=0.9)
+        found = m.retrieve(e.entry_id)
+        assert found is not None
+
+    def test_search(self):
+        m = LongTermMemory()
+        m.store("AI is transforming the world")
+        results = m.search("AI")
+        assert len(results) >= 1
+
+    def test_get_important(self):
+        m = LongTermMemory()
+        m.store("minor", importance=0.1)
+        m.store("critical", importance=0.95)
+        important = m.get_important(min_importance=0.9)
+        assert len(important) == 1
+
+    def test_apply_decay(self):
+        m = LongTermMemory(decay_rate=0.5)
+        m.store("old fact", importance=0.3)
+        removed = m.apply_decay()
+        assert isinstance(removed, int)
+
+    def test_evict_if_needed(self):
+        m = LongTermMemory(max_entries=3)
+        m.store("a", importance=0.1)
+        m.store("b", importance=0.5)
+        m.store("c", importance=0.8)
+        m.store("d", importance=0.9)
+        assert m.count() == 3
+
+
+# ─── WorkingMemory ──────────────────────────────────────────────────
+
+class TestWorkingMemory:
+    def test_add(self):
+        m = WorkingMemory()
+        e = m.add("current task", importance=0.8)
+        assert e.content == "current task"
+
+    def test_set_focus(self):
+        m = WorkingMemory()
+        m.set_focus("AI research")
+        assert m.get_focus() == "AI research"
+
+    def test_get_items(self):
+        m = WorkingMemory()
+        m.add("a", importance=0.5)
+        m.add("b", importance=0.9)
+        items = m.get_items(limit=1)
+        assert len(items) == 1
+        assert items[0].importance == 0.9
+
+    def test_search(self):
+        m = WorkingMemory()
+        m.add("Python code review")
+        results = m.search("Python")
+        assert len(results) >= 1
+
+    def test_clear(self):
+        m = WorkingMemory()
+        m.add("a")
+        m.set_focus("topic")
+        m.clear()
+        assert m.count() == 0
+        assert m.get_focus() is None
+
+
+# ─── MemorySync ─────────────────────────────────────────────────────
+
+class TestMemorySync:
+    def test_sync(self):
+        s = MemorySync()
+        source = [MemoryEntry(content="a", entry_id="e1"), MemoryEntry(content="b", entry_id="e2")]
+        target = [MemoryEntry(content="c", entry_id="e3")]
+        result = s.sync(source, target)
+        assert result["added"] == 2
+        assert result["removed"] == 1
+
+    def test_merge(self):
+        s = MemorySync()
+        a = [MemoryEntry(content="a", entry_id="e1")]
+        b = [MemoryEntry(content="b", entry_id="e2"), MemoryEntry(content="a", entry_id="e1")]
+        merged = s.merge(a, b)
+        assert len(merged) == 2
+
+
+# ─── MemoryCache ────────────────────────────────────────────────────
+
+class TestMemoryCache:
+    def test_set_get(self):
+        c = MemoryCache()
+        e = MemoryEntry(content="test", entry_id="e1")
+        c.set(e)
+        found = c.get("e1")
+        assert found is not None
+
+    def test_miss(self):
+        c = MemoryCache()
+        assert c.get("missing") is None
+
+    def test_hit_rate(self):
+        c = MemoryCache()
+        e = MemoryEntry(content="test", entry_id="e1")
+        c.set(e)
+        c.get("e1")  # hit
+        c.get("missing")  # miss
+        assert c.hit_rate == 0.5
+
+    def test_invalidate(self):
+        c = MemoryCache()
+        e = MemoryEntry(content="test", entry_id="e1")
+        c.set(e)
+        assert c.invalidate("e1")
+        assert c.get("e1") is None
+
+    def test_max_size(self):
+        c = MemoryCache(max_size=2)
+        c.set(MemoryEntry(content="a", entry_id="e1"))
+        c.set(MemoryEntry(content="b", entry_id="e2"))
+        c.set(MemoryEntry(content="c", entry_id="e3"))
+        assert c.stats()["size"] <= 2
+
+
+# ─── MemoryMetrics ──────────────────────────────────────────────────
+
+class TestMemoryMetrics:
+    def test_record(self):
+        m = MemoryMetrics()
+        m.record_store()
+        m.record_retrieval(True)
+        m.record_search()
+        m.record_eviction(5)
+        m.record_sync()
+        assert m.total_stores == 1
+        assert m.total_retrievals == 1
+
+    def test_hit_rate(self):
+        m = MemoryMetrics()
+        m.record_retrieval(True)
+        m.record_retrieval(True)
+        m.record_retrieval(False)
+        assert abs(m.hit_rate - 2 / 3) < 0.01
+
+    def test_to_dict(self):
+        d = MemoryMetrics().to_dict()
+        assert "total_stores" in d
+
+    def test_reset(self):
+        m = MemoryMetrics()
+        m.record_store()
+        m.reset()
+        assert m.total_stores == 0
+
+
+# ─── MemoryIndexer ──────────────────────────────────────────────────
+
+class TestMemoryIndexer:
+    def test_index_search(self):
+        idx = MemoryIndexer()
+        e = MemoryEntry(content="Python AI", tags=["python", "ai"], entry_id="e1")
+        idx.index(e)
+        assert "e1" in idx.search_by_tag("python")
+        assert "e1" in idx.search_by_word("python")
+
+    def test_remove(self):
+        idx = MemoryIndexer()
+        e = MemoryEntry(content="test", tags=["tag1"], entry_id="e1")
+        idx.index(e)
+        idx.remove(e)
+        assert "e1" not in idx.search_by_tag("tag1")
+
+    def test_rebuild(self):
+        idx = MemoryIndexer()
+        entries = [MemoryEntry(content="a b", tags=["t1"], entry_id="e1"),
+                   MemoryEntry(content="b c", tags=["t2"], entry_id="e2")]
+        idx.rebuild(entries)
+        assert "e1" in idx.search_by_tag("t1")
+
+    def test_search_by_words(self):
+        idx = MemoryIndexer()
+        idx.index(MemoryEntry(content="AI machine learning", tags=[], entry_id="e1"))
+        idx.index(MemoryEntry(content="AI deep learning", tags=[], entry_id="e2"))
+        idx.index(MemoryEntry(content="cooking recipes", tags=[], entry_id="e3"))
+        results = idx.search_by_words(["AI", "learning"])
+        assert len(results) == 2
+
+
+# ─── MemoryConsolidation ────────────────────────────────────────────
+
+class TestMemoryConsolidation:
+    def test_consolidate(self):
+        mc = MemoryConsolidation()
+        entries = [MemoryEntry(content="Point 1", tags=["a"], importance=0.8),
+                   MemoryEntry(content="Point 2", tags=["b"], importance=0.6)]
+        result = mc.consolidate(entries)
+        assert result.content
+        assert "a" in result.tags
+
+    def test_empty_consolidate(self):
+        mc = MemoryConsolidation()
+        result = mc.consolidate([])
+        assert result.importance == 0.0
+
+    def test_history(self):
+        mc = MemoryConsolidation()
+        mc.consolidate([MemoryEntry(content="x", entry_id="e1")])
+        assert len(mc.get_history()) == 1
+
+
+# ─── MemoryForgetting ───────────────────────────────────────────────
+
+class TestMemoryForgetting:
+    def test_ebbinghaus(self):
+        mf = MemoryForgetting()
+        retention = mf.ebbinghaus_retention(0, 30)
+        assert retention == 1.0
+        retention_old = mf.ebbinghaus_retention(60, 30)
+        assert retention_old < 1.0
+
+    def test_prune(self):
+        mf = MemoryForgetting()
+        entries = [MemoryEntry(content="a", importance=0.1),
+                   MemoryEntry(content="b", importance=0.9)]
+        result = mf.prune(entries, max_entries=1)
+        assert len(result) == 1
+
+    def test_should_forget(self):
+        import time as _time
+        mf = MemoryForgetting()
+        low = MemoryEntry(content="unimportant", importance=0.001,
+                          created_at=_time.time() - 86400 * 100)
+        assert mf.should_forget(low, threshold=0.1)
+
+
+# ─── MemoryHealth ───────────────────────────────────────────────────
+
+class TestMemoryHealth:
+    def test_check(self):
+        h = MemoryHealth()
+        h.check("router", True)
+        assert h.is_healthy("router")
+
+    def test_unhealthy(self):
+        h = MemoryHealth()
+        h.check("cache", False)
+        assert "cache" in h.get_unhealthy()
+
+    def test_overall(self):
+        h = MemoryHealth()
+        h.check("a", True)
+        oh = h.overall_health()
+        assert oh["healthy"] == 1
+
+
+# ─── MemoryEvents ───────────────────────────────────────────────────
+
+class TestMemoryEvents:
+    def test_publish_subscribe(self):
+        e = MemoryEvents()
+        received = []
+        e.subscribe("ev", lambda d: received.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(received) == 1
+
+    def test_clear(self):
+        e = MemoryEvents()
+        e.publish("ev")
+        e.clear()
+        assert len(e.get_log()) == 0
+
+
+# ─── MemoryProfiler ─────────────────────────────────────────────────
+
+class TestMemoryProfiler:
+    def test_record(self):
+        p = MemoryProfiler()
+        p.record("store", 10.0, 1)
+        assert p.summary()["count"] == 1
+
+    def test_avg(self):
+        p = MemoryProfiler()
+        p.record("op", 100.0)
+        p.record("op", 200.0)
+        assert p.get_avg("op") == 150.0
+
+    def test_clear(self):
+        p = MemoryProfiler()
+        p.record("x", 10)
+        p.clear()
+        assert p.summary()["count"] == 0
+
+
+# ─── MemoryReport ───────────────────────────────────────────────────
+
+class TestMemoryReport:
+    def test_generate(self):
+        r = MemoryReportGenerator()
+        report = r.generate({"hit_rate": 0.9, "total_evictions": 5}, {"total": 100})
+        assert report["report_type"] == "ai_memory"
+        assert len(report["recommendations"]) == 0
+
+    def test_low_hit_rate(self):
+        r = MemoryReportGenerator()
+        report = r.generate({"hit_rate": 0.3, "total_evictions": 5}, {"total": 100})
+        assert any("cache" in rec.lower() for rec in report["recommendations"])
+
+
+# ─── MemoryConfig ───────────────────────────────────────────────────
+
+class TestMemoryConfig:
+    def test_defaults(self):
+        c = MemoryConfig()
+        assert c.short_term_capacity == 50
+        assert c.enable_sync is True
+
+    def test_custom(self):
+        c = MemoryConfig(long_term_capacity=10000, cache_size=500)
+        assert c.long_term_capacity == 10000
+
+    def test_to_dict(self):
+        d = MemoryConfig().to_dict()
+        assert "short_term_capacity" in d
+
+
+# ─── MemoryRanker ───────────────────────────────────────────────────
+
+class TestMemoryRanker:
+    def test_rank(self):
+        r = MemoryRanker()
+        entries = [MemoryEntry(content="Python AI", importance=0.8, entry_id="e1"),
+                   MemoryEntry(content="Java code", importance=0.5, entry_id="e2")]
+        ranked = r.rank(entries, "Python")
+        assert ranked[0].entry_id == "e1"
+
+    def test_top(self):
+        r = MemoryRanker()
+        entries = [MemoryEntry(content="a", importance=0.9), MemoryEntry(content="b", importance=0.5)]
+        top = r.get_top(entries, top_n=1)
+        assert len(top) == 1
+
+
+# ─── MemoryAnalyzer ─────────────────────────────────────────────────
+
+class TestMemoryAnalyzer:
+    def test_analyze(self):
+        a = MemoryAnalyzer()
+        entries = [MemoryEntry(content="test", memory_type=MemoryType.SEMANTIC),
+                   MemoryEntry(content="test2", memory_type=MemoryType.EPISODIC)]
+        result = a.analyze(entries)
+        assert result["total"] == 2
+        assert "semantic" in result["by_type"]
+
+    def test_empty(self):
+        a = MemoryAnalyzer()
+        result = a.analyze([])
+        assert result["total"] == 0
+
+    def test_stale(self):
+        import time
+        a = MemoryAnalyzer()
+        old = MemoryEntry(content="old", last_accessed=time.time() - 86400 * 40)
+        stale = a.get_stale([old], max_age_days=30)
+        assert len(stale) == 1
+
+
+# ─── MemoryCompression ─────────────────────────────────────────────
+
+class TestMemoryCompression:
+    def test_compress(self):
+        mc = MemoryCompression()
+        entries = [MemoryEntry(content="a" * 500, entry_id="e1")]
+        compressed = mc.compress(entries, max_length=100)
+        assert len(compressed[0].content) < 500
+
+    def test_summarize_batch(self):
+        mc = MemoryCompression()
+        entries = [MemoryEntry(content="Point A"), MemoryEntry(content="Point B")]
+        summary = mc.summarize_batch(entries)
+        assert "Point A" in summary
+
+
+# ─── MemorySearch ───────────────────────────────────────────────────
+
+class TestMemorySearch:
+    def test_search(self):
+        s = MemorySearch()
+        stores = {"semantic": [MemoryEntry(content="AI is great", tags=[], entry_id="e1")]}
+        results = s.search(stores, "AI")
+        assert len(results) >= 1
+
+    def test_search_by_type(self):
+        s = MemorySearch()
+        stores = {"semantic": [MemoryEntry(content="a", entry_id="e1")],
+                  "episodic": [MemoryEntry(content="b", entry_id="e2")]}
+        results = s.search(stores, "a", memory_type=MemoryType.SEMANTIC)
+        assert len(results) == 1
+
+
+# ─── MemoryLifecycle ────────────────────────────────────────────────
+
+class TestMemoryLifecycle:
+    def test_get_stage(self):
+        ml = MemoryLifecycle()
+        active = MemoryEntry(content="recent", importance=0.9)
+        stage = ml.get_stage(active)
+        assert stage in ("active", "dormant", "archived", "deleted")
+
+    def test_apply_lifecycle(self):
+        ml = MemoryLifecycle()
+        entries = [MemoryEntry(content="a", importance=0.9),
+                   MemoryEntry(content="b", importance=0.1)]
+        result = ml.apply_lifecycle(entries)
+        total = sum(len(v) for v in result.values())
+        assert total == 2
+
+
+# ─── MemoryValidator ────────────────────────────────────────────────
+
+class TestMemoryValidator:
+    def test_valid_entry(self):
+        v = MemoryValidator()
+        e = MemoryEntry(content="valid entry", importance=0.5)
+        result = v.validate_entry(e)
+        assert result["valid"]
+
+    def test_empty_content(self):
+        v = MemoryValidator()
+        e = MemoryEntry(content="", importance=0.5)
+        result = v.validate_entry(e)
+        assert not result["valid"]
+
+    def test_invalid_importance(self):
+        v = MemoryValidator()
+        e = MemoryEntry(content="test", importance=1.5)
+        result = v.validate_entry(e)
+        assert not result["valid"]
+
+    def test_validate_query(self):
+        v = MemoryValidator()
+        q = MemoryQuery(query_text="test", limit=5)
+        result = v.validate_query(q)
+        assert result["valid"]
+
+    def test_empty_query(self):
+        v = MemoryValidator()
+        q = MemoryQuery()
+        result = v.validate_query(q)
+        assert not result["valid"]
+
+
+# ─── MemoryFallback ─────────────────────────────────────────────────
+
+class TestMemoryFallback:
+    def test_emergency_store(self):
+        f = MemoryFallback()
+        e = MemoryEntry(content="emergency", entry_id="e1")
+        assert f.emergency_store(e)
+        assert len(f.get_emergency_entries()) == 1
+
+    def test_replay(self):
+        f = MemoryFallback()
+        f.emergency_store(MemoryEntry(content="a", entry_id="e1"))
+        target: list = []
+        count = f.replay_emergency(target)
+        assert count == 1
+        assert len(target) == 1
+
+
+# ─── MemoryContext ──────────────────────────────────────────────────
+
+class TestMemoryContext:
+    def test_set_get(self):
+        c = MemoryContext()
+        c.set("key", "value")
+        assert c.get("key") == "value"
+
+    def test_record_operation(self):
+        c = MemoryContext()
+        c.record_operation("store")
+        assert "store" in c.get_operations()
+
+    def test_clear(self):
+        c = MemoryContext()
+        c.set("k", "v")
+        c.record_operation("op")
+        c.clear()
+        assert c.get("k") is None
+
+
+# ─── MemoryRegistry ─────────────────────────────────────────────────
+
+class TestMemoryRegistry:
+    def test_register_get(self):
+        r = MemoryRegistry()
+        store = SemanticMemory()
+        r.register("semantic", store)
+        assert r.get("semantic") is store
+
+    def test_unregister(self):
+        r = MemoryRegistry()
+        r.register("temp", SemanticMemory())
+        assert r.unregister("temp")
+        assert not r.unregister("nonexistent")
+
+    def test_list(self):
+        r = MemoryRegistry()
+        r.register("a", SemanticMemory())
+        assert "a" in r.list_stores()
+
+    def test_to_dict(self):
+        r = MemoryRegistry()
+        r.register("test", SemanticMemory())
+        d = r.to_dict()
+        assert "test" in d
+
+
+# ─── MemoryOrchestrator ─────────────────────────────────────────────
+
+class TestMemoryOrchestrator:
+    def test_start_stop(self):
+        o = MemoryOrchestrator()
+        assert o.start()
+        assert o.stop()
+
+    def test_store_retrieve(self):
+        o = MemoryOrchestrator()
+        o.start()
+        result = o.store("AI is great", memory_type="semantic", tags=["ai"])
+        assert "entry_id" in result
+        found = o.retrieve(result["entry_id"])
+        assert found is not None
+
+    def test_search(self):
+        o = MemoryOrchestrator()
+        o.store("Python programming", memory_type="semantic")
+        results = o.search("Python")
+        assert len(results) >= 1
+
+    def test_health(self):
+        o = MemoryOrchestrator()
+        h = o.get_health()
+        assert "uptime" in h
+
+    def test_stats(self):
+        o = MemoryOrchestrator()
+        o.store("test", memory_type="semantic")
+        stats = o.get_stats()
+        assert "metrics" in stats
