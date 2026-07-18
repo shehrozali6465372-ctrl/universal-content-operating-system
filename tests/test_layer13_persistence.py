@@ -1708,3 +1708,324 @@ class TestEmbeddingValidator:
     def test_fix(self):
         fixed = self.ev.fix([0.1, 0.2])
         assert len(fixed) == 3
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 5: Object Storage Platform
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.object_storage_platform.storage_manager import StorageManager
+from layers.layer13_persistence.modules.object_storage_platform.upload_engine import UploadEngine
+from layers.layer13_persistence.modules.object_storage_platform.download_engine import DownloadEngine
+from layers.layer13_persistence.modules.object_storage_platform.compression_engine import CompressionEngine
+from layers.layer13_persistence.modules.object_storage_platform.encryption_engine import EncryptionEngine
+from layers.layer13_persistence.modules.object_storage_platform.metadata_manager import MetadataManager
+from layers.layer13_persistence.modules.object_storage_platform.lifecycle_manager import LifecycleManager, LifecycleRule
+from layers.layer13_persistence.modules.object_storage_platform.cdn_manager import CDNManager, CDNConfig
+from layers.layer13_persistence.modules.object_storage_platform.file_versioning import FileVersionManager
+from layers.layer13_persistence.modules.object_storage_platform.chunk_uploader import ChunkUploader
+from layers.layer13_persistence.modules.object_storage_platform.multipart_uploader import MultipartUploader
+from layers.layer13_persistence.modules.object_storage_platform.storage_analytics import StorageAnalytics
+from layers.layer13_persistence.modules.object_storage_platform.storage_metrics import StorageMetrics
+from layers.layer13_persistence.modules.object_storage_platform.storage_health import StorageHealth
+
+
+class TestStorageManager:
+    def setup_method(self):
+        self.sm = StorageManager()
+
+    def test_put_get(self):
+        obj = self.sm.put("bucket1", "key1", b"data", "text/plain")
+        found = self.sm.get("bucket1", "key1")
+        assert found is not None
+        assert found.key == "key1"
+
+    def test_delete(self):
+        self.sm.put("b", "k", b"data")
+        assert self.sm.delete("b", "k") is True
+        assert self.sm.get("b", "k") is None
+
+    def test_exists(self):
+        self.sm.put("b", "k", b"data")
+        assert self.sm.exists("b", "k") is True
+        assert self.sm.exists("b", "missing") is False
+
+    def test_list_objects(self):
+        self.sm.put("b", "a/1", b"1")
+        self.sm.put("b", "a/2", b"2")
+        self.sm.put("b", "c/3", b"3")
+        assert len(self.sm.list_objects("b", "a/")) == 2
+
+    def test_count(self):
+        self.sm.put("b", "k1", b"1")
+        self.sm.put("b", "k2", b"2")
+        assert self.sm.count("b") == 2
+        assert self.sm.count() == 2
+
+    def test_total_size(self):
+        self.sm.put("b", "k1", b"hello")
+        assert self.sm.total_size() == 5
+
+    def test_stats(self):
+        self.sm.put("b", "k", b"data")
+        s = self.sm.stats()
+        assert s["objects"] == 1
+
+
+class TestUploadEngine:
+    def setup_method(self):
+        self.ue = UploadEngine()
+
+    def test_upload(self):
+        result = self.ue.upload("bucket", "key", b"data")
+        assert result.status == "completed"
+        assert result.size_bytes == 4
+
+    def test_stats(self):
+        self.ue.upload("b", "k", b"data")
+        s = self.ue.stats()
+        assert s["uploads"] == 1
+
+
+class TestDownloadEngine:
+    def setup_method(self):
+        self.de = DownloadEngine()
+
+    def test_download(self):
+        result = self.de.download("bucket", "key", 100)
+        assert result.status == "completed"
+
+    def test_stats(self):
+        self.de.download("b", "k", 100)
+        s = self.de.stats()
+        assert s["total_bytes"] == 100
+
+
+class TestCompressionEngine:
+    def setup_method(self):
+        self.ce = CompressionEngine()
+
+    def test_compress_decompress(self):
+        original = b"Hello world! " * 100
+        compressed = self.ce.compress(original)
+        decompressed = self.ce.decompress(compressed)
+        assert decompressed == original
+
+    def test_ratio(self):
+        original = b"aaa" * 100
+        compressed = self.ce.compress(original)
+        ratio = self.ce.ratio(original, compressed)
+        assert ratio <= 1.0
+
+    def test_algorithms(self):
+        assert "gzip" in self.ce.get_algorithms()
+
+
+class TestEncryptionEngine:
+    def setup_method(self):
+        self.ee = EncryptionEngine()
+
+    def test_encrypt_decrypt(self):
+        original = b"secret data"
+        encrypted = self.ee.encrypt(original, "key123")
+        decrypted = self.ee.decrypt(encrypted, "key123")
+        assert decrypted == original
+
+    def test_hash(self):
+        h = self.ee.hash(b"test")
+        assert len(h) == 64
+
+    def test_algorithm(self):
+        assert self.ee.get_algorithm() == "aes256"
+
+
+class TestMetadataManager:
+    def setup_method(self):
+        self.mm = MetadataManager()
+
+    def test_set_get(self):
+        self.mm.set_metadata("obj1", "color", "red")
+        assert self.mm.get_value("obj1", "color") == "red"
+
+    def test_tags(self):
+        self.mm.set_tags("obj1", ["important", "v2"])
+        found = self.mm.search_by_tag("important")
+        assert "obj1" in found
+
+    def test_delete(self):
+        self.mm.set_metadata("obj1", "k", "v")
+        assert self.mm.delete("obj1") is True
+
+    def test_count(self):
+        self.mm.set_metadata("o1", "k", "v")
+        assert self.mm.count() == 1
+
+
+class TestLifecycleManager:
+    def setup_method(self):
+        self.lm = LifecycleManager()
+
+    def test_add_rule(self):
+        rule = LifecycleRule("logs/", expiration_days=90)
+        self.lm.add_rule(rule)
+        assert self.lm.count() == 1
+
+    def test_evaluate(self):
+        self.lm.add_rule(LifecycleRule("logs/", expiration_days=30))
+        assert self.lm.evaluate("logs/2024.log", 31) == "expired"
+        assert self.lm.evaluate("logs/2024.log", 15) is None
+
+    def test_transition(self):
+        self.lm.add_rule(LifecycleRule("data/", transition_days=30, storage_class="cold"))
+        assert self.lm.evaluate("data/file.bin", 31) == "cold"
+
+    def test_remove_rule(self):
+        rule = LifecycleRule()
+        self.lm.add_rule(rule)
+        assert self.lm.remove_rule(rule.rule_id) is True
+
+
+class TestCDNManager:
+    def setup_method(self):
+        self.cdn = CDNManager()
+
+    def test_add_config(self):
+        config = CDNConfig("cloudflare", "cdn.example.com")
+        self.cdn.add_config("main", config)
+        assert self.cdn.get_config("main") is not None
+
+    def test_get_url(self):
+        self.cdn.add_config("main", CDNConfig("cloudflare", "cdn.example.com"))
+        url = self.cdn.get_url("main", "image.png")
+        assert url == "https://cdn.example.com/image.png"
+
+    def test_cache_ttl(self):
+        self.cdn.set_cache_ttl("images/*", 86400)
+        assert self.cdn.get_cache_ttl("images/*") == 86400
+
+
+class TestFileVersionManager:
+    def setup_method(self):
+        self.fvm = FileVersionManager()
+
+    def test_add_version(self):
+        v = self.fvm.add_version("bucket", "key.txt", 100)
+        assert v.is_latest is True
+
+    def test_get_latest(self):
+        self.fvm.add_version("b", "k", 100)
+        self.fvm.add_version("b", "k", 200)
+        latest = self.fvm.get_latest("b", "k")
+        assert latest.size_bytes == 200
+        assert latest.is_latest is True
+
+    def test_total_versions(self):
+        self.fvm.add_version("b", "k1", 100)
+        self.fvm.add_version("b", "k2", 200)
+        assert self.fvm.total_versions() == 2
+
+
+class TestChunkUploader:
+    def setup_method(self):
+        self.cu = ChunkUploader(chunk_size=1024)
+
+    def test_start_add(self):
+        self.cu.start_upload("u1")
+        self.cu.add_chunk("u1", 1, 500)
+        self.cu.add_chunk("u1", 2, 500)
+        assert self.cu.is_complete("u1", 2) is True
+
+    def test_calculate_chunks(self):
+        assert self.cu.calculate_chunks(3000) == 3
+        assert self.cu.calculate_chunks(500) == 1
+
+    def test_delete(self):
+        self.cu.start_upload("u1")
+        assert self.cu.delete_upload("u1") is True
+
+
+class TestMultipartUploader:
+    def setup_method(self):
+        self.mu = MultipartUploader()
+
+    def test_initiate(self):
+        upload = self.mu.initiate("bucket", "large_file.bin")
+        assert upload.status == "in_progress"
+
+    def test_add_part_complete(self):
+        upload = self.mu.initiate("b", "k")
+        self.mu.add_part(upload.upload_id, 1)
+        self.mu.add_part(upload.upload_id, 2)
+        assert self.mu.complete(upload.upload_id) is True
+        assert upload.status == "completed"
+
+    def test_abort(self):
+        upload = self.mu.initiate("b", "k")
+        assert self.mu.abort(upload.upload_id) is True
+
+    def test_list(self):
+        self.mu.initiate("b", "k1")
+        self.mu.initiate("b", "k2")
+        assert len(self.mu.list_uploads()) == 2
+
+
+class TestStorageAnalytics:
+    def setup_method(self):
+        self.sa = StorageAnalytics()
+
+    def test_record(self):
+        self.sa.record_operation("upload", "bucket", 1000)
+        assert self.sa.get_total_operations() == 1
+
+    def test_bucket_stats(self):
+        self.sa.record_operation("upload", "b", 500)
+        s = self.sa.get_bucket_stats("b")
+        assert s["uploads"] == 1
+
+    def test_total_bytes(self):
+        self.sa.record_operation("upload", "b", 500)
+        self.sa.record_operation("download", "b", 300)
+        assert self.sa.get_total_bytes() == 800
+
+
+class TestStorageMetrics:
+    def setup_method(self):
+        self.sm = StorageMetrics()
+
+    def test_record(self):
+        self.sm.record_object(100)
+        self.sm.record_operation("upload")
+        assert self.sm._total_objects == 1
+
+    def test_error_rate(self):
+        self.sm.record_operation("upload", True)
+        self.sm.record_operation("upload", False)
+        assert self.sm.get_error_rate() == 0.5
+
+    def test_reset(self):
+        self.sm.record_object(100)
+        self.sm.reset()
+        assert self.sm._total_objects == 0
+
+    def test_to_dict(self):
+        self.sm.record_object(100)
+        d = self.sm.to_dict()
+        assert "objects" in d
+
+
+class TestStorageHealth:
+    def setup_method(self):
+        self.sh = StorageHealth()
+
+    def test_check(self):
+        result = self.sh.check("s3", True, 5.0)
+        assert result["healthy"] is True
+
+    def test_is_healthy(self):
+        self.sh.check("s3", True)
+        assert self.sh.is_healthy() is True
+
+    def test_degraded(self):
+        self.sh.check("s3", True)
+        self.sh.check("minio", False)
+        assert self.sh.is_healthy() is False
