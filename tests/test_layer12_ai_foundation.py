@@ -1106,3 +1106,1233 @@ class TestProviderAnalytics:
         a = ProviderAnalytics()
         d = a.to_dict()
         assert "global" in d
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 3: Multi Model Intelligence
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.models import (
+    ModelResponse, VoteResult, RankEntry, ConsensusResult,
+)
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.consensus_engine import ConsensusEngine
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.voting_engine import VotingEngine
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.ranking_engine import RankingEngine
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.reasoning_merger import ReasoningMerger
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.confidence_engine import ConfidenceEngine
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.response_selector import ResponseSelector
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.parallel_reasoning import ParallelReasoning
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.parallel_generation import ParallelGeneration
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.parallel_review import ParallelReview
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.ensemble_ai import EnsembleAI
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_config import MultiModelConfig
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_context import MultiModelContext
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_request import MultiModelRequest
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_response import MultiModelResponse
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_metrics import MultiModelMetrics
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_events import MultiModelEvents
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_health import MultiModelHealth
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_profiler import MultiModelProfiler
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_validator import MultiModelValidator
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_memory import MultiModelMemory
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_report import MultiModelReportGenerator
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_cache import MultiModelCache
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_router import MultiModelRouter
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_registry import MultiModelRegistry
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_strategy import MultiModelStrategy
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_executor import MultiModelExecutor
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_scheduler import MultiModelScheduler
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_monitor import MultiModelMonitor
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_optimizer import MultiModelOptimizer
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_policy import MultiModelPolicy
+from layers.layer12_ai_foundation.modules.multi_model_intelligence.multi_model_fallback import MultiModelFallback
+
+
+# ─── Models ──────────────────────────────────────────────────────────
+
+class TestModels:
+    def test_model_response_success(self):
+        r = ModelResponse(model="gpt-4o", provider="openai", content="Hello", confidence=0.9)
+        assert r.is_success
+        assert r.model == "gpt-4o"
+
+    def test_model_response_error(self):
+        r = ModelResponse(model="gpt-4o", provider="openai", content="", error="timeout")
+        assert not r.is_success
+
+    def test_model_response_to_dict(self):
+        r = ModelResponse(model="gpt-4o", provider="openai", content="Hi")
+        d = r.to_dict()
+        assert d["model"] == "gpt-4o"
+        assert "response_id" in d
+
+    def test_vote_result(self):
+        v = VoteResult(candidate="A", votes=3, voters=["m1", "m2", "m3"])
+        d = v.to_dict()
+        assert d["votes"] == 3
+
+    def test_rank_entry(self):
+        r = RankEntry(rank=1, score=0.9)
+        d = r.to_dict()
+        assert d["rank"] == 1
+
+    def test_consensus_result(self):
+        c = ConsensusResult(agreed_content="X", agreement_score=0.8, participating_models=3)
+        d = c.to_dict()
+        assert d["agreement_score"] == 0.8
+
+
+# ─── ConsensusEngine ─────────────────────────────────────────────────
+
+class TestConsensusEngine:
+    def setup_method(self):
+        self.engine = ConsensusEngine("majority")
+
+    def test_empty(self):
+        r = self.engine.find_consensus([])
+        assert r.participating_models == 0
+
+    def test_single_response(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="Answer", confidence=0.9)]
+        r = self.engine.find_consensus(resp)
+        assert r.agreed_content == "Answer"
+        assert r.participating_models == 1
+
+    def test_majority_consensus(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="Same answer", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="Same answer", confidence=0.85),
+            ModelResponse(model="gemini", provider="google", content="Different", confidence=0.7),
+        ]
+        r = self.engine.find_consensus(resp)
+        assert r.method == "majority"
+        assert r.participating_models == 3
+        assert r.agreement_score > 0
+
+    def test_weighted_consensus(self):
+        engine = ConsensusEngine("weighted")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.8),
+        ]
+        weights = {"gpt-4o": 2.0, "claude": 1.0}
+        r = engine.find_consensus(resp, weights)
+        assert r.method == "weighted"
+        assert "scores" in r.details
+
+    def test_best_match_consensus(self):
+        engine = ConsensusEngine("best_match")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="the cat sat on the mat", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="the cat sat on the mat", confidence=0.85),
+            ModelResponse(model="gemini", provider="google", content="completely different text here", confidence=0.7),
+        ]
+        r = engine.find_consensus(resp)
+        assert r.method == "best_match"
+        assert r.agreement_score > 0
+
+    def test_all_failed(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="", error="fail"),
+            ModelResponse(model="claude", provider="anthropic", content="", error="fail"),
+        ]
+        r = self.engine.find_consensus(resp)
+        assert r.participating_models == 0
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="X", confidence=0.9)]
+        self.engine.find_consensus(resp)
+        assert len(self.engine.get_history()) == 1
+
+    def test_normalize(self):
+        assert ConsensusEngine._normalize("Hello, World!") == "hello world"
+
+    def test_similarity(self):
+        sim = ConsensusEngine._similarity("the cat sat", "the cat sat on the mat")
+        assert 0.0 < sim <= 1.0
+
+    def test_invalid_method_fallback(self):
+        engine = ConsensusEngine("invalid_method")
+        assert engine.method == "majority"
+
+
+# ─── VotingEngine ────────────────────────────────────────────────────
+
+class TestVotingEngine:
+    def setup_method(self):
+        self.engine = VotingEngine("plurality")
+
+    def test_empty_vote(self):
+        assert self.engine.vote([]) is None
+
+    def test_single_vote(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        v = self.engine.vote(resp)
+        assert v is not None
+        assert v.candidate == "A"
+
+    def test_plurality_vote(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.8),
+        ]
+        v = self.engine.vote(resp)
+        assert v.votes == 2
+
+    def test_ranked_choice(self):
+        engine = VotingEngine("ranked_choice")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        v = engine.vote(resp)
+        assert v is not None
+
+    def test_borda_count(self):
+        engine = VotingEngine("borda_count")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+            ModelResponse(model="gemini", provider="google", content="C", confidence=0.5),
+        ]
+        v = engine.vote(resp)
+        assert v is not None
+
+    def test_weighted_vote(self):
+        engine = VotingEngine("weighted", weights={"gpt-4o": 2.0})
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.95),
+        ]
+        v = engine.vote(resp)
+        assert v.candidate == "A"  # gpt-4o has 2x weight
+
+    def test_history(self):
+        engine = VotingEngine("weighted")
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        engine.vote(resp)
+        assert len(engine.get_history()) == 1
+
+
+# ─── RankingEngine ──────────────────────────────────────────────────
+
+class TestRankingEngine:
+    def setup_method(self):
+        self.engine = RankingEngine()
+
+    def test_empty_rank(self):
+        assert self.engine.rank([]) == []
+
+    def test_single_rank(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        ranks = self.engine.rank(resp)
+        assert len(ranks) == 1
+        assert ranks[0].rank == 1
+
+    def test_multi_rank(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="Short", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B " * 100, confidence=0.7),
+            ModelResponse(model="gemini", provider="google", content="Medium text content here", confidence=0.8),
+        ]
+        ranks = self.engine.rank(resp)
+        assert len(ranks) == 3
+        assert ranks[0].rank == 1
+        assert ranks[-1].rank == 3
+
+    def test_top_n(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        top = self.engine.get_top(resp, top_n=1)
+        assert len(top) == 1
+
+    def test_custom_criteria(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        ranks = self.engine.rank(resp, criteria={"quality": 1.0})
+        assert len(ranks) == 2
+
+    def test_score_criteria(self):
+        r = ModelResponse(model="test", provider="test", content="A" * 30, confidence=0.8)
+        assert RankingEngine._score_criterion(r, "quality") > 0
+        assert RankingEngine._score_criterion(r, "relevance") == 0.8
+        assert RankingEngine._score_criterion(r, "conciseness") > 0
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        self.engine.rank(resp)
+        assert len(self.engine.get_history()) == 1
+
+
+# ─── ReasoningMerger ─────────────────────────────────────────────────
+
+class TestReasoningMerger:
+    def setup_method(self):
+        self.merger = ReasoningMerger("weighted_merge")
+
+    def test_empty_merge(self):
+        r = self.merger.merge([])
+        assert r["sources"] == 0
+
+    def test_single_merge(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="Answer", confidence=0.9)]
+        r = self.merger.merge(resp)
+        assert r["merged"] == "Answer"
+        assert r["confidence"] > 0
+
+    def test_concatenate_merge(self):
+        merger = ReasoningMerger("concatenate")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.8),
+        ]
+        r = merger.merge(resp)
+        assert "gpt-4o" in r["merged"]
+
+    def test_best_pick_merge(self):
+        merger = ReasoningMerger("best_pick")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        r = merger.merge(resp)
+        assert r["merged"] == "A"
+
+    def test_all_failed_merge(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="", error="fail")]
+        r = self.merger.merge(resp)
+        assert r["sources"] == 0
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="X", confidence=0.9)]
+        self.merger.merge(resp)
+        assert len(self.merger.get_history()) == 1
+
+
+# ─── ConfidenceEngine ────────────────────────────────────────────────
+
+class TestConfidenceEngine:
+    def setup_method(self):
+        self.engine = ConfidenceEngine()
+
+    def test_empty(self):
+        r = self.engine.calculate([])
+        assert r["overall_confidence"] == 0.0
+
+    def test_single(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.8)]
+        r = self.engine.calculate(resp)
+        assert r["overall_confidence"] == 0.8
+        assert r["agreement"] == 1.0
+
+    def test_high_agreement(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.85),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.83),
+        ]
+        r = self.engine.calculate(resp)
+        assert r["agreement"] > 0.9
+
+    def test_low_agreement(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.2),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.9),
+        ]
+        r = self.engine.calculate(resp)
+        assert r["agreement"] < 1.0
+
+    def test_calibrate(self):
+        engine = ConfidenceEngine(calibration_offset=0.1)
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.5)]
+        r = engine.calculate(resp)
+        assert r["overall_confidence"] == 0.6
+
+    def test_is_confident(self):
+        assert self.engine.is_confident(0.8, 0.6)
+        assert not self.engine.is_confident(0.3, 0.6)
+
+    def test_all_failed(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="", error="fail")]
+        r = self.engine.calculate(resp)
+        assert r["overall_confidence"] == 0.0
+
+    def test_std_dev(self):
+        std = ConfidenceEngine._std_dev([0.5, 0.5, 0.5])
+        assert std == 0.0
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.8)]
+        self.engine.calculate(resp)
+        assert len(self.engine.get_history()) == 1
+
+
+# ─── ResponseSelector ────────────────────────────────────────────────
+
+class TestResponseSelector:
+    def setup_method(self):
+        self.selector = ResponseSelector("highest_confidence")
+
+    def test_empty_select(self):
+        assert self.selector.select([]) is None
+
+    def test_single_select(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        best = self.selector.select(resp)
+        assert best.model == "gpt-4o"
+
+    def test_best_confidence(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        best = self.selector.select(resp)
+        assert best.model == "gpt-4o"
+
+    def test_best_ranked(self):
+        selector = ResponseSelector("best_ranked")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.7),
+        ]
+        scores = {"gpt-4o": 0.5, "claude": 0.9}
+        best = selector.select(resp, scores=scores)
+        assert best.model == "claude"
+
+    def test_quality_first(self):
+        selector = ResponseSelector("quality_first")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9, latency_ms=100),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.9, latency_ms=50),
+        ]
+        best = selector.select(resp)
+        assert best.model == "claude"  # same confidence, lower latency
+
+    def test_ensemble_select(self):
+        selector = ResponseSelector("ensemble")
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9, latency_ms=100),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.8, latency_ms=200),
+        ]
+        best = selector.select(resp)
+        assert best is not None
+
+    def test_all_failed(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="", error="fail")]
+        assert self.selector.select(resp) is None
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        self.selector.select(resp)
+        assert len(self.selector.get_history()) == 1
+
+
+# ─── ParallelReasoning ──────────────────────────────────────────────
+
+class TestParallelReasoning:
+    def setup_method(self):
+        self.engine = ParallelReasoning(max_concurrent=3)
+
+    def test_reason_simulated(self):
+        results = self.engine.reason("test prompt", ["gpt-4o", "claude", "gemini"])
+        assert len(results) == 3
+        assert all(r.is_success for r in results)
+
+    def test_reason_with_callback(self):
+        def fake_call(prompt, model):
+            return ModelResponse(model=model, provider="test", content="OK", confidence=0.9)
+        results = self.engine.reason("test", ["gpt-4o", "claude"], call_fn=fake_call)
+        assert len(results) == 2
+        assert results[0].model == "gpt-4o"
+
+    def test_reason_with_error(self):
+        def fail_call(prompt, model):
+            raise ValueError("boom")
+        results = self.engine.reason("test", ["gpt-4o"], call_fn=fail_call)
+        assert not results[0].is_success
+        assert "boom" in results[0].error
+
+    def test_history(self):
+        self.engine.reason("test", ["gpt-4o"])
+        assert len(self.engine.get_history()) == 1
+
+
+# ─── ParallelGeneration ─────────────────────────────────────────────
+
+class TestParallelGeneration:
+    def setup_method(self):
+        self.engine = ParallelGeneration(max_parallel=3)
+
+    def test_generate_simulated(self):
+        results = self.engine.generate("Write a blog", ["gpt-4o", "claude"])
+        assert len(results) == 2
+        assert all(r.is_success for r in results)
+
+    def test_generate_with_callback(self):
+        def fake_call(prompt, model):
+            return ModelResponse(model=model, provider="test", content="Content", confidence=0.8)
+        results = self.engine.generate("Write", ["gpt-4o"], call_fn=fake_call)
+        assert results[0].content == "Content"
+
+    def test_max_parallel(self):
+        results = self.engine.generate("Write", ["m1", "m2", "m3", "m4", "m5"])
+        assert len(results) <= 3
+
+    def test_history(self):
+        self.engine.generate("Write", ["gpt-4o"])
+        assert len(self.engine.get_history()) == 1
+
+
+# ─── ParallelReview ─────────────────────────────────────────────────
+
+class TestParallelReview:
+    def setup_method(self):
+        self.reviewer = ParallelReview(max_concurrent=3)
+
+    def test_review_simulated(self):
+        results = self.reviewer.review("Great content", ["critic1", "critic2"])
+        assert len(results) == 2
+        assert all(r.is_success for r in results)
+
+    def test_review_with_callback(self):
+        def fake_review(content, reviewer):
+            return ModelResponse(model=reviewer, provider="test", content="Looks good", confidence=0.85)
+        results = self.reviewer.review("Text", ["c1"], call_fn=fake_review)
+        assert results[0].is_success
+
+    def test_history(self):
+        self.reviewer.review("Text", ["c1"])
+        assert len(self.reviewer.get_history()) == 1
+
+
+# ─── EnsembleAI ──────────────────────────────────────────────────────
+
+class TestEnsembleAI:
+    def setup_method(self):
+        self.ensemble = EnsembleAI()
+
+    def test_empty_ensemble(self):
+        r = self.ensemble.ensemble([])
+        assert r["best"] is None
+
+    def test_single_ensemble(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        r = self.ensemble.ensemble(resp)
+        assert r["best"].model == "gpt-4o"
+        assert r["consensus"] is not None
+        assert r["confidence"]["overall_confidence"] > 0
+
+    def test_multi_ensemble(self):
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.8),
+            ModelResponse(model="gemini", provider="google", content="C", confidence=0.7),
+        ]
+        r = self.ensemble.ensemble(resp)
+        assert r["model_count"] == 3
+        assert len(r["ranking"]) == 3
+
+    def test_all_failed(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="", error="fail")]
+        r = self.ensemble.ensemble(resp)
+        assert r["best"] is None
+
+    def test_history(self):
+        resp = [ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9)]
+        self.ensemble.ensemble(resp)
+        assert len(self.ensemble.get_history()) == 1
+
+
+# ─── Config, Context, Request, Response ─────────────────────────────
+
+class TestMultiModelConfig:
+    def test_defaults(self):
+        c = MultiModelConfig()
+        assert c.consensus_method == "majority"
+        assert len(c.models) >= 2
+
+    def test_custom(self):
+        c = MultiModelConfig(min_models=3, timeout_seconds=60)
+        assert c.min_models == 3
+        assert c.timeout_seconds == 60
+
+    def test_to_dict(self):
+        d = MultiModelConfig().to_dict()
+        assert "models" in d
+        assert "consensus_method" in d
+
+
+class TestMultiModelContext:
+    def test_create(self):
+        ctx = MultiModelContext()
+        assert ctx.session_id
+
+    def test_set_get(self):
+        ctx = MultiModelContext()
+        ctx.set("key", "value")
+        assert ctx.get("key") == "value"
+
+    def test_add_response(self):
+        ctx = MultiModelContext()
+        ctx.add_response("gpt-4o", "resp")
+        assert "gpt-4o" in ctx.model_responses
+
+    def test_record_stage(self):
+        ctx = MultiModelContext()
+        ctx.record_stage("step1", {"data": 1})
+        assert len(ctx.get_stages()) == 1
+
+    def test_clear(self):
+        ctx = MultiModelContext()
+        ctx.set("k", "v")
+        ctx.clear()
+        assert ctx.get("k") is None
+
+    def test_to_dict(self):
+        d = MultiModelContext().to_dict()
+        assert "session_id" in d
+
+
+class TestMultiModelRequest:
+    def test_create(self):
+        r = MultiModelRequest("test prompt")
+        assert r.prompt == "test prompt"
+        assert len(r.models) >= 2
+
+    def test_custom_models(self):
+        r = MultiModelRequest("test", models=["gpt-4o", "claude"])
+        assert len(r.models) == 2
+
+    def test_to_dict(self):
+        d = MultiModelRequest("hi").to_dict()
+        assert "request_id" in d
+
+
+class TestMultiModelResponse:
+    def test_empty(self):
+        r = MultiModelResponse()
+        assert r.successful_count == 0
+        assert r.failed_count == 0
+
+    def test_add(self):
+        r = MultiModelResponse()
+        r.add_response(ModelResponse(model="g", provider="p", content="A"))
+        assert r.successful_count == 1
+
+    def test_best(self):
+        r = MultiModelResponse()
+        best = ModelResponse(model="g", provider="p", content="A")
+        r.set_best(best)
+        assert r.best.model == "g"
+
+    def test_to_dict(self):
+        d = MultiModelResponse().to_dict()
+        assert "total_responses" in d
+
+
+# ─── Metrics ─────────────────────────────────────────────────────────
+
+class TestMultiModelMetrics:
+    def test_initial(self):
+        m = MultiModelMetrics()
+        assert m.total_requests == 0
+
+    def test_record(self):
+        m = MultiModelMetrics()
+        m.record_request(3, True, 100.0, 500, 0.8, ["gpt-4o", "claude", "gemini"])
+        assert m.total_requests == 1
+        assert m.successful_requests == 1
+        assert m.total_models_used == 3
+
+    def test_success_rate(self):
+        m = MultiModelMetrics()
+        m.record_request(1, True, 100, 100, 0.8)
+        m.record_request(1, False, 100, 100, 0.3)
+        assert m.success_rate == 0.5
+
+    def test_avg_latency(self):
+        m = MultiModelMetrics()
+        m.record_request(1, True, 100.0, 100, 0.8)
+        m.record_request(1, True, 300.0, 100, 0.8)
+        assert m.avg_latency_ms == 200.0
+
+    def test_to_dict(self):
+        d = MultiModelMetrics().to_dict()
+        assert "total_requests" in d
+
+    def test_model_usage(self):
+        m = MultiModelMetrics()
+        m.record_request(2, True, 100, 100, 0.8, ["gpt-4o", "claude"])
+        assert m.model_usage["gpt-4o"] == 1
+        assert m.model_usage["claude"] == 1
+
+    def test_reset(self):
+        m = MultiModelMetrics()
+        m.record_request(1, True, 100, 100, 0.8)
+        m.reset()
+        assert m.total_requests == 0
+
+
+# ─── Events ──────────────────────────────────────────────────────────
+
+class TestMultiModelEvents:
+    def test_publish_subscribe(self):
+        events = MultiModelEvents()
+        received = []
+        events.subscribe("test_event", lambda d: received.append(d))
+        events.publish("test_event", {"key": "value"})
+        assert len(received) == 1
+        assert received[0]["key"] == "value"
+
+    def test_unsubscribe(self):
+        events = MultiModelEvents()
+        fn = lambda d: None
+        events.subscribe("ev", fn)
+        events.unsubscribe("ev", fn)
+        events.publish("ev")
+        assert len(events.get_log("ev")) == 1  # event logged but not delivered
+
+    def test_log_filter(self):
+        events = MultiModelEvents()
+        events.publish("a", {"x": 1})
+        events.publish("b", {"y": 2})
+        events.publish("a", {"x": 3})
+        assert len(events.get_log("a")) == 2
+
+    def test_clear_log(self):
+        events = MultiModelEvents()
+        events.publish("ev")
+        events.clear_log()
+        assert len(events.get_log()) == 0
+
+
+# ─── Health ──────────────────────────────────────────────────────────
+
+class TestMultiModelHealth:
+    def test_check_model(self):
+        h = MultiModelHealth()
+        h.check_model("gpt-4o", True, 100.0)
+        assert h.is_model_healthy("gpt-4o")
+
+    def test_unhealthy(self):
+        h = MultiModelHealth()
+        h.check_model("gpt-4o", False, 5000.0)
+        assert not h.is_model_healthy("gpt-4o")
+        assert "gpt-4o" in h.get_unhealthy_models()
+
+    def test_healthy_list(self):
+        h = MultiModelHealth()
+        h.check_model("gpt-4o", True)
+        h.check_model("claude", False)
+        assert "gpt-4o" in h.get_healthy_models()
+        assert "claude" not in h.get_healthy_models()
+
+    def test_overall_health(self):
+        h = MultiModelHealth()
+        h.check_model("gpt-4o", True)
+        h.check_model("claude", True)
+        oh = h.overall_health()
+        assert oh["healthy"] == 2
+        assert oh["health_ratio"] == 1.0
+
+    def test_unchecked_healthy(self):
+        h = MultiModelHealth()
+        assert h.is_model_healthy("unknown_model")
+
+    def test_to_dict(self):
+        d = MultiModelHealth().to_dict()
+        assert "healthy" in d
+
+
+# ─── Profiler ────────────────────────────────────────────────────────
+
+class TestMultiModelProfiler:
+    def test_start_stop(self):
+        p = MultiModelProfiler()
+        p.start("op1")
+        elapsed = p.stop("op1")
+        assert elapsed >= 0
+
+    def test_profile(self):
+        p = MultiModelProfiler()
+        p.start("op")
+        p.stop("op")
+        profiles = p.get_profile("op")
+        assert len(profiles) == 1
+
+    def test_summary(self):
+        p = MultiModelProfiler()
+        p.start("a")
+        p.stop("a")
+        s = p.summary()
+        assert s["count"] == 1
+
+    def test_clear(self):
+        p = MultiModelProfiler()
+        p.start("x")
+        p.stop("x")
+        p.clear()
+        assert p.summary()["count"] == 0
+
+
+# ─── Validator ───────────────────────────────────────────────────────
+
+class TestMultiModelValidator:
+    def test_valid_request(self):
+        v = MultiModelValidator()
+        r = v.validate_request("hello", ["gpt-4o", "claude"])
+        assert r["valid"]
+
+    def test_empty_prompt(self):
+        v = MultiModelValidator()
+        r = v.validate_request("", ["gpt-4o", "claude"])
+        assert not r["valid"]
+
+    def test_too_few_models(self):
+        v = MultiModelValidator(min_models=3)
+        r = v.validate_request("hello", ["gpt-4o"])
+        assert not r["valid"]
+        assert len(r["errors"]) == 1
+
+    def test_too_many_models(self):
+        v = MultiModelValidator(max_models=2)
+        r = v.validate_request("hello", ["m1", "m2", "m3"])
+        assert not r["valid"]
+
+    def test_validate_responses(self):
+        v = MultiModelValidator()
+        resp = [ModelResponse(model="g", provider="p", content="OK")]
+        r = v.validate_responses(resp)
+        assert r["valid"]
+
+    def test_empty_responses(self):
+        v = MultiModelValidator()
+        r = v.validate_responses([])
+        assert not r["valid"]
+
+    def test_consensus_validation(self):
+        v = MultiModelValidator()
+        assert v.validate_consensus(0.7, 0.5)
+        assert not v.validate_consensus(0.3, 0.5)
+
+
+# ─── Memory ──────────────────────────────────────────────────────────
+
+class TestMultiModelMemory:
+    def test_store_recall(self):
+        m = MultiModelMemory()
+        m.store("prompt1", "gpt-4o", 0.9, 0.85, {"task_type": "generation"})
+        recalled = m.recall("prompt1")
+        assert recalled is not None
+        assert recalled["best_model"] == "gpt-4o"
+
+    def test_recall_miss(self):
+        m = MultiModelMemory()
+        assert m.recall("nonexistent") is None
+
+    def test_count(self):
+        m = MultiModelMemory()
+        assert m.count() == 0
+        m.store("p1", "gpt-4o", 0.9, 0.85)
+        assert m.count() == 1
+
+    def test_max_entries(self):
+        m = MultiModelMemory(max_entries=3)
+        for i in range(5):
+            m.store(f"p{i}", "gpt-4o", 0.9, 0.85)
+        assert m.count() == 3
+
+    def test_clear(self):
+        m = MultiModelMemory()
+        m.store("p", "g", 0.9, 0.85)
+        m.clear()
+        assert m.count() == 0
+
+    def test_best_model_for_type(self):
+        m = MultiModelMemory()
+        m.store("p1", "gpt-4o", 0.9, 0.85, {"task_type": "generation"})
+        m.store("p2", "claude", 0.8, 0.80, {"task_type": "reasoning"})
+        best = m.get_best_model_for_type("generation")
+        assert best == "gpt-4o"
+
+    def test_to_dict(self):
+        d = MultiModelMemory().to_dict()
+        assert "count" in d
+
+
+# ─── Report ──────────────────────────────────────────────────────────
+
+class TestMultiModelReport:
+    def test_generate(self):
+        r = MultiModelReportGenerator()
+        report = r.generate({"success_rate": 0.95, "avg_latency_ms": 200, "avg_consensus": 0.8}, [])
+        assert report["report_type"] == "multi_model_intelligence"
+        assert len(report["recommendations"]) == 0
+
+    def test_low_success_rate(self):
+        r = MultiModelReportGenerator()
+        report = r.generate({"success_rate": 0.5, "avg_latency_ms": 200, "avg_consensus": 0.8}, [])
+        assert any("fallback" in rec.lower() for rec in report["recommendations"])
+
+    def test_high_latency(self):
+        r = MultiModelReportGenerator()
+        report = r.generate({"success_rate": 0.95, "avg_latency_ms": 10000, "avg_consensus": 0.8}, [])
+        assert any("latency" in rec.lower() for rec in report["recommendations"])
+
+    def test_history(self):
+        r = MultiModelReportGenerator()
+        r.generate({"success_rate": 0.9}, [{"consensus_score": 0.8}])
+        assert len(r.get_reports()) == 1
+
+    def test_export_json(self):
+        r = MultiModelReportGenerator()
+        report = r.generate({"success_rate": 0.9}, [])
+        json_str = r.export_json(report)
+        assert "multi_model_intelligence" in json_str
+
+
+# ─── Cache ───────────────────────────────────────────────────────────
+
+class TestMultiModelCache:
+    def test_set_get(self):
+        c = MultiModelCache()
+        c.set("prompt", ["gpt-4o"], {"result": "ok"})
+        r = c.get("prompt", ["gpt-4o"])
+        assert r is not None
+        assert r["result"] == "ok"
+
+    def test_miss(self):
+        c = MultiModelCache()
+        assert c.get("missing", ["m"]) is None
+
+    def test_invalidate(self):
+        c = MultiModelCache()
+        c.set("p", ["m"], {"r": 1})
+        assert c.invalidate("p", ["m"])
+        assert c.get("p", ["m"]) is None
+
+    def test_max_size(self):
+        c = MultiModelCache(max_size=2)
+        c.set("p1", ["m"], {"r": 1})
+        c.set("p2", ["m"], {"r": 2})
+        c.set("p3", ["m"], {"r": 3})
+        assert c.stats()["size"] <= 2
+
+    def test_hit_rate(self):
+        c = MultiModelCache()
+        c.set("p", ["m"], {"r": 1})
+        c.get("p", ["m"])  # hit
+        c.get("x", ["m"])  # miss
+        assert c.hit_rate == 0.5
+
+    def test_clear(self):
+        c = MultiModelCache()
+        c.set("p", ["m"], {"r": 1})
+        c.clear()
+        assert c.stats()["size"] == 0
+
+
+# ─── Router ──────────────────────────────────────────────────────────
+
+class TestMultiModelRouter:
+    def test_route_generation(self):
+        r = MultiModelRouter()
+        models = r.route("generation")
+        assert "gpt-4o" in models
+
+    def test_route_custom(self):
+        r = MultiModelRouter()
+        r.register_route("custom_task", ["m1", "m2"])
+        models = r.route("custom_task")
+        assert models == ["m1", "m2"]
+
+    def test_route_override(self):
+        r = MultiModelRouter()
+        models = r.route("generation", models=["only_this"])
+        assert models == ["only_this"]
+
+    def test_unregister(self):
+        r = MultiModelRouter()
+        r.register_route("temp", ["m1"])
+        assert r.unregister_route("temp")
+        assert not r.unregister_route("nonexistent")
+
+    def test_all_routes(self):
+        r = MultiModelRouter()
+        all_r = r.get_all_routes()
+        assert "generation" in all_r
+
+
+# ─── Registry ────────────────────────────────────────────────────────
+
+class TestMultiModelRegistry:
+    def test_defaults(self):
+        r = MultiModelRegistry()
+        assert "gpt-4o" in r.list_models()
+
+    def test_register(self):
+        r = MultiModelRegistry()
+        r.register("custom-model", ["generation"], provider="custom")
+        assert "custom-model" in r.list_models()
+
+    def test_unregister(self):
+        r = MultiModelRegistry()
+        r.register("temp", ["generation"])
+        assert r.unregister("temp")
+        assert "temp" not in r.list_models()
+
+    def test_get(self):
+        r = MultiModelRegistry()
+        info = r.get("gpt-4o")
+        assert info is not None
+        assert info["provider"] == "openai"
+
+    def test_by_capability(self):
+        r = MultiModelRegistry()
+        coding = r.get_by_capability("coding")
+        assert "gpt-4o" in coding
+
+    def test_to_dict(self):
+        d = MultiModelRegistry().to_dict()
+        assert "gpt-4o" in d
+
+
+# ─── Strategy ────────────────────────────────────────────────────────
+
+class TestMultiModelStrategy:
+    def test_balanced(self):
+        s = MultiModelStrategy("balanced")
+        assert s.get("prefer_low_latency") is True
+
+    def test_custom(self):
+        s = MultiModelStrategy("fastest")
+        s.set("custom_key", "custom_val")
+        assert s.get("custom_key") == "custom_val"
+
+    def test_to_dict(self):
+        d = MultiModelStrategy("best_quality").to_dict()
+        assert "name" in d
+
+    def test_available(self):
+        strategies = MultiModelStrategy.available_strategies()
+        assert "balanced" in strategies
+        assert "fastest" in strategies
+
+
+# ─── Executor ────────────────────────────────────────────────────────
+
+class TestMultiModelExecutor:
+    def test_execute(self):
+        e = MultiModelExecutor()
+        results = e.execute("test", ["gpt-4o", "claude"])
+        assert len(results) == 2
+        assert e.execution_count == 1
+
+    def test_execute_with_callback(self):
+        def fake(prompt, model):
+            return ModelResponse(model=model, provider="test", content="OK", confidence=0.9)
+        e = MultiModelExecutor()
+        results = e.execute("test", ["gpt-4o"], call_fn=fake)
+        assert results[0].is_success
+
+    def test_retry(self):
+        call_count = {"n": 0}
+        def flaky(prompt, model):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise ValueError("fail")
+            return ModelResponse(model=model, provider="test", content="OK", confidence=0.9)
+        e = MultiModelExecutor(max_retries=2)
+        results = e.execute("test", ["gpt-4o"], call_fn=flaky)
+        assert results[0].is_success
+
+    def test_timeout(self):
+        e = MultiModelExecutor(max_retries=0, timeout=0.001)
+        results = e.execute("test", ["gpt-4o"])
+        # May or may not timeout depending on speed, just check it returns
+        assert len(results) == 1
+
+
+# ─── Scheduler ───────────────────────────────────────────────────────
+
+class TestMultiModelScheduler:
+    def test_schedule(self):
+        s = MultiModelScheduler()
+        job_id = s.schedule("prompt", ["gpt-4o"])
+        assert job_id.startswith("mmjob-")
+        assert s.queue_size() == 1
+
+    def test_get_next(self):
+        s = MultiModelScheduler()
+        s.schedule("prompt", ["gpt-4o"])
+        job = s.get_next()
+        assert job is not None
+        assert job.status == "running"
+
+    def test_complete(self):
+        s = MultiModelScheduler()
+        jid = s.schedule("p", ["m"])
+        s.get_next()
+        assert s.complete(jid, True)
+        assert s.queue_size() == 0
+
+    def test_cancel(self):
+        s = MultiModelScheduler()
+        jid = s.schedule("p", ["m"])
+        assert s.cancel(jid)
+        assert s.queue_size() == 0
+
+    def test_priority_order(self):
+        s = MultiModelScheduler()
+        s.schedule("low", ["m"], priority=10)
+        s.schedule("high", ["m"], priority=1)
+        job = s.get_next()
+        assert job.prompt == "high"
+
+    def test_get_queue(self):
+        s = MultiModelScheduler()
+        s.schedule("p", ["m"])
+        q = s.get_queue()
+        assert len(q) == 1
+
+
+# ─── Monitor ─────────────────────────────────────────────────────────
+
+class TestMultiModelMonitor:
+    def test_counter(self):
+        m = MultiModelMonitor()
+        m.increment("requests")
+        m.increment("requests")
+        assert m.get_counter("requests") == 2
+
+    def test_alert(self):
+        m = MultiModelMonitor()
+        m.alert("warning", "High latency")
+        alerts = m.get_alerts("warning")
+        assert len(alerts) == 1
+
+    def test_status(self):
+        m = MultiModelMonitor()
+        m.increment("ops")
+        s = m.status()
+        assert s["counters"]["ops"] == 1
+
+    def test_reset(self):
+        m = MultiModelMonitor()
+        m.increment("x")
+        m.reset()
+        assert m.get_counter("x") == 0
+
+
+# ─── Optimizer ───────────────────────────────────────────────────────
+
+class TestMultiModelOptimizer:
+    def test_optimize_selection(self):
+        o = MultiModelOptimizer()
+        models = o.optimize_model_selection(["gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash", "gpt-4o-mini"], "generation")
+        assert len(models) >= 2
+
+    def test_optimize_creative(self):
+        o = MultiModelOptimizer()
+        models = o.optimize_model_selection(["gpt-4o", "claude", "gemini", "deepseek"], "creative")
+        assert "gpt-4o" in models or "claude" in models
+
+    def test_optimize_consensus(self):
+        o = MultiModelOptimizer()
+        resp = [
+            ModelResponse(model="gpt-4o", provider="openai", content="A", confidence=0.9),
+            ModelResponse(model="claude", provider="anthropic", content="B", confidence=0.85),
+        ]
+        result = o.optimize_consensus(resp)
+        assert result["action"] == "accept"
+
+    def test_reduce_cost(self):
+        o = MultiModelOptimizer()
+        models = o.reduce_cost(["a", "b", "c", "d", "e"], max_models=3)
+        assert len(models) == 3
+
+
+# ─── Policy ──────────────────────────────────────────────────────────
+
+class TestMultiModelPolicy:
+    def test_defaults(self):
+        p = MultiModelPolicy()
+        assert p.get("min_models_for_consensus") == 2
+
+    def test_custom(self):
+        p = MultiModelPolicy(max_cost_per_request=0.5)
+        assert p.get("max_cost_per_request") == 0.5
+
+    def test_check_pass(self):
+        p = MultiModelPolicy()
+        r = p.check("consensus", {"models_used": 3})
+        assert r["allowed"]
+
+    def test_check_fail(self):
+        p = MultiModelPolicy()
+        r = p.check("consensus", {"models_used": 1})
+        assert not r["allowed"]
+        assert len(r["violations"]) > 0
+
+    def test_cost_check(self):
+        p = MultiModelPolicy()
+        r = p.check("cost", {"cost": 0.50})
+        assert not r["allowed"]
+
+    def test_set(self):
+        p = MultiModelPolicy()
+        p.set("custom_policy", 42)
+        assert p.get("custom_policy") == 42
+
+    def test_to_dict(self):
+        d = MultiModelPolicy().to_dict()
+        assert "min_models_for_consensus" in d
+
+
+# ─── Fallback ────────────────────────────────────────────────────────
+
+class TestMultiModelFallback:
+    def test_fallback(self):
+        f = MultiModelFallback()
+        resp = f.attempt_fallback("prompt", ["gpt-4o"])
+        assert resp is not None
+        assert resp.is_success
+
+    def test_fallback_with_callback(self):
+        def fake(prompt, model):
+            return ModelResponse(model=model, provider="test", content="OK", confidence=0.8)
+        f = MultiModelFallback()
+        resp = f.attempt_fallback("p", ["gpt-4o"], call_fn=fake)
+        assert resp.is_success
+
+    def test_all_models_failed(self):
+        f = MultiModelFallback(fallback_models=["gpt-4o"])
+        resp = f.attempt_fallback("p", ["gpt-4o"])
+        assert resp is None  # gpt-4o in both fallback and failed list
+
+    def test_fallback_available(self):
+        f = MultiModelFallback(fallback_models=["gpt-4o"])
+        resp = f.attempt_fallback("p", ["claude"])
+        assert resp is not None  # gpt-4o not in failed list
+    def test_no_available(self):
+        f = MultiModelFallback(fallback_models=["gpt-4o"])
+        resp = f.attempt_fallback("p", ["gpt-4o", "gpt-4o"])  # all failed
+        # fallback_models has gpt-4o but it's in failed list
+        # The logic checks `m not in failed_models` — gpt-4o IS in failed list
+        # So we need to verify: failed_models = ["gpt-4o"], fallback = ["gpt-4o"]
+        # available = [m for m in fallback if m not in failed] = []
+        assert resp is None
+
+    def test_history(self):
+        f = MultiModelFallback()
+        f.attempt_fallback("p", [])
+        assert len(f.get_history()) >= 1
+
+    def test_callback_error(self):
+        def fail(prompt, model):
+            raise ValueError("boom")
+        f = MultiModelFallback()
+        resp = f.attempt_fallback("p", [], call_fn=fail)
+        assert resp is None  # all fallbacks failed
