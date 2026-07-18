@@ -1,0 +1,16 @@
+"""Exceptions for SQL database platform."""
+from __future__ import annotations
+
+class SQLError(Exception): """Base SQL error."""
+class ConnectionError(SQLError): """Connection failed."""
+class QueryError(SQLError): """Query failed."""
+class TransactionError(SQLError): """Transaction failed."""
+class MigrationError(SQLError): """Migration failed."""
+class SchemaError(SQLError): """Schema error."""
+class PoolError(SQLError): """Pool error."""
+class DeadlockError(SQLError): """Deadlock detected."""
+class LockError(SQLError): """Lock error."""
+class BackupError(SQLError): """Backup failed."""
+class RestoreError(SQLError): """Restore failed."""
+class ReplicationError(SQLError): """Replication failed."""
+class IntegrityError(SQLError): """Data integrity error."""

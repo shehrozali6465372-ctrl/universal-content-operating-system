@@ -424,3 +424,562 @@ class TestPersistenceExceptions:
     def test_catch_base(self):
         with pytest.raises(PersistenceError):
             raise ConnectionError("test")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 2: SQL Database Platform
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.sql_database_platform.connection_manager import ConnectionManager
+from layers.layer13_persistence.modules.sql_database_platform.pool_manager import PoolManager
+from layers.layer13_persistence.modules.sql_database_platform.transaction_manager import TransactionManager
+from layers.layer13_persistence.modules.sql_database_platform.query_executor import QueryExecutor, QueryResult
+from layers.layer13_persistence.modules.sql_database_platform.prepared_statement import PreparedStatementManager
+from layers.layer13_persistence.modules.sql_database_platform.orm_bridge import ORMBridge, ORMModel
+from layers.layer13_persistence.modules.sql_database_platform.schema_manager import SchemaManager, TableSchema
+from layers.layer13_persistence.modules.sql_database_platform.migration_engine import MigrationEngine, Migration
+from layers.layer13_persistence.modules.sql_database_platform.index_manager import IndexManager, DatabaseIndex
+from layers.layer13_persistence.modules.sql_database_platform.partition_manager import PartitionManager, Partition
+from layers.layer13_persistence.modules.sql_database_platform.replication_manager import ReplicationManager, ReplicaNode
+from layers.layer13_persistence.modules.sql_database_platform.backup_manager import BackupManager
+from layers.layer13_persistence.modules.sql_database_platform.restore_manager import RestoreManager
+from layers.layer13_persistence.modules.sql_database_platform.optimizer import QueryOptimizer
+from layers.layer13_persistence.modules.sql_database_platform.query_analyzer import QueryAnalyzer
+from layers.layer13_persistence.modules.sql_database_platform.deadlock_detector import DeadlockDetector, LockRequest
+from layers.layer13_persistence.modules.sql_database_platform.lock_manager import LockManager
+from layers.layer13_persistence.modules.sql_database_platform.sql_metrics import SQLMetrics
+from layers.layer13_persistence.modules.sql_database_platform.sql_health import SQLHealth
+from layers.layer13_persistence.modules.sql_database_platform.sql_report import SQLReport
+
+
+class TestConnectionManager:
+    def setup_method(self):
+        self.cm = ConnectionManager()
+
+    def test_configure(self):
+        self.cm.configure("testdb", "localhost", 5432, "admin")
+        assert self.cm._config["database"] == "testdb"
+
+    def test_connect(self):
+        conn = self.cm.connect("main")
+        assert conn.is_active
+        assert conn.database == "default"
+
+    def test_disconnect(self):
+        self.cm.connect("main")
+        assert self.cm.disconnect("main") is True
+        assert self.cm.disconnect("main") is False
+
+    def test_disconnect_all(self):
+        self.cm.connect("a")
+        self.cm.connect("b")
+        assert self.cm.disconnect_all() == 2
+
+    def test_get_active(self):
+        self.cm.connect("a")
+        active = self.cm.get_active()
+        assert len(active) >= 1
+
+    def test_is_connected(self):
+        self.cm.connect("main")
+        assert self.cm.is_connected("main") is True
+        assert self.cm.is_connected("other") is False
+
+    def test_to_dict(self):
+        d = self.cm.to_dict()
+        assert "connections" in d
+
+
+class TestPoolManager:
+    def setup_method(self):
+        self.pm = PoolManager(pool_size=5, max_overflow=2)
+
+    def test_initialize(self):
+        assert self.pm.initialize() is True
+
+    def test_acquire(self):
+        self.pm.initialize()
+        entry = self.pm.acquire()
+        assert entry is not None
+        assert entry.in_use is True
+
+    def test_release(self):
+        self.pm.initialize()
+        entry = self.pm.acquire()
+        assert self.pm.release(entry) is True
+        assert entry.in_use is False
+
+    def test_overflow(self):
+        self.pm.initialize()
+        entries = []
+        for _ in range(7):
+            e = self.pm.acquire()
+            if e:
+                entries.append(e)
+        assert len(entries) >= 5
+
+    def test_exhausted(self):
+        pm = PoolManager(pool_size=1, max_overflow=0)
+        pm.initialize()
+        pm.acquire()
+        assert pm.acquire() is None
+
+    def test_stats(self):
+        self.pm.initialize()
+        s = self.pm.get_stats()
+        assert s["pool_size"] == 5
+
+    def test_close_all(self):
+        self.pm.initialize()
+        count = self.pm.close_all()
+        assert count >= 5
+
+
+class TestTransactionManager:
+    def setup_method(self):
+        self.tm = TransactionManager()
+
+    def test_begin(self):
+        tx = self.tm.begin()
+        assert tx.status == "active"
+
+    def test_commit(self):
+        tx = self.tm.begin()
+        assert self.tm.commit(tx.tx_id) is True
+        assert len(self.tm.get_completed()) == 1
+
+    def test_rollback(self):
+        tx = self.tm.begin()
+        assert self.tm.rollback(tx.tx_id) is True
+        assert tx.rolled_back is True
+
+    def test_execute_in_transaction(self):
+        result = self.tm.execute_in_transaction(lambda: "ok")
+        assert result == "ok"
+
+    def test_get_active(self):
+        self.tm.begin()
+        self.tm.begin()
+        assert len(self.tm.get_active()) == 2
+
+    def test_stats(self):
+        self.tm.begin()
+        s = self.tm.stats()
+        assert s["active"] == 1
+
+
+class TestQueryExecutor:
+    def setup_method(self):
+        self.qe = QueryExecutor()
+
+    def test_execute(self):
+        result = self.qe.execute("SELECT 1")
+        assert isinstance(result, QueryResult)
+
+    def test_fetch_one(self):
+        result = self.qe.fetch_one("SELECT 1")
+        assert result is None or isinstance(result, dict)
+
+    def test_fetch_all(self):
+        results = self.qe.fetch_all("SELECT * FROM users")
+        assert isinstance(results, list)
+
+    def test_execute_many(self):
+        result = self.qe.execute_many("INSERT INTO t VALUES (?)", [{"a": 1}, {"a": 2}])
+        assert result.affected_rows == 2
+
+    def test_stats(self):
+        self.qe.execute("SELECT 1")
+        s = self.qe.stats()
+        assert s["total_queries"] >= 1
+
+    def test_history(self):
+        self.qe.execute("SELECT 1")
+        h = self.qe.get_history()
+        assert len(h) >= 1
+
+
+class TestPreparedStatementManager:
+    def setup_method(self):
+        self.psm = PreparedStatementManager()
+
+    def test_prepare(self):
+        stmt = self.psm.prepare("get_user", "SELECT * FROM users WHERE id = ?")
+        assert stmt.sql.startswith("SELECT")
+
+    def test_execute(self):
+        self.psm.prepare("q", "SELECT 1")
+        assert self.psm.execute("q") is True
+
+    def test_drop(self):
+        self.psm.prepare("q", "SELECT 1")
+        assert self.psm.drop("q") is True
+        assert self.psm.drop("q") is False
+
+    def test_list_all(self):
+        self.psm.prepare("a", "SELECT 1")
+        self.psm.prepare("b", "SELECT 2")
+        assert len(self.psm.list_all()) == 2
+
+    def test_stats(self):
+        self.psm.prepare("q", "SELECT 1")
+        self.psm.execute("q")
+        s = self.psm.stats()
+        assert s["total_executions"] == 1
+
+
+class TestORMBridge:
+    def setup_method(self):
+        self.bridge = ORMBridge()
+
+    def test_set_framework(self):
+        self.bridge.set_framework("django")
+        assert self.bridge._framework == "django"
+
+    def test_register_model(self):
+        model = ORMModel("User", "users")
+        model.add_field("id", "INTEGER PRIMARY KEY")
+        self.bridge.register_model(model)
+        assert self.bridge.get_model("User") is not None
+
+    def test_to_create_table(self):
+        model = ORMModel("User", "users")
+        model.add_field("id", "INTEGER PRIMARY KEY")
+        self.bridge.register_model(model)
+        sql = self.bridge.to_create_table("User")
+        assert "CREATE TABLE" in sql
+
+    def test_get_all(self):
+        self.bridge.register_model(ORMModel("A"))
+        self.bridge.register_model(ORMModel("B"))
+        assert len(self.bridge.get_all_models()) == 2
+
+
+class TestSchemaManager:
+    def setup_method(self):
+        self.sm = SchemaManager()
+
+    def test_create_table(self):
+        schema = TableSchema("users")
+        schema.add_column("id", "INTEGER", nullable=False)
+        assert self.sm.create_table(schema) is True
+
+    def test_drop_table(self):
+        self.sm.create_table(TableSchema("users"))
+        assert self.sm.drop_table("users") is True
+
+    def test_alter_table(self):
+        self.sm.create_table(TableSchema("users"))
+        assert self.sm.alter_table("users", {"email": "VARCHAR"}) is True
+
+    def test_list_tables(self):
+        self.sm.create_table(TableSchema("a"))
+        self.sm.create_table(TableSchema("b"))
+        assert len(self.sm.list_tables()) == 2
+
+    def test_get_history(self):
+        self.sm.create_table(TableSchema("a"))
+        h = self.sm.get_history()
+        assert len(h) >= 1
+
+
+class TestMigrationEngine:
+    def setup_method(self):
+        self.me = MigrationEngine()
+
+    def test_add_migration(self):
+        m = Migration("1.0.0", "init", "CREATE TABLE t (id INT)")
+        self.me.add_migration(m)
+        assert len(self.me.get_pending()) == 1
+
+    def test_migrate_up(self):
+        self.me.add_migration(Migration("1.0.0", "init", "CREATE TABLE t"))
+        applied = self.me.migrate_up("1.0.0")
+        assert len(applied) == 1
+        assert self.me.get_current_version() == "1.0.0"
+
+    def test_migrate_down(self):
+        self.me.add_migration(Migration("1.0.0", "init", "CREATE TABLE t"))
+        self.me.add_migration(Migration("2.0.0", "add", "ALTER TABLE t"))
+        self.me.migrate_up("2.0.0")
+        rolled = self.me.migrate_down("1.0.0")
+        assert len(rolled) >= 1
+
+    def test_stats(self):
+        self.me.add_migration(Migration("1.0.0", "init", "SQL"))
+        s = self.me.stats()
+        assert s["total"] == 1
+
+
+class TestIndexManager:
+    def setup_method(self):
+        self.im = IndexManager()
+
+    def test_create_index(self):
+        idx = DatabaseIndex("idx_users_email", "users", ["email"], unique=True)
+        assert self.im.create_index(idx) is True
+
+    def test_drop_index(self):
+        self.im.create_index(DatabaseIndex("idx1", "users", ["id"]))
+        assert self.im.drop_index("idx1") is True
+
+    def test_get_indexes_for_table(self):
+        self.im.create_index(DatabaseIndex("idx1", "users", ["id"]))
+        self.im.create_index(DatabaseIndex("idx2", "posts", ["id"]))
+        assert len(self.im.get_indexes_for_table("users")) == 1
+
+    def test_stats(self):
+        self.im.create_index(DatabaseIndex("idx1", "users", ["id"]))
+        s = self.im.stats()
+        assert s["total"] == 1
+
+
+class TestPartitionManager:
+    def setup_method(self):
+        self.pm = PartitionManager()
+
+    def test_create_partition(self):
+        p = Partition("p_2024", "logs", "range", "created_at")
+        assert self.pm.create_partition(p) is True
+
+    def test_drop_partition(self):
+        self.pm.create_partition(Partition("p1", "logs"))
+        assert self.pm.drop_partition("p1") is True
+
+    def test_get_for_table(self):
+        self.pm.create_partition(Partition("p1", "logs"))
+        self.pm.create_partition(Partition("p2", "events"))
+        assert len(self.pm.get_partitions_for_table("logs")) == 1
+
+    def test_stats(self):
+        self.pm.create_partition(Partition("p1", "logs"))
+        s = self.pm.stats()
+        assert s["total"] == 1
+
+
+class TestReplicationManager:
+    def setup_method(self):
+        self.rm = ReplicationManager()
+
+    def test_enable_disable(self):
+        self.rm.enable()
+        assert self.rm._is_enabled is True
+        self.rm.disable()
+        assert self.rm._is_enabled is False
+
+    def test_add_remove_replica(self):
+        node = ReplicaNode("replica1.local", 5432)
+        assert self.rm.add_replica(node) is True
+        assert self.rm.remove_replica(node.node_id) is True
+
+    def test_is_healthy(self):
+        node = ReplicaNode("r1.local")
+        self.rm.add_replica(node)
+        assert self.rm.is_healthy() is True
+
+    def test_stats(self):
+        self.rm.add_replica(ReplicaNode("r1"))
+        s = self.rm.stats()
+        assert s["nodes"] == 1
+
+
+class TestBackupManager:
+    def setup_method(self):
+        self.bm = BackupManager()
+
+    def test_full_backup(self):
+        job = self.bm.create_full_backup("mydb")
+        assert job.status == "completed"
+        assert job.backup_type == "full"
+
+    def test_incremental(self):
+        job = self.bm.create_incremental_backup("mydb")
+        assert job.status == "completed"
+
+    def test_get_job(self):
+        job = self.bm.create_full_backup("db")
+        found = self.bm.get_job(job.job_id)
+        assert found is not None
+
+    def test_stats(self):
+        self.bm.create_full_backup("db")
+        s = self.bm.stats()
+        assert s["total_jobs"] == 1
+
+
+class TestRestoreManager:
+    def setup_method(self):
+        self.rm = RestoreManager()
+
+    def test_restore(self):
+        job = self.rm.restore("mydb", "backup_001")
+        assert job.status == "completed"
+
+    def test_list_jobs(self):
+        self.rm.restore("db", "b1")
+        assert len(self.rm.list_jobs()) == 1
+
+
+class TestQueryOptimizer:
+    def setup_method(self):
+        self.qo = QueryOptimizer()
+
+    def test_analyze(self):
+        suggestions = self.qo.analyze("SELECT * FROM users WHERE name LIKE '%test%'")
+        assert len(suggestions) >= 1
+
+    def test_get_all_suggestions(self):
+        self.qo.analyze("SELECT * FROM users")
+        assert len(self.qo.get_all_suggestions()) >= 1
+
+    def test_rules(self):
+        rules = self.qo.get_rules()
+        assert len(rules) >= 3
+
+
+class TestQueryAnalyzer:
+    def setup_method(self):
+        self.qa = QueryAnalyzer()
+
+    def test_profile(self):
+        p = self.qa.profile("SELECT 1", 5.0)
+        assert p.execution_time_ms == 5.0
+
+    def test_slow_queries(self):
+        self.qa.profile("SELECT 1", 1.0)
+        self.qa.profile("SELECT 2", 200.0)
+        slow = self.qa.get_slow_queries(100.0)
+        assert len(slow) == 1
+
+    def test_stats(self):
+        self.qa.profile("SELECT 1", 10.0)
+        s = self.qa.stats()
+        assert s["total_profiles"] == 1
+
+
+class TestDeadlockDetector:
+    def setup_method(self):
+        self.dd = DeadlockDetector()
+
+    def test_add_request(self):
+        req = LockRequest("tx1", "table_a", "exclusive")
+        self.dd.add_request(req)
+        assert len(self.dd._requests) == 1
+
+    def test_detect_no_deadlock(self):
+        self.dd.add_request(LockRequest("tx1", "table_a", "shared"))
+        self.dd.add_request(LockRequest("tx2", "table_b", "shared"))
+        deadlocks = self.dd.detect()
+        assert len(deadlocks) == 0
+
+    def test_detect_deadlock(self):
+        self.dd.add_request(LockRequest("tx1", "table_a", "exclusive"))
+        self.dd.add_request(LockRequest("tx2", "table_a", "exclusive"))
+        deadlocks = self.dd.detect()
+        assert len(deadlocks) >= 1
+
+    def test_clear(self):
+        self.dd.add_request(LockRequest("tx1", "a"))
+        self.dd.clear()
+        assert len(self.dd._requests) == 0
+
+
+class TestLockManager:
+    def setup_method(self):
+        self.lm = LockManager()
+
+    def test_acquire(self):
+        lock = self.lm.acquire("table_a", "shared", "tx1")
+        assert lock is not None
+
+    def test_acquire_exclusive_blocks(self):
+        self.lm.acquire("table_a", "exclusive", "tx1")
+        lock2 = self.lm.acquire("table_a", "shared", "tx2")
+        assert lock2 is None
+
+    def test_release(self):
+        self.lm.acquire("table_a", "shared", "tx1")
+        assert self.lm.release("table_a", "tx1") is True
+
+    def test_is_locked(self):
+        self.lm.acquire("table_a", "shared", "tx1")
+        assert self.lm.is_locked("table_a") is True
+
+    def test_clear_expired(self):
+        self.lm.acquire("table_a", "shared", "tx1", timeout=0.0)
+        import time
+        time.sleep(0.01)
+        count = self.lm.clear_expired()
+        assert count >= 1
+
+    def test_stats(self):
+        self.lm.acquire("a", "shared", "tx1")
+        s = self.lm.stats()
+        assert s["active_locks"] == 1
+
+
+class TestSQLMetrics:
+    def setup_method(self):
+        self.sm = SQLMetrics()
+
+    def test_record(self):
+        self.sm.record_query("SELECT", 5.0, True)
+        assert self.sm._queries == 1
+
+    def test_error_rate(self):
+        self.sm.record_query("SELECT", 5.0, True)
+        self.sm.record_query("SELECT", 5.0, False)
+        assert self.sm.get_error_rate() == 0.5
+
+    def test_avg_time(self):
+        self.sm.record_query("SELECT", 10.0)
+        self.sm.record_query("SELECT", 20.0)
+        assert self.sm.get_avg_time() == 15.0
+
+    def test_reset(self):
+        self.sm.record_query("SELECT", 5.0)
+        self.sm.reset()
+        assert self.sm._queries == 0
+
+    def test_to_dict(self):
+        self.sm.record_query("SELECT", 5.0)
+        d = self.sm.to_dict()
+        assert "queries" in d
+
+
+class TestSQLHealth:
+    def setup_method(self):
+        self.sh = SQLHealth()
+
+    def test_check(self):
+        result = self.sh.check("pool", True, 2.0)
+        assert result["healthy"] is True
+
+    def test_is_healthy(self):
+        self.sh.check("pool", True)
+        self.sh.check("replica", True)
+        assert self.sh.is_healthy() is True
+
+    def test_degraded(self):
+        self.sh.check("pool", True)
+        self.sh.check("replica", False)
+        assert self.sh.is_healthy() is False
+
+    def test_to_dict(self):
+        self.sh.check("pool", True)
+        d = self.sh.to_dict()
+        assert "healthy" in d
+
+
+class TestSQLReport:
+    def setup_method(self):
+        self.sr = SQLReport()
+
+    def test_generate(self):
+        report = self.sr.generate({"queries": 100}, {"healthy": True}, {"size": 5})
+        assert "metrics" in report
+
+    def test_history(self):
+        self.sr.generate({}, {}, {})
+        h = self.sr.get_history()
+        assert len(h) == 1
