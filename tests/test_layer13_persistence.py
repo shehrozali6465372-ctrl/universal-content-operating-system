@@ -2488,3 +2488,382 @@ class TestMemorySearch:
         self.ms.register_store("conv", conv)
         counts = self.ms.count_all()
         assert counts["conv"] == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 7: Repository Layer
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer13_persistence.modules.repository_layer.base_repository import BaseRepository, BaseEntity
+from layers.layer13_persistence.modules.repository_layer.user_repository import UserRepository, UserEntity
+from layers.layer13_persistence.modules.repository_layer.project_repository import ProjectRepository, ProjectEntity
+from layers.layer13_persistence.modules.repository_layer.content_repository import ContentRepository, ContentEntity
+from layers.layer13_persistence.modules.repository_layer.research_repository import ResearchRepository, ResearchEntity
+from layers.layer13_persistence.modules.repository_layer.analytics_repository import AnalyticsRepository, AnalyticsEntity
+from layers.layer13_persistence.modules.repository_layer.learning_repository import LearningRepository, LearningEntity
+from layers.layer13_persistence.modules.repository_layer.memory_repository import MemoryRepository, MemoryEntity
+from layers.layer13_persistence.modules.repository_layer.prompt_repository import PromptRepository, PromptEntity
+from layers.layer13_persistence.modules.repository_layer.plugin_repository import PluginRepository, PluginEntity
+from layers.layer13_persistence.modules.repository_layer.media_repository import MediaRepository, MediaEntity
+from layers.layer13_persistence.modules.repository_layer.report_repository import ReportRepository, ReportEntity
+from layers.layer13_persistence.modules.repository_layer.knowledge_repository import KnowledgeRepository, KnowledgeEntity
+from layers.layer13_persistence.modules.repository_layer.brand_repository import BrandRepository, BrandEntity
+from layers.layer13_persistence.modules.repository_layer.audit_repository import AuditRepository, AuditEntity
+from layers.layer13_persistence.modules.repository_layer.goal_repository import GoalRepository, GoalEntity
+from layers.layer13_persistence.modules.repository_layer.task_repository import TaskRepository, TaskEntity
+from layers.layer13_persistence.modules.repository_layer.workflow_repository import WorkflowRepository, WorkflowEntity
+from layers.layer13_persistence.modules.repository_layer.platform_repository import PlatformRepository, PlatformEntity
+
+
+class TestBaseRepository:
+    def setup_method(self):
+        self.repo = BaseRepository("test")
+
+    def test_create_get(self):
+        entity = BaseEntity()
+        self.repo.create(entity)
+        assert self.repo.get_by_id(entity.id) is not None
+
+    def test_get_all(self):
+        self.repo.create(BaseEntity())
+        self.repo.create(BaseEntity())
+        assert len(self.repo.get_all()) == 2
+
+    def test_update(self):
+        entity = BaseEntity()
+        self.repo.create(entity)
+        self.repo.update(entity.id, {"metadata": {"updated": True}})
+        found = self.repo.get_by_id(entity.id)
+        assert found is not None
+
+    def test_delete(self):
+        entity = BaseEntity()
+        self.repo.create(entity)
+        assert self.repo.delete(entity.id) is True
+        assert self.repo.exists(entity.id) is False
+
+    def test_find(self):
+        e1 = BaseEntity()
+        self.repo.create(e1)
+        results = self.repo.find(id=e1.id)
+        assert len(results) == 1
+
+    def test_count(self):
+        self.repo.create(BaseEntity())
+        assert self.repo.count() == 1
+
+    def test_clear(self):
+        self.repo.create(BaseEntity())
+        count = self.repo.clear()
+        assert count == 1
+        assert self.repo.count() == 0
+
+
+class TestUserRepository:
+    def setup_method(self):
+        self.repo = UserRepository()
+
+    def test_create_find(self):
+        user = UserEntity("alice", "alice@example.com")
+        self.repo.create(user)
+        assert self.repo.find_by_email("alice@example.com") is not None
+
+    def test_find_by_username(self):
+        self.repo.create(UserEntity("bob", "bob@test.com"))
+        assert self.repo.find_by_username("bob") is not None
+
+    def test_find_by_role(self):
+        self.repo.create(UserEntity("admin", "a@test.com", "admin"))
+        self.repo.create(UserEntity("user", "u@test.com", "user"))
+        assert len(self.repo.find_by_role("admin")) == 1
+
+
+class TestProjectRepository:
+    def setup_method(self):
+        self.repo = ProjectRepository()
+
+    def test_create_find(self):
+        p = ProjectEntity("AI Agent", "Universal AI content agent", owner_id=1)
+        self.repo.create(p)
+        assert len(self.repo.find_by_owner(1)) == 1
+
+    def test_by_status(self):
+        e = ProjectEntity("A")
+        e.status = "active"
+        self.repo.create(e)
+        assert len(self.repo.find_by_status("active")) == 1
+
+
+class TestContentRepository:
+    def setup_method(self):
+        self.repo = ContentRepository()
+
+    def test_create_find(self):
+        c = ContentEntity("My Post", "Content body", "post")
+        c.platform = "twitter"
+        self.repo.create(c)
+        assert len(self.repo.find_by_platform("twitter")) == 1
+
+    def test_published(self):
+        c = ContentEntity("Published Post")
+        c.status = "published"
+        self.repo.create(c)
+        assert len(self.repo.find_published()) == 1
+
+
+class TestResearchRepository:
+    def setup_method(self):
+        self.repo = ResearchRepository()
+
+    def test_create_find(self):
+        r = ResearchEntity("AI trends 2024", source="google")
+        self.repo.create(r)
+        assert len(self.repo.find_by_source("google")) == 1
+
+    def test_high_confidence(self):
+        r1 = ResearchEntity("q1", source="a")
+        r1.confidence = 0.9
+        r2 = ResearchEntity("q2", source="b")
+        r2.confidence = 0.3
+        self.repo.create(r1)
+        self.repo.create(r2)
+        assert len(self.repo.find_high_confidence(0.7)) == 1
+
+
+class TestAnalyticsRepository:
+    def setup_method(self):
+        self.repo = AnalyticsRepository()
+
+    def test_create_find(self):
+        a = AnalyticsEntity("engagement", 0.85, "twitter")
+        self.repo.create(a)
+        assert len(self.repo.find_by_metric("engagement")) == 1
+
+    def test_total(self):
+        self.repo.create(AnalyticsEntity("likes", 100, "fb"))
+        self.repo.create(AnalyticsEntity("likes", 200, "fb"))
+        assert self.repo.get_metric_total("likes") == 300
+
+
+class TestLearningRepository:
+    def setup_method(self):
+        self.repo = LearningRepository()
+
+    def test_create_find(self):
+        l = LearningEntity("writing", "Short captions work best", "high")
+        self.repo.create(l)
+        assert len(self.repo.find_by_type("writing")) == 1
+
+    def test_applied_unapplied(self):
+        l1 = LearningEntity("a", "d1")
+        l1.applied = True
+        l2 = LearningEntity("b", "d2")
+        self.repo.create(l1)
+        self.repo.create(l2)
+        assert len(self.repo.find_applied()) == 1
+        assert len(self.repo.find_unapplied()) == 1
+
+
+class TestMemoryRepository:
+    def setup_method(self):
+        self.repo = MemoryRepository()
+
+    def test_create_find(self):
+        m = MemoryEntity("semantic", "python_fact", "Python is popular")
+        self.repo.create(m)
+        assert len(self.repo.find_by_type("semantic")) == 1
+
+    def test_by_key(self):
+        self.repo.create(MemoryEntity("m", "k1", "v1"))
+        assert len(self.repo.find_by_key("k1")) == 1
+
+
+class TestPromptRepository:
+    def setup_method(self):
+        self.repo = PromptRepository()
+
+    def test_create_find(self):
+        p = PromptEntity("tweet_prompt", "Write a tweet about {topic}")
+        self.repo.create(p)
+        assert len(self.repo.find_by_name("tweet_prompt")) == 1
+
+    def test_best(self):
+        p1 = PromptEntity("good", "prompt1")
+        p1.performance_score = 0.9
+        p2 = PromptEntity("bad", "prompt2")
+        p2.performance_score = 0.3
+        self.repo.create(p1)
+        self.repo.create(p2)
+        best = self.repo.find_best(1)
+        assert best[0].name == "good"
+
+
+class TestPluginRepository:
+    def setup_method(self):
+        self.repo = PluginRepository()
+
+    def test_create_find(self):
+        p = PluginEntity("facebook", "2.0.0", "facebook")
+        self.repo.create(p)
+        assert len(self.repo.find_by_platform("facebook")) == 1
+
+    def test_enabled(self):
+        p1 = PluginEntity("a")
+        p1.enabled = True
+        p2 = PluginEntity("b")
+        p2.enabled = False
+        self.repo.create(p1)
+        self.repo.create(p2)
+        assert len(self.repo.find_enabled()) == 1
+
+
+class TestMediaRepository:
+    def setup_method(self):
+        self.repo = MediaRepository()
+
+    def test_create_find(self):
+        m = MediaEntity("photo.jpg", "image")
+        m.size_bytes = 1024
+        self.repo.create(m)
+        assert len(self.repo.find_by_type("image")) == 1
+
+    def test_total_size(self):
+        m1 = MediaEntity("a.jpg", "image")
+        m1.size_bytes = 100
+        m2 = MediaEntity("b.mp4", "video")
+        m2.size_bytes = 500
+        self.repo.create(m1)
+        self.repo.create(m2)
+        assert self.repo.total_size() == 600
+
+
+class TestReportRepository:
+    def setup_method(self):
+        self.repo = ReportRepository()
+
+    def test_create_find(self):
+        r = ReportEntity("weekly", "Week 1 Report")
+        self.repo.create(r)
+        assert len(self.repo.find_by_type("weekly")) == 1
+
+
+class TestKnowledgeRepository:
+    def setup_method(self):
+        self.repo = KnowledgeRepository()
+
+    def test_create_find(self):
+        k = KnowledgeEntity("AI trends", "Content about AI", "technology")
+        self.repo.create(k)
+        assert len(self.repo.find_by_category("technology")) == 1
+
+    def test_by_topic(self):
+        self.repo.create(KnowledgeEntity("Python", "programming language"))
+        assert len(self.repo.find_by_topic("Python")) == 1
+
+
+class TestBrandRepository:
+    def setup_method(self):
+        self.repo = BrandRepository()
+
+    def test_create_find(self):
+        b = BrandEntity("MyBrand", "tone", "Professional tone")
+        self.repo.create(b)
+        assert len(self.repo.find_by_type("tone")) == 1
+
+    def test_by_platform(self):
+        b = BrandEntity("B", "style", "Casual")
+        b.platform = "instagram"
+        self.repo.create(b)
+        assert len(self.repo.find_by_platform("instagram")) == 1
+
+
+class TestAuditRepository:
+    def setup_method(self):
+        self.repo = AuditRepository()
+
+    def test_create_find(self):
+        a = AuditEntity("create", "content", 42)
+        a.user_id = 1
+        self.repo.create(a)
+        assert len(self.repo.find_by_action("create")) == 1
+
+    def test_by_user(self):
+        a1 = AuditEntity("update")
+        a1.user_id = 1
+        self.repo.create(a1)
+        a2 = AuditEntity("delete")
+        a2.user_id = 2
+        self.repo.create(a2)
+        assert len(self.repo.find_by_user(1)) == 1
+
+
+class TestGoalRepository:
+    def setup_method(self):
+        self.repo = GoalRepository()
+
+    def test_create_find(self):
+        g = GoalEntity("Grow followers", priority=8)
+        self.repo.create(g)
+        assert len(self.repo.find_active()) == 1
+
+    def test_completed(self):
+        g = GoalEntity("Done")
+        g.status = "completed"
+        self.repo.create(g)
+        assert len(self.repo.find_completed()) == 1
+
+    def test_by_priority(self):
+        self.repo.create(GoalEntity("High", priority=9))
+        self.repo.create(GoalEntity("Low", priority=2))
+        assert len(self.repo.find_by_priority(5)) == 1
+
+
+class TestTaskRepository:
+    def setup_method(self):
+        self.repo = TaskRepository()
+
+    def test_create_find(self):
+        t = TaskEntity("Write post", assigned_to=1)
+        self.repo.create(t)
+        assert len(self.repo.find_pending()) == 1
+
+    def test_by_assignee(self):
+        self.repo.create(TaskEntity("A", assigned_to=1))
+        self.repo.create(TaskEntity("B", assigned_to=2))
+        assert len(self.repo.find_by_assignee(1)) == 1
+
+
+class TestWorkflowRepository:
+    def setup_method(self):
+        self.repo = WorkflowRepository()
+
+    def test_create_find(self):
+        w = WorkflowEntity("Content Pipeline", ["research", "write", "publish"])
+        w.status = "running"
+        self.repo.create(w)
+        assert len(self.repo.find_running()) == 1
+
+    def test_completed(self):
+        w = WorkflowEntity("Done")
+        w.status = "completed"
+        self.repo.create(w)
+        assert len(self.repo.find_completed()) == 1
+
+
+class TestPlatformRepository:
+    def setup_method(self):
+        self.repo = PlatformRepository()
+
+    def test_create_find(self):
+        p = PlatformEntity("Facebook", "social")
+        self.repo.create(p)
+        assert len(self.repo.find_by_type("social")) == 1
+
+    def test_enabled(self):
+        p1 = PlatformEntity("Twitter", "social")
+        p1.enabled = True
+        p2 = PlatformEntity("Old", "social")
+        p2.enabled = False
+        self.repo.create(p1)
+        self.repo.create(p2)
+        assert len(self.repo.find_enabled()) == 1
