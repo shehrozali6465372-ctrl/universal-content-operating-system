@@ -54,14 +54,20 @@ class AutonomousPlanningManager:
         for approach in ["conservative", "balanced", "aggressive"]:
             option = self.decision_matrix.add_option(approach)
             if approach == "conservative":
-                option.set_score("impact", 0.4); option.set_score("risk", 0.2)
-                option.set_score("confidence", 0.8); option.set_score("cost", 0.3)
+                option.set_score("impact", 0.4)
+                option.set_score("risk", 0.2)
+                option.set_score("confidence", 0.8)
+                option.set_score("cost", 0.3)
             elif approach == "balanced":
-                option.set_score("impact", 0.6); option.set_score("risk", 0.4)
-                option.set_score("confidence", 0.7); option.set_score("cost", 0.5)
+                option.set_score("impact", 0.6)
+                option.set_score("risk", 0.4)
+                option.set_score("confidence", 0.7)
+                option.set_score("cost", 0.5)
             else:
-                option.set_score("impact", 0.9); option.set_score("risk", 0.7)
-                option.set_score("confidence", 0.5); option.set_score("cost", 0.8)
+                option.set_score("impact", 0.9)
+                option.set_score("risk", 0.7)
+                option.set_score("confidence", 0.5)
+                option.set_score("cost", 0.8)
         best_approach = self.decision_matrix.evaluate()
         results["stages"]["decision"] = best_approach.to_dict() if best_approach else {}
 
