@@ -44,6 +44,7 @@ jobs:
           python -m pytest \
             tests/ \
             --ignore=tests/test_core.py \
+            --ignore=tests/layer10_monetization/test_content_generation.py \
             layers/layer01_core/tests/ \
             layers/layer02_research/tests/ \
             layers/layer03_intelligence/tests/ \

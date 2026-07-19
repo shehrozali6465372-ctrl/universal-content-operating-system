@@ -2,12 +2,11 @@
 # v5.4.0
 
 # ─── AI & LLM Providers ────────────────────────────────────────────
-# Gemini (via urllib — stdlib, no package needed)
-# OpenAI (optional — for future provider)
 openai>=1.0.0
 
 # ─── Core Dependencies ──────────────────────────────────────────────
 pyyaml>=6.0
+cryptography>=41.0.0
 
 # ─── Testing ────────────────────────────────────────────────────────
 pytest>=7.0.0
@@ -15,18 +14,3 @@ pytest-cov>=4.0.0
 
 # ─── Development ────────────────────────────────────────────────────
 ruff>=0.1.0
-
-# ─── Optional: Real HTTP client (for async operations) ──────────────
-# httpx>=0.25.0
-
-# ─── Optional: Database ────────────────────────────────────────────
-# psycopg2-binary>=2.9.0    # PostgreSQL
-# redis>=5.0.0              # Redis
-# sqlalchemy>=2.0.0         # ORM
-
-# ─── Optional: Image Generation ────────────────────────────────────
-# Pillow>=10.0.0            # Image processing
-
-# ─── Note: Most core functionality uses Python stdlib only ──────────
-# urllib, json, hashlib, hmac, threading, asyncio, uuid, os, sys,
-# time, math, re, base64, secrets, copy, functools, concurrent.futures
