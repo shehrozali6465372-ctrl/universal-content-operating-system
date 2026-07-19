@@ -5388,3 +5388,295 @@ class TestEvalOrchestrator:
         o.evaluate("Test content")
         s = o.get_stats()
         assert "total" in s
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 9: AI Governance
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_governance.models import Policy, PolicyType, Violation
+from layers.layer12_ai_foundation.modules.ai_governance.ethics_engine import EthicsEngine
+from layers.layer12_ai_foundation.modules.ai_governance.copyright_checker import CopyrightChecker
+from layers.layer12_ai_foundation.modules.ai_governance.privacy_engine import PrivacyEngine
+from layers.layer12_ai_foundation.modules.ai_governance.safety_policy import SafetyPolicy
+from layers.layer12_ai_foundation.modules.ai_governance.policy_manager import PolicyManager
+from layers.layer12_ai_foundation.modules.ai_governance.violation_tracker import ViolationTracker
+from layers.layer12_ai_foundation.modules.ai_governance.governance_metrics import GovernanceMetrics
+from layers.layer12_ai_foundation.modules.ai_governance.governance_events import GovernanceEvents
+from layers.layer12_ai_foundation.modules.ai_governance.governance_health import GovernanceHealth
+from layers.layer12_ai_foundation.modules.ai_governance.governance_profiler import GovernanceProfiler
+from layers.layer12_ai_foundation.modules.ai_governance.governance_report import GovernanceReportGenerator
+from layers.layer12_ai_foundation.modules.ai_governance.governance_validator import GovernanceValidator
+from layers.layer12_ai_foundation.modules.ai_governance.governance_memory import GovernanceMemory
+from layers.layer12_ai_foundation.modules.ai_governance.governance_cache import GovernanceCache
+from layers.layer12_ai_foundation.modules.ai_governance.governance_router import GovernanceRouter
+from layers.layer12_ai_foundation.modules.ai_governance.governance_enforcer import GovernanceEnforcer
+from layers.layer12_ai_foundation.modules.ai_governance.governance_scheduler import GovernanceScheduler
+from layers.layer12_ai_foundation.modules.ai_governance.governance_registry import GovernanceRegistry
+from layers.layer12_ai_foundation.modules.ai_governance.governance_analyzer import GovernanceAnalyzer
+from layers.layer12_ai_foundation.modules.ai_governance.governance_orchestrator import GovernanceOrchestrator
+
+
+class TestGovModels:
+    def test_policy(self):
+        p = Policy(name="test", policy_type=PolicyType.ETHICS, rules=["rule1"])
+        d = p.to_dict()
+        assert d["name"] == "test"
+        assert d["type"] == "ethics"
+
+    def test_violation(self):
+        v = Violation(policy_type="ethics", severity="high", description="test violation")
+        d = v.to_dict()
+        assert d["severity"] == "high"
+
+
+class TestEthicsEngine:
+    def test_clean(self):
+        e = EthicsEngine()
+        r = e.check("Positive content about innovation")
+        assert r["passed"]
+
+    def test_violation(self):
+        e = EthicsEngine()
+        r = e.check("This will harm people through hate and prejudice")
+        assert not r["passed"]
+
+
+class TestCopyrightChecker:
+    def test_clean(self):
+        c = CopyrightChecker()
+        r = c.check("Original content about technology")
+        assert r["passed"]
+
+    def test_high_similarity(self):
+        c = CopyrightChecker()
+        r = c.check("the cat sat on the mat and the cat was happy", "the cat sat on the mat and the cat was happy today")
+        assert not r["passed"]
+
+
+class TestPrivacyEngine:
+    def test_clean(self):
+        p = PrivacyEngine()
+        r = p.check("No personal data here")
+        assert r["passed"]
+
+    def test_email(self):
+        p = PrivacyEngine()
+        r = p.check("Contact me at test@example.com")
+        assert not r["passed"]
+
+    def test_phone(self):
+        p = PrivacyEngine()
+        r = p.check("Call me at 555-123-4567")
+        assert not r["passed"]
+
+
+class TestSafetyPolicy:
+    def test_safe(self):
+        s = SafetyPolicy()
+        r = s.check("Great content about technology")
+        assert r["passed"]
+
+    def test_unsafe(self):
+        s = SafetyPolicy()
+        r = s.check("This contains illegal drugs and weapons")
+        assert not r["passed"]
+
+
+class TestPolicyManager:
+    def test_add_get(self):
+        pm = PolicyManager()
+        p = Policy(name="test", rules=["r1"])
+        pm.add(p)
+        assert pm.get(p.policy_id) is not None
+
+    def test_remove(self):
+        pm = PolicyManager()
+        p = Policy(name="temp", rules=["r1"])
+        pm.add(p)
+        assert pm.remove(p.policy_id)
+
+    def test_by_type(self):
+        pm = PolicyManager()
+        pm.add(Policy(name="e", policy_type=PolicyType.ETHICS, rules=["r"]))
+        pm.add(Policy(name="c", policy_type=PolicyType.COPYRIGHT, rules=["r"]))
+        assert len(pm.list_by_type(PolicyType.ETHICS)) == 1
+
+
+class TestViolationTracker:
+    def test_track(self):
+        vt = ViolationTracker()
+        vt.track(Violation(policy_type="ethics", severity="high", description="test"))
+        assert vt.count() == 1
+
+    def test_critical(self):
+        vt = ViolationTracker()
+        vt.track(Violation(severity="critical"))
+        assert vt.count_critical() == 1
+
+
+class TestGovernanceMetrics:
+    def test_record(self):
+        m = GovernanceMetrics()
+        m.record(True, "ethics")
+        m.record(False, "copyright")
+        assert m.total_checks == 2
+        assert m.compliance_rate == 0.5
+
+    def test_to_dict(self):
+        d = GovernanceMetrics().to_dict()
+        assert "total_checks" in d
+
+
+class TestGovernanceEvents:
+    def test_publish(self):
+        e = GovernanceEvents()
+        r = []
+        e.subscribe("ev", lambda d: r.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(r) == 1
+
+
+class TestGovernanceHealth:
+    def test_check(self):
+        h = GovernanceHealth()
+        h.check("ethics", True)
+        assert h.is_healthy("ethics")
+
+
+class TestGovernanceProfiler:
+    def test_record(self):
+        p = GovernanceProfiler()
+        p.record("check", 5.0)
+        assert p.summary()["count"] == 1
+
+
+class TestGovernanceReport:
+    def test_generate(self):
+        r = GovernanceReportGenerator()
+        report = r.generate({"compliance_rate": 0.95})
+        assert report["report_type"] == "ai_governance"
+
+
+class TestGovernanceValidator:
+    def test_valid_content(self):
+        v = GovernanceValidator()
+        assert v.validate_content("Good content")["valid"]
+
+    def test_empty(self):
+        v = GovernanceValidator()
+        assert not v.validate_content("")["valid"]
+
+    def test_valid_policy(self):
+        v = GovernanceValidator()
+        p = Policy(name="test", rules=["rule1"])
+        assert v.validate_policy(p)["valid"]
+
+    def test_invalid_policy(self):
+        v = GovernanceValidator()
+        p = Policy()
+        assert not v.validate_policy(p)["valid"]
+
+
+class TestGovernanceMemory:
+    def test_store_recall(self):
+        m = GovernanceMemory()
+        m.store("hash1", "passed")
+        r = m.recall("hash1")
+        assert r is not None
+        assert r["decision"] == "passed"
+
+    def test_miss(self):
+        m = GovernanceMemory()
+        assert m.recall("nonexistent") is None
+
+
+class TestGovernanceCache:
+    def test_set_get(self):
+        c = GovernanceCache()
+        c.set("k", {"v": 1})
+        assert c.get("k") == {"v": 1}
+
+    def test_miss(self):
+        c = GovernanceCache()
+        assert c.get("missing") is None
+
+
+class TestGovernanceRouter:
+    def test_route(self):
+        r = GovernanceRouter()
+        assert r.route("ethics") == "ethics_engine"
+
+    def test_register(self):
+        r = GovernanceRouter()
+        r.register("custom", "custom_engine")
+        assert r.route("custom") == "custom_engine"
+
+
+class TestGovernanceEnforcer:
+    def test_allow(self):
+        e = GovernanceEnforcer()
+        results = [{"passed": True}, {"passed": True}]
+        r = e.enforce(results)
+        assert r["allowed"]
+
+    def test_block(self):
+        e = GovernanceEnforcer(block_on_critical=True)
+        results = [{"passed": False, "severity": "critical"}]
+        r = e.enforce(results)
+        assert not r["allowed"]
+
+
+class TestGovernanceScheduler:
+    def test_schedule(self):
+        s = GovernanceScheduler()
+        jid = s.schedule("check")
+        assert jid.startswith("gov-")
+
+    def test_complete(self):
+        s = GovernanceScheduler()
+        jid = s.schedule("task")
+        s.get_next()
+        assert s.complete(jid)
+
+
+class TestGovernanceRegistry:
+    def test_register(self):
+        r = GovernanceRegistry()
+        r.register("ethics", "engine")
+        assert r.get("ethics") == "engine"
+
+
+class TestGovernanceAnalyzer:
+    def test_analyze(self):
+        a = GovernanceAnalyzer()
+        checks = [{"passed": True, "type": "ethics"}, {"passed": False, "type": "safety"}]
+        result = a.analyze(checks)
+        assert result["total"] == 2
+        assert result["pass_rate"] == 0.5
+
+
+class TestGovernanceOrchestrator:
+    def test_start_stop(self):
+        o = GovernanceOrchestrator()
+        assert o.start(); assert o.stop()
+
+    def test_check_safe(self):
+        o = GovernanceOrchestrator()
+        r = o.check("Positive content about technology and innovation")
+        assert r["all_passed"]
+
+    def test_check_unsafe(self):
+        o = GovernanceOrchestrator()
+        r = o.check("This content will harm people through illegal activities", checks=["ethics", "safety"])
+        assert not r["all_passed"]
+
+    def test_check_custom(self):
+        o = GovernanceOrchestrator()
+        r = o.check("Test content", checks=["privacy"])
+        assert r["total_checks"] == 1
+
+    def test_stats(self):
+        o = GovernanceOrchestrator()
+        o.check("Test content")
+        s = o.get_stats()
+        assert "total_checks" in s
