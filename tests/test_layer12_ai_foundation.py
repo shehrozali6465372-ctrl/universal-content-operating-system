@@ -5066,3 +5066,325 @@ class TestCostOrchestrator:
         o.record_cost("openai", "gpt-4o", 100, 50, 0.01)
         s = o.get_stats()
         assert "budget" in s
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 8: AI Evaluation Engine
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.models import EvalResult, EvalCriteria, EvalType
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.quality_checker import QualityChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.accuracy_checker import AccuracyChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.hallucination_detector import HallucinationDetector
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.bias_detector import BiasDetector
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.safety_checker import SafetyChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.grammar_checker import GrammarChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.seo_checker import SEOChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.creativity_checker import CreativityChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.consistency_checker import ConsistencyChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.brand_voice_checker import BrandVoiceChecker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_config import EvalConfig
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_memory import EvalMemory
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_metrics import EvalMetrics
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_events import EvalEvents
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_health import EvalHealth
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_profiler import EvalProfiler
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_report import EvalReportGenerator
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_validator import EvalValidator
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_cache import EvalCache
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_context import EvalContext
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_ranker import EvalRanker
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_enforcer import EvalEnforcer
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_scheduler import EvalScheduler
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_registry import EvalRegistry
+from layers.layer12_ai_foundation.modules.ai_evaluation_engine.eval_orchestrator import EvalOrchestrator
+
+
+class TestEvalModels:
+    def test_result(self):
+        r = EvalResult(eval_type=EvalType.QUALITY, score=0.8, passed=True)
+        d = r.to_dict()
+        assert d["score"] == 0.8
+        assert d["type"] == "quality"
+
+    def test_criteria(self):
+        c = EvalCriteria(name="quality", weight=1.0, threshold=0.5)
+        assert c.name == "quality"
+
+
+class TestQualityChecker:
+    def test_good_content(self):
+        q = QualityChecker()
+        result = q.check("This is a well-written piece with many different words and ideas expressed clearly.")
+        assert result.passed
+
+    def test_short_content(self):
+        q = QualityChecker(min_score=0.9)
+        result = q.check("Hi")
+        assert result.score < 1.0
+
+
+class TestAccuracyChecker:
+    def test_basic(self):
+        a = AccuracyChecker()
+        result = a.check("The year 2024 was significant for AI.", "AI in 2024 saw major advances.")
+        assert result.score > 0
+
+
+class TestHallucinationDetector:
+    def test_clean(self):
+        h = HallucinationDetector()
+        result = h.check("This is a factual statement about technology.")
+        assert result.passed
+
+    def test_signals(self):
+        h = HallucinationDetector()
+        result = h.check("according to my training data, I believe this is correct")
+        assert result.score < 1.0
+
+
+class TestBiasDetector:
+    def test_neutral(self):
+        b = BiasDetector()
+        result = b.check("The product has features that work for most users")
+        assert result.passed
+
+    def test_biased(self):
+        b = BiasDetector()
+        result = b.check("always never only all everything obviously definitely")
+        assert result.score < 1.0 or result.score < 0.8
+
+
+class TestSafetyChecker:
+    def test_safe(self):
+        s = SafetyChecker()
+        result = s.check("Great content about technology and innovation")
+        assert result.passed
+
+    def test_unsafe(self):
+        s = SafetyChecker()
+        result = s.check("This is hate spam content")
+        assert result.score < 1.0
+
+
+class TestGrammarChecker:
+    def test_good(self):
+        g = GrammarChecker()
+        result = g.check("This is a well structured sentence with proper grammar and punctuation.")
+        assert result.passed
+
+    def test_bad(self):
+        g = GrammarChecker()
+        result = g.check("hi  there  this  has  extra  spaces")
+        assert "Multiple consecutive spaces" in result.issues
+
+
+class TestSEOChecker:
+    def test_basic(self):
+        s = SEOChecker()
+        result = s.check("A long piece of content with many words " * 10, keywords=["content", "words"])
+        assert result.score > 0.5
+
+    def test_short(self):
+        s = SEOChecker()
+        result = s.check("Short")
+        assert any("short" in i.lower() for i in result.issues)
+
+
+class TestCreativityChecker:
+    def test_creative(self):
+        c = CreativityChecker()
+        result = c.check("Innovation drives extraordinary possibilities through diverse perspectives")
+        assert result.score > 0.3
+
+    def test_repetitive(self):
+        c = CreativityChecker()
+        result = c.check("the the the the the the the the the")
+        assert result.score < 0.8
+
+
+class TestConsistencyChecker:
+    def test_consistent(self):
+        c = ConsistencyChecker()
+        content = "First paragraph about AI.\n\nSecond paragraph about ML.\n\nThird about data."
+        result = c.check(content)
+        assert result.passed
+
+
+class TestBrandVoiceChecker:
+    def test_compliant(self):
+        b = BrandVoiceChecker("professional")
+        result = b.check("Our platform delivers enterprise solutions for modern teams.")
+        assert result.passed
+
+    def test_forbidden_words(self):
+        b = BrandVoiceChecker()
+        result = b.check("This is bad content", brand_guidelines={"forbidden_words": ["bad"]})
+        assert result.score < 1.0
+
+
+class TestEvalConfig:
+    def test_defaults(self):
+        c = EvalConfig()
+        assert c.min_quality_score == 0.5
+
+    def test_to_dict(self):
+        d = EvalConfig().to_dict()
+        assert "min_quality_score" in d
+
+
+class TestEvalMemory:
+    def test_store(self):
+        m = EvalMemory()
+        m.store("hash1", "quality", 0.8, True)
+        assert m.count() == 1
+
+    def test_by_type(self):
+        m = EvalMemory()
+        m.store("h1", "quality", 0.8, True)
+        m.store("h2", "safety", 0.9, True)
+        assert len(m.get_by_type("quality")) == 1
+
+    def test_success_rate(self):
+        m = EvalMemory()
+        m.store("h1", "q", 0.8, True)
+        m.store("h2", "q", 0.3, False)
+        assert m.success_rate() == 0.5
+
+
+class TestEvalMetrics:
+    def test_record(self):
+        m = EvalMetrics()
+        m.record("quality", 0.8, True)
+        assert m.total_evaluations == 1
+        assert m.pass_rate == 1.0
+
+    def test_to_dict(self):
+        d = EvalMetrics().to_dict()
+        assert "total" in d
+
+
+class TestEvalEvents:
+    def test_publish(self):
+        e = EvalEvents()
+        received = []
+        e.subscribe("ev", lambda d: received.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(received) == 1
+
+
+class TestEvalHealth:
+    def test_check(self):
+        h = EvalHealth()
+        h.check("quality", True)
+        assert h.is_healthy("quality")
+
+
+class TestEvalProfiler:
+    def test_record(self):
+        p = EvalProfiler()
+        p.record("eval", 10.0)
+        assert p.summary()["count"] == 1
+
+
+class TestEvalReport:
+    def test_generate(self):
+        r = EvalReportGenerator()
+        report = r.generate({"pass_rate": 0.9}, [])
+        assert report["report_type"] == "ai_evaluation"
+
+
+class TestEvalValidator:
+    def test_valid(self):
+        v = EvalValidator()
+        assert v.validate_content("Good content")["valid"]
+
+    def test_empty(self):
+        v = EvalValidator()
+        assert not v.validate_content("")["valid"]
+
+
+class TestEvalCache:
+    def test_set_get(self):
+        c = EvalCache()
+        c.set("k", {"v": 1})
+        assert c.get("k") == {"v": 1}
+
+    def test_miss(self):
+        c = EvalCache()
+        assert c.get("missing") is None
+
+
+class TestEvalContext:
+    def test_set_get(self):
+        c = EvalContext()
+        c.set("key", "val")
+        assert c.get("key") == "val"
+
+
+class TestEvalRanker:
+    def test_rank(self):
+        r = EvalRanker()
+        results = [EvalResult(score=0.9), EvalResult(score=0.5)]
+        ranked = r.rank(results)
+        assert ranked[0]["rank"] == 1
+
+
+class TestEvalEnforcer:
+    def test_pass(self):
+        e = EvalEnforcer()
+        results = [EvalResult(passed=True), EvalResult(passed=True)]
+        assert e.enforce(results)["passes"]
+
+    def test_fail(self):
+        e = EvalEnforcer(min_pass_rate=0.9)
+        results = [EvalResult(passed=True), EvalResult(passed=False)]
+        assert not e.enforce(results)["passes"]
+
+
+class TestEvalScheduler:
+    def test_schedule(self):
+        s = EvalScheduler()
+        jid = s.schedule("content")
+        assert jid.startswith("eval-")
+
+    def test_complete(self):
+        s = EvalScheduler()
+        jid = s.schedule("c")
+        s.get_next()
+        assert s.complete(jid)
+
+
+class TestEvalRegistry:
+    def test_register(self):
+        r = EvalRegistry()
+        r.register("quality", "checker")
+        assert r.get("quality") == "checker"
+
+
+class TestEvalOrchestrator:
+    def test_start_stop(self):
+        o = EvalOrchestrator()
+        assert o.start(); assert o.stop()
+
+    def test_evaluate(self):
+        o = EvalOrchestrator()
+        o.start()
+        result = o.evaluate("This is a comprehensive evaluation of high-quality AI content with many features.")
+        assert result["valid"]
+        assert result["avg_score"] > 0
+
+    def test_empty_content(self):
+        o = EvalOrchestrator()
+        result = o.evaluate("")
+        assert not result["valid"]
+
+    def test_custom_types(self):
+        o = EvalOrchestrator()
+        result = o.evaluate("Test content about AI and technology", eval_types=["quality", "safety"])
+        assert result["evaluations"] == 2
+
+    def test_stats(self):
+        o = EvalOrchestrator()
+        o.evaluate("Test content")
+        s = o.get_stats()
+        assert "total" in s
