@@ -1,26 +1,29 @@
-# AI Self-Improving Facebook Agent
-# Core Dependencies
+# Universal AI Content Operating System
+# v5.2.0
 
-# AI & ML
+# ─── AI & LLM Providers ────────────────────────────────────────────
+# Gemini (via urllib — stdlib, no package needed)
+# OpenAI (optional — for future provider)
 openai>=1.0.0
-langchain>=0.1.0
 
-# Facebook Integration
-facebook-sdk>=3.1.0
-requests>=2.31.0
-
-# Data & Storage
-cryptography>=41.0.0
-json5>=0.9.0
-
-# Utilities
-python-dotenv>=1.0.0
-loguru>=0.7.0
-rich>=13.0.0
-
-# Testing
+# ─── Testing ────────────────────────────────────────────────────────
 pytest>=7.0.0
 pytest-cov>=4.0.0
 
-# Development Tools
+# ─── Development ────────────────────────────────────────────────────
 ruff>=0.1.0
+
+# ─── Optional: Real HTTP client (for async operations) ──────────────
+# httpx>=0.25.0
+
+# ─── Optional: Database ────────────────────────────────────────────
+# psycopg2-binary>=2.9.0    # PostgreSQL
+# redis>=5.0.0              # Redis
+# sqlalchemy>=2.0.0         # ORM
+
+# ─── Optional: Image Generation ────────────────────────────────────
+# Pillow>=10.0.0            # Image processing
+
+# ─── Note: Most core functionality uses Python stdlib only ──────────
+# urllib, json, hashlib, hmac, threading, asyncio, uuid, os, sys,
+# time, math, re, base64, secrets, copy, functools, concurrent.futures

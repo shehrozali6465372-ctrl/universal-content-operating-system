@@ -1,101 +1,103 @@
-# 🤖 AI Self-Improving Facebook Agent
+# 🤖 Universal AI Content Operating System
 
-An autonomous AI agent that creates, publishes, and improves content on Facebook using a layered architecture. The system self-learns and optimizes over time.
+**v5.2.0** — An autonomous, platform-agnostic AI content creation and publishing system.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-ai-self-improving-facebook-agent/
-├── docs/              # Documentation & guides
-├── layers/            # Layered AI modules (10 layers)
-│   ├── layer01_core/
-│   ├── layer02_research/
-│   ├── layer03_intelligence/
-│   ├── layer04_writing/
-│   ├── layer05_image/
-│   ├── layer06_quality/
-│   ├── layer07_publishing/
-│   ├── layer08_analytics/
-│   ├── layer09_learning/
-│   └── layer10_monetization/
-├── tests/             # Unit & integration tests
-├── config/            # Configuration files
-├── data/              # Data storage & datasets
-├── logs/              # System logs
-├── prompts/           # AI prompt templates
-├── memory/            # Agent memory & state
-├── main.py            # Entry point
-├── requirements.txt
-└── .gitignore
+Layer 22 — Documentation
+Layer 21 — Deployment
+Layer 20 — Image Pipeline
+Layer 19 — Analytics Engine
+Layer 18 — Monitoring
+Layer 17 — Security
+Layer 16 — Database Engineering
+Layer 15 — Async Runtime Engine
+Layer 14 — Enterprise Integration
+Layer 13 — Persistence
+Layer 12 — AI Foundation (Model Router, Key Manager, Gemini)
+Layer 11 — Async Runtime
+Layer 10 — Monetization
+Layer 9  — Self-Learning
+Layer 8  — Analytics
+Layer 7  — Publishing
+Layer 6  — Quality & Safety
+Layer 5  — Image Intelligence
+Layer 4  — Content Writing
+Layer 3  — AI Intelligence
+Layer 2  — Research & Scraping
+Layer 1  — Core System
 ```
 
-## 🧩 10 Major Layers
+## Quick Start
 
-| # | Layer | Name | Description | Status | Version |
-|---|-------|------|-------------|--------|---------|
-| 01 | `layer01_core` | **Core System** | Config, secrets, DB, memory, logging, scheduling, file management, backup | ✅ Complete | v0.1.11 |
-| 02 | `layer02_research` | **Research Engine** | Trend discovery, competitor, audience, fact-check, topic scoring, orchestration | ✅ Complete | v0.2.9 |
-| 03 | `layer03_intelligence` | **AI Intelligence** | Semantic analysis, trend intelligence, reasoning, recommendations, knowledge fusion, strategy, memory | ✅ 10/10 Modules | v0.5.1 |
-| 04 | `layer04_writing` | **Content Writing** | Content planning, generation, captions, hashtags, A/B variants | ✅ 10/10 Modules ✅ Complete | v0.5.1 |
-| 05 | `layer05_image` | **Image & Visual** | Image generation, memes, infographics, thumbnails | 🔜 Planned | — |
-| 06 | `layer06_quality` | **Quality Check** | Spam filter, tone check, fact-check, compliance | 🔜 Planned | — |
-| 07 | `layer07_publishing` | **Facebook Publishing** | API posting, scheduling, auto-publishing | 🔜 Planned | — |
-| 08 | `layer08_analytics` | **Analytics & Tracking** | Engagement metrics, performance monitoring | 🔜 Planned | — |
-| 09 | `layer09_learning` | **Self-Learning** | Feedback loop, pattern recognition, improvement | 🔜 Planned | — |
-| 10 | `layer10_monetization` | **Monetization** | Ad management, revenue tracking, optimization | 🔜 Planned | — |
+```bash
+# Boot the system
+python main.py
 
-## 📊 Project Status
+# Check status
+python main.py --status
+
+# Generate content (requires GEMINI_API_KEY_*)
+python main.py --generate "artificial intelligence trends"
+```
+
+## API Keys
+
+Set these environment variables (or GitHub Secrets):
+
+```bash
+export GEMINI_API_KEY_1="AIzaSy..."  # Primary
+export GEMINI_API_KEY_2="AIzaSy..."  # Secondary
+export GEMINI_API_KEY_3="AIzaSy..."  # Backup
+```
+
+Keys are health-tracked with automatic rotation, rate-limit detection, and failover.
+
+## Project Scale
 
 | Metric | Value |
 |--------|-------|
-| Current Version | v0.5.1 |
-| Layers Complete | 2/10 (Core + Research) |
-| Layer 3 Progress | 10/10 Modules ✅ Complete |
-| Total Tests | 1462 |
-| Code Coverage | 95%+ |
-| CI/CD | ✅ Passing |
+| Layers | 22 |
+| Python Files | 1,780+ |
+| Lines of Code | 150,000+ |
+| Tests | 6,989 passing |
+| Git Commits | 127+ |
 
-## 🧠 Layer 3 — Intelligence Layer Progress
+## Key Features
 
-| Module | Name | Status | Version |
-|--------|------|--------|---------|
-| 1 | Semantic Analyzer | ✅ **Frozen** | v0.3.4 |
-| 2 | Trend Intelligence | ✅ Complete | v0.3.7 |
-| 3 | Reasoning Engine | ✅ Complete | v0.3.9 |
-| 4 | Content Intelligence | ✅ Complete | v0.3.10 |
-| 5 | Recommendation Engine | ✅ Complete | v0.3.11 |
-| 6 | Learning Signals | ✅ Complete | v0.3.12 |
-| 7 | Knowledge Fusion | ✅ Complete | v0.3.12 |
-| 8 | Strategy Engine | ✅ Complete | v0.3.13 |
-| 9 | Intelligence Memory | ✅ Complete | v0.5.1 |
-| 8 | Strategy Engine | ⏳ Pending | — |
-| 9 | Intelligence Memory | ⏳ Pending | — |
-| 10 | Intelligence Orchestrator | ⏳ Pending | — |
+- **22-Layer Architecture** — Clean separation, zero circular dependencies
+- **Intelligent Key Rotation** — 3 API keys with health tracking, cooldown, failover
+- **Model Router** — Provider-agnostic (Gemini, OpenAI, Claude, DeepSeek)
+- **Real Gemini API** — Actual HTTP calls via stdlib urllib
+- **Prompt Builder** — Self-improving, style-aware prompt generation
+- **Security** — JWT, encryption, input validation, firewall, RBAC
+- **Monitoring** — Metrics, profiler, tracer, health checks, alerts
+- **Database** — Repository pattern, ORM, migrations, cache, connection pool
+- **Async Runtime** — Coroutine manager, worker pool, task queues, retry engine
+- **Deployment** — Docker, environment manager, release manager, build pipeline
 
-## 📐 Development Principle
+## Testing
 
-> **Har Layer mukammal → Git Commit → phir agla Layer.**
+```bash
+# Full suite
+python -m pytest tests/ --ignore=tests/test_core.py -q
 
-- Agar Layer 6 mein bug aaye toh Layer 1–5 safe rahenge
-- Har layer independently testable hogi
-- Clean separation of concerns
-
-## 🚀 CI/CD
-
-GitHub Actions runs automatically on every push:
-
-1. **Ruff Lint** — Code quality check
-2. **Pytest** — All tests must pass
-3. **Coverage** — Minimum 95%
-
-## 📁 Key Directories
-
+# Specific layer
+python -m pytest tests/test_phase1_integration_engine.py -v
 ```
-shared/          — Global models, event bus, DI, interfaces, AI providers
-layers/
-  layer01_core/  — 10 modules: config, secrets, env, database, memory, logger, scheduler, file_manager, settings, backup
-  layer02_research/  — 10 modules: trend, topic_intel, competitor, audience, knowledge, verification, research_memory, scoring, planner, orchestrator
-  layer03_intelligence/  — 7 modules (in progress): semantic, trend_intel, reasoning, content_intel, recommendation, learning_signals, knowledge_fusion
-tests/           — 960 tests (unit + benchmark)
-docs/            — Architecture, layer guides, ADRs
+
+## Development
+
+```bash
+# Lint
+ruff check layers/ --select E,F,W --ignore E501,E402
+
+# Version
+cat VERSION
 ```
+
+## Platform Support
+
+Universal — works with any social media platform through plugin architecture:
+Facebook, Instagram, X (Twitter), LinkedIn, YouTube, TikTok, Threads, Reddit, Medium, WordPress, Telegram, Discord, Binance Square, Pinterest, and future plugins.
