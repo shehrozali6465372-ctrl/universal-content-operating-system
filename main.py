@@ -96,31 +96,24 @@ class AIOSBoot:
         }
 
 
-def generate_content(topic: str) -> Dict[str, Any]:
-    """Generate content using the AI pipeline."""
+def generate_content(topic: str, platform: str = "facebook",
+                    tone: str = "professional", style: str = "educational",
+                    include_image: bool = True) -> Dict[str, Any]:
+    """Run the full end-to-end pipeline for a topic."""
     try:
-        from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager
-        from layers.layer12_ai_foundation.modules.model_router.gemini_provider import GeminiProvider
-        from layers.layer12_ai_foundation.modules.model_router.prompt_builder import PromptBuilder, PromptStyle
-
-        km = KeyManager()
-        secrets = load_env_secrets()
-        for i, (name, key) in enumerate(secrets.items(), 1):
-            km.register_key(f"k{i}", key, "gemini")
-
-        gemini = GeminiProvider(km)
-        pb = PromptBuilder()
-
-        prompt = pb.build_text(
-            f"Write a detailed, engaging social media post about: {topic}",
-            style=PromptStyle.CHAIN_OF_THOUGHT,
-            system_prompt="You are an expert content creator. Write for maximum engagement."
+        from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import (
+            PipelineWiring, ContentRequest,
         )
 
-        result = gemini.generate(prompt)
-        return {"topic": topic, "content": result.get("content", ""), "model": result.get("model", "")}
+        pipe = PipelineWiring()
+        req = ContentRequest(
+            topic=topic, platform=platform, tone=tone,
+            style=style, include_image=include_image,
+        )
+        response = pipe.execute(req)
+        return response.to_dict()
     except Exception as exc:
-        return {"topic": topic, "error": str(exc)}
+        return {"topic": topic, "error": str(exc), "traceback": __import__("traceback").format_exc()}
 
 
 def show_status() -> Dict[str, Any]:
@@ -146,7 +139,23 @@ if __name__ == "__main__":
         status = show_status()
         print(json.dumps(status, indent=2))
 
+    elif "--topic" in args:
+        # Full end-to-end pipeline
+        idx = args.index("--topic")
+        topic = args[idx + 1] if idx + 1 < len(args) else "artificial intelligence"
+        platform = "facebook"
+        tone = "professional"
+        if "--platform" in args:
+            pidx = args.index("--platform")
+            platform = args[pidx + 1] if pidx + 1 < len(args) else "facebook"
+        if "--tone" in args:
+            tidx = args.index("--tone")
+            tone = args[tidx + 1] if tidx + 1 < len(args) else "professional"
+        result = generate_content(topic, platform=platform, tone=tone)
+        print(json.dumps(result, indent=2, default=str))
+
     elif "--generate" in args:
+        # Legacy: single-topic Gemini generation
         idx = args.index("--generate")
         topic = args[idx + 1] if idx + 1 < len(args) else "artificial intelligence"
         result = generate_content(topic)
