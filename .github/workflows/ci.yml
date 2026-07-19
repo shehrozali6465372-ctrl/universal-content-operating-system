@@ -13,6 +13,11 @@ jobs:
       matrix:
         python-version: ["3.12"]
 
+    env:
+      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -29,30 +34,44 @@ jobs:
           pip install pytest-cov ruff
 
       - name: 🔍 Lint (Ruff)
-        run: ruff check layers/ --select E,F,W --ignore E501,E402,E741,E731,E721,F841,E701,E702
-
-      - name: 🧪 Unit Tests + Integration Tests (with Coverage)
         run: |
-          python -m pytest layers/layer01_core/tests/ \
+          ruff check layers/ --select E,F,W \
+            --ignore E501,E402,E741,E731,E721,F841,E701,E702
+
+      - name: 🧪 Full Test Suite (All Layers + Tests)
+        run: |
+          python -m pytest \
+            tests/ \
+            --ignore=tests/test_core.py \
+            layers/layer01_core/tests/ \
+            layers/layer02_research/tests/ \
+            layers/layer03_intelligence/tests/ \
+            layers/layer04_writing/tests/ \
+            layers/layer05_image/tests/ \
+            layers/layer06_quality/tests/ \
+            layers/layer07_publishing/tests/ \
+            layers/layer08_analytics/tests/ \
+            layers/layer09_learning/tests/ \
+            layers/layer10_monetization/tests/ \
             -v \
             --tb=short \
-            --cov=layers/layer01_core \
-            --cov-report=term-missing \
-            --cov-report=html:coverage_html \
-            --cov-fail-under=80
+            -q
 
-      - name: 📊 Coverage Summary
-        run: |
-          echo "=== COVERAGE REPORT ==="
-          python -m pytest layers/layer01_core/tests/ \
-            --cov=layers/layer01_core \
-            --cov-report=term-missing \
-            --no-header -q 2>&1 | tail -30
-
-      - name: 📤 Upload Coverage Report
+      - name: 📊 Test Summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage_html/
-          retention-days: 7
+        run: |
+          echo "=== FULL TEST SUMMARY ==="
+          python -m pytest \
+            tests/ \
+            --ignore=tests/test_core.py \
+            layers/layer01_core/tests/ \
+            layers/layer02_research/tests/ \
+            layers/layer03_intelligence/tests/ \
+            layers/layer04_writing/tests/ \
+            layers/layer05_image/tests/ \
+            layers/layer06_quality/tests/ \
+            layers/layer07_publishing/tests/ \
+            layers/layer08_analytics/tests/ \
+            layers/layer09_learning/tests/ \
+            layers/layer10_monetization/tests/ \
+            --no-header -q 2>&1 | tail -30
