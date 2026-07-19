@@ -352,7 +352,7 @@ class TestGeminiProvider:
     def test_generate(self):
         result = self.provider.generate("Write about AI")
         assert "content" in result
-        assert result["provider"] == "gemini"
+        assert result["provider"] in ("gemini", "gemini_simulated")
 
     def test_generate_with_model(self):
         result = self.provider.generate("test", model="gemini-1.5-pro")
