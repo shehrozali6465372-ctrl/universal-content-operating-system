@@ -4025,3 +4025,720 @@ class TestMemoryOrchestrator:
         o.store("test", memory_type="semantic")
         stats = o.get_stats()
         assert "metrics" in stats
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 6: AI Reasoning Engine
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.models import (
+    ReasoningStep, ReasoningChain, ReasoningResult, ReasoningType,
+)
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.logical_reasoner import LogicalReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.analytical_reasoner import AnalyticalReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.creative_reasoner import CreativeReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.strategic_reasoner import StrategicReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.planning_reasoner import PlanningReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reflection_reasoner import ReflectionReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.decision_reasoner import DecisionReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.verification_reasoner import VerificationReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.chain_builder import ChainBuilder
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.chain_validator import ChainValidator
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.evidence_collector import EvidenceCollector
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.counterfactual_reasoner import CounterfactualReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.analogy_reasoner import AnalogyReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.meta_reasoner import MetaReasoner
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_config import ReasoningConfig
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_metrics import ReasoningMetrics
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_events import ReasoningEvents
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_memory import ReasoningMemory
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_health import ReasoningHealth
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_profiler import ReasoningProfiler
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_report import ReasoningReportGenerator
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_cache import ReasoningCache
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_router import ReasoningRouter
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_registry import ReasoningRegistry
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_optimizer import ReasoningOptimizer
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_context import ReasoningContext
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_enforcer import ReasoningEnforcer
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_pipeline import ReasoningPipeline
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_ensemble import ReasoningEnsemble
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_scheduler import ReasoningScheduler
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_monitor import ReasoningMonitor
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_fallback import ReasoningFallback
+from layers.layer12_ai_foundation.modules.ai_reasoning_engine.reasoning_orchestrator import ReasoningOrchestrator
+
+
+# ─── Models ──────────────────────────────────────────────────────────
+
+class TestReasoningModels:
+    def test_step(self):
+        s = ReasoningStep(content="test step", confidence=0.8)
+        assert s.content == "test step"
+        d = s.to_dict()
+        assert d["confidence"] == 0.8
+
+    def test_chain(self):
+        c = ReasoningChain(reasoning_type=ReasoningType.LOGICAL)
+        c.add_step(ReasoningStep(content="step1"))
+        c.add_step(ReasoningStep(content="step2"))
+        assert c.step_count == 2
+        d = c.to_dict()
+        assert d["step_count"] == 2
+
+    def test_result(self):
+        r = ReasoningResult(answer="answer", confidence=0.9)
+        assert r.answer == "answer"
+        d = r.to_dict()
+        assert d["confidence"] == 0.9
+
+    def test_reasoning_type(self):
+        assert ReasoningType.LOGICAL.value == "logical"
+        assert ReasoningType.DECISION.value == "decision"
+
+
+# ─── LogicalReasoner ─────────────────────────────────────────────────
+
+class TestLogicalReasoner:
+    def setup_method(self):
+        self.r = LogicalReasoner()
+
+    def test_deductive(self):
+        result = self.r.deductive(["All humans are mortal", "Socrates is human"])
+        assert result.confidence > 0
+        assert result.chain.step_count >= 2
+
+    def test_deductive_empty(self):
+        result = self.r.deductive([])
+        assert result.chain.step_count == 0
+
+    def test_inductive(self):
+        result = self.r.inductive(["obs1", "obs2", "obs3"])
+        assert result.confidence > 0
+
+    def test_abductive(self):
+        result = self.r.abductive(["obs1", "obs2"])
+        assert result.confidence > 0
+
+    def test_history(self):
+        self.r.deductive(["a"])
+        assert len(self.r.get_history()) == 1
+
+
+# ─── AnalyticalReasoner ─────────────────────────────────────────────
+
+class TestAnalyticalReasoner:
+    def setup_method(self):
+        self.r = AnalyticalReasoner()
+
+    def test_analyze(self):
+        data = [{"key": "val1"}, {"key": "val2"}]
+        result = self.r.analyze(data)
+        assert result.confidence > 0
+
+    def test_compare(self):
+        result = self.r.compare("optionA", "optionB")
+        assert result.confidence > 0
+
+    def test_history(self):
+        self.r.analyze([{"a": 1}])
+        assert len(self.r.get_history()) == 1
+
+
+# ─── CreativeReasoner ───────────────────────────────────────────────
+
+class TestCreativeReasoner:
+    def setup_method(self):
+        self.r = CreativeReasoner()
+
+    def test_brainstorm(self):
+        result = self.r.brainstorm("AI content", count=3)
+        assert len(result.alternatives) == 3
+        assert result.confidence > 0
+
+    def test_lateral_thinking(self):
+        result = self.r.lateral_thinking("engagement problem")
+        assert result.confidence > 0
+
+    def test_history(self):
+        self.r.brainstorm("topic")
+        assert len(self.r.get_history()) == 1
+
+
+# ─── StrategicReasoner ──────────────────────────────────────────────
+
+class TestStrategicReasoner:
+    def setup_method(self):
+        self.r = StrategicReasoner()
+
+    def test_plan(self):
+        result = self.r.plan("Grow to 1M followers")
+        assert result.confidence > 0
+
+    def test_risk_assessment(self):
+        result = self.r.risk_assessment("Launch new product")
+        assert result.confidence > 0
+
+
+# ─── PlanningReasoner ───────────────────────────────────────────────
+
+class TestPlanningReasoner:
+    def setup_method(self):
+        self.r = PlanningReasoner()
+
+    def test_decompose(self):
+        result = self.r.decompose("Build AI OS", max_steps=5)
+        assert len(result.alternatives) == 5
+
+    def test_schedule(self):
+        tasks = [{"name": "t1"}, {"name": "t2"}]
+        result = self.r.schedule(tasks)
+        assert result.confidence > 0
+
+
+# ─── ReflectionReasoner ─────────────────────────────────────────────
+
+class TestReflectionReasoner:
+    def setup_method(self):
+        self.r = ReflectionReasoner()
+
+    def test_reflect_on_decision(self):
+        result = self.r.reflect_on_decision("Published post", "Success")
+        assert result.confidence > 0
+
+    def test_reflect_on_reasoning(self):
+        chain = ReasoningChain(reasoning_type=ReasoningType.LOGICAL)
+        chain.add_step(ReasoningStep(content="s1", confidence=0.8))
+        chain.add_step(ReasoningStep(content="s2", confidence=0.9))
+        result = self.r.reflect_on_reasoning(chain)
+        assert result.confidence > 0
+
+    def test_decisions(self):
+        self.r.reflect_on_decision("d1", "ok")
+        assert len(self.r.get_decisions()) == 1
+
+
+# ─── DecisionReasoner ───────────────────────────────────────────────
+
+class TestDecisionReasoner:
+    def setup_method(self):
+        self.r = DecisionReasoner()
+
+    def test_decide(self):
+        result = self.r.decide(["Option A", "Option B", "Option C"])
+        assert result.confidence > 0
+
+    def test_decide_with_scores(self):
+        scores = {"A": {"impact": 0.9, "feasibility": 0.7}, "B": {"impact": 0.5, "feasibility": 0.9}}
+        result = self.r.decide(["A", "B"], scores=scores)
+        assert result.confidence > 0
+
+    def test_tradeoff(self):
+        result = self.r.tradeoff_analysis("Fast", "High quality")
+        assert result.confidence > 0
+
+
+# ─── VerificationReasoner ───────────────────────────────────────────
+
+class TestVerificationReasoner:
+    def setup_method(self):
+        self.r = VerificationReasoner()
+
+    def test_verify_valid(self):
+        chain = ReasoningChain(reasoning_type=ReasoningType.LOGICAL)
+        chain.add_step(ReasoningStep(content="premise", confidence=0.9))
+        chain.add_step(ReasoningStep(content="conclusion", confidence=0.8))
+        chain.conclusion = "test conclusion"
+        result = self.r.verify(chain)
+        assert result["valid"]
+
+    def test_verify_empty(self):
+        chain = ReasoningChain()
+        result = self.r.verify(chain)
+        assert not result["valid"]
+        assert "Empty reasoning chain" in result["issues"]
+
+    def test_cross_check(self):
+        c1 = ReasoningChain()
+        c1.conclusion = "Same answer"
+        c2 = ReasoningChain()
+        c2.conclusion = "Same answer"
+        result = self.r.cross_check([c1, c2])
+        assert result["consistent"]
+
+
+# ─── ChainBuilder ────────────────────────────────────────────────────
+
+class TestChainBuilder:
+    def test_build(self):
+        chain = (ChainBuilder(ReasoningType.LOGICAL)
+                 .add_premise("fact1")
+                 .add_inference("inference1")
+                 .set_conclusion("conclusion1")
+                 .build())
+        assert chain.step_count >= 3
+        assert chain.conclusion == "conclusion1"
+
+    def test_add_multiple(self):
+        builder = ChainBuilder()
+        builder.add_premise("p1").add_observation("o1").add_evidence("e1")
+        chain = builder.build()
+        assert chain.step_count == 3
+
+
+# ─── ChainValidator ─────────────────────────────────────────────────
+
+class TestChainValidator:
+    def test_valid_chain(self):
+        chain = ReasoningChain(reasoning_type=ReasoningType.LOGICAL)
+        chain.add_step(ReasoningStep(step_type="premise", content="p", confidence=0.9))
+        chain.add_step(ReasoningStep(step_type="conclusion", content="c", confidence=0.8))
+        chain.conclusion = "c"
+        v = ChainValidator()
+        result = v.validate(chain)
+        assert result["valid"]
+
+    def test_invalid_chain(self):
+        chain = ReasoningChain()
+        v = ChainValidator()
+        result = v.validate(chain)
+        assert not result["valid"]
+
+
+# ─── EvidenceCollector ───────────────────────────────────────────────
+
+class TestEvidenceCollector:
+    def test_add_get(self):
+        ec = EvidenceCollector()
+        ec.add("evidence1", source="web", confidence=0.9)
+        assert ec.count() == 1
+
+    def test_sorted(self):
+        ec = EvidenceCollector()
+        ec.add("low", confidence=0.3)
+        ec.add("high", confidence=0.9)
+        top = ec.get_sorted()
+        assert top[0]["confidence"] == 0.9
+
+    def test_aggregate(self):
+        ec = EvidenceCollector()
+        ec.add("a", confidence=0.8, weight=2.0)
+        ec.add("b", confidence=0.6, weight=1.0)
+        agg = ec.aggregate_confidence()
+        assert agg > 0.5
+
+    def test_filter(self):
+        ec = EvidenceCollector()
+        ec.add("a", source="web")
+        ec.add("b", source="db")
+        assert len(ec.filter_by_source("web")) == 1
+
+
+# ─── CounterfactualReasoner ─────────────────────────────────────────
+
+class TestCounterfactualReasoner:
+    def test_what_if(self):
+        r = CounterfactualReasoner()
+        result = r.what_if("Post at 9am", "Posted at 6pm instead")
+        assert result.confidence > 0
+
+    def test_compare_paths(self):
+        r = CounterfactualReasoner()
+        result = r.compare_paths("strategy", ["path_a", "path_b"])
+        assert result.confidence > 0
+
+
+# ─── AnalogyReasoner ────────────────────────────────────────────────
+
+class TestAnalogyReasoner:
+    def test_draw_analogy(self):
+        r = AnalogyReasoner()
+        result = r.draw_analogy("Learning", "Teaching", {"student": "teacher"})
+        assert result.confidence > 0
+
+
+# ─── MetaReasoner ───────────────────────────────────────────────────
+
+class TestMetaReasoner:
+    def test_evaluate_strategy(self):
+        r = MetaReasoner()
+        results = [{"success": True}, {"success": True}, {"success": False}]
+        result = r.evaluate_strategy("publish_daily", results)
+        assert result.confidence > 0
+
+    def test_suggest_improvement(self):
+        r = MetaReasoner()
+        result = r.suggest_improvement("current approach", ["too slow", "expensive"])
+        assert result.confidence > 0
+
+
+# ─── Config, Metrics, Events, Memory ────────────────────────────────
+
+class TestReasoningConfig:
+    def test_defaults(self):
+        c = ReasoningConfig()
+        assert c.default_type == "logical"
+        assert c.enable_verification is True
+
+    def test_to_dict(self):
+        d = ReasoningConfig().to_dict()
+        assert "max_chain_steps" in d
+
+
+class TestReasoningMetrics:
+    def test_record(self):
+        m = ReasoningMetrics()
+        m.record("logical", 0.8, 50.0)
+        assert m.total_reasoning == 1
+        assert m.avg_confidence == 0.8
+
+    def test_to_dict(self):
+        d = ReasoningMetrics().to_dict()
+        assert "total_reasoning" in d
+
+    def test_reset(self):
+        m = ReasoningMetrics()
+        m.record("logical", 0.8, 50)
+        m.reset()
+        assert m.total_reasoning == 0
+
+
+class TestReasoningEvents:
+    def test_publish_subscribe(self):
+        e = ReasoningEvents()
+        received = []
+        e.subscribe("ev", lambda d: received.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(received) == 1
+
+    def test_clear(self):
+        e = ReasoningEvents()
+        e.publish("ev")
+        e.clear()
+        assert len(e.get_log()) == 0
+
+
+class TestReasoningMemory:
+    def test_store_recall(self):
+        m = ReasoningMemory()
+        chain = ReasoningChain(reasoning_type=ReasoningType.LOGICAL, conclusion="test")
+        m.store(chain, "outcome", True)
+        assert m.count() == 1
+
+    def test_success_rate(self):
+        m = ReasoningMemory()
+        chain = ReasoningChain()
+        m.store(chain, "ok", True)
+        m.store(chain, "fail", False)
+        assert m.success_rate == 0.5
+
+    def test_by_type(self):
+        m = ReasoningMemory()
+        chain = ReasoningChain(reasoning_type=ReasoningType.LOGICAL)
+        m.store(chain, "ok", True)
+        results = m.recall_by_type("logical")
+        assert len(results) == 1
+
+
+class TestReasoningHealth:
+    def test_check(self):
+        h = ReasoningHealth()
+        h.check("engine", True)
+        assert h.is_healthy("engine")
+
+    def test_unhealthy(self):
+        h = ReasoningHealth()
+        h.check("cache", False)
+        assert "cache" in h.get_unhealthy()
+
+
+# ─── Profiler, Report, Cache ─────────────────────────────────────────
+
+class TestReasoningProfiler:
+    def test_record(self):
+        p = ReasoningProfiler()
+        p.record("reason", 25.0, 5)
+        assert p.summary()["count"] == 1
+
+    def test_clear(self):
+        p = ReasoningProfiler()
+        p.record("x", 10, 1)
+        p.clear()
+        assert p.summary()["count"] == 0
+
+
+class TestReasoningReport:
+    def test_generate(self):
+        r = ReasoningReportGenerator()
+        report = r.generate({"avg_confidence": 0.9, "verification_rate": 0.8})
+        assert report["report_type"] == "reasoning_engine"
+
+    def test_low_quality(self):
+        r = ReasoningReportGenerator()
+        report = r.generate({"avg_confidence": 0.3, "verification_rate": 0.2})
+        assert len(report["recommendations"]) >= 2
+
+
+class TestReasoningCache:
+    def test_set_get(self):
+        c = ReasoningCache()
+        c.set("q", {"a": 1})
+        assert c.get("q") == {"a": 1}
+
+    def test_miss(self):
+        c = ReasoningCache()
+        assert c.get("missing") is None
+
+    def test_hit_rate(self):
+        c = ReasoningCache()
+        c.set("k", {"v": 1})
+        c.get("k")
+        c.get("x")
+        assert c.hit_rate == 0.5
+
+    def test_max_size(self):
+        c = ReasoningCache(max_size=2)
+        c.set("a", {"v": 1})
+        c.set("b", {"v": 2})
+        c.set("c", {"v": 3})
+        assert c.stats()["size"] <= 2
+
+
+# ─── Router, Registry, Optimizer, Context ────────────────────────────
+
+class TestReasoningRouter:
+    def test_route(self):
+        r = ReasoningRouter()
+        assert r.route("logic") == ReasoningType.LOGICAL
+        assert r.route("strategy") == ReasoningType.STRATEGIC
+        assert r.route("creative") == ReasoningType.CREATIVE
+
+    def test_custom_route(self):
+        r = ReasoningRouter()
+        r.register_route("custom", ReasoningType.ANALYTICAL)
+        assert r.route("custom") == ReasoningType.ANALYTICAL
+
+    def test_all_routes(self):
+        routes = ReasoningRouter().get_all_routes()
+        assert "logic" in routes
+
+
+class TestReasoningRegistry:
+    def test_register(self):
+        r = ReasoningRegistry()
+        r.register("logical", "component")
+        assert r.get("logical") == "component"
+
+    def test_unregister(self):
+        r = ReasoningRegistry()
+        r.register("temp", "c")
+        assert r.unregister("temp")
+        assert not r.unregister("nonexistent")
+
+    def test_to_dict(self):
+        r = ReasoningRegistry()
+        r.register("test", "comp")
+        d = r.to_dict()
+        assert "test" in d
+
+
+class TestReasoningOptimizer:
+    def test_optimize(self):
+        o = ReasoningOptimizer()
+        chain = ReasoningChain()
+        chain.add_step(ReasoningStep(content="step1", confidence=0.1))
+        chain.add_step(ReasoningStep(content="conclusion", confidence=0.9, step_type="conclusion"))
+        optimized = o.optimize(chain)
+        assert len(optimized.steps) >= 1
+
+    def test_prune(self):
+        o = ReasoningOptimizer()
+        chain = ReasoningChain()
+        chain.add_step(ReasoningStep(content="same"))
+        chain.add_step(ReasoningStep(content="same"))
+        pruned = o.prune_duplicates(chain)
+        assert len(pruned.steps) == 1
+
+
+class TestReasoningContext:
+    def test_set_get(self):
+        c = ReasoningContext()
+        c.set("key", "val")
+        assert c.get("key") == "val"
+
+    def test_log_step(self):
+        c = ReasoningContext()
+        c.log_step("step1")
+        assert "step1" in c.get_steps()
+
+    def test_clear(self):
+        c = ReasoningContext()
+        c.set("k", "v")
+        c.clear()
+        assert c.get("k") is None
+
+
+# ─── Enforcer, Pipeline, Ensemble ────────────────────────────────────
+
+class TestReasoningEnforcer:
+    def test_pass(self):
+        chain = ReasoningChain()
+        chain.add_step(ReasoningStep(content="a", confidence=0.8))
+        chain.add_step(ReasoningStep(content="b", confidence=0.9))
+        chain.conclusion = "done"
+        e = ReasoningEnforcer()
+        result = e.enforce(chain)
+        assert result["passes"]
+
+    def test_fail_min_steps(self):
+        chain = ReasoningChain()
+        chain.add_step(ReasoningStep(content="a"))
+        e = ReasoningEnforcer(min_steps=3)
+        result = e.enforce(chain)
+        assert not result["passes"]
+
+
+class TestReasoningPipeline:
+    def test_execute(self):
+        p = ReasoningPipeline()
+        p.add_stage("double", lambda x: x * 2)
+        p.add_stage("add1", lambda x: x + 1)
+        result = p.execute(5)
+        assert result["final_output"] == 11
+
+    def test_stage_count(self):
+        p = ReasoningPipeline()
+        p.add_stage("a", lambda x: x)
+        assert p.stage_count() == 1
+
+
+class TestReasoningEnsemble:
+    def test_ensemble(self):
+        e = ReasoningEnsemble()
+        r1 = ReasoningResult(answer="A", confidence=0.9)
+        r2 = ReasoningResult(answer="B", confidence=0.7)
+        result = e.ensemble([r1, r2])
+        assert result.answer == "A"
+        assert result.confidence > 0.7
+
+    def test_voting(self):
+        e = ReasoningEnsemble()
+        r1 = ReasoningResult(answer="A", confidence=0.9)
+        r2 = ReasoningResult(answer="A", confidence=0.8)
+        r3 = ReasoningResult(answer="B", confidence=0.7)
+        result = e.voting([r1, r2, r3])
+        assert result.answer == "A"
+        assert abs(result.confidence - 2 / 3) < 0.01
+
+
+# ─── Scheduler, Monitor, Fallback ────────────────────────────────────
+
+class TestReasoningScheduler:
+    def test_schedule(self):
+        s = ReasoningScheduler()
+        jid = s.schedule("problem", "logical")
+        assert jid.startswith("reason-")
+        assert s.queue_size() == 1
+
+    def test_get_next(self):
+        s = ReasoningScheduler()
+        s.schedule("p", "logical")
+        job = s.get_next()
+        assert job is not None
+        assert job.status == "running"
+
+    def test_complete(self):
+        s = ReasoningScheduler()
+        jid = s.schedule("p", "logical")
+        s.get_next()
+        assert s.complete(jid)
+        assert s.queue_size() == 0
+
+    def test_priority_order(self):
+        s = ReasoningScheduler()
+        s.schedule("low", "logical", priority=10)
+        s.schedule("high", "logical", priority=1)
+        job = s.get_next()
+        assert job.problem == "high"
+
+
+class TestReasoningMonitor:
+    def test_counter(self):
+        m = ReasoningMonitor()
+        m.increment("ops")
+        m.increment("ops")
+        assert m.get_counter("ops") == 2
+
+    def test_alert(self):
+        m = ReasoningMonitor()
+        m.alert("warn", "high latency")
+        assert len(m.get_alerts("warn")) == 1
+
+    def test_status(self):
+        m = ReasoningMonitor()
+        m.increment("x")
+        s = m.status()
+        assert s["counters"]["x"] == 1
+
+
+class TestReasoningFallback:
+    def test_fallback(self):
+        f = ReasoningFallback()
+        result = f.attempt_fallback("hard problem", ["logical"])
+        assert result.confidence > 0
+        assert len(f.get_log()) == 1
+
+    def test_all_approaches_tried(self):
+        f = ReasoningFallback()
+        result = f.attempt_fallback("p", ["logical", "analytical", "creative", "strategic"])
+        assert result.confidence == 0.4
+
+
+# ─── ReasoningOrchestrator ──────────────────────────────────────────
+
+class TestReasoningOrchestrator:
+    def test_start_stop(self):
+        o = ReasoningOrchestrator()
+        assert o.start()
+        assert o.stop()
+
+    def test_reason_logical(self):
+        o = ReasoningOrchestrator()
+        o.start()
+        result = o.reason("test problem", reasoning_type="logical")
+        assert result.confidence > 0
+
+    def test_reason_analytical(self):
+        o = ReasoningOrchestrator()
+        result = o.reason("analyze data", reasoning_type="analysis")
+        assert result.confidence > 0
+
+    def test_reason_creative(self):
+        o = ReasoningOrchestrator()
+        result = o.reason("new ideas", reasoning_type="creative")
+        assert result.confidence > 0
+
+    def test_reason_strategy(self):
+        o = ReasoningOrchestrator()
+        result = o.reason("growth plan", reasoning_type="strategy")
+        assert result.confidence > 0
+
+    def test_reason_planning(self):
+        o = ReasoningOrchestrator()
+        result = o.reason("build system", reasoning_type="plan")
+        assert result.confidence > 0
+
+    def test_reason_decision(self):
+        o = ReasoningOrchestrator()
+        result = o.reason("choose path", reasoning_type="decision")
+        assert result.confidence > 0
+
+    def test_health(self):
+        o = ReasoningOrchestrator()
+        h = o.get_health()
+        assert "uptime" in h
+
+    def test_stats(self):
+        o = ReasoningOrchestrator()
+        o.reason("test", reasoning_type="logical")
+        s = o.get_stats()
+        assert "total_reasoning" in s
