@@ -5680,3 +5680,463 @@ class TestGovernanceOrchestrator:
         o.check("Test content")
         s = o.get_stats()
         assert "total_checks" in s
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 10: AI Orchestrator
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_orchestrator.models import Task, Pipeline, TaskStatus
+from layers.layer12_ai_foundation.modules.ai_orchestrator.orchestrator_config import OrchestratorConfig
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_pipeline import AIPipeline
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_task_manager import AITaskManager
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_router import AIRouter
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_state_manager import AIStateManager
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_metrics import AIMetrics
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_events import AIEvents
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_health import AIHealth
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_cache import AICache
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_scheduler import AIScheduler
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_validator import AIValidator
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_context import AIContext
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_memory import AIMemory
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_profiler import AIProfiler
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_report import AIReportGenerator
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_registry import AIRegistry
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_fallback import AIFallback
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_linker import AILinker
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_config_manager import AIConfigManager
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_request import AIRequest
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_response import AIResponse
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_monitor import AIMonitor
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_logger import AILogger
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_policy import AIPolicy
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_retry import AIRetry
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_enforcer import AIEnforcer
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_coordinator import AICoordinator
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_gateway import AIGateway
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_analyzer import AIAnalyzer
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_version_manager import AIVersionManager
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_diff_engine import AIDiffEngine
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_orchestrator import AIOrchestrator
+
+
+class TestOrchModels:
+    def test_task(self):
+        t = Task(name="test")
+        assert t.status == TaskStatus.PENDING
+        d = t.to_dict()
+        assert d["name"] == "test"
+
+    def test_pipeline(self):
+        p = Pipeline(name="pipeline1")
+        p.tasks.append(Task(name="step1"))
+        assert len(p.tasks) == 1
+        d = p.to_dict()
+        assert d["task_count"] == 1
+
+
+class TestOrchConfig:
+    def test_defaults(self):
+        c = OrchestratorConfig()
+        assert c.max_concurrent == 5
+        assert c.enable_retry is True
+
+    def test_to_dict(self):
+        d = OrchestratorConfig().to_dict()
+        assert "max_concurrent" in d
+
+
+class TestAIPipeline:
+    def test_create(self):
+        p = AIPipeline()
+        pipe = p.create("test", ["step1", "step2"])
+        assert len(pipe.tasks) == 2
+
+    def test_execute(self):
+        p = AIPipeline()
+        pipe = p.create("test", ["step1", "step2"])
+        result = p.execute(pipe.pipeline_id)
+        assert result["pipeline"]["status"] == "completed"
+        assert len(result["results"]) == 2
+
+    def test_execute_fail(self):
+        p = AIPipeline()
+        pipe = p.create("test", ["step1"])
+
+        def fail_executor(task):
+            raise ValueError("boom")
+
+        result = p.execute(pipe.pipeline_id, fail_executor)
+        assert result["pipeline"]["status"] == "failed"
+
+    def test_list_pipelines(self):
+        p = AIPipeline()
+        p.create("p1")
+        assert len(p.list_pipelines()) == 1
+
+    def test_delete(self):
+        p = AIPipeline()
+        pipe = p.create("temp")
+        assert p.delete(pipe.pipeline_id)
+
+    def test_not_found(self):
+        p = AIPipeline()
+        result = p.execute("nonexistent")
+        assert "error" in result
+
+
+class TestAITaskManager:
+    def test_create(self):
+        tm = AITaskManager()
+        t = tm.create("task1", {"key": "value"})
+        assert t.name == "task1"
+
+    def test_complete(self):
+        tm = AITaskManager()
+        t = tm.create("t1")
+        assert tm.complete(t.task_id, {"result": "ok"})
+
+    def test_fail(self):
+        tm = AITaskManager()
+        t = tm.create("t1")
+        assert tm.fail(t.task_id, "error")
+
+    def test_to_dict(self):
+        tm = AITaskManager()
+        tm.create("t1")
+        d = tm.to_dict()
+        assert "total" in d
+
+
+class TestAIRouter:
+    def test_route(self):
+        r = AIRouter()
+        assert r.route("generate") == "llm_manager"
+        assert r.route("analyze") == "reasoning"
+
+    def test_custom_route(self):
+        r = AIRouter()
+        r.register("custom", "custom_target")
+        assert r.route("custom") == "custom_target"
+
+    def test_list_routes(self):
+        routes = AIRouter().list_routes()
+        assert "generate" in routes
+
+
+class TestAIStateManager:
+    def test_set_get(self):
+        s = AIStateManager()
+        s.set("key", "val")
+        assert s.get("key") == "val"
+
+    def test_transition(self):
+        s = AIStateManager()
+        s.transition("running")
+        assert s.get("status") == "running"
+        assert len(s.get_history()) == 1
+
+    def test_reset(self):
+        s = AIStateManager()
+        s.transition("running")
+        s.reset()
+        assert s.get("status") == "idle"
+
+
+class TestAIMetrics:
+    def test_record(self):
+        m = AIMetrics()
+        m.record_task("comp1", True, 100.0)
+        assert m.total_tasks == 1
+        assert m.success_rate == 1.0
+
+    def test_to_dict(self):
+        d = AIMetrics().to_dict()
+        assert "total_tasks" in d
+
+
+class TestAIEvents:
+    def test_publish(self):
+        e = AIEvents()
+        r = []
+        e.subscribe("ev", lambda d: r.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(r) == 1
+
+
+class TestAIHealth:
+    def test_check(self):
+        h = AIHealth()
+        h.check("comp", True)
+        assert h.is_healthy("comp")
+
+
+class TestAICache:
+    def test_set_get(self):
+        c = AICache()
+        c.set("k", {"v": 1})
+        assert c.get("k") == {"v": 1}
+
+    def test_miss(self):
+        c = AICache()
+        assert c.get("missing") is None
+
+    def test_max_size(self):
+        c = AICache(max_size=2)
+        c.set("a", 1); c.set("b", 2); c.set("c", 3)
+        assert c.stats()["size"] <= 2
+
+
+class TestAIScheduler:
+    def test_schedule(self):
+        s = AIScheduler()
+        jid = s.schedule("task")
+        assert jid.startswith("ai-")
+
+    def test_complete(self):
+        s = AIScheduler()
+        jid = s.schedule("t")
+        s.get_next()
+        assert s.complete(jid)
+
+
+class TestAIValidator:
+    def test_valid(self):
+        v = AIValidator()
+        assert v.validate_task("test")["valid"]
+
+    def test_empty(self):
+        v = AIValidator()
+        assert not v.validate_task("")["valid"]
+
+
+class TestAIContext:
+    def test_set_get(self):
+        c = AIContext()
+        c.set("k", "v")
+        assert c.get("k") == "v"
+
+    def test_merge(self):
+        c = AIContext()
+        c.merge({"a": 1, "b": 2})
+        assert c.get("a") == 1
+
+
+class TestAIMemory:
+    def test_store(self):
+        m = AIMemory()
+        m.store("decision", "success")
+        assert m.count() == 1
+
+    def test_recall(self):
+        m = AIMemory()
+        m.store("d1", "ok")
+        assert len(m.recall("d1")) == 1
+
+
+class TestAIProfiler:
+    def test_record(self):
+        p = AIProfiler()
+        p.record("op", 10.0)
+        assert p.summary()["count"] == 1
+
+
+class TestAIReport:
+    def test_generate(self):
+        r = AIReportGenerator()
+        report = r.generate({"success_rate": 0.95})
+        assert report["report_type"] == "ai_orchestrator"
+
+
+class TestAIRegistry:
+    def test_register(self):
+        r = AIRegistry()
+        r.register("comp", "module")
+        assert r.get("comp") == "module"
+
+
+class TestAIFallback:
+    def test_handle(self):
+        f = AIFallback()
+        result = f.handle_failure("comp", "error")
+        assert result["original"] == "comp"
+
+
+class TestAILinker:
+    def test_link(self):
+        l = AILinker()
+        l.link("m1", "module")
+        assert l.get("m1") == "module"
+
+
+class TestAIConfigManager:
+    def test_set_get(self):
+        c = AIConfigManager()
+        c.set("k", "v")
+        assert c.get("k") == "v"
+
+
+class TestAIRequest:
+    def test_create(self):
+        r = AIRequest("task", {"input": "data"})
+        assert r.status == "pending"
+
+    def test_complete(self):
+        r = AIRequest("task")
+        r.complete({"output": "result"})
+        assert r.status == "completed"
+
+
+class TestAIResponse:
+    def test_create(self):
+        r = AIResponse()
+        r.content = "hello"
+        r.confidence = 0.9
+        d = r.to_dict()
+        assert d["confidence"] == 0.9
+
+
+class TestAIMonitor:
+    def test_counter(self):
+        m = AIMonitor()
+        m.increment("ops")
+        assert m.status()["counters"]["ops"] == 1
+
+    def test_alert(self):
+        m = AIMonitor()
+        m.alert("warn", "test")
+        assert len(m.get_alerts()) == 1
+
+
+class TestAILogger:
+    def test_log(self):
+        l = AILogger()
+        l.log("info", "test message")
+        assert l.count() == 1
+
+
+class TestAIPolicy:
+    def test_set_get(self):
+        p = AIPolicy()
+        p.set("custom", 42)
+        assert p.get("custom") == 42
+
+    def test_check(self):
+        p = AIPolicy()
+        r = p.check("test", {"retries": 1})
+        assert r["allowed"]
+
+
+class TestAIRetry:
+    def test_retry_success(self):
+        r = AIRetry(max_retries=2)
+        result = r.retry(lambda: 42)
+        assert result == 42
+
+    def test_retry_fail(self):
+        r = AIRetry(max_retries=1, delay_ms=1)
+        try:
+            r.retry(lambda: (_ for _ in ()).throw(ValueError("boom")))
+        except ValueError:
+            pass
+        assert len(r.get_log()) == 2
+
+
+class TestAIEnforcer:
+    def test_add_rule(self):
+        e = AIEnforcer()
+        e.add_rule("no_spam", "spam", "block")
+        assert len(e.list_rules()) == 1
+
+    def test_check(self):
+        e = AIEnforcer()
+        e.add_rule("no_spam", "spam", "block")
+        r = e.check({"content": "clean"})
+        assert r["passes"]
+
+
+class TestAICoordinator:
+    def test_register(self):
+        c = AICoordinator()
+        c.register("comp", "module")
+        assert "comp" in c.list_components()
+
+    def test_coordinate(self):
+        c = AICoordinator()
+        c.register("a", "m1")
+        c.set_order(["a"])
+        result = c.coordinate()
+        assert result["total"] == 1
+
+
+class TestAIGateway:
+    def test_register_handle(self):
+        g = AIGateway()
+        g.register_handler("test", lambda d: {"ok": True})
+        r = g.handle("test", {})
+        assert r["success"]
+
+    def test_not_found(self):
+        g = AIGateway()
+        r = g.handle("nonexistent")
+        assert "error" in r
+
+
+class TestAIAnalyzer:
+    def test_analyze(self):
+        a = AIAnalyzer()
+        result = a.analyze({"success_rate": 0.95, "avg_latency_ms": 100})
+        assert result["healthy"]
+
+
+class TestAIVersionManager:
+    def test_set_version(self):
+        v = AIVersionManager("1.0.0")
+        v.set_version("2.0.0")
+        assert v.get_current() == "2.0.0"
+
+    def test_rollback(self):
+        v = AIVersionManager("1.0.0")
+        v.set_version("2.0.0")
+        rolled = v.rollback()
+        assert rolled == "1.0.0"
+
+
+class TestAIDiffEngine:
+    def test_compare(self):
+        d = AIDiffEngine()
+        result = d.compare({"a": 1, "b": 2}, {"a": 1, "b": 3})
+        assert result["total_changes"] == 1
+
+    def test_no_changes(self):
+        d = AIDiffEngine()
+        result = d.compare({"a": 1}, {"a": 1})
+        assert result["total_changes"] == 0
+
+
+class TestAIOrchestrator:
+    def test_start_stop(self):
+        o = AIOrchestrator()
+        assert o.start(); assert o.stop()
+
+    def test_process(self):
+        o = AIOrchestrator()
+        o.start()
+        result = o.process("test", {"input": "data"})
+        assert "component" in result or "processed" in result
+
+    def test_link(self):
+        o = AIOrchestrator()
+        o.link_module("test_module", {"evaluate": lambda x: {"ok": True}})
+        assert "test_module" in o.get_status()["linked_modules"]
+
+    def test_status(self):
+        o = AIOrchestrator()
+        o.start()
+        s = o.get_status()
+        assert s["running"] is True
+
+    def test_report(self):
+        o = AIOrchestrator()
+        report = o.generate_report()
+        assert report["report_type"] == "ai_orchestrator"
