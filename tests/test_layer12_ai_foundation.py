@@ -4742,3 +4742,327 @@ class TestReasoningOrchestrator:
         o.reason("test", reasoning_type="logical")
         s = o.get_stats()
         assert "total_reasoning" in s
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODULE 7: AI Cost Optimizer
+# ═══════════════════════════════════════════════════════════════════════
+
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.models import CostEntry, BudgetLimit
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_tracker import CostTracker
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.budget_manager import BudgetManager
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.token_counter import TokenCounter
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.price_calculator import PriceCalculator
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_memory import CostMemory
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_analytics import CostAnalytics
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_optimizer import CostOptimizer
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.model_switcher import ModelSwitcher
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_forecaster import CostForecaster
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_report import CostReportGenerator
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_events import CostEvents
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_health import CostHealth
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_profiler import CostProfiler
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_context import CostContext
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_validator import CostValidator
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_monitor import CostMonitor
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_scheduler import CostScheduler
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_registry import CostRegistry
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_config import CostConfig
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_ranker import CostRanker
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_fallback import CostFallback
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_analyzer import CostAnalyzer
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.cost_orchestrator import CostOrchestrator
+
+
+class TestCostModels:
+    def test_entry(self):
+        e = CostEntry(provider="openai", model="gpt-4o", prompt_tokens=100, completion_tokens=50, cost_usd=0.01)
+        assert e.total_tokens() == 150
+        d = e.to_dict()
+        assert d["provider"] == "openai"
+
+    def test_budget_limit(self):
+        b = BudgetLimit(daily=5.0, weekly=30.0)
+        d = b.to_dict()
+        assert d["daily"] == 5.0
+
+
+class TestCostTracker:
+    def test_record(self):
+        t = CostTracker()
+        t.record("openai", "gpt-4o", 100, 50, 0.01)
+        assert t.entries_count() == 1
+        assert t.total_spent() == 0.01
+
+    def test_over_budget(self):
+        t = CostTracker(daily_budget=0.005)
+        t.record("openai", "gpt-4o", 100, 50, 0.01)
+        assert t.is_over_daily_budget()
+
+    def test_get_entries(self):
+        t = CostTracker()
+        t.record("openai", "gpt-4o", 100, 50, 0.01)
+        t.record("anthropic", "claude", 100, 50, 0.02)
+        assert len(t.get_entries("openai")) == 1
+
+    def test_to_dict(self):
+        t = CostTracker()
+        d = t.to_dict()
+        assert "total_spent" in d
+
+
+class TestBudgetManager:
+    def test_can_spend(self):
+        b = BudgetManager(BudgetLimit(daily=1.0))
+        assert b.can_spend(0.5)
+        assert not b.can_spend(1.5)
+
+    def test_usage(self):
+        b = BudgetManager(BudgetLimit(daily=1.0))
+        b.record_spend(0.3)
+        assert abs(b.budget_usage_pct() - 30.0) < 0.01
+
+    def test_to_dict(self):
+        d = BudgetManager().to_dict()
+        assert "daily" in d
+
+
+class TestTokenCounter:
+    def test_count(self):
+        assert TokenCounter.count_words("hello world") == 2
+
+    def test_estimate(self):
+        tokens = TokenCounter.estimate_tokens("hello world test")
+        assert tokens > 0
+
+    def test_batch(self):
+        result = TokenCounter.count_batch(["hello", "world"])
+        assert result["count"] == 2
+
+
+class TestPriceCalculator:
+    def test_calculate(self):
+        cost = PriceCalculator.calculate("gpt-4o", 1000, 500)
+        assert cost > 0
+
+    def test_compare(self):
+        costs = PriceCalculator.compare_models(1000, 500, ["gpt-4o", "gpt-4o-mini"])
+        assert "gpt-4o" in costs
+        assert costs["gpt-4o-mini"] < costs["gpt-4o"]
+
+
+class TestCostMemory:
+    def test_store(self):
+        m = CostMemory()
+        m.store("openai", "gpt-4o", 0.01)
+        assert m.count() == 1
+
+    def test_by_provider(self):
+        m = CostMemory()
+        m.store("openai", "gpt-4o", 0.01)
+        m.store("anthropic", "claude", 0.02)
+        by_p = m.get_spending_by_provider()
+        assert by_p["openai"] == 0.01
+
+    def test_avg(self):
+        m = CostMemory()
+        m.store("openai", "gpt-4o", 0.01)
+        m.store("openai", "gpt-4o", 0.03)
+        assert m.get_avg_cost("openai") == 0.02
+
+
+class TestCostAnalytics:
+    def test_analyze(self):
+        a = CostAnalytics()
+        a.add_entries([CostEntry(provider="openai", model="gpt-4o", cost_usd=0.01)])
+        s = a.summary()
+        assert s["request_count"] == 1
+
+    def test_by_provider(self):
+        a = CostAnalytics()
+        a.add_entries([CostEntry(provider="a", cost_usd=1.0), CostEntry(provider="b", cost_usd=2.0)])
+        assert a.cost_by_provider()["a"] == 1.0
+
+
+class TestCostOptimizer:
+    def test_find_cheapest(self):
+        o = CostOptimizer()
+        cheapest = o.find_cheapest(1000, 500)
+        assert cheapest in ["gemini-2.0-flash", "gpt-4o-mini", "deepseek-chat"]
+
+    def test_suggest(self):
+        o = CostOptimizer()
+        assert o.suggest_model("low", 0.001) == "gemini-2.0-flash"
+
+
+class TestModelSwitcher:
+    def test_switch_down(self):
+        s = ModelSwitcher()
+        result = s.switch_down("gpt-4o", 0.0005)
+        assert result == "gemini-2.0-flash"
+
+    def test_tier(self):
+        s = ModelSwitcher()
+        assert s.suggest_tier(0.005) == "cheapest"
+        assert s.suggest_tier(0.5) == "high_quality"
+
+
+class TestCostForecaster:
+    def test_predict(self):
+        f = CostForecaster()
+        result = f.predict([1.0, 2.0, 3.0], days_ahead=7)
+        assert result["projected_total"] == 14.0
+
+    def test_empty(self):
+        f = CostForecaster()
+        result = f.predict([])
+        assert result["avg_daily"] == 0.0
+
+
+class TestCostReport:
+    def test_generate(self):
+        r = CostReportGenerator()
+        report = r.generate({"total_cost": 5.0}, {"by_provider": {"openai": 5.0}})
+        assert report["report_type"] == "cost_optimizer"
+
+    def test_export(self):
+        r = CostReportGenerator()
+        report = r.generate({"total_cost": 1.0}, {})
+        j = r.export_json(report)
+        assert "cost_optimizer" in j
+
+
+class TestCostEvents:
+    def test_publish(self):
+        e = CostEvents()
+        received = []
+        e.subscribe("ev", lambda d: received.append(d))
+        e.publish("ev", {"x": 1})
+        assert len(received) == 1
+
+
+class TestCostHealth:
+    def test_check(self):
+        h = CostHealth()
+        h.check("tracker", True)
+        assert h.is_healthy("tracker")
+
+
+class TestCostProfiler:
+    def test_record(self):
+        p = CostProfiler()
+        p.record("calc", 5.0)
+        assert p.summary()["count"] == 1
+
+
+class TestCostContext:
+    def test_set_get(self):
+        c = CostContext()
+        c.set("key", "val")
+        assert c.get("key") == "val"
+
+
+class TestCostValidator:
+    def test_valid(self):
+        v = CostValidator()
+        e = CostEntry(provider="o", model="m", cost_usd=0.01, prompt_tokens=100, completion_tokens=50)
+        assert v.validate_entry(e)["valid"]
+
+    def test_negative_cost(self):
+        v = CostValidator()
+        e = CostEntry(cost_usd=-1.0)
+        assert not v.validate_entry(e)["valid"]
+
+
+class TestCostMonitor:
+    def test_add_spend(self):
+        m = CostMonitor()
+        m.add_spend(1.0)
+        assert m.status()["counters"]["total_spend"] == 1.0
+
+
+class TestCostScheduler:
+    def test_schedule(self):
+        s = CostScheduler()
+        jid = s.schedule("optimize")
+        assert jid.startswith("cost-")
+
+    def test_complete(self):
+        s = CostScheduler()
+        jid = s.schedule("task")
+        s.get_next()
+        assert s.complete(jid)
+
+
+class TestCostRegistry:
+    def test_register(self):
+        r = CostRegistry()
+        r.register("tracker", "comp")
+        assert r.get("tracker") == "comp"
+
+
+class TestCostConfig:
+    def test_defaults(self):
+        c = CostConfig()
+        assert c.daily_budget == 10.0
+
+    def test_to_dict(self):
+        d = CostConfig().to_dict()
+        assert "daily_budget" in d
+
+
+class TestCostRanker:
+    def test_rank(self):
+        r = CostRanker()
+        ranked = r.rank(1000, 500, ["gpt-4o", "gpt-4o-mini"])
+        assert ranked[0]["rank"] == 1
+        assert ranked[0]["model"] == "gpt-4o-mini"
+
+
+class TestCostFallback:
+    def test_fallback(self):
+        f = CostFallback()
+        model = f.get_fallback_model("gpt-4o", 0.0005)
+        assert model == "gemini-2.0-flash"
+
+
+class TestCostAnalyzer:
+    def test_analyze(self):
+        a = CostAnalyzer()
+        result = a.analyze([1.0, 2.0, 3.0])
+        assert result["avg"] == 2.0
+
+    def test_anomalies(self):
+        a = CostAnalyzer()
+        anomalies = a.detect_anomalies([1.0, 1.1, 0.9, 10.0, 1.0], threshold=1.0)
+        assert len(anomalies) >= 1
+
+    def test_empty(self):
+        assert CostAnalyzer().analyze([])["count"] == 0
+
+
+class TestCostOrchestrator:
+    def test_start_stop(self):
+        o = CostOrchestrator()
+        assert o.start(); assert o.stop()
+
+    def test_record_cost(self):
+        o = CostOrchestrator()
+        o.start()
+        result = o.record_cost("openai", "gpt-4o", 100, 50, 0.01)
+        assert result["provider"] == "openai"
+
+    def test_estimate(self):
+        o = CostOrchestrator()
+        cost = o.estimate_cost("gpt-4o", 1000, 500)
+        assert cost > 0
+
+    def test_find_best(self):
+        o = CostOrchestrator()
+        model = o.find_best_model(1000, 500, "low")
+        assert model in ["gemini-2.0-flash", "gpt-4o-mini", "deepseek-chat"]
+
+    def test_stats(self):
+        o = CostOrchestrator()
+        o.record_cost("openai", "gpt-4o", 100, 50, 0.01)
+        s = o.get_stats()
+        assert "budget" in s
