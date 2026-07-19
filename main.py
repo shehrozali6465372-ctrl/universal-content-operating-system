@@ -15,13 +15,21 @@ import json
 from typing import Any, Dict, Optional
 
 
+# GitHub Secret names (note: key 2 & 3 have no underscores)
+GEMINI_KEY_NAMES = [
+    ("GEMINI_API_KEY_1", "GEMINI_API_KEY_1"),
+    ("GEMINI_API_KEY_2", "GEMINIAPIKEY2"),
+    ("GEMINI_API_KEY_3", "GEMINIAPIKEY3"),
+]
+
+
 def load_env_secrets() -> Dict[str, str]:
     """Load API keys from environment / GitHub Secrets."""
     secrets = {}
-    for i in range(1, 4):
-        key = os.environ.get(f"GEMINI_API_KEY_{i}")
+    for env_name, secret_name in GEMINI_KEY_NAMES:
+        key = os.environ.get(env_name) or os.environ.get(secret_name)
         if key:
-            secrets[f"GEMINI_API_KEY_{i}"] = key
+            secrets[secret_name] = key
     return secrets
 
 

@@ -66,12 +66,19 @@ class ContentResponse:
 class PipelineWiring:
     """Wires all layers together into the content pipeline."""
 
+    # GitHub Secret names (note: key 2 & 3 have no underscores)
+    _GEMINI_KEYS = [
+        ("GEMINI_API_KEY_1", "GEMINI_API_KEY_1"),
+        ("GEMINI_API_KEY_2", "GEMINIAPIKEY2"),
+        ("GEMINI_API_KEY_3", "GEMINIAPIKEY3"),
+    ]
+
     def __init__(self) -> None:
         self._key_manager = KeyManager()
-        for i in range(1, 4):
-            key = os.environ.get(f"GEMINI_API_KEY_{i}")
+        for idx, (env_name, secret_name) in enumerate(self._GEMINI_KEYS, 1):
+            key = os.environ.get(env_name) or os.environ.get(secret_name)
             if key:
-                self._key_manager.register_key(f"k{i}", key, "gemini")
+                self._key_manager.register_key(f"k{idx}", key, "gemini")
         self._gemini = GeminiProvider(self._key_manager)
         self._prompt_builder = PromptBuilder()
 

@@ -23,8 +23,8 @@ class TestFullPipeline:
     def setup_method(self):
         self.km = KeyManager()
         self.km.register_key("k1", os.environ.get("GEMINI_API_KEY_1", "AIzaSy_FAKE_11111111111111111111"), "gemini")
-        self.km.register_key("k2", os.environ.get("GEMINI_API_KEY_2", "AIzaSy_FAKE_22222222222222222222"), "gemini")
-        self.km.register_key("k3", os.environ.get("GEMINI_API_KEY_3", "AIzaSy_FAKE_33333333333333333333"), "gemini")
+        self.km.register_key("k2", os.environ.get("GEMINIAPIKEY2", "AIzaSy_FAKE_22222222222222222222"), "gemini")
+        self.km.register_key("k3", os.environ.get("GEMINIAPIKEY3", "AIzaSy_FAKE_33333333333333333333"), "gemini")
 
         self.gemini = GeminiProvider(self.km)
         self.router = ModelRouter(self.km)
