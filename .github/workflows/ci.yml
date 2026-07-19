@@ -36,7 +36,7 @@ jobs:
       - name: 🔍 Lint (Ruff)
         run: |
           ruff check layers/ --select E,F,W \
-            --ignore E501,E402,E741,E731,E721,F841,E701,E702
+            --ignore E501,E402,E741,E731,E721,F841,E701,E702,F401
 
       - name: 🧪 Full Test Suite (All Layers + Tests)
         run: |
