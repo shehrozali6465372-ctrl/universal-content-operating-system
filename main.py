@@ -62,7 +62,7 @@ class AIOSBoot:
 
     def __init__(self) -> None:
         self.start_time = time.time()
-        self.version = "5.8.0"
+        self.version = "5.9.0"
         self.layers_loaded: list = []
         self.errors: list = []
 
@@ -125,7 +125,7 @@ def show_status() -> Dict[str, Any]:
         for d in layer_dirs
     )
     return {
-        "version": "5.8.0",
+        "version": "5.9.0",
         "total_layers": len(layer_dirs),
         "total_python_files": total_files,
         "layers": [os.path.basename(d.rstrip("/")) for d in layer_dirs],
@@ -177,7 +177,7 @@ def show_stats() -> Dict[str, Any]:
         pass
 
     return {
-        "version": "5.8.0",
+        "version": "5.9.0",
         "layers": len(layer_dirs),
         "source_files": total_files,
         "test_files": test_files,
@@ -234,6 +234,45 @@ if __name__ == "__main__":
     elif "--stats" in args:
         result = show_stats()
         print(json.dumps(result, indent=2, default=str))
+
+    elif "--api" in args:
+        from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
+        port = 8000
+        if "--port" in args:
+            pidx = args.index("--port")
+            port = int(args[pidx + 1]) if pidx + 1 < len(args) else 8000
+        gateway = APIGateway(port=port)
+        gateway.start()
+        print(f"\n🌐 API Gateway running on http://0.0.0.0:{port}")
+        print(f"   Endpoints: /status /health /analytics /history /stats /generate /templates /platforms")
+        print(f"   Press Ctrl+C to stop\n")
+        try:
+            import signal
+            signal.signal(signal.SIGINT, lambda s, f: (gateway.stop(), print("\n🛑 Gateway stopped"), sys.exit(0)))
+            signal.pause()
+        except AttributeError:
+            import time as _time
+            while gateway.is_running():
+                _time.sleep(1)
+
+    elif "--dashboard" in args:
+        import http.server
+        import os
+        dash_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
+        if not os.path.exists(os.path.join(dash_dir, "dashboard.html")):
+            print("⚠️  Dashboard not found. Run from project root.")
+            sys.exit(1)
+        port = 8080
+        if "--port" in args:
+            pidx = args.index("--port")
+            port = int(args[pidx + 1]) if pidx + 1 < len(args) else 8080
+        os.chdir(dash_dir)
+        handler = http.server.SimpleHTTPRequestHandler
+        with http.server.HTTPServer(("0.0.0.0", port), handler) as httpd:
+            print(f"\n🖥️  Dashboard at http://localhost:{port}/dashboard.html")
+            print(f"   API Gateway should be on port 8000")
+            print(f"   Press Ctrl+C to stop\n")
+            httpd.serve_forever()
 
     else:
         boot = AIOSBoot()

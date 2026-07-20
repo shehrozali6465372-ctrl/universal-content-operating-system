@@ -16,7 +16,7 @@ class TestMainPy:
         assert result.returncode == 0
         import json
         data = json.loads(result.stdout)
-        assert data["version"] == "5.8.0"
+        assert data["version"] == "5.9.0"
         assert data["total_layers"] == 22
 
     def test_boot_command(self):

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤖 AI OS Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #1e293b, #334155); padding: 20px; border-bottom: 1px solid #475569; }
+  .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+  .header span { font-size: 14px; color: #94a3b8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+  .badge-green { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e; }
+  .badge-yellow { background: #eab30820; color: #eab308; border: 1px solid #eab308; }
+  .badge-red { background: #ef444420; color: #ef4444; border: 1px solid #ef4444; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+  .card h2 { font-size: 16px; color: #94a3b8; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+  .stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; }
+  .stat:last-child { border: none; }
+  .stat-label { color: #94a3b8; }
+  .stat-value { font-weight: bold; color: #e2e8f0; }
+  .metric-value { font-size: 36px; font-weight: bold; color: #3b82f6; }
+  .metric-label { font-size: 14px; color: #94a3b8; margin-top: 4px; }
+  .history-item { padding: 12px; border: 1px solid #334155; border-radius: 8px; margin-bottom: 8px; }
+  .history-item:last-child { margin-bottom: 0; }
+  .history-item .title { font-weight: 600; }
+  .history-item .meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .btn { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .btn:hover { background: #2563eb; }
+  input, select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 10px; border-radius: 8px; font-size: 14px; width: 100%; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .full-width { grid-column: 1 / -1; }
+  pre { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 15px; overflow-x: auto; font-size: 12px; max-height: 300px; }
+  .flex { display: flex; gap: 10px; align-items: center; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.green { background: #22c55e; }
+  .status-dot.red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+  .status-dot.yellow { background: #eab308; }
+  .loader { display: inline-block; width: 20px; height: 20px; border: 2px solid #334155; border-top: 2px solid #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: white; padding: 12px 24px; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+<div class="header flex-between">
+  <h1>🤖 AI OS Dashboard <span>v5.8.0</span></h1>
+  <div class="flex">
+    <span id="connectionStatus" class="badge badge-yellow">Connecting...</span>
+    <button class="btn" onclick="refreshAll()">🔄 Refresh</button>
+  </div>
+</div>
+<div class="container">
+  <div class="grid" style="margin-bottom:20px">
+    <div class="card">
+      <div class="metric-value" id="totalLayers">-</div>
+      <div class="metric-label">Total Layers</div>
+    </div>
+    <div class="card">
+      <div class="metric-value" id="totalSourceFiles">-</div>
+      <div class="metric-label">Source Files</div>
+    </div>
+    <div class="card">
+      <div class="metric-value" id="totalTestFiles">-</div>
+      <div class="metric-label">Test Files</div>
+    </div>
+    <div class="card">
+      <div class="metric-value" id="dbTotalRows">-</div>
+      <div class="metric-label">Database Rows</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>📊 Analytics</h2>
+      <div id="analyticsContent"><div class="loader"></div></div>
+    </div>
+    <div class="card">
+      <h2>🏆 Template Rankings</h2>
+      <div id="templatesContent"><div class="loader"></div></div>
+    </div>
+    <div class="card">
+      <h2>📋 Recent Content</h2>
+      <div id="historyContent"><div class="loader"></div></div>
+    </div>
+    <div class="card">
+      <h2>🚀 Generate Content</h2>
+      <div class="form-grid">
+        <input type="text" id="topicInput" placeholder="Topic" value="AI Trends" class="full-width">
+        <select id="platformSelect"><option>facebook</option><option>instagram</option><option>linkedin</option><option>twitter</option></select>
+        <select id="toneSelect"><option>professional</option><option>casual</option><option>educational</option></select>
+        <button class="btn full-width" onclick="generateContent()">🚀 Generate</button>
+      </div>
+      <pre id="generateResult" style="margin-top:10px">Click Generate to start</pre>
+    </div>
+    <div class="card">
+      <h2>🌐 Platforms</h2>
+      <div id="platformsContent"><div class="loader"></div></div>
+    </div>
+    <div class="card">
+      <h2>🩺 Health</h2>
+      <div id="healthContent"><div class="loader"></div></div>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+const API = 'http://localhost:8000';
+async function fetchAPI(endpoint, opts={}) {
+  try {
+    const resp = await fetch(`${API}${endpoint}`, opts);
+    const data = await resp.json();
+    return data;
+  } catch (e) { return { success: false, error: e.message }; }
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+async function loadStatus() {
+  const data = await fetchAPI('/status');
+  if (data.success) {
+    document.getElementById('totalLayers').textContent = data.data.layers;
+    document.getElementById('connectionStatus').textContent = 'Connected';
+    document.getElementById('connectionStatus').className = 'badge badge-green';
+  }
+}
+async function loadStats() {
+  const data = await fetchAPI('/stats');
+  if (data.success) {
+    document.getElementById('totalSourceFiles').textContent = data.data.source_files;
+    document.getElementById('totalTestFiles').textContent = data.data.test_files;
+    if (data.data.database) {
+      document.getElementById('dbTotalRows').textContent = data.data.database.total_rows || 0;
+    }
+  }
+}
+async function loadAnalytics() {
+  const data = await fetchAPI('/analytics');
+  const el = document.getElementById('analyticsContent');
+  if (data.success && data.data.analytics) {
+    let html = '';
+    for (const [name, info] of Object.entries(data.data.analytics)) {
+      html += `<div class="stat"><span class="stat-label">${name}</span><span class="stat-value">${info.avg.toFixed(2)} (${info.count}x)</span></div>`;
+    }
+    el.innerHTML = html || '<p>No data yet</p>';
+  } else {
+    el.innerHTML = '<p>Analytics unavailable</p>';
+  }
+}
+async function loadHistory() {
+  const data = await fetchAPI('/history?limit=5');
+  const el = document.getElementById('historyContent');
+  if (data.success && data.data.history) {
+    let html = '';
+    for (const item of data.data.history) {
+      html += `<div class="history-item"><div class="title">${item.content || 'No content'}</div><div class="meta">#${item.id} · ${item.platform} · score: ${item.engagement_score || 0}</div></div>`;
+    }
+    el.innerHTML = html;
+  } else {
+    el.innerHTML = '<p>No history yet</p>';
+  }
+}
+async function loadTemplates() {
+  const data = await fetchAPI('/templates');
+  const el = document.getElementById('templatesContent');
+  if (data.success && data.data.rankings) {
+    let html = '';
+    for (const r of data.data.rankings.slice(0, 10)) {
+      const badge = r.is_champion ? '🏆' : r.is_challenger ? '📊' : r.is_retired ? '🗑️' : '📋';
+      html += `<div class="stat"><span class="stat-label">${badge} ${r.hook_type}</span><span class="stat-value">${r.score} (${r.total_uses}x)</span></div>`;
+    }
+    el.innerHTML = html || '<p>No templates yet</p>';
+  } else {
+    el.innerHTML = '<p>No templates yet</p>';
+  }
+}
+async function loadPlatforms() {
+  const data = await fetchAPI('/platforms');
+  const el = document.getElementById('platformsContent');
+  if (data.success && data.data.publishers) {
+    let html = '';
+    for (const [plat, status] of Object.entries(data.data.publishers)) {
+      const dot = status === 'implemented' ? 'green' : 'red';
+      html += `<div class="stat"><span class="stat-label"><span class="status-dot ${dot}"></span>${plat}</span><span class="stat-value">${status}</span></div>`;
+    }
+    html += `<div class="stat"><span class="stat-label">Total supported</span><span class="stat-value">${(data.data.platforms||[]).length}</span></div>`;
+    el.innerHTML = html;
+  }
+}
+async function loadHealth() {
+  const data = await fetchAPI('/health');
+  const el = document.getElementById('healthContent');
+  if (data.success && data.data.checks) {
+    let html = '';
+    for (const [check, status] of Object.entries(data.data.checks)) {
+      const dot = status === 'healthy' || status === 'configured' ? 'green' : status === 'not_configured' ? 'yellow' : 'red';
+      html += `<div class="stat"><span class="stat-label"><span class="status-dot ${dot}"></span>${check}</span><span class="stat-value">${status}</span></div>`;
+    }
+    el.innerHTML = html;
+  }
+}
+async function generateContent() {
+  const topic = document.getElementById('topicInput').value;
+  const platform = document.getElementById('platformSelect').value;
+  const tone = document.getElementById('toneSelect').value;
+  document.getElementById('generateResult').textContent = 'Generating...';
+  const data = await fetchAPI('/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, platform, tone }),
+  });
+  if (data.success) {
+    document.getElementById('generateResult').textContent = JSON.stringify(data.data, null, 2);
+    showToast('✅ Content generated!');
+    loadHistory(); loadAnalytics(); loadTemplates();
+  } else {
+    document.getElementById('generateResult').textContent = 'Error: ' + (data.error || 'Unknown');
+    showToast('❌ Generation failed');
+  }
+}
+async function refreshAll() {
+  await Promise.all([
+    loadStatus(), loadStats(), loadAnalytics(),
+    loadHistory(), loadTemplates(), loadPlatforms(), loadHealth(),
+  ]);
+}
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>
