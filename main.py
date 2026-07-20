@@ -62,7 +62,7 @@ class AIOSBoot:
 
     def __init__(self) -> None:
         self.start_time = time.time()
-        self.version = "5.7.0"
+        self.version = "5.8.0"
         self.layers_loaded: list = []
         self.errors: list = []
 
@@ -125,7 +125,7 @@ def show_status() -> Dict[str, Any]:
         for d in layer_dirs
     )
     return {
-        "version": "5.7.0",
+        "version": "5.8.0",
         "total_layers": len(layer_dirs),
         "total_python_files": total_files,
         "layers": [os.path.basename(d.rstrip("/")) for d in layer_dirs],
@@ -177,7 +177,7 @@ def show_stats() -> Dict[str, Any]:
         pass
 
     return {
-        "version": "5.7.0",
+        "version": "5.8.0",
         "layers": len(layer_dirs),
         "source_files": total_files,
         "test_files": test_files,

@@ -1,0 +1,70 @@
+# ─── Universal AI Content Operating System ───
+# Docker Compose for local development and production
+
+version: '3.8'
+
+services:
+  # ─── Main AI OS Service ───
+  aios:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aios-main
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - aios-data:/app/data
+      - aios-output:/app/output
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1:-}
+      - GEMINIAPIKEY2=${GEMINIAPIKEY2:-}
+      - GEMINIAPIKEY3=${GEMINIAPIKEY3:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,subprocess; r=subprocess.run(['python','main.py','--status'],capture_output=True,text=True,timeout=5); d=json.loads(r.stdout); exit(0 if d.get('layers',0)>0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    networks:
+      - aios-net
+
+  # ─── Worker Service (background tasks) ───
+  aios-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aios-worker
+    restart: unless-stopped
+    command: ["python", "-c", "import time; print('Worker running'); time.sleep(3600)"]
+    volumes:
+      - aios-data:/app/data
+      - aios-output:/app/output
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1:-}
+      - GEMINIAPIKEY2=${GEMINIAPIKEY2:-}
+      - GEMINIAPIKEY3=${GEMINIAPIKEY3:-}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+    networks:
+      - aios-net
+
+volumes:
+  aios-data:
+    driver: local
+  aios-output:
+    driver: local
+
+networks:
+  aios-net:
+    driver: bridge

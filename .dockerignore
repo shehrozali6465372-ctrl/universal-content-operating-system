@@ -1,0 +1,40 @@
+# Git
+.git
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+htmlcov/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/
+*.test.py
+
+# Data (persisted via volumes)
+data/
+
+# Output (persisted via volumes)
+output/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Dev tools
+Makefile
+.dockerignore
