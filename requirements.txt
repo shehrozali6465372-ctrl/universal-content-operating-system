@@ -1,5 +1,5 @@
 # Universal AI Content Operating System
-# v5.6.0
+# v5.7.0
 
 # ─── AI & LLM Providers ────────────────────────────────────────────
 openai>=1.0.0

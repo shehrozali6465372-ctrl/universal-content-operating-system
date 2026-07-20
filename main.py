@@ -62,7 +62,7 @@ class AIOSBoot:
 
     def __init__(self) -> None:
         self.start_time = time.time()
-        self.version = "5.6.0"
+        self.version = "5.7.0"
         self.layers_loaded: list = []
         self.errors: list = []
 
@@ -125,11 +125,65 @@ def show_status() -> Dict[str, Any]:
         for d in layer_dirs
     )
     return {
-        "version": "5.6.0",
+        "version": "5.7.0",
         "total_layers": len(layer_dirs),
         "total_python_files": total_files,
         "layers": [os.path.basename(d.rstrip("/")) for d in layer_dirs],
     }
+
+
+
+def show_analytics() -> Dict[str, Any]:
+    """Show analytics summary from database."""
+    try:
+        from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+        persist = PipelinePersistence()
+        summary = persist.get_analytics_summary()
+        persist.close()
+        return {"analytics": summary, "total_metrics": len(summary)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def show_history(limit: int = 10, platform: Optional[str] = None) -> Dict[str, Any]:
+    """Show content history from database."""
+    try:
+        from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+        persist = PipelinePersistence()
+        history = persist.get_content_history(platform=platform, limit=limit)
+        persist.close()
+        return {"history": history, "count": len(history), "platform_filter": platform}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def show_stats() -> Dict[str, Any]:
+    """Show full system statistics."""
+    import glob
+    layer_dirs = sorted(glob.glob("layers/layer*/"))
+    total_files = sum(
+        len(glob.glob(f"{d}**/*.py", recursive=True))
+        for d in layer_dirs
+    )
+    test_files = len(glob.glob("tests/**/test_*.py", recursive=True))
+
+    db_stats = {}
+    try:
+        from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+        persist = PipelinePersistence()
+        db_stats = persist.get_db_stats()
+        persist.close()
+    except Exception:
+        pass
+
+    return {
+        "version": "5.7.0",
+        "layers": len(layer_dirs),
+        "source_files": total_files,
+        "test_files": test_files,
+        "database": db_stats,
+    }
+
 
 
 if __name__ == "__main__":
@@ -159,6 +213,26 @@ if __name__ == "__main__":
         idx = args.index("--generate")
         topic = args[idx + 1] if idx + 1 < len(args) else "artificial intelligence"
         result = generate_content(topic)
+        print(json.dumps(result, indent=2, default=str))
+
+    elif "--analytics" in args:
+        result = show_analytics()
+        print(json.dumps(result, indent=2, default=str))
+
+    elif "--history" in args:
+        limit = 10
+        platform = None
+        if "--limit" in args:
+            lidx = args.index("--limit")
+            limit = int(args[lidx + 1]) if lidx + 1 < len(args) else 10
+        if "--platform" in args:
+            pidx = args.index("--platform")
+            platform = args[pidx + 1] if pidx + 1 < len(args) else None
+        result = show_history(limit=limit, platform=platform)
+        print(json.dumps(result, indent=2, default=str))
+
+    elif "--stats" in args:
+        result = show_stats()
         print(json.dumps(result, indent=2, default=str))
 
     else:

@@ -1,6 +1,6 @@
 # 🤖 Universal AI Content Operating System
 
-**v5.6.0** — An autonomous, platform-agnostic AI content creation and publishing system.
+**v5.7.0** — An autonomous, platform-agnostic AI content creation and publishing system.
 
 ## Architecture
 
