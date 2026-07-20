@@ -23,7 +23,7 @@ class DockerConfig:
                 "volumes": self.volumes, "memory": self.memory_limit}
 
     def generate_dockerfile(self) -> str:
-        return f"""FROM python:3.12-slim
+        return """FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
@@ -41,12 +41,12 @@ class DockerCompose:
         self.services[name] = config
 
     def generate(self) -> str:
-        lines = [f"version: '3.8'", f"services:"]
+        lines = ["version: '3.8'", "services:"]
         for name, config in self.services.items():
             lines.append(f"  {name}:")
             lines.append(f"    image: {config.image}:{config.tag}")
             if config.ports:
-                lines.append(f"    ports:")
+                lines.append("    ports:")
                 for port in config.ports:
                     lines.append(f"      - {port}")
             lines.append(f"    restart: {config.restart_policy}")

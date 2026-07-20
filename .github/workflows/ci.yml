@@ -39,12 +39,9 @@ jobs:
           ruff check layers/ --select E,F,W \
             --ignore E501,E402,E741,E731,E721,F841,E701,E702,F401,E401,F821,F403
 
-      - name: 🧪 Full Test Suite (All Layers + Tests)
+      - name: 🧪 Layer 1-10 Tests
         run: |
           python -m pytest \
-            tests/ \
-            --ignore=tests/test_core.py \
-            --ignore=tests/layer10_monetization/test_content_generation.py \
             layers/layer01_core/tests/ \
             layers/layer02_research/tests/ \
             layers/layer03_intelligence/tests/ \
@@ -55,6 +52,43 @@ jobs:
             layers/layer08_analytics/tests/ \
             layers/layer09_learning/tests/ \
             layers/layer10_monetization/tests/ \
+            -v \
+            --tb=short \
+            -q
+
+      - name: 🧪 Layer 11-14 Tests
+        run: |
+          python -m pytest \
+            tests/test_layer11_async_runtime.py \
+            tests/test_layer12_ai_foundation.py \
+            tests/test_layer13_persistence.py \
+            tests/test_layer14_integration.py \
+            tests/test_phase1_integration_engine.py \
+            tests/test_phase2_async_runtime.py \
+            tests/test_phase3_database.py \
+            tests/test_phase4_security.py \
+            tests/test_phase5_monitoring.py \
+            tests/test_phases6_9_combined.py \
+            -v \
+            --tb=short \
+            -q
+
+      - name: 🧪 Model Router & Integration Tests
+        run: |
+          python -m pytest \
+            tests/test_gemini_real_api.py \
+            tests/test_model_router_system.py \
+            tests/test_final_fixes.py \
+            -v \
+            --tb=short \
+            -q
+
+      - name: 🧪 Shared & Benchmark Tests
+        run: |
+          python -m pytest \
+            tests/shared/ \
+            tests/benchmarks/ \
+            tests/integration/ \
             -v \
             --tb=short \
             -q
