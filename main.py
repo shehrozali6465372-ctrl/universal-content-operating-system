@@ -62,7 +62,7 @@ class AIOSBoot:
 
     def __init__(self) -> None:
         self.start_time = time.time()
-        self.version = "5.9.0"
+        self.version = "6.0.0"
         self.layers_loaded: list = []
         self.errors: list = []
 
@@ -125,7 +125,7 @@ def show_status() -> Dict[str, Any]:
         for d in layer_dirs
     )
     return {
-        "version": "5.9.0",
+        "version": "6.0.0",
         "total_layers": len(layer_dirs),
         "total_python_files": total_files,
         "layers": [os.path.basename(d.rstrip("/")) for d in layer_dirs],
@@ -177,7 +177,7 @@ def show_stats() -> Dict[str, Any]:
         pass
 
     return {
-        "version": "5.9.0",
+        "version": "6.0.0",
         "layers": len(layer_dirs),
         "source_files": total_files,
         "test_files": test_files,
@@ -254,6 +254,47 @@ if __name__ == "__main__":
             import time as _time
             while gateway.is_running():
                 _time.sleep(1)
+
+    elif "--schedule" in args:
+        from layers.layer07_publishing.modules.content_scheduler.scheduler import ContentScheduler
+        from layers.layer07_publishing.modules.content_scheduler.cron_parser import CronExpression
+        scheduler = ContentScheduler()
+        idx = args.index("--schedule")
+        cron = args[idx + 1] if idx + 1 < len(args) else "daily"
+        topic_idx = args.index("--topic") if "--topic" in args else -1
+        topic = args[topic_idx + 1] if topic_idx >= 0 and topic_idx + 1 < len(args) else "AI Trends"
+        platforms = ["facebook"]
+        if "--platforms" in args:
+            pidx = args.index("--platforms")
+            platforms = args[pidx + 1].split(",") if pidx + 1 < len(args) else ["facebook"]
+        job = scheduler.add_job(topic=topic, platforms=platforms, cron=cron)
+        print(json.dumps({"job": job.to_dict(), "message": f"Scheduled '{topic}' on {cron} for {platforms}"}, indent=2, default=str))
+
+    elif "--scheduler-stats" in args:
+        from layers.layer07_publishing.modules.content_scheduler.scheduler import ContentScheduler
+        scheduler = ContentScheduler()
+        print(json.dumps(scheduler.get_stats(), indent=2))
+
+    elif "--cron-next" in args:
+        from layers.layer07_publishing.modules.content_scheduler.cron_parser import CronExpression
+        idx = args.index("--cron-next")
+        expr = CronExpression(args[idx + 1] if idx + 1 < len(args) else "daily")
+        nxt = expr.next_run_time()
+        print(json.dumps({"expression": str(expr), "next_run": nxt.isoformat() if nxt else "none"}, indent=2))
+
+    elif "--cron-presets" in args:
+        from layers.layer07_publishing.modules.content_scheduler.cron_parser import CronExpression
+        cron = CronExpression()
+        presets = {name: cron.get_preset(name) for name in cron.list_presets()}
+        print(json.dumps(presets, indent=2))
+
+    elif "--cross-publish" in args:
+        from layers.layer07_publishing.modules.platform_plugin_manager.cross_platform_publisher import CrossPlatformPublisher
+        cross = CrossPlatformPublisher()
+        idx = args.index("--cross-publish")
+        topic = args[idx + 1] if idx + 1 < len(args) else "AI Trends"
+        result = cross.publish(topic=topic, content=f"Check out the latest on {topic}!", platforms=["facebook"])
+        print(json.dumps(result.to_dict(), indent=2, default=str))
 
     elif "--dashboard" in args:
         import http.server
