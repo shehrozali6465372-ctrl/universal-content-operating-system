@@ -267,11 +267,12 @@ class PipelineWiring:
 
     def _step_image_plan(self, req: ContentRequest, response: ContentResponse,
                          ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L5: Image — plan image generation."""
+        """L5: Image — plan and generate image via Gemini."""
         if not req.include_image:
             return {"skipped": True, "reason": "include_image=False"}
 
         from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
+        from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         planner = ImagePlanner()
         plans = planner.plan(req.topic, platform=req.platform, image_type="photo", count=1)
         plan = plans[0] if plans else None
@@ -283,7 +284,24 @@ class PipelineWiring:
             f"Style: {req.tone}, {req.style}. High quality, professional, engaging."
         )
         response.image_prompt = img_prompt_text
-        return {"image_type": img_type, "prompt": img_prompt_text[:150]}
+
+        # Try to generate actual image via Gemini
+        image_gen = GeminiImageProvider()
+        img_result = image_gen.generate(
+            img_prompt_text,
+            size="1024x1024",
+            style=req.tone,
+        )
+        ctx["image_generated"] = bool(img_result.image_url or img_result.image_data)
+        ctx["image_provider"] = img_result.provider
+
+        return {
+            "image_type": img_type,
+            "prompt": img_prompt_text[:150],
+            "image_url": img_result.image_url,
+            "provider": img_result.provider,
+            "generated": ctx["image_generated"],
+        }
 
     def _step_quality(self, req: ContentRequest, response: ContentResponse,
                       ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -403,7 +421,19 @@ class PipelineWiring:
         print(f"   Content: {len(response.text)} chars | Quality: {response.quality_score}/10")
         print(f"{'=' * 60}\n")
 
+        # Persist results to database
+        self._persist_results(response)
         return response
+
+    def _persist_results(self, response: ContentResponse) -> None:
+        """Persist pipeline results to SQLite database."""
+        try:
+            from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+            persist = PipelinePersistence()
+            persist.save_pipeline_run(response.to_dict())
+            persist.close()
+        except Exception as exc:
+            self._logger.log("L-Persist", f"warning: could not persist results: {exc}")
 
     def status(self) -> Dict[str, Any]:
         """Return system status."""
