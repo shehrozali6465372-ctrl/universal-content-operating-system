@@ -315,6 +315,12 @@ if __name__ == "__main__":
             print(f"   Press Ctrl+C to stop\n")
             httpd.serve_forever()
 
+    elif "--verify-system" in args:
+        from layers.layer14_enterprise_integration.modules.system_verifier.system_verifier import run_verification
+        report = run_verification()
+        print(f"\n📋 Full report saved to memory")
+        print(json.dumps(report, indent=2, default=str))
+
     else:
         boot = AIOSBoot()
         result = boot.boot()
