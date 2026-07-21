@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,19 +22,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Create Virtual Environment
-        run: |
-          python -m venv .venv
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-
       - name: Install Dependencies
         run: |
-          pip install --upgrade pip
-          pip install pytest pytest-cov pyyaml cryptography openai ruff
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
 
       - name: Run Tests
         run: |
-          pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
+          python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
 
       - name: System Status
         run: python main.py --status
