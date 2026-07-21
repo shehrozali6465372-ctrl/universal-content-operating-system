@@ -297,7 +297,6 @@ class FacebookPublisher(BasePublisher):
         """Upload an image to Facebook and return the media ID."""
         result = PublishResult(platform="facebook")
         try:
-            # For URL-based upload
             if image_path.startswith("http"):
                 api_result = self._api_post(f"/{self._page_id}/photos", {
                     "url": image_path,
@@ -306,19 +305,51 @@ class FacebookPublisher(BasePublisher):
                     "access_token": self._access_token,
                 })
             else:
-                # For file-based upload, would need multipart — use URL approach
-                result.error_message = "File upload requires URL. Use image URL instead."
-                return result
+                api_result = self._upload_image_file(image_path, caption)
 
             if api_result and "id" in api_result:
                 result.success = True
                 result.post_id = api_result["id"]
                 result.metadata = {"media_type": "image"}
             else:
-                result.error_message = "Upload failed"
+                result.error_message = str(api_result) if api_result else "Upload failed"
         except Exception as exc:
             result.error_message = str(exc)
         return result
+
+    def _upload_image_file(self, image_path: str, caption: str = "") -> Optional[Dict]:
+        """Upload local image file via multipart form data."""
+        import mimetypes
+        boundary = "----FormBoundary7MA4YWxkTrZu0gW"
+        filename = os.path.basename(image_path)
+        content_type = mimetypes.guess_type(image_path)[0] or "image/png"
+
+        with open(image_path, "rb") as f:
+            file_data = f.read()
+
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="source"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode() + file_data + (
+            f"\r\n--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="message"\r\n\r\n'
+            f"{caption}\r\n"
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="access_token"\r\n\r\n'
+            f"{self._access_token}\r\n"
+            f"--{boundary}--\r\n"
+        ).encode()
+
+        url = f"{self.API_BASE}/{self._page_id}/photos"
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return None
 
     def get_page_info(self) -> Dict[str, Any]:
         """Get Facebook Page information."""
