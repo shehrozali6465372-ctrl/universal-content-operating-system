@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.13.6"]
 
     env:
       GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
