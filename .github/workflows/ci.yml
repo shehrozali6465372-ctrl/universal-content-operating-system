@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -16,8 +18,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check Python
-        run: python --version
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Check Working Directory
-        run: ls -la
+      - name: Run Smoke Tests (Layer 1 Core)
+        run: |
+          python -m pytest layers/layer01_core/tests/ -q --tb=short
+
+      - name: Run Layer 2-10 Tests
+        run: |
+          python -m pytest layers/layer02_research/tests/ layers/layer03_intelligence/tests/ layers/layer04_writing/tests/ layers/layer05_image/tests/ layers/layer06_quality/tests/ layers/layer07_publishing/tests/ layers/layer08_analytics/tests/ layers/layer09_learning/tests/ layers/layer10_monetization/tests/ -q --tb=short
+
+      - name: Run Full Test Suite
+        run: |
+          python -m pytest tests/ -q --tb=short --ignore=tests/test_core.py
+
+      - name: System Status Check
+        run: |
+          python main.py --status
