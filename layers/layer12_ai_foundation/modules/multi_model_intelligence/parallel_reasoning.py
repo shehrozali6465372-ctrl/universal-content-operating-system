@@ -29,11 +29,10 @@ class ParallelReasoning:
                     results.append(ModelResponse(model=model, provider="unknown",
                                                  content="", error=str(exc)))
             else:
-                # Simulated response
                 results.append(ModelResponse(
-                    model=model, provider="simulated",
-                    content=f"Reasoning from {model} for: {prompt[:80]}",
-                    confidence=0.7, latency_ms=100.0 + len(results) * 50,
+                    model=model, provider="error",
+                    content="", error=f"No call_fn for {model}",
+                    confidence=0.0, latency_ms=0.0,
                 ))
 
         elapsed = (time.time() - start) * 1000

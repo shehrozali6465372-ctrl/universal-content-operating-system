@@ -170,36 +170,89 @@ class QualityOrchestrator:
     def _create_simulated_records(
         self, content: str, platform: str,
     ) -> List[ModuleExecutionRecord]:
-        """Create simulated records when no module functions are provided."""
+        """Real content quality analysis when no external modules provided."""
+        import re
         content_len = len(content)
-        base_score = min(98, 75 + content_len / 20)
-        modules = [
-            ("content_quality", base_score + 2),
-            ("fact_validation", base_score + 5),
-            ("safety", min(100, base_score + 10)),
-            ("originality", base_score - 2),
-            ("seo", base_score - 3),
-            ("platform_compliance", base_score + 3),
-            ("brand_voice", base_score),
-            ("human_review", base_score + 1),
-        ]
+        word_count = len(content.split())
+        
         records = []
-        for name, score in modules:
-            rec = ModuleExecutionRecord(name)
-            rec.status = "completed"
-            rec.score = max(0, min(100, score))
-            rec.confidence = 0.85
-            rec.duration_ms = 5.0
-            records.append(rec)
-
+        
+        # 1. Content Quality — based on length, structure, readability
+        length_score = min(100, max(0, (content_len / 50) * 10))
+        has_paragraphs = "\n\n" in content or content_len > 200
+        structure_score = 10 if has_paragraphs else 3
+        quality_score = min(100, length_score + structure_score)
+        rec = ModuleExecutionRecord("content_quality")
+        rec.status = "completed"
+        rec.score = round(quality_score, 1)
+        rec.confidence = 0.8
+        rec.duration_ms = 1.0
+        records.append(rec)
+        
+        # 2. Safety — check for harmful content patterns
+        harmful = ["kill", "hate", "attack", "bomb"]
+        harmful_count = sum(1 for h in harmful if h in content.lower())
+        safety_score = max(0, 100 - harmful_count * 20)
+        rec = ModuleExecutionRecord("safety")
+        rec.status = "completed"
+        rec.score = safety_score
+        rec.confidence = 0.9
+        rec.duration_ms = 0.5
+        records.append(rec)
+        
+        # 3. Originality — based on uniqueness markers
+        unique_words = len(set(content.lower().split()))
+        uniqueness = unique_words / max(word_count, 1) * 100
+        rec = ModuleExecutionRecord("originality")
+        rec.status = "completed"
+        rec.score = round(min(100, uniqueness), 1)
+        rec.confidence = 0.7
+        rec.duration_ms = 0.5
+        records.append(rec)
+        
+        # 4. SEO — keyword density, hashtag presence
+        hashtags = len(re.findall(r"#\w+", content))
+        mentions = len(re.findall(r"@\w+", content))
+        seo_score = min(100, 40 + hashtags * 10 + mentions * 5)
+        rec = ModuleExecutionRecord("seo")
+        rec.status = "completed"
+        rec.score = seo_score
+        rec.confidence = 0.75
+        rec.duration_ms = 0.5
+        records.append(rec)
+        
+        # 5. Platform Compliance — Facebook specific
+        platform_limits = {"facebook": 63206, "twitter": 280, "linkedin": 3000}
+        limit = platform_limits.get(platform.lower(), 5000)
+        compliance = 100 if content_len <= limit else max(0, 100 - ((content_len - limit) / limit * 100))
+        rec = ModuleExecutionRecord("platform_compliance")
+        rec.status = "completed"
+        rec.score = round(compliance, 1)
+        rec.confidence = 0.95
+        rec.duration_ms = 0.3
+        records.append(rec)
+        
+        # 6. Brand Voice — CTA and engagement markers
+        cta_words = ["follow", "like", "share", "comment", "subscribe", "click"]
+        cta_count = sum(1 for c in cta_words if c in content.lower())
+        emoji_count = len(re.findall(r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF]", content))
+        brand_score = min(100, 50 + cta_count * 10 + emoji_count * 5)
+        rec = ModuleExecutionRecord("brand_voice")
+        rec.status = "completed"
+        rec.score = brand_score
+        rec.confidence = 0.7
+        rec.duration_ms = 0.5
+        records.append(rec)
+        
         # Quality scoring record
+        avg_score = sum(r.score for r in records) / len(records)
         scoring_rec = ModuleExecutionRecord("quality_scoring")
         scoring_rec.status = "completed"
-        scoring_rec.score = base_score
-        scoring_rec.confidence = 0.9
-        scoring_rec.duration_ms = 2.0
+        scoring_rec.score = round(avg_score, 1)
+        scoring_rec.confidence = 0.85
+        scoring_rec.duration_ms = 1.0
         records.append(scoring_rec)
-
+        
         return records
 
     @property

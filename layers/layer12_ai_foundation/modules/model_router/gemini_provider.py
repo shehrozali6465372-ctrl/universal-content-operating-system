@@ -114,13 +114,19 @@ class GeminiProvider:
                 if self._key_manager and key_id_used:
                     self._key_manager.report_error(key_id_used, "api_call_failed")
 
-        # Fallback: simulated response
-        result = self._simulated_response(prompt, model)
-        self._simulated_count += 1
+        # No simulated fallback — return error
         latency = (time.time() - start) * 1000
-        result["latency_ms"] = round(latency, 1)
-        self._history.append({**result, "time": time.time()})
-        return result
+        error_result = {
+            "text": "",
+            "model": model,
+            "provider": "gemini",
+            "tokens_used": 0,
+            "simulated": False,
+            "error": "All API keys failed or unavailable",
+            "latency_ms": round(latency, 1),
+        }
+        self._history.append({**error_result, "time": time.time()})
+        return error_result
 
     def chat(self, messages: List[Dict[str, str]], model: str = "",
              **kwargs: Any) -> Dict[str, Any]:
@@ -154,13 +160,19 @@ class GeminiProvider:
                 if self._key_manager and key_id_used:
                     self._key_manager.report_error(key_id_used, "chat_api_failed")
 
-        # Simulated fallback
-        prompt = messages[-1]["content"] if messages else ""
-        result = self._simulated_response(prompt, model)
-        result["latency_ms"] = round((time.time() - start) * 1000, 1)
-        self._simulated_count += 1
-        self._history.append({**result, "time": time.time()})
-        return result
+        # No simulated fallback — return error
+        latency = (time.time() - start) * 1000
+        error_result = {
+            "text": "",
+            "model": model,
+            "provider": "gemini",
+            "tokens_used": 0,
+            "simulated": False,
+            "error": "All API keys failed or unavailable",
+            "latency_ms": round(latency, 1),
+        }
+        self._history.append({**error_result, "time": time.time()})
+        return error_result
 
     def _real_api_call(self, prompt: str, model: str, api_key: str,
                        system_prompt: str = "",

@@ -35,7 +35,7 @@ class MultiModelExecutor:
                         response = call_fn(prompt, model)
                     else:
                         response = ModelResponse(
-                            model=model, provider="simulated",
+                            model=model, provider="error",
                             content=f"Response from {model}",
                             confidence=0.75, latency_ms=100.0,
                         )

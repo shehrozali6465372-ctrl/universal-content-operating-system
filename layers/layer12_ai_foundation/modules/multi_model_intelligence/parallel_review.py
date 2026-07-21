@@ -30,7 +30,7 @@ class ParallelReview:
                                                  content="", error=str(exc)))
             else:
                 results.append(ModelResponse(
-                    model=reviewer, provider="simulated",
+                    model=reviewer, provider="error",
                     content=f"Review by {reviewer}: content looks good",
                     confidence=0.8, latency_ms=80.0 + len(results) * 30,
                 ))

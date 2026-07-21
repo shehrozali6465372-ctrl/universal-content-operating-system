@@ -111,5 +111,4 @@ class LLMManager:
                 "metrics": self.metrics.to_dict(), "cache": self.cache.get_stats()}
 
     def _simulate_response(self, prompt: str, model: str) -> str:
-        word_count = max(10, len(prompt.split()) * 3)
-        return f"[{model}] Generated response for: {prompt[:80]}... ({word_count} words simulated)"
+        return ""

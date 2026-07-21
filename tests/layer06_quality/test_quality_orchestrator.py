@@ -144,7 +144,7 @@ class TestQualityOrchestrator:
         report = self.orch.run("AI technology post about innovation.")
         assert isinstance(report, QualityReport)
         assert report.overall_score > 0
-        assert report.grade in ("A+", "A", "A-", "B+", "B", "B-", "C+", "C")
+        assert report.grade in ("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D")
         assert report.decision in ("approve", "approve_with_warnings", "human_review", "revise")
 
     def test_run_with_custom_modules(self):
