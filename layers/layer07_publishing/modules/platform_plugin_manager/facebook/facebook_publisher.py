@@ -95,6 +95,11 @@ class FacebookPublisher(BasePublisher):
             self._authenticated = False
             return False
 
+        # Auto-resolve user token → page token
+        self._access_token = self._resolve_page_token(
+            self._access_token, self._page_id
+        )
+
         # Validate token by making a test API call
         try:
             result = self._api_get(f"/{self._page_id}", {"fields": "id,name"})
@@ -339,6 +344,64 @@ class FacebookPublisher(BasePublisher):
         }
 
     # ── Internal API Methods ──
+
+    def _resolve_page_token(self, token: str, page_id: str) -> str:
+        """Auto-convert user token → page access token if needed.
+
+        Facebook requires a PAGE token for posting, not a user token.
+        This method detects if the token is a user token and resolves
+        the correct page token automatically via /me/accounts endpoint.
+        """
+        if not token or not page_id:
+            return token
+
+        # First: try posting directly (might already be a page token)
+        try:
+            test_url = f"{self.API_BASE}/{page_id}/feed"
+            payload = json.dumps({"message": "__test__", "access_token": token}).encode("utf-8")
+            req = urllib.request.Request(
+                test_url, data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                if result and "id" in result:
+                    # Clean up test post
+                    try:
+                        del_url = f"{self.API_BASE}/{result['id']}"
+                        del_req = urllib.request.Request(
+                            f"{del_url}?access_token={token}", method="DELETE"
+                        )
+                        urllib.request.urlopen(del_req, timeout=10)
+                    except Exception:
+                        pass
+                    return token
+        except urllib.error.HTTPError:
+            pass
+        except Exception:
+            pass
+
+        # Token is a user token — resolve page token via /me/accounts
+        try:
+            accounts_url = (
+                f"{self.API_BASE}/me/accounts"
+                f"?fields=id,name,access_token"
+                f"&access_token={token}"
+            )
+            req = urllib.request.Request(accounts_url, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for page in data.get("data", []):
+                    if page.get("id") == page_id:
+                        resolved = page.get("access_token", "")
+                        if resolved:
+                            return resolved
+        except Exception:
+            pass
+
+        # Fallback: return original token
+        return token
 
     def _api_get(self, endpoint: str, params: Optional[Dict] = None) -> Optional[Dict]:
         """Make a GET request to Facebook Graph API."""
