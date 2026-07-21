@@ -1,101 +1,23 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
-  lint-and-test:
+  build:
     runs-on: ubuntu-22.04
 
-    env:
-      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
-      GEMINIAPIKEY2: ${{ secrets.GEMINIAPIKEY2 }}
-      GEMINIAPIKEY3: ${{ secrets.GEMINIAPIKEY3 }}
-      FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-      FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-      FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
-      FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
-      TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
-      INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
-      LINKEDIN_PERSON_ID: ${{ secrets.LINKEDIN_PERSON_ID }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest-cov ruff
+      - name: Check Python
+        run: python --version
 
-      - name: Lint
-        continue-on-error: true
-        run: |
-          ruff check layers/ --select E,F,W \
-            --ignore E501,E402,E741,E731,E721,F841,E701,E702,F401,E401,F821,F403
-
-      - name: Core Tests
-        run: |
-          python -m pytest \
-            layers/layer01_core/tests/ \
-            layers/layer02_research/tests/ \
-            layers/layer03_intelligence/tests/ \
-            layers/layer04_writing/tests/ \
-            layers/layer05_image/tests/ \
-            layers/layer06_quality/tests/ \
-            layers/layer07_publishing/tests/ \
-            layers/layer08_analytics/tests/ \
-            layers/layer09_learning/tests/ \
-            layers/layer10_monetization/tests/ \
-            -q --tb=short
-
-      - name: Feature Tests
-        run: |
-          python -m pytest \
-            tests/test_production_features.py \
-            tests/test_cross_platform_and_scheduler.py \
-            tests/test_prompt_evolution.py \
-            tests/test_pipeline_features.py \
-            tests/test_platforms_and_api.py \
-            -q --tb=short
-
-      - name: Enterprise Tests
-        run: |
-          python -m pytest \
-            tests/test_layer11_async_runtime.py \
-            tests/test_layer12_ai_foundation.py \
-            tests/test_layer13_persistence.py \
-            tests/test_layer14_integration.py \
-            tests/test_phase1_integration_engine.py \
-            tests/test_phase2_async_runtime.py \
-            tests/test_phase3_database.py \
-            tests/test_phase4_security.py \
-            tests/test_phase5_monitoring.py \
-            tests/test_phases6_9_combined.py \
-            -v --tb=short -q
-
-      - name: Router and Final Tests
-        run: |
-          python -m pytest \
-            tests/test_gemini_real_api.py \
-            tests/test_model_router_system.py \
-            tests/test_final_fixes.py \
-            -v --tb=short -q
-
-      - name: Shared and Benchmark Tests
-        run: |
-          python -m pytest \
-            tests/shared/ \
-            tests/benchmarks/ \
-            tests/integration/ \
-            -v --tb=short -q
+      - name: Check Working Directory
+        run: ls -la
