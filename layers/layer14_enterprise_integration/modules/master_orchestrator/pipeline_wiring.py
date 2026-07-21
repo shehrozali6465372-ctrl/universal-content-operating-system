@@ -235,35 +235,85 @@ class PipelineWiring:
             raise RuntimeError("Gemini not initialized — no API keys configured")
 
         keywords_str = ", ".join(str(k) for k in ctx.get("keywords", [])[:5])
-        prompt_text = (
-            f"Write a detailed, engaging {req.tone} social media post for {req.platform}.\n"
-            f"Topic: {req.topic}\n"
-            f"Key points to include: {keywords_str}\n"
-            f"Style: {req.style}\n"
-            f"Length: approximately {req.max_length} words.\n"
-            f"Make it informative, engaging, and shareable. "
-            f"Include a strong hook, valuable insights, and a call-to-action."
-        )
 
-        prompt = self._prompt_builder.build(
-            prompt_text,
-            style=__import__(
-                "layers.layer12_ai_foundation.modules.model_router.prompt_builder",
-                fromlist=["PromptStyle"]
-            ).PromptStyle.CHAIN_OF_THOUGHT,
-            context={"platform": req.platform, "tone": req.tone}
-        )
-        user_msg = next(
-            (m["content"] for m in prompt["messages"] if m["role"] == "user"),
-            prompt_text
-        )
+        # Platform-specific system prompt for high-quality content
+        system_prompt = self._get_platform_system_prompt(req.platform)
 
-        result = self._gemini.generate(user_msg)
+        # Build the user prompt with clear instructions
+        prompt_text = f"""Write a viral Facebook post about: {req.topic}
+
+KEY RULES:
+- Start with a powerful hook (question, shocking fact, or bold statement)
+- Use emojis naturally throughout (not spammy)
+- Keep paragraphs SHORT (1-2 lines max)
+- Include bullet points or numbered lists for scannability
+- End with an engaging question or call-to-action
+- Add 5-7 relevant hashtags at the end
+- Tone: {req.tone}
+- Style: {req.style}
+- Length: 150-250 words (perfect for Facebook)
+
+KEYWORDS TO INCLUDE: {keywords_str}
+
+EXAMPLE OF A GREAT FACEBOOK POST:
+"Did you know? The human brain processes images 60,000x faster than text. 🧠
+
+That's why visual content dominates social media. Here are 3 facts that will change how you see marketing:
+
+1️⃣ Posts with images get 2.3x more engagement
+2️⃣ Video content gets 5x more reach
+3️⃣ Stories drive 25% of all platform interactions
+
+The question is: Are you using visual content effectively?
+
+Drop a 👍 if you agree, or comment your best tip below!
+
+#MarketingTips #SocialMedia #ContentStrategy"
+
+NOW WRITE YOUR POST (only the post content, no explanations):"""
+
+        result = self._gemini.generate(prompt_text, system_prompt=system_prompt)
         content = result.get("content", "")
         response.text = content
         ctx["ai_model"] = result.get("model", "gemini")
         ctx["content_length"] = len(content)
         return {"content_length": len(content), "model": ctx["ai_model"]}
+
+    def _get_platform_system_prompt(self, platform: str) -> str:
+        """Get platform-specific system prompt for high-quality content."""
+        prompts = {
+            "facebook": """You are an expert Facebook content creator for the page "deeplora" — an educational and informative page.
+
+YOUR STYLE:
+- Write like a knowledgeable friend sharing interesting facts
+- Use emojis naturally (🧠, 💡, 🔥, ✅, ⚠️, etc.) — not spammy
+- Short paragraphs (1-2 lines max)
+- Use bullet points and numbered lists
+- Start every post with a HOOK that stops the scroll
+- End with a question to drive comments
+- Mix facts with storytelling
+- Never use walls of text
+
+FORMATTING:
+- Line breaks between sections
+- Emojis as bullet points (🔹, ✅, ⚠️, 💡)
+- Bold key phrases using **text**
+- Hashtags at the end (5-7 relevant ones)
+
+AVOID:
+- Generic, boring introductions
+- Walls of text
+- Overly formal language
+- Clickbait without substance
+- Repetitive phrasing
+
+Write ONLY the post content. No explanations, no labels.""",
+            "instagram": """You are an expert Instagram content creator. Write visually descriptive, hashtag-rich captions.""",
+            "twitter": """You are an expert Twitter/X content creator. Write concise, punchy tweets under 280 characters.""",
+            "linkedin": """You are an expert LinkedIn content creator. Write professional, thought-leadership content.""",
+            "youtube": """You are an expert YouTube content creator. Write engaging video descriptions and titles.""",
+        }
+        return prompts.get(platform, prompts["facebook"])
 
     def _step_image_plan(self, req: ContentRequest, response: ContentResponse,
                          ctx: Dict[str, Any]) -> Dict[str, Any]:
