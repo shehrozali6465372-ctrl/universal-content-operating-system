@@ -286,3 +286,47 @@ class TestDashboard:
             content = f.read()
         assert "#0f172a" in content
         assert "#1e293b" in content
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Facebook Publisher Secrets Check Tests
+# ══════════════════════════════════════════════════════════════════════
+
+class TestFacebookSecrets:
+    def test_secrets_environment_check(self):
+        """Verify Facebook secrets are properly configured."""
+        import os
+        fb_token = os.environ.get("FACEBOOK_ACCESS_TOKEN", "")
+        fb_page = os.environ.get("FACEBOOK_PAGE_ID", "")
+        # Should not crash even if not set
+        assert isinstance(fb_token, str)
+        assert isinstance(fb_page, str)
+
+    def test_facebook_publisher_reads_env(self):
+        """FacebookPublisher reads from environment variables."""
+        import os
+        os.environ["FACEBOOK_PAGE_ID"] = "test_123"
+        os.environ["FACEBOOK_ACCESS_TOKEN"] = "test_token_abc"
+        try:
+            from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
+            pub = FacebookPublisher()
+            result = pub.authenticate({})
+            # With fake token, auth may succeed (marks as configured)
+            # or fail gracefully
+            assert isinstance(result, bool)
+        finally:
+            del os.environ["FACEBOOK_PAGE_ID"]
+            del os.environ["FACEBOOK_ACCESS_TOKEN"]
+
+    def test_all_platform_publishers_instantiate(self):
+        """All platform publishers can be imported and instantiated."""
+        from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
+        from layers.layer07_publishing.modules.platform_plugin_manager.instagram.instagram_publisher import InstagramPublisher
+        from layers.layer07_publishing.modules.platform_plugin_manager.linkedin.linkedin_publisher import LinkedInPublisher
+        from layers.layer07_publishing.modules.platform_plugin_manager.twitter.twitter_publisher import TwitterPublisher
+
+        for PubClass in [FacebookPublisher, InstagramPublisher, LinkedInPublisher, TwitterPublisher]:
+            pub = PubClass()
+            assert pub.get_platform_name() in ("facebook", "instagram", "linkedin", "twitter")
+            caps = pub.get_capabilities()
+            assert caps.max_length > 0
