@@ -1,0 +1,74 @@
+{
+  "layer": 3,
+  "name": "Intelligence",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer03_intelligence.modules.content_understanding.semantic_analyzer",
+        "Class found: SemanticAnalyzer",
+        "Instance created: SemanticAnalyzer",
+        "Module imported: layers.layer03_intelligence.modules.content_understanding.keyword_analyzer",
+        "Class found: KeywordAnalyzer",
+        "Instance created: KeywordAnalyzer"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Semantic analysis: SemanticResult returned",
+        "Keyword analysis: 9 keywords, primary=['learning', 'ai', 'machine']"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Both analyzers work on same input: semantic=SemanticResult, keywords=9"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Empty text: handled (keywords=0)",
+        "Minimal text: handled"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Production analysis: semantic=SemanticResult, keywords=18, primary=['the', 'future']"
+      ]
+    }
+  ],
+  "duration_ms": 198.6,
+  "timestamp": "2026-07-22T00:36:12.509516+00:00"
+}

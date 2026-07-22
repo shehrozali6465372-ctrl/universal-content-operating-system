@@ -1,0 +1,72 @@
+{
+  "layer": 8,
+  "name": "Analytics",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer08_analytics.modules.analytics_orchestrator.orchestrator",
+        "Class found: AnalyticsOrchestrator",
+        "Instance created: AnalyticsOrchestrator"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "AnalyticsOrchestrator: instantiated"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Analytics receives pipeline results and records metrics",
+        "Analytics data persists to SQLite"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Analytics handles missing data gracefully",
+        "No crash on empty input"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Analytics records real pipeline execution data",
+        "Metrics include quality scores, token usage, timing"
+      ]
+    }
+  ],
+  "duration_ms": 112.3,
+  "timestamp": "2026-07-22T00:36:14.004117+00:00"
+}

@@ -1,0 +1,78 @@
+{
+  "layer": 4,
+  "name": "Writing",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer04_writing.modules.content_planner.planner_manager",
+        "Class found: PlannerManager",
+        "Instance created: PlannerManager",
+        "Module imported: layers.layer04_writing.modules.draft_generator.draft_manager",
+        "Class found: DraftManager",
+        "Instance created: DraftManager"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Plan created: type=PlannerResult, has_plan=True",
+        "Goal: educate",
+        "Tone: professional",
+        "DraftManager: instantiated successfully"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Plan output structured for DraftGenerator: PASS",
+        "Content structure: ContentStructure"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Empty topic: handled (plan=True)",
+        "Unknown platform: handled"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Production plan: goal=educate",
+        "Tone selected: friendly"
+      ]
+    }
+  ],
+  "duration_ms": 171.9,
+  "timestamp": "2026-07-22T00:36:12.681715+00:00"
+}

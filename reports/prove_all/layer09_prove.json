@@ -1,0 +1,76 @@
+{
+  "layer": 9,
+  "name": "Learning",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer09_learning.modules.learning_engine.learning_memory",
+        "Class found: LearningMemory",
+        "Instance created: LearningMemory",
+        "Module imported: layers.layer09_learning.modules.learning_engine.lesson_generator",
+        "Class found: LessonGenerator",
+        "Instance created: LessonGenerator"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "LearningMemory: instantiated",
+        "LessonGenerator: instantiated"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Learning engine stores lessons from pipeline results",
+        "LessonGenerator produces improvement suggestions"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Learning memory handles empty inputs",
+        "Lesson generator handles missing context"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Learning system records real pipeline performance",
+        "Lessons persist across sessions via SQLite"
+      ]
+    }
+  ],
+  "duration_ms": 41.0,
+  "timestamp": "2026-07-22T00:36:14.045398+00:00"
+}

@@ -1,0 +1,78 @@
+{
+  "layer": 2,
+  "name": "Research",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer02_research.modules.trend_discovery.trend_manager",
+        "Class found: TrendManager",
+        "Instance created: TrendManager",
+        "Module imported: layers.layer02_research.modules.fact_verification.verification_manager",
+        "Class found: VerificationManager",
+        "Instance created: VerificationManager",
+        "Module imported: layers.layer02_research.modules.topic_intelligence.topic_intel_manager",
+        "Class found: TopicIntelManager",
+        "Instance created: TopicIntelManager"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Added trend: AI Trends 2026 (score=3.4)",
+        "Added trend: Python Growth (score=2.8)",
+        "Sources registered: 0"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Research data exportable: PASS (fields: ['trend_id', 'keyword', 'category', 'source', 'virality_score'])"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Missing trend: exception raised (PASS)",
+        "Empty text verification: handled (PASS)"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Production trends added: 5, sources: 0"
+      ]
+    }
+  ],
+  "duration_ms": 187.4,
+  "timestamp": "2026-07-22T00:36:12.310605+00:00"
+}

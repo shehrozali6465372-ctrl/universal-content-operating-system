@@ -1,0 +1,73 @@
+{
+  "layer": 6,
+  "name": "Quality",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer06_quality.modules.quality_orchestrator.quality_orchestrator",
+        "Class found: QualityOrchestrator",
+        "Instance created: QualityOrchestrator"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Quality report: score=71.2, grade=C-, decision=approve_with_warnings",
+        "Module records: 7 modules evaluated"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Score in valid range: 68.3",
+        "Decision valid: approve_with_warnings"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Empty content: score=52.9, no crash",
+        "Large content (50K chars): handled, score=89.3"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Production quality check: score=84.1, grade=B",
+        "Modules evaluated: 7"
+      ]
+    }
+  ],
+  "duration_ms": 95.4,
+  "timestamp": "2026-07-22T00:36:13.844891+00:00"
+}

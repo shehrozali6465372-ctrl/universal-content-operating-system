@@ -1,0 +1,77 @@
+{
+  "layer": 5,
+  "name": "Image",
+  "total_score": 100,
+  "max_score": 100,
+  "percentage": 100.0,
+  "certified": true,
+  "levels": [
+    {
+      "level": 1,
+      "name": "Import",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Module imported: layers.layer05_image.modules.image_planner.image_planner",
+        "Class found: ImagePlanner",
+        "Instance created: ImagePlanner",
+        "Module imported: layers.layer05_image.modules.infographic_generator.infographic_generator",
+        "Class found: InfographicGenerator",
+        "Instance created: InfographicGenerator",
+        "Module imported: layers.layer05_image.modules.image_provider.gemini_image_provider",
+        "Class found: GeminiImageProvider",
+        "Instance created: GeminiImageProvider"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Functional",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Image plan created: list",
+        "Infographic generated: 15645 bytes at /tmp/infographic.png"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Integration",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Image output ready for publishing: 14126 bytes at /tmp/infographic.png"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure Recovery",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Empty inputs: handled without crash",
+        "Invalid platform: handled"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Production",
+      "score": 20,
+      "max_score": 20,
+      "percentage": 100.0,
+      "passed": true,
+      "evidence": [
+        "Production infographic: 18991 bytes at /tmp/infographic.png"
+      ]
+    }
+  ],
+  "duration_ms": 1066.9,
+  "timestamp": "2026-07-22T00:36:13.748958+00:00"
+}
