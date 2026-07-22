@@ -322,6 +322,12 @@ if __name__ == "__main__":
         print(f"\n📋 Full report saved to memory")
         print(json.dumps(report, indent=2, default=str))
 
+    elif "--live-proof" in args:
+        from layers.layer14_enterprise_integration.modules.production_certification.live_proof import LiveProof
+        lp = LiveProof()
+        report = lp.run()
+        print(json.dumps(report, indent=2, default=str))
+
     elif "--prove-all" in args:
         from layers.layer14_enterprise_integration.modules.production_certification.prove_all import ProveAll
         prover = ProveAll()
