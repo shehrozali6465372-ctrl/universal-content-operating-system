@@ -1,0 +1,55 @@
+{
+  "layer": 5,
+  "name": "Image",
+  "score": 87.5,
+  "max_score": 100.0,
+  "percentage": 87.5,
+  "certified": true,
+  "tests": [
+    {
+      "test": "ImagePlanner Import+Init",
+      "status": "PASS",
+      "duration_ms": 66.27,
+      "evidence": {
+        "module": "layers.layer05_image.modules.image_planner.image_planner",
+        "class": "ImagePlanner",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:38.301512+00:00"
+    },
+    {
+      "test": "InfographicGenerator Import+Init",
+      "status": "PASS",
+      "duration_ms": 865.96,
+      "evidence": {
+        "module": "layers.layer05_image.modules.infographic_generator.infographic_generator",
+        "class": "InfographicGenerator",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:39.167601+00:00"
+    },
+    {
+      "test": "InfographicGenerator Generate",
+      "status": "WARN",
+      "duration_ms": 379.32,
+      "evidence": {
+        "output_type": "str",
+        "size_bytes": 0
+      },
+      "timestamp": "2026-07-22T00:15:39.547056+00:00"
+    },
+    {
+      "test": "GeminiImageProvider Import+Init",
+      "status": "PASS",
+      "duration_ms": 404.91,
+      "evidence": {
+        "module": "layers.layer05_image.modules.image_provider.gemini_image_provider",
+        "class": "GeminiImageProvider",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:39.952206+00:00"
+    }
+  ],
+  "duration_ms": 1717.2,
+  "timestamp": "2026-07-22T00:15:39.952371+00:00"
+}

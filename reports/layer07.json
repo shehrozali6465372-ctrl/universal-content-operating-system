@@ -1,0 +1,41 @@
+{
+  "layer": 7,
+  "name": "Publishing",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "FacebookPublisher Import+Init",
+      "status": "PASS",
+      "duration_ms": 91.42,
+      "evidence": {
+        "module": "layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher",
+        "class": "FacebookPublisher",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.191721+00:00"
+    },
+    {
+      "test": "FacebookPublisher Functional",
+      "status": "PASS",
+      "duration_ms": 0.05,
+      "evidence": {
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.191974+00:00"
+    },
+    {
+      "test": "Publisher No Credentials",
+      "status": "PASS",
+      "duration_ms": 0.08,
+      "evidence": {
+        "handled_no_creds": true
+      },
+      "timestamp": "2026-07-22T00:15:40.192147+00:00"
+    }
+  ],
+  "duration_ms": 92.0,
+  "timestamp": "2026-07-22T00:15:40.192234+00:00"
+}

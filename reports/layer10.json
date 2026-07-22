@@ -1,0 +1,45 @@
+{
+  "layer": 10,
+  "name": "Monetization",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "Master Orchestrator Import+Init",
+      "status": "PASS",
+      "duration_ms": 99.91,
+      "evidence": {
+        "module": "layers.layer10_monetization.modules.master_orchestrator.master_orchestrator",
+        "class": "MasterOrchestrator",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.642706+00:00"
+    },
+    {
+      "test": "Autonomous Planner Import+Init",
+      "status": "PASS",
+      "duration_ms": 19.51,
+      "evidence": {
+        "module": "layers.layer10_monetization.modules.autonomous_planner.autonomous_planner",
+        "class": "AutonomousPlanner",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.662377+00:00"
+    },
+    {
+      "test": "Content Generation Import+Init",
+      "status": "PASS",
+      "duration_ms": 91.59,
+      "evidence": {
+        "module": "layers.layer10_monetization.modules.content_generation.content_generation_manager",
+        "class": "ContentGenerationManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.754112+00:00"
+    }
+  ],
+  "duration_ms": 211.5,
+  "timestamp": "2026-07-22T00:15:40.754248+00:00"
+}

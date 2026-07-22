@@ -1,0 +1,54 @@
+{
+  "layer": 6,
+  "name": "Quality",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "QualityOrchestrator Import+Init",
+      "status": "PASS",
+      "duration_ms": 140.24,
+      "evidence": {
+        "module": "layers.layer06_quality.modules.quality_orchestrator.quality_orchestrator",
+        "class": "QualityOrchestrator",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:40.092801+00:00"
+    },
+    {
+      "test": "QualityOrchestrator Run",
+      "status": "PASS",
+      "duration_ms": 4.49,
+      "evidence": {
+        "score": 69.0,
+        "grade": "D",
+        "decision": "approve_with_warnings"
+      },
+      "timestamp": "2026-07-22T00:15:40.097435+00:00"
+    },
+    {
+      "test": "Quality Score Range",
+      "status": "PASS",
+      "duration_ms": 1.32,
+      "evidence": {
+        "score": 66.7,
+        "in_range": true
+      },
+      "timestamp": "2026-07-22T00:15:40.098921+00:00"
+    },
+    {
+      "test": "Quality Empty Input",
+      "status": "PASS",
+      "duration_ms": 0.96,
+      "evidence": {
+        "handled_empty": true,
+        "score": 52.9
+      },
+      "timestamp": "2026-07-22T00:15:40.100007+00:00"
+    }
+  ],
+  "duration_ms": 147.6,
+  "timestamp": "2026-07-22T00:15:40.100103+00:00"
+}

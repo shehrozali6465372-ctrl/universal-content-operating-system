@@ -1,0 +1,44 @@
+{
+  "layer": 13,
+  "name": "Persistence",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "SQLite CRUD",
+      "status": "PASS",
+      "duration_ms": 3.69,
+      "evidence": {
+        "read": "updated",
+        "after_delete": 0,
+        "crud_complete": true
+      },
+      "timestamp": "2026-07-22T00:15:41.422853+00:00"
+    },
+    {
+      "test": "Concurrent Writes (10)",
+      "status": "PASS",
+      "duration_ms": 96.84,
+      "evidence": {
+        "succeeded": 10,
+        "failed": 0,
+        "errors": []
+      },
+      "timestamp": "2026-07-22T00:15:41.519896+00:00"
+    },
+    {
+      "test": "DB Recovery",
+      "status": "PASS",
+      "duration_ms": 3.97,
+      "evidence": {
+        "recovered": true,
+        "data": "after_recovery"
+      },
+      "timestamp": "2026-07-22T00:15:41.524243+00:00"
+    }
+  ],
+  "duration_ms": 106.1,
+  "timestamp": "2026-07-22T00:15:41.525183+00:00"
+}

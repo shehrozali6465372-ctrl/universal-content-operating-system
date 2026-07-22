@@ -1,0 +1,798 @@
+{
+  "timestamp": "2026-07-22T00:15:42.490860+00:00",
+  "overall_score": 97.7,
+  "layers_certified": 14,
+  "layers_total": 14,
+  "tests_passed": 49,
+  "tests_total": 51,
+  "duration_ms": 5702.1,
+  "layers": [
+    {
+      "layer": 1,
+      "name": "Core",
+      "score": 80.0,
+      "max_score": 100.0,
+      "percentage": 80.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "ConfigManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 382.9,
+          "evidence": {
+            "module": "layers.layer01_core.modules.config_manager",
+            "class": "ConfigManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.124198+00:00"
+        },
+        {
+          "test": "MemoryManager Save/Load",
+          "status": "WARN",
+          "duration_ms": 258.9,
+          "evidence": {
+            "save": true,
+            "load": false,
+            "value_match": [
+              {
+                "id": 14,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-22 00:15:37",
+                "updated_at": "2026-07-22 00:15:37",
+                "last_accessed": "2026-07-22 00:15:37"
+              },
+              {
+                "id": 13,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-21 20:25:16",
+                "updated_at": "2026-07-21 20:25:16",
+                "last_accessed": "2026-07-21 20:25:16"
+              },
+              {
+                "id": 12,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-21 20:22:53",
+                "updated_at": "2026-07-21 20:22:53",
+                "last_accessed": "2026-07-21 20:22:53"
+              },
+              {
+                "id": 11,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-21 20:20:26",
+                "updated_at": "2026-07-21 20:20:26",
+                "last_accessed": "2026-07-21 20:20:26"
+              },
+              {
+                "id": 10,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-21 20:19:19",
+                "updated_at": "2026-07-21 20:19:19",
+                "last_accessed": "2026-07-21 20:19:19"
+              },
+              {
+                "id": 9,
+                "level": "test",
+                "category": "proof",
+                "key": "key1",
+                "value": "value1",
+                "tags": "",
+                "importance": 0.5,
+                "access_count": 0,
+                "created_at": "2026-07-21 20:18:51",
+                "updated_at": "2026-07-21 20:18:51",
+                "last_accessed": "2026-07-21 20:18:51"
+              }
+            ]
+          },
+          "timestamp": "2026-07-22T00:15:37.383399+00:00"
+        },
+        {
+          "test": "Logger Log",
+          "status": "PASS",
+          "duration_ms": 38.82,
+          "evidence": {
+            "logged": true
+          },
+          "timestamp": "2026-07-22T00:15:37.422452+00:00"
+        },
+        {
+          "test": "Scheduler Import+Init",
+          "status": "PASS",
+          "duration_ms": 100.3,
+          "evidence": {
+            "module": "layers.layer01_core.modules.scheduler.scheduler_manager",
+            "class": "SchedulerManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.522946+00:00"
+        },
+        {
+          "test": "ConfigManager Functional",
+          "status": "PASS",
+          "duration_ms": 0.06,
+          "evidence": {
+            "functional": true
+          },
+          "timestamp": "2026-07-22T00:15:37.523203+00:00"
+        }
+      ],
+      "duration_ms": 782.0,
+      "timestamp": "2026-07-22T00:15:37.523320+00:00"
+    },
+    {
+      "layer": 2,
+      "name": "Research",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "TrendManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 70.29,
+          "evidence": {
+            "module": "layers.layer02_research.modules.trend_discovery.trend_manager",
+            "class": "TrendManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.593862+00:00"
+        },
+        {
+          "test": "TrendManager Add Trend",
+          "status": "PASS",
+          "duration_ms": 0.36,
+          "evidence": {
+            "trend_id": "test_topic_manual",
+            "keyword": "Test Topic",
+            "score": 2.8
+          },
+          "timestamp": "2026-07-22T00:15:37.594332+00:00"
+        },
+        {
+          "test": "VerificationManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 111.21,
+          "evidence": {
+            "module": "layers.layer02_research.modules.fact_verification.verification_manager",
+            "class": "VerificationManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.705619+00:00"
+        },
+        {
+          "test": "TopicIntelManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 62.82,
+          "evidence": {
+            "module": "layers.layer02_research.modules.topic_intelligence.topic_intel_manager",
+            "class": "TopicIntelManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.768619+00:00"
+        },
+        {
+          "test": "TrendManager Failure Handling",
+          "status": "PASS",
+          "duration_ms": 0.1,
+          "evidence": {
+            "raised_exception": true
+          },
+          "timestamp": "2026-07-22T00:15:37.768888+00:00"
+        }
+      ],
+      "duration_ms": 245.4,
+      "timestamp": "2026-07-22T00:15:37.768972+00:00"
+    },
+    {
+      "layer": 3,
+      "name": "Intelligence",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "SemanticAnalyzer Import+Init",
+          "status": "PASS",
+          "duration_ms": 216.13,
+          "evidence": {
+            "module": "layers.layer03_intelligence.modules.content_understanding.semantic_analyzer",
+            "class": "SemanticAnalyzer",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.985314+00:00"
+        },
+        {
+          "test": "SemanticAnalyzer Analyze",
+          "status": "PASS",
+          "duration_ms": 10.72,
+          "evidence": {
+            "result_type": "SemanticResult",
+            "has_result": true
+          },
+          "timestamp": "2026-07-22T00:15:37.996176+00:00"
+        },
+        {
+          "test": "KeywordAnalyzer Import+Init",
+          "status": "PASS",
+          "duration_ms": 0.05,
+          "evidence": {
+            "module": "layers.layer03_intelligence.modules.content_understanding.keyword_analyzer",
+            "class": "KeywordAnalyzer",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:37.996399+00:00"
+        },
+        {
+          "test": "KeywordAnalyzer Analyze",
+          "status": "PASS",
+          "duration_ms": 9.42,
+          "evidence": {
+            "keywords_count": 10,
+            "primary": [
+              "ai",
+              "and",
+              "machine"
+            ]
+          },
+          "timestamp": "2026-07-22T00:15:38.005890+00:00"
+        }
+      ],
+      "duration_ms": 236.9,
+      "timestamp": "2026-07-22T00:15:38.006023+00:00"
+    },
+    {
+      "layer": 4,
+      "name": "Writing",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "PlannerManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 141.38,
+          "evidence": {
+            "module": "layers.layer04_writing.modules.content_planner.planner_manager",
+            "class": "PlannerManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:38.147579+00:00"
+        },
+        {
+          "test": "PlannerManager Create Plan",
+          "status": "PASS",
+          "duration_ms": 0.75,
+          "evidence": {
+            "plan_type": "PlannerResult",
+            "has_plan": true
+          },
+          "timestamp": "2026-07-22T00:15:38.148459+00:00"
+        },
+        {
+          "test": "DraftManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 86.19,
+          "evidence": {
+            "module": "layers.layer04_writing.modules.draft_generator.draft_manager",
+            "class": "DraftManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:38.234802+00:00"
+        },
+        {
+          "test": "DraftManager Functional",
+          "status": "PASS",
+          "duration_ms": 0.08,
+          "evidence": {
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:38.235011+00:00"
+        }
+      ],
+      "duration_ms": 228.9,
+      "timestamp": "2026-07-22T00:15:38.235066+00:00"
+    },
+    {
+      "layer": 5,
+      "name": "Image",
+      "score": 87.5,
+      "max_score": 100.0,
+      "percentage": 87.5,
+      "certified": true,
+      "tests": [
+        {
+          "test": "ImagePlanner Import+Init",
+          "status": "PASS",
+          "duration_ms": 66.27,
+          "evidence": {
+            "module": "layers.layer05_image.modules.image_planner.image_planner",
+            "class": "ImagePlanner",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:38.301512+00:00"
+        },
+        {
+          "test": "InfographicGenerator Import+Init",
+          "status": "PASS",
+          "duration_ms": 865.96,
+          "evidence": {
+            "module": "layers.layer05_image.modules.infographic_generator.infographic_generator",
+            "class": "InfographicGenerator",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:39.167601+00:00"
+        },
+        {
+          "test": "InfographicGenerator Generate",
+          "status": "WARN",
+          "duration_ms": 379.32,
+          "evidence": {
+            "output_type": "str",
+            "size_bytes": 0
+          },
+          "timestamp": "2026-07-22T00:15:39.547056+00:00"
+        },
+        {
+          "test": "GeminiImageProvider Import+Init",
+          "status": "PASS",
+          "duration_ms": 404.91,
+          "evidence": {
+            "module": "layers.layer05_image.modules.image_provider.gemini_image_provider",
+            "class": "GeminiImageProvider",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:39.952206+00:00"
+        }
+      ],
+      "duration_ms": 1717.2,
+      "timestamp": "2026-07-22T00:15:39.952371+00:00"
+    },
+    {
+      "layer": 6,
+      "name": "Quality",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "QualityOrchestrator Import+Init",
+          "status": "PASS",
+          "duration_ms": 140.24,
+          "evidence": {
+            "module": "layers.layer06_quality.modules.quality_orchestrator.quality_orchestrator",
+            "class": "QualityOrchestrator",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.092801+00:00"
+        },
+        {
+          "test": "QualityOrchestrator Run",
+          "status": "PASS",
+          "duration_ms": 4.49,
+          "evidence": {
+            "score": 69.0,
+            "grade": "D",
+            "decision": "approve_with_warnings"
+          },
+          "timestamp": "2026-07-22T00:15:40.097435+00:00"
+        },
+        {
+          "test": "Quality Score Range",
+          "status": "PASS",
+          "duration_ms": 1.32,
+          "evidence": {
+            "score": 66.7,
+            "in_range": true
+          },
+          "timestamp": "2026-07-22T00:15:40.098921+00:00"
+        },
+        {
+          "test": "Quality Empty Input",
+          "status": "PASS",
+          "duration_ms": 0.96,
+          "evidence": {
+            "handled_empty": true,
+            "score": 52.9
+          },
+          "timestamp": "2026-07-22T00:15:40.100007+00:00"
+        }
+      ],
+      "duration_ms": 147.6,
+      "timestamp": "2026-07-22T00:15:40.100103+00:00"
+    },
+    {
+      "layer": 7,
+      "name": "Publishing",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "FacebookPublisher Import+Init",
+          "status": "PASS",
+          "duration_ms": 91.42,
+          "evidence": {
+            "module": "layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher",
+            "class": "FacebookPublisher",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.191721+00:00"
+        },
+        {
+          "test": "FacebookPublisher Functional",
+          "status": "PASS",
+          "duration_ms": 0.05,
+          "evidence": {
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.191974+00:00"
+        },
+        {
+          "test": "Publisher No Credentials",
+          "status": "PASS",
+          "duration_ms": 0.08,
+          "evidence": {
+            "handled_no_creds": true
+          },
+          "timestamp": "2026-07-22T00:15:40.192147+00:00"
+        }
+      ],
+      "duration_ms": 92.0,
+      "timestamp": "2026-07-22T00:15:40.192234+00:00"
+    },
+    {
+      "layer": 8,
+      "name": "Analytics",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "AnalyticsOrchestrator Import+Init",
+          "status": "PASS",
+          "duration_ms": 280.63,
+          "evidence": {
+            "module": "layers.layer08_analytics.modules.analytics_orchestrator.orchestrator",
+            "class": "AnalyticsOrchestrator",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.473198+00:00"
+        },
+        {
+          "test": "AnalyticsOrchestrator Functional",
+          "status": "PASS",
+          "duration_ms": 0.06,
+          "evidence": {
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.473429+00:00"
+        },
+        {
+          "test": "Analytics Failure Handling",
+          "status": "PASS",
+          "duration_ms": 0.02,
+          "evidence": {
+            "no_crash": true
+          },
+          "timestamp": "2026-07-22T00:15:40.473501+00:00"
+        }
+      ],
+      "duration_ms": 281.0,
+      "timestamp": "2026-07-22T00:15:40.473554+00:00"
+    },
+    {
+      "layer": 9,
+      "name": "Learning",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "LearningMemory Import+Init",
+          "status": "PASS",
+          "duration_ms": 68.62,
+          "evidence": {
+            "module": "layers.layer09_learning.modules.learning_engine.learning_memory",
+            "class": "LearningMemory",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.542375+00:00"
+        },
+        {
+          "test": "LessonGenerator Import+Init",
+          "status": "PASS",
+          "duration_ms": 0.05,
+          "evidence": {
+            "module": "layers.layer09_learning.modules.learning_engine.lesson_generator",
+            "class": "LessonGenerator",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.542535+00:00"
+        },
+        {
+          "test": "LessonGenerator Functional",
+          "status": "PASS",
+          "duration_ms": 0.01,
+          "evidence": {
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.542578+00:00"
+        }
+      ],
+      "duration_ms": 68.9,
+      "timestamp": "2026-07-22T00:15:40.542617+00:00"
+    },
+    {
+      "layer": 10,
+      "name": "Monetization",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "Master Orchestrator Import+Init",
+          "status": "PASS",
+          "duration_ms": 99.91,
+          "evidence": {
+            "module": "layers.layer10_monetization.modules.master_orchestrator.master_orchestrator",
+            "class": "MasterOrchestrator",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.642706+00:00"
+        },
+        {
+          "test": "Autonomous Planner Import+Init",
+          "status": "PASS",
+          "duration_ms": 19.51,
+          "evidence": {
+            "module": "layers.layer10_monetization.modules.autonomous_planner.autonomous_planner",
+            "class": "AutonomousPlanner",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.662377+00:00"
+        },
+        {
+          "test": "Content Generation Import+Init",
+          "status": "PASS",
+          "duration_ms": 91.59,
+          "evidence": {
+            "module": "layers.layer10_monetization.modules.content_generation.content_generation_manager",
+            "class": "ContentGenerationManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:40.754112+00:00"
+        }
+      ],
+      "duration_ms": 211.5,
+      "timestamp": "2026-07-22T00:15:40.754248+00:00"
+    },
+    {
+      "layer": 11,
+      "name": "Async Runtime",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "AsyncRuntime Import+Init",
+          "status": "PASS",
+          "duration_ms": 460.23,
+          "evidence": {
+            "module": "layers.layer11_async_runtime.modules.async_runtime_engine.runtime",
+            "class": "AsyncRuntime",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:41.214927+00:00"
+        },
+        {
+          "test": "AsyncRuntime Start/Stop",
+          "status": "PASS",
+          "duration_ms": 0.23,
+          "evidence": {
+            "start_stop": true,
+            "running": false
+          },
+          "timestamp": "2026-07-22T00:15:41.215380+00:00"
+        },
+        {
+          "test": "AsyncRuntime Parallel",
+          "status": "PASS",
+          "duration_ms": 21.44,
+          "evidence": {
+            "results": [
+              2,
+              4,
+              6
+            ],
+            "correct": true
+          },
+          "timestamp": "2026-07-22T00:15:41.237019+00:00"
+        }
+      ],
+      "duration_ms": 482.8,
+      "timestamp": "2026-07-22T00:15:41.237248+00:00"
+    },
+    {
+      "layer": 12,
+      "name": "AI Foundation",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "KeyManager Import+Init",
+          "status": "PASS",
+          "duration_ms": 161.85,
+          "evidence": {
+            "module": "layers.layer12_ai_foundation.modules.model_router.key_manager",
+            "class": "KeyManager",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:41.399361+00:00"
+        },
+        {
+          "test": "KeyManager Rotation",
+          "status": "PASS",
+          "duration_ms": 0.36,
+          "evidence": {
+            "selected": true,
+            "keys_registered": 2
+          },
+          "timestamp": "2026-07-22T00:15:41.399894+00:00"
+        },
+        {
+          "test": "GeminiProvider Import+Init",
+          "status": "PASS",
+          "duration_ms": 18.54,
+          "evidence": {
+            "module": "layers.layer12_ai_foundation.modules.model_router.gemini_provider",
+            "class": "GeminiProvider",
+            "instantiated": true
+          },
+          "timestamp": "2026-07-22T00:15:41.418596+00:00"
+        },
+        {
+          "test": "Gemini No Simulated",
+          "status": "PASS",
+          "duration_ms": 0.12,
+          "evidence": {
+            "simulated": false,
+            "provider": "gemini"
+          },
+          "timestamp": "2026-07-22T00:15:41.418859+00:00"
+        }
+      ],
+      "duration_ms": 181.5,
+      "timestamp": "2026-07-22T00:15:41.418949+00:00"
+    },
+    {
+      "layer": 13,
+      "name": "Persistence",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "SQLite CRUD",
+          "status": "PASS",
+          "duration_ms": 3.69,
+          "evidence": {
+            "read": "updated",
+            "after_delete": 0,
+            "crud_complete": true
+          },
+          "timestamp": "2026-07-22T00:15:41.422853+00:00"
+        },
+        {
+          "test": "Concurrent Writes (10)",
+          "status": "PASS",
+          "duration_ms": 96.84,
+          "evidence": {
+            "succeeded": 10,
+            "failed": 0,
+            "errors": []
+          },
+          "timestamp": "2026-07-22T00:15:41.519896+00:00"
+        },
+        {
+          "test": "DB Recovery",
+          "status": "PASS",
+          "duration_ms": 3.97,
+          "evidence": {
+            "recovered": true,
+            "data": "after_recovery"
+          },
+          "timestamp": "2026-07-22T00:15:41.524243+00:00"
+        }
+      ],
+      "duration_ms": 106.1,
+      "timestamp": "2026-07-22T00:15:41.525183+00:00"
+    },
+    {
+      "layer": 14,
+      "name": "Integration",
+      "score": 100.0,
+      "max_score": 100.0,
+      "percentage": 100.0,
+      "certified": true,
+      "tests": [
+        {
+          "test": "Pipeline Execute",
+          "status": "PASS",
+          "duration_ms": 182.53,
+          "evidence": {
+            "response_type": "ContentResponse",
+            "has_stats": true,
+            "steps": 0
+          },
+          "timestamp": "2026-07-22T00:15:41.708015+00:00"
+        },
+        {
+          "test": "Pipeline Performance (5x)",
+          "status": "PASS",
+          "duration_ms": 277.14,
+          "evidence": {
+            "avg_ms": 55.0,
+            "min_ms": 44.4,
+            "max_ms": 74.4
+          },
+          "timestamp": "2026-07-22T00:15:41.985473+00:00"
+        },
+        {
+          "test": "Pipeline Stability (10x)",
+          "status": "PASS",
+          "duration_ms": 457.23,
+          "evidence": {
+            "successes": 10,
+            "failures": 0,
+            "success_rate": "100%"
+          },
+          "timestamp": "2026-07-22T00:15:42.442943+00:00"
+        }
+      ],
+      "duration_ms": 917.7,
+      "timestamp": "2026-07-22T00:15:42.443119+00:00"
+    }
+  ]
+}

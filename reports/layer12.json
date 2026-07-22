@@ -1,0 +1,54 @@
+{
+  "layer": 12,
+  "name": "AI Foundation",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "KeyManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 161.85,
+      "evidence": {
+        "module": "layers.layer12_ai_foundation.modules.model_router.key_manager",
+        "class": "KeyManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:41.399361+00:00"
+    },
+    {
+      "test": "KeyManager Rotation",
+      "status": "PASS",
+      "duration_ms": 0.36,
+      "evidence": {
+        "selected": true,
+        "keys_registered": 2
+      },
+      "timestamp": "2026-07-22T00:15:41.399894+00:00"
+    },
+    {
+      "test": "GeminiProvider Import+Init",
+      "status": "PASS",
+      "duration_ms": 18.54,
+      "evidence": {
+        "module": "layers.layer12_ai_foundation.modules.model_router.gemini_provider",
+        "class": "GeminiProvider",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:41.418596+00:00"
+    },
+    {
+      "test": "Gemini No Simulated",
+      "status": "PASS",
+      "duration_ms": 0.12,
+      "evidence": {
+        "simulated": false,
+        "provider": "gemini"
+      },
+      "timestamp": "2026-07-22T00:15:41.418859+00:00"
+    }
+  ],
+  "duration_ms": 181.5,
+  "timestamp": "2026-07-22T00:15:41.418949+00:00"
+}

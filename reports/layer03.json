@@ -1,0 +1,58 @@
+{
+  "layer": 3,
+  "name": "Intelligence",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "SemanticAnalyzer Import+Init",
+      "status": "PASS",
+      "duration_ms": 216.13,
+      "evidence": {
+        "module": "layers.layer03_intelligence.modules.content_understanding.semantic_analyzer",
+        "class": "SemanticAnalyzer",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:37.985314+00:00"
+    },
+    {
+      "test": "SemanticAnalyzer Analyze",
+      "status": "PASS",
+      "duration_ms": 10.72,
+      "evidence": {
+        "result_type": "SemanticResult",
+        "has_result": true
+      },
+      "timestamp": "2026-07-22T00:15:37.996176+00:00"
+    },
+    {
+      "test": "KeywordAnalyzer Import+Init",
+      "status": "PASS",
+      "duration_ms": 0.05,
+      "evidence": {
+        "module": "layers.layer03_intelligence.modules.content_understanding.keyword_analyzer",
+        "class": "KeywordAnalyzer",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:37.996399+00:00"
+    },
+    {
+      "test": "KeywordAnalyzer Analyze",
+      "status": "PASS",
+      "duration_ms": 9.42,
+      "evidence": {
+        "keywords_count": 10,
+        "primary": [
+          "ai",
+          "and",
+          "machine"
+        ]
+      },
+      "timestamp": "2026-07-22T00:15:38.005890+00:00"
+    }
+  ],
+  "duration_ms": 236.9,
+  "timestamp": "2026-07-22T00:15:38.006023+00:00"
+}

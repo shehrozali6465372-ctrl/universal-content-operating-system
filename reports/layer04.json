@@ -1,0 +1,53 @@
+{
+  "layer": 4,
+  "name": "Writing",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "PlannerManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 141.38,
+      "evidence": {
+        "module": "layers.layer04_writing.modules.content_planner.planner_manager",
+        "class": "PlannerManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:38.147579+00:00"
+    },
+    {
+      "test": "PlannerManager Create Plan",
+      "status": "PASS",
+      "duration_ms": 0.75,
+      "evidence": {
+        "plan_type": "PlannerResult",
+        "has_plan": true
+      },
+      "timestamp": "2026-07-22T00:15:38.148459+00:00"
+    },
+    {
+      "test": "DraftManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 86.19,
+      "evidence": {
+        "module": "layers.layer04_writing.modules.draft_generator.draft_manager",
+        "class": "DraftManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:38.234802+00:00"
+    },
+    {
+      "test": "DraftManager Functional",
+      "status": "PASS",
+      "duration_ms": 0.08,
+      "evidence": {
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:38.235011+00:00"
+    }
+  ],
+  "duration_ms": 228.9,
+  "timestamp": "2026-07-22T00:15:38.235066+00:00"
+}

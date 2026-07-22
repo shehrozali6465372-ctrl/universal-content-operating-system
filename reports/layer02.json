@@ -1,0 +1,65 @@
+{
+  "layer": 2,
+  "name": "Research",
+  "score": 100.0,
+  "max_score": 100.0,
+  "percentage": 100.0,
+  "certified": true,
+  "tests": [
+    {
+      "test": "TrendManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 70.29,
+      "evidence": {
+        "module": "layers.layer02_research.modules.trend_discovery.trend_manager",
+        "class": "TrendManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:37.593862+00:00"
+    },
+    {
+      "test": "TrendManager Add Trend",
+      "status": "PASS",
+      "duration_ms": 0.36,
+      "evidence": {
+        "trend_id": "test_topic_manual",
+        "keyword": "Test Topic",
+        "score": 2.8
+      },
+      "timestamp": "2026-07-22T00:15:37.594332+00:00"
+    },
+    {
+      "test": "VerificationManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 111.21,
+      "evidence": {
+        "module": "layers.layer02_research.modules.fact_verification.verification_manager",
+        "class": "VerificationManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:37.705619+00:00"
+    },
+    {
+      "test": "TopicIntelManager Import+Init",
+      "status": "PASS",
+      "duration_ms": 62.82,
+      "evidence": {
+        "module": "layers.layer02_research.modules.topic_intelligence.topic_intel_manager",
+        "class": "TopicIntelManager",
+        "instantiated": true
+      },
+      "timestamp": "2026-07-22T00:15:37.768619+00:00"
+    },
+    {
+      "test": "TrendManager Failure Handling",
+      "status": "PASS",
+      "duration_ms": 0.1,
+      "evidence": {
+        "raised_exception": true
+      },
+      "timestamp": "2026-07-22T00:15:37.768888+00:00"
+    }
+  ],
+  "duration_ms": 245.4,
+  "timestamp": "2026-07-22T00:15:37.768972+00:00"
+}
