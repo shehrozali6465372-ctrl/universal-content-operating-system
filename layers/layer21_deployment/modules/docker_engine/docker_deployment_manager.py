@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import shlex
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -149,8 +150,9 @@ class DockerDeploymentManager:
 
     def _run_command(self, cmd: str, timeout: int = 10) -> tuple:
         try:
+            args = shlex.split(cmd)
             result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=timeout
+                args, capture_output=True, text=True, timeout=timeout
             )
             return result.returncode, result.stdout.strip(), result.stderr.strip()
         except subprocess.TimeoutExpired:

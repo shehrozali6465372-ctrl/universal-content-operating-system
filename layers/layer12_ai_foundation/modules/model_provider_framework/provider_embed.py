@@ -31,7 +31,7 @@ class ProviderEmbed:
         if cache_key in self._cache:
             return self._cache[cache_key]
         import hashlib
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         embedding = [float(int(h[i:i + 2], 16)) / 255.0 for i in range(0, min(32, len(h)), 2)]
         while len(embedding) < 1536:
             embedding.append(0.0)

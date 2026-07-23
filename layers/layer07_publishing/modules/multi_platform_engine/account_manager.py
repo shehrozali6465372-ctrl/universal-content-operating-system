@@ -93,7 +93,7 @@ class AccountManager:
         if len(self._accounts) >= self._max_accounts:
             raise ValueError(f"Account limit reached: {self._max_accounts}")
 
-        account_id = hashlib.md5(
+        account_id = hashlib.sha256(
             f"{platform}:{username}:{time.time()}".encode()
         ).hexdigest()[:16]
 

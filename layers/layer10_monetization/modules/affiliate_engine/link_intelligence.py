@@ -42,7 +42,7 @@ class TrackedLink:
 
     def __init__(self, original_url: str, niche: str = "", category: str = "") -> None:
         self.id = str(uuid.uuid4())[:12]
-        self.short_slug = hashlib.md5(original_url.encode()).hexdigest()[:8]
+        self.short_slug = hashlib.sha256(original_url.encode()).hexdigest()[:8]
         self.original_url = original_url
         self.cloaked_url = f"/go/{self.short_slug}"
         self.variants: List[LinkVariant] = [LinkVariant(original_url)]

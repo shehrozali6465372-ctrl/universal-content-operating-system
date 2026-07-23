@@ -32,7 +32,7 @@ class Memory:
 
     def __init__(self, content: str, memory_type: MemoryType = MemoryType.FACT,
                  importance: float = 0.5, metadata: Dict[str, Any] = None):
-        self.memory_id = hashlib.md5(
+        self.memory_id = hashlib.sha256(
             f"{time.time()}:{content[:100]}".encode()
         ).hexdigest()[:16]
         self.content = content

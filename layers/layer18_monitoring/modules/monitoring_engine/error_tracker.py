@@ -46,7 +46,7 @@ class ErrorTracker:
             Error record
         """
         now = time.time()
-        fingerprint = hashlib.md5(f"{error_type}:{module}:{message[:100]}".encode()).hexdigest()[:12]
+        fingerprint = hashlib.sha256(f"{error_type}:{module}:{message[:100]}".encode()).hexdigest()[:12]
 
         error = {
             "timestamp": now,

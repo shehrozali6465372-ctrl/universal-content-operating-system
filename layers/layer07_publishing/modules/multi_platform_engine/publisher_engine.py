@@ -91,7 +91,7 @@ class PublisherEngine:
             Publish result dict
         """
         import hashlib
-        job_id = hashlib.md5(f"{platform}:{account_id}:{time.time()}".encode()).hexdigest()[:12]
+        job_id = hashlib.sha256(f"{platform}:{account_id}:{time.time()}".encode()).hexdigest()[:12]
 
         job = PublishJob(
             job_id=job_id,

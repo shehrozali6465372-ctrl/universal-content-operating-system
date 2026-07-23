@@ -11,7 +11,7 @@ class BackupSystem:
         self._max_backups = 10
 
     def create_backup(self, data: Dict[str, Any], name: str = '') -> Dict[str, Any]:
-        backup_id = hashlib.md5(json.dumps(data, default=str).encode()).hexdigest()[:8]
+        backup_id = hashlib.sha256(json.dumps(data, default=str).encode()).hexdigest()[:8]
         backup = {'id': backup_id, 'name': name or f'backup_{len(self._backups) + 1}',
                   'data': data, 'timestamp': time.time(),
                   'size': len(json.dumps(data, default=str))}

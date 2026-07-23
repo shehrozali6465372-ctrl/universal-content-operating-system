@@ -16,7 +16,7 @@ class EmbeddingCache:
         self._misses = 0
 
     def _make_key(self, text: str, model: str) -> str:
-        return hashlib.md5(f"{model}:{text}".encode()).hexdigest()
+        return hashlib.sha256(f"{model}:{text}".encode()).hexdigest()
 
     def get(self, text: str, model: str = "default") -> Optional[List[float]]:
         key = self._make_key(text, model)

@@ -115,7 +115,7 @@ class EmbeddingEngine:
 
         # Add positional features
         for i, word in enumerate(words[:20]):
-            h = hashlib.md5(f"{word}_{i}".encode()).hexdigest()
+            h = hashlib.sha256(f"{word}_{i}".encode()).hexdigest()
             idx = int(h[:4], 16) % self._dimensions
             vector[idx] += 0.1
 
@@ -198,7 +198,7 @@ class EmbeddingEngine:
         return [x / norm for x in vector]
 
     def _cache_key(self, text: str) -> str:
-        return hashlib.md5(f"{self._strategy}:{self._dimensions}:{text}".encode()).hexdigest()
+        return hashlib.sha256(f"{self._strategy}:{self._dimensions}:{text}".encode()).hexdigest()
 
     def _get_cached(self, key: str) -> Optional[List[float]]:
         with self._lock:

@@ -89,15 +89,37 @@ class ScoringRulesEngine:
         return round(sum(r.bonus for r in applied), 2)
 
     def _check_condition(self, condition: str, scores: Dict[str, float]) -> bool:
-        """Evaluate a condition string against scores."""
+        """Evaluate a condition string against scores safely (no eval)."""
         if not condition:
             return False
-        # Replace variable names with values
-        expr = condition
-        for key, val in scores.items():
-            expr = expr.replace(key, str(val))
-        # Simple safe evaluation
-        return eval(expr)  # noqa: S307
+        import re
+        # Allowed pattern: variable_name op number (e.g. "trend_score >= 8.0")
+        safe_pattern = re.compile(
+            r"^[a-zA-Z_][a-zA-Z0-9_]*\s*(>=|<=|!=|==|>|<)\s*-?\d+(\.\d+)?$"
+        )
+        if not safe_pattern.match(condition.strip()):
+            return False
+        # Parse: "trend_score >= 8.0"
+        match = re.match(
+            r"^([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|!=|==|>|<)\s*(-?\d+(?:\.\d+)?)$",
+            condition.strip()
+        )
+        if not match:
+            return False
+        var_name, op, num_str = match.group(1), match.group(2), match.group(3)
+        if var_name not in scores:
+            return False
+        val = scores[var_name]
+        threshold = float(num_str)
+        ops = {
+            ">=": val >= threshold,
+            "<=": val <= threshold,
+            ">": val > threshold,
+            "<": val < threshold,
+            "==": val == threshold,
+            "!=": val != threshold,
+        }
+        return ops.get(op, False)
 
     def reset_to_defaults(self):
         self._rules = {r.rule_id: r for r in DEFAULT_RULES}

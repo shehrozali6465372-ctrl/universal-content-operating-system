@@ -94,7 +94,7 @@ class KnowledgeEntry:
         """Simple content hash for deduplication."""
         import hashlib
         normalized = text.lower().strip()[:1000]
-        return hashlib.md5(normalized.encode()).hexdigest()
+        return hashlib.sha256(normalized.encode()).hexdigest()
 
     def is_expired(self) -> bool:
         try:

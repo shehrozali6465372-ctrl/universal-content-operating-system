@@ -109,7 +109,7 @@ class ContentScheduler:
         Returns:
             Scheduled post info
         """
-        schedule_id = hashlib.md5(
+        schedule_id = hashlib.sha256(
             f"{platform}:{scheduled_time}:{content[:50]}".encode()
         ).hexdigest()[:12]
 

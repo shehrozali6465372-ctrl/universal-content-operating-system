@@ -55,7 +55,7 @@ class RAGPipeline:
         ingested = []
 
         for i, chunk in enumerate(chunks):
-            chunk_id = hashlib.md5(f"{namespace}:{chunk[:100]}:{i}".encode()).hexdigest()
+            chunk_id = hashlib.sha256(f"{namespace}:{chunk[:100]}:{i}".encode()).hexdigest()
 
             # Generate embedding
             vector = None
@@ -69,7 +69,7 @@ class RAGPipeline:
                     "chunk_index": i,
                     "total_chunks": len(chunks),
                     "chunk_strategy": chunk_strategy,
-                    "parent_hash": hashlib.md5(text.encode()).hexdigest()[:16],
+                    "parent_hash": hashlib.sha256(text.encode()).hexdigest()[:16],
                 }
                 if metadata:
                     chunk_metadata.update(metadata)

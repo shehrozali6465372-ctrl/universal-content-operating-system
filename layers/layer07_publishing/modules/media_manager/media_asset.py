@@ -43,12 +43,12 @@ class MediaAsset:
 
     def compute_checksum(self, content: bytes = b"") -> str:
         if content:
-            self.checksum = hashlib.md5(content).hexdigest()
+            self.checksum = hashlib.sha256(content).hexdigest()
         elif self.file_path and os.path.exists(self.file_path):
             with open(self.file_path, "rb") as f:
-                self.checksum = hashlib.md5(f.read()).hexdigest()
+                self.checksum = hashlib.sha256(f.read()).hexdigest()
         else:
-            self.checksum = hashlib.md5(self.file_name.encode()).hexdigest()
+            self.checksum = hashlib.sha256(self.file_name.encode()).hexdigest()
         return self.checksum
 
     def get_extension(self) -> str:

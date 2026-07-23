@@ -35,10 +35,10 @@ class EmbeddingManager:
 
     def generate(self, text: str, model: str = "default",
                  dimensions: int = 1536) -> EmbeddingResult:
-        cache_key = hashlib.md5(f"{model}:{text}".encode()).hexdigest()
+        cache_key = hashlib.sha256(f"{model}:{text}".encode()).hexdigest()
         if cache_key in self._cache:
             return self._embeddings[self._cache[cache_key]]
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         vector = [float(int(h[i:i + 2], 16)) / 255.0 for i in range(0, min(32, len(h)), 2)]
         while len(vector) < dimensions:
             vector.append(0.0)

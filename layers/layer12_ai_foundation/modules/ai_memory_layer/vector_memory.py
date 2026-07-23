@@ -72,7 +72,7 @@ class VectorMemory:
     def _generate_embedding(text: str) -> List[float]:
         """Generate a simple deterministic embedding from text (for simulation)."""
         import hashlib
-        h = hashlib.md5(text.encode()).hexdigest()
+        h = hashlib.sha256(text.encode()).hexdigest()
         embedding = []
         for i in range(128):
             idx = i % len(h)

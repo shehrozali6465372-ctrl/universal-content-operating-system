@@ -25,7 +25,7 @@ class NoveltyDetector:
 
     def detect(self, content: str, existing: Optional[List[str]] = None) -> NoveltyResult:
         result = NoveltyResult()
-        content_hash = hashlib.md5(content.lower().strip().encode()).hexdigest()
+        content_hash = hashlib.sha256(content.lower().strip().encode()).hexdigest()
         if content_hash in self._seen_hashes:
             result.novelty_score = 0.0
             result.is_novel = False
