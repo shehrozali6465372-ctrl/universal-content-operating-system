@@ -346,7 +346,288 @@ if __name__ == "__main__":
         print(f"\n📋 Full report saved to memory")
         print(json.dumps(report, indent=2, default=str))
 
-    else:
+    elif "--db-status" in args:
+        from layers.layer13_persistence.modules.postgresql.manager import get_database
+        db = get_database()
+        status = db.get_db_status()
+        # Pretty print
+        print("\n🐘 DATABASE STATUS")
+        print("=" * 50)
+        print(f"  Overall     : {status['overall']}")
+        print(f"  PostgreSQL  : {'✅' if status['postgresql_available'] else '⚠️  SQLite fallback'}")
+        print()
+        print("  📊 Connections:")
+        conn = status['connections']
+        print(f"     Active    : {conn['active']}")
+        print(f"     Idle      : {conn['idle']}")
+        print(f"     Max Pool  : {conn['max_pool_size']}")
+        print(f"     Queries   : {conn['total_queries']:,}")
+        print(f"     Failed    : {conn['failed_queries']}")
+        print(f"     Retries   : {conn['total_retries']}")
+        print()
+        print("  ⏱️  Latency:")
+        lat = status['latency']
+        print(f"     Avg       : {lat['avg_ms']}ms")
+        print(f"     P95       : {lat['p95_ms']}ms")
+        print(f"     P99       : {lat['p99_ms']}ms")
+        print()
+        slow = status['slow_queries']
+        if slow['total'] > 0:
+            print(f"  🐌 Slow Queries: {slow['total']} ({slow['slow_pct']}%)")
+        leak = status['leak_detection']
+        if leak['total_leaks_detected'] > 0:
+            print(f"  🔴 Leaks Detected: {leak['total_leaks_detected']}")
+        print()
+        print(f"  📦 Tables: {len(status['tables'])} | Rows: {status['total_rows']:,}")
+        print("=" * 50)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+
+    elif "--postgres-transaction-recovery" in args:
+        from layers.layer13_persistence.modules.postgresql.manager import get_database
+        db = get_database()
+        result = db.run_transaction_recovery()
+        print(json.dumps(result, indent=2, default=str))
+
+    elif "--postgres-leak-check" in args:
+        from layers.layer13_persistence.modules.postgresql.manager import get_database
+        db = get_database()
+        leaks = db.check_leaks()
+        stats = db.leak_detector.get_stats() if db.leak_detector else {}
+        print(f"\n🔍 Leak Detection: {len(leaks)} active leaks")
+        print(json.dumps(stats, indent=2, default=str))
+
+
+    elif "--redis-status" in args:
+        from layers.layer13_persistence.modules.redis_platform.redis_manager import get_redis
+        redis = get_redis()
+        status = redis.get_redis_status()
+        print("\n🔴 REDIS STATUS")
+        print("=" * 50)
+        print(f"  Overall     : {status["overall"]}")
+        print(f"  Redis       : {"✅ Real Redis" if status["connection"]["redis_available"] else "⚠️  In-memory fallback"}")
+        print()
+        print("  📊 Connection:")
+        conn = status["connection"]
+        print(f"     Total Ops : {conn["total_ops"]:,}")
+        print(f"     Failed    : {conn["failed_ops"]}")
+        print(f"     Retries   : {conn["total_retries"]}")
+        print()
+        print("  ⏱️  Latency:")
+        lat = status["latency"]
+        print(f"     Avg       : {lat.get("avg_ms", 0)}ms")
+        print(f"     P95       : {lat.get("p95_ms", 0)}ms")
+        print(f"     P99       : {lat.get("p99_ms", 0)}ms")
+        print()
+        cache = status["cache"]
+        if cache:
+            print(f"  💾 Cache     : Hits={cache.get("hits",0)} Misses={cache.get("misses",0)} Rate={cache.get("hit_rate_pct",0)}%")
+        sess = status["sessions"]
+        if sess:
+            print(f"  👤 Sessions  : Active={sess.get("active_sessions",0)} Total={sess.get("total_sessions",0)}")
+        rate = status["rate_limiter"]
+        if rate:
+            print(f"  🚦 Rate Limit: Allowed={rate.get("total_allowed",0)} Rejected={rate.get("total_rejected",0)}")
+        qs = status["queues"]
+        if qs:
+            for qname, qstats in qs.items():
+                sizes = qstats.get("sizes",{})
+                print(f"  📬 Queue {qname:10s}: Pending={sizes.get("total",0)} Completed={qstats.get("total_completed",0)}")
+        print("=" * 50)
+        print()
+
+    elif "--vector-db-status" in args:
+        from layers.layer13_persistence.modules.vector_database_platform.vector_db_manager import get_vectordb
+        vdb = get_vectordb()
+        status = vdb.get_vector_db_status()
+        print("\n🧠 VECTOR DATABASE STATUS")
+        print("=" * 55)
+        print(f"  Overall         : {status["overall"]}")
+        print(f"  Dimensions      : {status["dimensions"]}")
+        print(f"  Embedding       : {status["embedding_strategy"]}")
+        print()
+        store = status["storage"]
+        print(f"  💾 Storage:")
+        print(f"     Records      : {store.get("total_records", 0):,}")
+        print(f"     Namespaces   : {store.get("namespaces", {})}")
+        print()
+        eng = status["embedding"]
+        print(f"  🔢 Embedding Engine:")
+        print(f"     Vocab Size   : {eng.get("vocab_size", 0):,}")
+        print(f"     Generated    : {eng.get("total_generated", 0):,}")
+        print(f"     Cache Hit    : {eng.get("cache_hit_rate", 0)}%")
+        print()
+        mem = status["memory"]
+        print(f"  🧠 Long-Term Memory:")
+        print(f"     Total        : {mem.get("total", 0):,}")
+        print(f"     Short-Term   : {mem.get("short_term", 0):,}")
+        print(f"     Long-Term    : {mem.get("long_term", 0):,}")
+        print(f"     By Type      : {mem.get("by_type", {})}")
+        print()
+        dedup = status["deduplication"]
+        print(f"  🔍 Deduplication:")
+        print(f"     Checked      : {dedup.get("total_checked", 0):,}")
+        print(f"     Exact Dupes  : {dedup.get("exact_duplicates", 0):,}")
+        print(f"     Near Dupes   : {dedup.get("near_duplicates", 0):,}")
+        print()
+        print("=" * 55)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+
+    elif "--publishing-status" in args:
+        from layers.layer07_publishing.modules.multi_platform_engine.publishing_manager import get_publishing
+        pub = get_publishing()
+        status = pub.get_publishing_status()
+        print("\n🚀 MULTI-PLATFORM PUBLISHING STATUS")
+        print("=" * 60)
+        print(f"  Overall       : {status["overall"]}")
+        print(f"  Platforms     : {status["total_platforms"]}")
+        print(f"  Supported     : {", ".join(status["supported_platforms"][:8])}...")
+        print()
+        acc = status["accounts"]
+        print(f"  👤 Accounts:")
+        print(f"     Total       : {acc["total_accounts"]:,}")
+        print(f"     Active      : {acc["active_accounts"]:,}")
+        print(f"     Platforms   : {acc["platforms"]}")
+        print(f"     Brands      : {acc["brands"]}")
+        print()
+        eng = status["engine"]
+        print(f"  ⚡ Publisher Engine:")
+        print(f"     Published   : {eng["total_published"]:,}")
+        print(f"     Failed      : {eng["total_failed"]:,}")
+        print(f"     Retried     : {eng["total_retried"]:,}")
+        print(f"     Handlers    : {eng["registered_handlers"]}")
+        print()
+        sched = status["scheduler"]
+        print(f"  📅 Scheduler:")
+        print(f"     Scheduled   : {sched["total_scheduled"]:,}")
+        print(f"     Published   : {sched["total_published"]:,}")
+        print(f"     Queue Size  : {sched["queue_size"]:,}")
+        print()
+        ana = status["analytics"]
+        dash = ana.get("dashboard", {})
+        print(f"  📊 Analytics:")
+        print(f"     Posts       : {ana["tracked_posts"]:,}")
+        print(f"     Views       : {dash.get("total_views", 0):,}")
+        print(f"     Clicks      : {dash.get("total_clicks", 0):,}")
+        print(f"     Engagement  : {dash.get("total_engagement", 0):,}")
+        print(f"     Affiliate   : {dash.get("total_affiliate_clicks", 0):,}")
+        print(f"     Revenue     : ${dash.get("total_affiliate_revenue", 0):,.2f}")
+        print("=" * 60)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+    elif "--monitoring-status" in args:
+        from layers.layer18_monitoring.modules.monitoring_engine.monitoring_manager import get_monitoring
+        mon = get_monitoring()
+        status = mon.get_monitoring_status()
+        print("\n📡 MONITORING & OBSERVABILITY STATUS")
+        print("=" * 60)
+        print(f"  Overall       : {status["overall"]}")
+        print()
+        health = status["health"]
+        print(f"  🏥 Health Score: {health.get("score", 0)}/100 ({health.get("status", "unknown")})")
+        comps = health.get("components", {})
+        for name, comp in comps.items():
+            icon = "✅" if comp["status"] == "healthy" else "⚠️" if comp["status"] == "degraded" else "❌"
+            print(f"     {icon} {name:15s} : {comp["score"]}/100")
+        print()
+        sys = status.get("system", {})
+        cpu = sys.get("cpu", {})
+        mem = sys.get("memory", {})
+        disk = sys.get("disk", {})
+        print(f"  💻 System Resources:")
+        print(f"     CPU         : {cpu.get("percent", 0)}% ({cpu.get("cores", 0)} cores)")
+        print(f"     Memory      : {mem.get("percent", 0)}% ({mem.get("used_mb", 0):,}MB / {mem.get("total_mb", 0):,}MB)")
+        print(f"     Disk        : {disk.get("percent_used", 0)}% ({disk.get("used_gb", 0):,}GB / {disk.get("total_gb", 0):,}GB)")
+        print()
+        api = status.get("api", {})
+        print(f"  ⚡ API Metrics:")
+        print(f"     Requests    : {api.get("total_requests", 0):,}")
+        print(f"     Avg Latency : {api.get("avg_latency_ms", 0)}ms")
+        print(f"     Error Rate  : {api.get("error_rate_pct", 0)}%")
+        print()
+        err = status.get("errors", {})
+        print(f"  🐛 Error Tracker:")
+        print(f"     Total       : {err.get("total_errors", 0):,}")
+        print(f"     Groups      : {err.get("unique_error_groups", 0):,}")
+        print()
+        al = status.get("alerts", {})
+        print(f"  🚨 Alerts:")
+        print(f"     Rules       : {al.get("rules", 0)}")
+        print(f"     Firing      : {al.get("firing", 0)}")
+        print(f"     Resolved    : {al.get("resolved", 0)}")
+        print("=" * 60)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+    elif "--docker-status" in args:
+        from layers.layer21_deployment.modules.docker_engine.docker_deployment_manager import get_docker_manager
+        dm = get_docker_manager()
+        status = dm.get_deployment_status()
+        docker = status["docker"]
+        deploy = status["deployment"]
+        print("\n🐳 DOCKER DEPLOYMENT STATUS")
+        print("=" * 60)
+        print(f"  Docker        : {'✅ Available' if docker['docker_available'] else '❌ Not found'}")
+        print(f"  Version       : {docker.get('docker_version', 'N/A')}")
+        print(f"  Compose       : {'✅ Available' if docker['compose_available'] else '❌ Not found'}")
+        print()
+        print(f"  📦 Services:")
+        print(f"     Expected    : {deploy['total_services']}")
+        print(f"     Running     : {deploy['running']}")
+        print(f"     Stopped     : {deploy['stopped']}")
+        print(f"     Overall     : {deploy['overall']}")
+        print()
+        containers = deploy.get("containers", {})
+        for name, info in containers.items():
+            icon = "✅" if info["status"] == "running" else "❌"
+            health = "healthy" if info.get("healthy") else "unhealthy"
+            print(f"     {icon} {name:15s}: {info['status']:10s} ({health})")
+        print()
+        print(f"  ⚙️  Config:")
+        config = status.get("config", {})
+        print(f"     Project     : {config.get('project', 'N/A')}")
+        print(f"     Services    : {config.get('services', [])}")
+        print(f"     Networks    : {config.get('networks', [])}")
+        print()
+        history = status.get("deploy_history", [])
+        if history:
+            print(f"  📜 Recent Deployments: {len(history)}")
+            for h in history[-3:]:
+                icon = "✅" if h.get("success") else "❌"
+                dur = h.get('duration_seconds', 0)
+                print(f"     {icon} {h.get('action', 'unknown')} ({dur}s)")
+        print("=" * 60)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+
+    elif "--docker-deploy" in args:
+        from layers.layer21_deployment.modules.docker_engine.docker_deployment_manager import get_docker_manager
+        dm = get_docker_manager()
+        print("\n🚀 Deploying with Docker Compose...")
+        result = dm.deploy()
+        if result["success"]:
+            print(f"✅ Deployed in {result['duration_seconds']}s")
+        else:
+            print(f"❌ Deployment failed: {result.get('error', 'unknown')}")
+        print(json.dumps(result, indent=2, default=str))
+
+    elif "--docker-verify" in args:
+        from layers.layer21_deployment.modules.docker_engine.docker_deployment_manager import get_docker_manager
+        dm = get_docker_manager()
+        print("\n🔍 Verifying Docker deployment...")
+        result = dm.verify_deployment()
+        print(f"  Docker Available  : {'✅' if result['docker_available'] else '❌'}")
+        print(f"  Compose Available : {'✅' if result['compose_available'] else '❌'}")
+        print(f"  Running           : {result['containers_running']}/{result['containers_expected']}")
+        print(f"  Healthy           : {result['services_healthy']}/{result['containers_expected']}")
+        print()
+        for check in result.get("checks", []):
+            icon = "✅" if check.get("passed") else "❌"
+            print(f"  {icon} {check['name']:20s}: {check.get('detail', 'N/A')}")
+        print()
+        print(f"  Overall: {'✅ PASS' if result['overall'] else '❌ FAIL'}")
+        print(json.dumps(result, indent=2, default=str))
+
         boot = AIOSBoot()
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")

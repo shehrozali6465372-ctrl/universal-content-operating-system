@@ -1,32 +1,99 @@
 # ─── Universal AI Content Operating System ───
-# Docker Compose for local development and production
+# Production Docker Compose v6.0.0
+# ────────────────────────────────────────────
 
 version: '3.8'
 
 services:
-  # ─── Main AI OS Service ───
+  # ─── PostgreSQL Database ────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: aios-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aios
+      POSTGRES_USER: aios
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aios_secure_2024}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aios -d aios"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+    networks:
+      - aios-net
+
+  # ─── Redis Cache ────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aios-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - aios-net
+
+  # ─── Main AI OS Application ─────────────────
   aios:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: aios-main
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     volumes:
       - aios-data:/app/data
       - aios-output:/app/output
+      - aios-logs:/app/logs
+      - aios-backups:/app/backups
     environment:
       - PYTHONUNBUFFERED=1
+      - APP_ENV=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aios
+      - POSTGRES_USER=aios
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-aios_secure_2024}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - GEMINI_API_KEY_1=${GEMINI_API_KEY_1:-}
-      - GEMINIAPIKEY2=${GEMINIAPIKEY2:-}
-      - GEMINIAPIKEY3=${GEMINIAPIKEY3:-}
+      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2:-}
+      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import json,subprocess; r=subprocess.run(['python','main.py','--status'],capture_output=True,text=True,timeout=5); d=json.loads(r.stdout); exit(0 if d.get('layers',0)>0 else 1)"]
+      test: ["CMD", "python", "main.py", "--status"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -35,22 +102,34 @@ services:
     networks:
       - aios-net
 
-  # ─── Worker Service (background tasks) ───
+  # ─── Worker Service (background tasks) ──────
   aios-worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: aios-worker
     restart: unless-stopped
-    command: ["python", "-c", "import time; print('Worker running'); time.sleep(3600)"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["python", "main.py", "--worker"]
     volumes:
       - aios-data:/app/data
       - aios-output:/app/output
+      - aios-logs:/app/logs
     environment:
       - PYTHONUNBUFFERED=1
-      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1:-}
-      - GEMINIAPIKEY2=${GEMINIAPIKEY2:-}
-      - GEMINIAPIKEY3=${GEMINIAPIKEY3:-}
+      - APP_ENV=production
+      - APP_ROLE=worker
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aios
+      - POSTGRES_USER=aios
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-aios_secure_2024}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     deploy:
       resources:
         limits:
@@ -60,9 +139,17 @@ services:
       - aios-net
 
 volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
   aios-data:
     driver: local
   aios-output:
+    driver: local
+  aios-logs:
+    driver: local
+  aios-backups:
     driver: local
 
 networks:

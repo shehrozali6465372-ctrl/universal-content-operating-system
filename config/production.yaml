@@ -1,0 +1,60 @@
+# ─── Production Configuration ───
+
+app:
+  name: "Universal AI Content OS"
+  version: "6.0.0"
+  environment: "production"
+  debug: false
+
+database:
+  postgresql:
+    host: "${POSTGRES_HOST:-postgres}"
+    port: "${POSTGRES_PORT:-5432}"
+    database: "${POSTGRES_DB:-aios}"
+    user: "${POSTGRES_USER:-aios}"
+    password: "${POSTGRES_PASSWORD:-}"
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 30
+    pool_recycle: 1800
+  fallback: "sqlite"
+
+cache:
+  redis:
+    host: "${REDIS_HOST:-redis}"
+    port: "${REDIS_PORT:-6379}"
+    db: 0
+    max_connections: 50
+    socket_timeout: 5
+    retry_on_timeout: true
+  fallback: "memory"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  file: "logs/aios.log"
+  max_bytes: 10485760
+  backup_count: 5
+
+monitoring:
+  enabled: true
+  health_check_interval: 30
+  metrics_retention_hours: 72
+  alert_thresholds:
+    cpu_warning: 70
+    cpu_critical: 90
+    memory_warning: 75
+    memory_critical: 90
+    disk_warning: 80
+    disk_critical: 95
+
+performance:
+  max_content_per_day: 50
+  concurrent_publishers: 5
+  rate_limit_per_platform: 100
+  batch_size: 10
+
+security:
+  encryption_enabled: true
+  session_timeout: 3600
+  max_login_attempts: 5
