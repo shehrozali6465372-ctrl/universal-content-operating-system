@@ -716,6 +716,87 @@ if __name__ == "__main__":
         print("=" * 50)
         print(json.dumps(summary, indent=2, default=str))
 
+    elif "--niche-intel-status" in args:
+        from layers.layer02_research.modules.niche_intelligence.niche_intelligence_manager import get_niche_intelligence
+        ni = get_niche_intelligence()
+        status = ni.get_full_intelligence()
+        research = status["research"]
+        products = status["products"]
+        keywords = status["keywords"]
+        competitors = status["competitors"]
+        opps = status["opportunities"]
+        preds = status["predictions"]
+        rankings = status["rankings"]
+        print("\n🧠 NICHE INTELLIGENCE ENGINE STATUS")
+        print("=" * 60)
+        print(f"  Overall       : {status['overall']}")
+        print(f"  Uptime        : {status['uptime_seconds']}s")
+        print()
+        print(f"  🔍 Research:")
+        print(f"     Niches      : {research['total_niches']}")
+        print(f"     Avg Score   : {research['avg_score']}")
+        print(f"     Very High   : {research['very_high_potential']}")
+        print(f"     Keywords    : {research['total_keywords']}")
+        print()
+        print(f"  📦 Products:")
+        print(f"     Total       : {products['total_products']}")
+        print(f"     Categories  : {len(products.get('by_category', {}))}")
+        print(f"     High Comm.  : {products['high_commission']}")
+        print(f"     Recurring   : {products['recurring']}")
+        print(f"     Seasonal    : {products['seasonal']}")
+        print()
+        print(f"  🔑 Keywords:")
+        print(f"     Total       : {keywords['total_keywords']}")
+        print(f"     Long-tail   : {keywords['long_tail']}")
+        print(f"     Questions   : {keywords['questions']}")
+        print(f"     Avg Volume  : {keywords['avg_volume']}")
+        print(f"     Avg CPC     : ${keywords['avg_cpc']}")
+        intents = keywords.get('by_intent', {})
+        print(f"     Intent: ", end="")
+        print(", ".join(f"{k}={v}" for k, v in intents.items()))
+        print()
+        print(f"  🏆 Competitors:")
+        print(f"     Total       : {competitors['total_competitors']}")
+        print(f"     High Threat : {competitors['high_threat']}")
+        print(f"     Avg Traffic : {competitors['avg_traffic']:,.0f}")
+        print(f"     Avg DA      : {competitors['avg_da']}")
+        print()
+        print(f"  💡 Opportunities:")
+        print(f"     Total       : {opps['total_opportunities']}")
+        print(f"     Quick Wins  : {opps['quick_wins']}")
+        print(f"     Avg Score   : {opps['avg_score']}")
+        print(f"     Est. Traffic: {opps['total_estimated_traffic']:,}")
+        print(f"     Est. Revenue: ${opps['total_estimated_revenue']:,.2f}")
+        print()
+        print(f"  💰 Revenue Predictions:")
+        print(f"     Monthly     : ${preds['total_predicted_monthly']:,.2f}")
+        print(f"     Annual      : ${preds['total_predicted_annual']:,.2f}")
+        print()
+        if rankings:
+            print(f"  🏅 Niche Rankings:")
+            for i, r in enumerate(rankings[:5], 1):
+                print(f"     {i}. {r['niche']:25s} Score={r['score']:.1f}  "
+                      f"Potential={r['monetization_potential']}")
+        print("=" * 60)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+
+    elif "--niche-intel-summary" in args:
+        from layers.layer02_research.modules.niche_intelligence.niche_intelligence_manager import get_niche_intelligence
+        ni = get_niche_intelligence()
+        summary = ni.get_executive_summary()
+        print("\n📋 NICHE INTELLIGENCE EXECUTIVE SUMMARY")
+        print("=" * 50)
+        print(f"  Niches        : {summary['total_niches']}")
+        print(f"  Products      : {summary['total_products']}")
+        print(f"  Keywords      : {summary['total_keywords']}")
+        print(f"  Competitors   : {summary['total_competitors']}")
+        print(f"  Predicted/Mo  : ${summary['predicted_monthly_revenue']:,.2f}")
+        print(f"  Predicted/Yr  : ${summary['predicted_annual_revenue']:,.2f}")
+        print(f"  Top Niches    : {', '.join(summary['top_niches'])}")
+        print("=" * 50)
+        print(json.dumps(summary, indent=2, default=str))
+
         boot = AIOSBoot()
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
