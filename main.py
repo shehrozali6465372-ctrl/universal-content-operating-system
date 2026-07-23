@@ -967,6 +967,107 @@ if __name__ == "__main__":
         print("=" * 50)
         print(json.dumps(summary, indent=2, default=str))
 
+    elif "--bi-status" in args:
+        from layers.layer19_analytics_engine.modules.bi_platform.bi_manager import get_bi_manager
+        bi = get_bi_manager()
+        status = bi.get_full_bi_status()
+        ceo = status["ceo"]
+        niche = status["niche"]
+        platform = status["platform"]
+        ai = status["ai"]
+        empire = status["empire"]
+        alerts = status["alerts"]
+        forecast = status["forecasting"]
+        api = status["api"]
+        print("\n📊 ENTERPRISE ANALYTICS & BUSINESS INTELLIGENCE")
+        print("=" * 60)
+        print(f"  Overall       : {status['overall']}")
+        print(f"  Uptime        : {status['uptime_seconds']}s")
+        print()
+        print(f"  👔 CEO Dashboard:")
+        print(f"     Revenue     : ${ceo.get('total_revenue', 0):,.2f}")
+        print(f"     Profit      : ${ceo.get('total_profit', 0):,.2f}")
+        print(f"     Accounts    : {ceo.get('total_accounts', 0)}")
+        print(f"     AI Health   : {ceo.get('ai_health', 0)}")
+        growth = ceo.get("growth", {})
+        if growth:
+            print(f"     Daily Growth: {growth.get('daily_growth', 0)}%")
+            print(f"     Weekly      : {growth.get('weekly_growth', 0)}%")
+        print()
+        print(f"  💰 Revenue Forecast:")
+        f30 = forecast.get("forecasts", {}).get("30day", {})
+        f90 = forecast.get("forecasts", {}).get("90day", {})
+        f1y = forecast.get("forecasts", {}).get("1year", {})
+        if f30:
+            print(f"     30-Day      : ${f30.get('total_revenue', 0):,.2f}")
+        if f90:
+            print(f"     90-Day      : ${f90.get('total_revenue', 0):,.2f}")
+        if f1y:
+            print(f"     1-Year      : ${f1y.get('total_revenue', 0):,.2f}")
+        roi = forecast.get("roi", {})
+        if roi:
+            print(f"     ROI (30d)   : {roi.get('roi_30day', 0)}%")
+            print(f"     Payback     : {roi.get('payback_days', 0)} days")
+        print()
+        print(f"  🎯 Niche Dashboard:")
+        print(f"     Niches      : {niche['total_niches']}")
+        print(f"     Revenue     : ${niche['total_revenue']:,.2f}")
+        print(f"     Growing     : {niche.get('growing', 0)}")
+        print(f"     Declining   : {niche.get('declining', 0)}")
+        print()
+        print(f"  📱 Platform Dashboard:")
+        print(f"     Platforms   : {platform['total_platforms']}")
+        print(f"     Total Reach : {platform['total_reach']:,}")
+        print(f"     Revenue     : ${platform['total_revenue']:,.2f}")
+        print()
+        print(f"  🤖 AI Dashboard:")
+        ai_cur = ai.get("current", {})
+        print(f"     Accuracy    : {ai_cur.get('accuracy', 0)}%")
+        print(f"     Quality     : {ai_cur.get('quality', 0)}%")
+        print(f"     Prompt OK   : {ai_cur.get('prompt_success', 0)}%")
+        print(f"     RAG         : {ai_cur.get('rag_accuracy', 0)}%")
+        print(f"     Health      : {ai_cur.get('overall_health', 0)}")
+        print()
+        emp_cur = empire.get("current", {})
+        print(f"  👑 Empire Dashboard:")
+        print(f"     Accounts    : {emp_cur.get('total_accounts', 0)}")
+        print(f"     Healthy     : {emp_cur.get('healthy_accounts', 0)} ({emp_cur.get('health_rate', 0)}%)")
+        print(f"     Shadow Ban  : {emp_cur.get('shadow_ban_alerts', 0)}")
+        print(f"     Published   : {emp_cur.get('published_today', 0)}")
+        print(f"     Failed      : {emp_cur.get('failed_posts', 0)}")
+        print()
+        print(f"  🚨 Alert Center:")
+        print(f"     Active      : {alerts['active']}")
+        print(f"     Critical    : {alerts['critical_active']}")
+        print(f"     Resolved    : {alerts['resolved']}")
+        sev = alerts.get("by_severity", {})
+        print(f"     Emergency   : {sev.get('emergency', 0)}")
+        print()
+        print(f"  📡 API:")
+        print(f"     Endpoints   : {api['total_endpoints']}")
+        print(f"     Requests    : {api['total_requests']}")
+        print(f"     Avg Latency : {api['avg_latency']}ms")
+        print("=" * 60)
+        print()
+        print(json.dumps(status, indent=2, default=str))
+
+    elif "--bi-summary" in args:
+        from layers.layer19_analytics_engine.modules.bi_platform.bi_manager import get_bi_manager
+        bi = get_bi_manager()
+        summary = bi.get_executive_summary()
+        print("\n📋 BUSINESS INTELLIGENCE EXECUTIVE SUMMARY")
+        print("=" * 50)
+        print(f"  Revenue       : ${summary['total_revenue']:,.2f}")
+        print(f"  Profit        : ${summary['total_profit']:,.2f}")
+        print(f"  Accounts      : {summary['total_accounts']} ({summary['active_accounts']} active)")
+        print(f"  Niches        : {summary['total_niches']}")
+        print(f"  Platforms     : {summary['total_platforms']}")
+        print(f"  AI Health     : {summary['ai_health']}")
+        print(f"  Empire Health : {summary['empire_health_rate']}%")
+        print(f"  Alerts        : {summary['active_alerts']} ({summary['critical_alerts']} critical)")
+        print("=" * 50)
+        print(json.dumps(summary, indent=2, default=str))
+
         boot = AIOSBoot()
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
