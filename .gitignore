@@ -34,3 +34,6 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+.env.production
+
+# Production config (templates only)
