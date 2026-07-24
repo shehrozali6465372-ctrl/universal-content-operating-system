@@ -32,7 +32,10 @@ class PersistenceAPI:
         self._request_count += 1
         b = self._backends.get(backend)
         if b and hasattr(b, "delete"):
-            return b.delete(key)
+            result = b.delete(key)
+            if isinstance(result, int):
+                return result > 0
+            return bool(result)
         return False
 
     def stats(self) -> Dict[str, Any]:

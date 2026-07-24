@@ -29,7 +29,7 @@ class TestMediaAsset:
     def test_compute_checksum(self):
         a = MediaAsset("test.jpg")
         cs = a.compute_checksum(b"hello world")
-        assert len(cs) == 32
+        assert len(cs) == 64  # SHA-256
 
     def test_to_dict(self):
         a = MediaAsset("img.png", "image")

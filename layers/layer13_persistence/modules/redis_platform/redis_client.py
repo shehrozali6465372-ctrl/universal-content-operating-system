@@ -488,6 +488,24 @@ class RedisClient:
                 pass
         self._initialized = False
 
+    def connect(self) -> bool:
+        """Alias for initialize(). Always returns True (uses in-memory fallback if needed)."""
+        self.initialize()
+        return True
+
+    def is_connected(self) -> bool:
+        """Check if the client is currently connected/initialized."""
+        return self._initialized
+
+    def disconnect(self) -> bool:
+        """Alias for close(). Returns True after disconnection."""
+        self.close()
+        return True
+
+    def flush(self) -> bool:
+        """Alias for flushdb(). Flushes all keys."""
+        return self.flushdb()
+
     # ─── In-Memory Fallback Methods ───────────────────────────────
 
     def _memory_cleanup_expired(self):

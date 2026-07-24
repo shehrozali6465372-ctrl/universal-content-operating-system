@@ -1026,7 +1026,7 @@ class TestRedisClient:
     def test_delete(self):
         self.rc.connect()
         self.rc.set("key1", "value1")
-        assert self.rc.delete("key1") is True
+        assert self.rc.delete("key1") >= 1
         assert self.rc.get("key1") is None
 
     def test_exists(self):
@@ -1466,34 +1466,40 @@ class TestVectorStore:
     def setup_method(self):
         self.vs = VectorStore(dimensions=128)
 
+    def _auto_id(self, counter=[0]):
+        counter[0] += 1
+        return f"rec_{counter[0]}"
+
     def test_upsert(self):
         vec = [0.1] * 128
-        record = self.vs.upsert(vec, {"source": "test"})
-        assert record.record_id > 0
+        record = self.vs.upsert(self._auto_id(), vec, {"source": "test"})
+        assert record.record_id is not None
+        assert record.record_id != ""
 
     def test_search(self):
         vec1 = [1.0] + [0.0] * 127
         vec2 = [0.0] + [1.0] * 127
-        self.vs.upsert(vec1, {"label": "a"})
-        self.vs.upsert(vec2, {"label": "b"})
+        self.vs.upsert("a1", vec1, {"label": "a"})
+        self.vs.upsert("b1", vec2, {"label": "b"})
         results = self.vs.search(vec1, top_k=1)
         assert len(results) == 1
         assert results[0][0].metadata["label"] == "a"
 
     def test_search_with_filter(self):
         vec = [0.5] * 128
-        self.vs.upsert(vec, {"type": "a"})
-        self.vs.upsert(vec, {"type": "b"})
-        results = self.vs.search(vec, top_k=10, filter_metadata={"type": "a"})
+        self.vs.upsert("f1", vec, {"type": "a"})
+        self.vs.upsert("f2", vec, {"type": "b"})
+        results = self.vs.search(vec, top_k=10,
+                                 filter_fn=lambda rec: rec.metadata.get("type") == "a")
         assert all(r.metadata["type"] == "a" for r, _ in results)
 
     def test_delete(self):
-        record = self.vs.upsert([0.1] * 128)
+        record = self.vs.upsert("d1", [0.1] * 128)
         assert self.vs.delete(record.record_id) is True
 
     def test_count(self):
-        self.vs.upsert([0.1] * 128)
-        self.vs.upsert([0.2] * 128)
+        self.vs.upsert("c1", [0.1] * 128)
+        self.vs.upsert("c2", [0.2] * 128)
         assert self.vs.count() == 2
 
 

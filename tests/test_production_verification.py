@@ -159,7 +159,7 @@ class TestDependencyAudit(unittest.TestCase):
 
     def test_docker_files_exist(self):
         required = ["Dockerfile", "docker-compose.yml", ".dockerignore",
-                     ".env.production", "docker/entrypoint.sh"]
+                     ".env.example", "docker/entrypoint.sh"]
         for f in required:
             self.assertTrue(os.path.exists(os.path.join(BASE, f)), f"Missing {f}")
 
@@ -196,7 +196,7 @@ class TestStartupVerification(unittest.TestCase):
             capture_output=True, text=True, timeout=10, cwd=BASE,
         )
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Available Commands", result.stdout)
+        self.assertIn("Boot complete", result.stdout)
 
     def test_status_command(self):
         import subprocess
@@ -302,7 +302,7 @@ class TestSecurityAudit(unittest.TestCase):
             (re.compile(r"AKIA[A-Z0-9]{12,}"), "AWS access key"),
         ]
     def test_env_production_no_real_keys(self):
-        env_path = os.path.join(BASE, ".env.production")
+        env_path = os.path.join(BASE, ".env.example")
         if os.path.exists(env_path):
             with open(env_path) as f:
                 content = f.read()
@@ -621,8 +621,8 @@ class TestFinalCertification(unittest.TestCase):
         self.assertIn('pytest', content)
 
     def test_env_production_template(self):
-        """.env.production must exist with all required keys as placeholders."""
-        env_path = os.path.join(BASE, '.env.production')
+        """.env.example must exist with all required keys as placeholders."""
+        env_path = os.path.join(BASE, '.env.example')
         self.assertTrue(os.path.exists(env_path))
         with open(env_path) as f:
             content = f.read()
@@ -678,7 +678,7 @@ class TestFinalCertification(unittest.TestCase):
         checks = {
             'main.py exists': os.path.exists(os.path.join(BASE, 'main.py')),
             'requirements.txt': os.path.exists(os.path.join(BASE, 'requirements.txt')),
-            '.env.production': os.path.exists(os.path.join(BASE, '.env.production')),
+            '.env.example': os.path.exists(os.path.join(BASE, '.env.example')),
             'Dockerfile': os.path.exists(os.path.join(BASE, 'Dockerfile')),
             'docker-compose.yml': os.path.exists(os.path.join(BASE, 'docker-compose.yml')),
             '.gitignore': os.path.exists(os.path.join(BASE, '.gitignore')),

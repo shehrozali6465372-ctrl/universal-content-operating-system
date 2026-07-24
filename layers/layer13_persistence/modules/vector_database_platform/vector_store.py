@@ -175,7 +175,7 @@ class VectorStore:
                 continue
 
             score = self._compute_distance(query, record.vector)
-            if score >= min_score:
+            if min_score <= 0.0 or score >= min_score:
                 results.append((record, score))
 
         results.sort(key=lambda x: x[1], reverse=True)

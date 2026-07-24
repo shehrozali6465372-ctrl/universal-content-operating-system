@@ -24,10 +24,13 @@ class VectorManager:
         return self._stores.get(name)
 
     def upsert(self, store_name: str, vector: List[float],
-               metadata: Dict[str, Any] = None):
+               metadata: Dict[str, Any] = None, record_id: str = None):
         store = self._stores.get(store_name)
         if store:
-            return store.upsert(vector, metadata)
+            if record_id is None:
+                import hashlib, time
+                record_id = hashlib.sha256(f"{store_name}:{time.time()}:{len(vector)}".encode()).hexdigest()[:16]
+            return store.upsert(record_id, vector, metadata)
         return None
 
     def search(self, store_name: str, query: List[float], top_k: int = 10):
