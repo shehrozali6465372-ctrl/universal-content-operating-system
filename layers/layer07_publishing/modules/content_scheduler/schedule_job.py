@@ -1,6 +1,7 @@
 """ScheduleJob — A single scheduled publishing job."""
 from __future__ import annotations
 import time
+import threading
 from typing import Any, Dict, List, Optional
 from enum import Enum
 
@@ -14,6 +15,20 @@ class JobStatus(str, Enum):
     PAUSED = "paused"
 
 
+class _JobIDCounter:
+    """Thread-safe monotonically increasing job ID counter."""
+    def __init__(self):
+        self._counter = 0
+        self._lock = threading.Lock()
+
+    def next(self):
+        with self._lock:
+            self._counter += 1
+            return self._counter
+
+_job_counter = _JobIDCounter()
+
+
 class ScheduleJob:
     """A scheduled content publishing job."""
 
@@ -22,7 +37,7 @@ class ScheduleJob:
                  "status", "run_count", "fail_count", "metadata", "created_at")
 
     def __init__(self, topic: str = "", platforms: Optional[List[str]] = None) -> None:
-        self.job_id: str = f"job_{int(time.time() * 1000) % 10000000}"
+        self.job_id: str = f"job_{_job_counter.next()}"
         self.topic: str = topic
         self.platforms: List[str] = platforms or ["facebook"]
         self.content_template: str = ""

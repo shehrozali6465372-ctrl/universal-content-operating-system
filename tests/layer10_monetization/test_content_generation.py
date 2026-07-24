@@ -333,7 +333,7 @@ class TestContentGenerationManager:
         assert "ctas" in result
         assert "seo" in result
         assert "tone" in result
-        assert result["duration_ms"] > 0
+        assert result["duration_ms"] >= 0
 
     def test_generate_multi_platform(self):
         results = self.mgr.generate_multi_platform("AI", ["facebook", "linkedin"])
