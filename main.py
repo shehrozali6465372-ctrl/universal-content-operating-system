@@ -1073,6 +1073,41 @@ if __name__ == "__main__":
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
 
+    elif "--board-status" in args:
+        from layers.layer23_website_manager.pinterest_board_manager.pinterest_board_manager import get_board_manager
+        bm = get_board_manager()
+        status = bm.get_status()
+        boards = status["boards"]
+        health = status["health"]
+        print("\n📋 PINTEREST BOARD MANAGER STATUS (Layer 23 / Module 3)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print()
+        print(f"  📊 Boards:")
+        print(f"     Total      : {boards['total_boards']}")
+        print(f"     Total Pins : {boards['total_pins']}")
+        print(f"     Empty      : {boards['empty_boards']}")
+        print(f"     By Status  : {boards['by_status']}")
+        print(f"     By Niche   : {boards['by_niche']}")
+        print()
+        print(f"  🏥 Health:")
+        print(f"     Score      : {health['overall_score']}/100")
+        print(f"     Healthy    : {health['healthy']}")
+        print(f"     Degraded   : {health['degraded']}")
+        print(f"     Critical   : {health['critical']}")
+        print(f"     Issues     : {health['issues']}")
+        print()
+        print(f"  🔍 SEO: {status['seo']['total_optimizations']} optimizations")
+        print(f"  📈 Analytics: {status['analytics']['tracked_boards']} boards tracked")
+        print(f"  💡 Recommendations: {status['recommendations']['total_recommendations']}")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+
     elif "--pinterest-status" in args:
         from layers.layer23_website_manager.pinterest_account_manager.pinterest_account_manager import get_pinterest_manager
         pm = get_pinterest_manager()
