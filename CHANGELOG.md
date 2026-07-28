@@ -1,5 +1,32 @@
 # 📋 Changelog
 
+## [v6.0.0] - 2026-07-28
+### Added
+- **Layer 23 — Pinterest Business Platform**
+  - **Module 1: Website Manager (v1.0.0)** — Complete website lifecycle management
+  - **WebsiteConfig** — Domain, branding, theme, language, timezone configuration
+  - **SiteStructureManager** — Navigation menus, categories, static pages
+  - **Publisher** — Article CRUD, scheduling, publishing workflow
+  - **URLManager** — SEO-friendly slugs, canonical URLs, redirects
+  - **MediaManager** — Image upload, alt text, featured images
+  - **SEOManager** — Meta tags, Open Graph, Twitter Cards, structured data (JSON-LD)
+  - **SitemapGenerator** — XML sitemap with changefreq, priority, lastmod
+  - **RobotsTxt** — robots.txt generation with sitemap reference
+  - **InternalLinkManager** — Related article discovery, auto internal linking
+  - **WebsiteHealthChecker** — Broken links, missing metadata, duplicate slugs, health scoring
+  - **WebsiteManager API** — Unified facade via `get_website()` singleton
+  - **50 comprehensive tests** — All passing
+- **New CLI Command**: `python main.py --website-status`
+- **LAYER_MAP updated**: 22 → 23 layers
+
+### Changed
+- VERSION updated to v6.0.0
+
+### Stats
+- Total Layers: 23
+- Total Tests: 9,030+ (all passing)
+- Total Python Files: 2,040+
+
 ## [v1.6.0] - 2026-07-17
 ### Added
 - **Layer 10 Module 6: Content Generation Engine** — Universal content creation with 12 sub-modules:

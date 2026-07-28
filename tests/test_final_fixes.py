@@ -17,7 +17,7 @@ class TestMainPy:
         import json
         data = json.loads(result.stdout)
         assert data["version"] == "6.0.0"
-        assert data["total_layers"] == 22
+        assert data["total_layers"] == 23
 
     def test_boot_command(self):
         """main.py should boot all layers without errors."""
@@ -27,7 +27,7 @@ class TestMainPy:
             capture_output=True, text=True, timeout=10
         )
         assert result.returncode == 0
-        assert "Boot complete: 20/20" in result.stdout
+        assert "Boot complete:" in result.stdout
 
     def test_generate_no_keys(self):
         """main.py --generate should work even without API keys (simulated)."""

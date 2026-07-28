@@ -54,6 +54,7 @@ LAYER_MAP = [
     ("Layer 20 — Image Pipeline", "layers.layer20_image_pipeline"),
     ("Layer 21 — Deployment", "layers.layer21_deployment"),
     ("Layer 22 — Documentation", "layers.layer22_documentation"),
+    ("Layer 23 — Website Manager", "layers.layer23_website_manager"),
 ]
 
 
@@ -1067,6 +1068,56 @@ if __name__ == "__main__":
         print(f"  Alerts        : {summary['active_alerts']} ({summary['critical_alerts']} critical)")
         print("=" * 50)
         print(json.dumps(summary, indent=2, default=str))
+
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+
+    elif "--website-status" in args:
+        from layers.layer23_website_manager.website_manager import get_website
+        wm = get_website()
+        status = wm.get_status()
+        config = status["configuration"]
+        articles = status["articles"]
+        health = status["health"]
+        print("\n🌐 WEBSITE MANAGER STATUS (Layer 23)")
+        print("=" * 55)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print(f"  Domain        : {config['domain']}")
+        print(f"  Site Name     : {config['site_name']}")
+        print(f"  Language      : {config['language']}")
+        print()
+        print(f"  📄 Articles:")
+        print(f"     Total      : {articles['total_articles']}")
+        print(f"     Published  : {articles['by_status'].get('published', 0)}")
+        print(f"     Draft      : {articles['by_status'].get('draft', 0)}")
+        print(f"     Scheduled  : {articles['by_status'].get('scheduled', 0)}")
+        print()
+        print(f"  🏥 Health:")
+        print(f"     Overall    : {health['overall_score']}/100")
+        print(f"     Content    : {health['content_health']}/100")
+        print(f"     Config     : {health['config_health']}/100")
+        print(f"     Issues     : {health['issues']}")
+        print()
+        print(f"  🔗 URL Manager:")
+        url = status["url_manager"]
+        print(f"     Slugs      : {url['existing_slugs']}")
+        print(f"     Redirects  : {url['redirects']}")
+        print(f"     Canonicals : {url['canonical_urls']}")
+        print()
+        print(f"  💾 Media:")
+        med = status["media"]
+        print(f"     Assets     : {med['total_assets']}")
+        print(f"     Size       : {med['total_size_mb']}MB")
+        print()
+        print(f"  🔍 SEO:")
+        seo = status["seo"]
+        print(f"     Sitemap    : {seo['sitemap_urls']} URLs")
+        print(f"     Schema     : {seo['structured_data_entries']} entries")
+        print(f"     Meta OK    : {'Yes' if seo['meta_defaults']['meta_title'] else 'No'}")
+        print("=" * 55)
+        print(json.dumps(status, indent=2, default=str))
 
         boot = AIOSBoot()
         result = boot.boot()
