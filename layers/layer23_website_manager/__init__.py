@@ -21,10 +21,15 @@ from __future__ import annotations
 from layers.layer23_website_manager.website_manager import WebsiteManager, get_website
 from layers.layer23_website_manager.models.website_config import WebsiteConfig
 from layers.layer23_website_manager.models.article import Article, ArticleStatus
+from layers.layer23_website_manager.pinterest_account_manager.pinterest_account_manager import (
+    PinterestAccountManager, get_pinterest_manager,
+)
 
 __all__ = [
     "WebsiteManager",
     "get_website",
+    "PinterestAccountManager",
+    "get_pinterest_manager",
     "WebsiteConfig",
     "Article",
     "ArticleStatus",

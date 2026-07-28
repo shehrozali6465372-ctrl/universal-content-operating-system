@@ -1073,6 +1073,44 @@ if __name__ == "__main__":
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
 
+    elif "--pinterest-status" in args:
+        from layers.layer23_website_manager.pinterest_account_manager.pinterest_account_manager import get_pinterest_manager
+        pm = get_pinterest_manager()
+        status = pm.get_status()
+        accounts = status["accounts"]
+        health = status["health"]
+        auth = status["authentication"]
+        print("\n📌 PINTEREST ACCOUNT MANAGER STATUS (Layer 23 / Module 2)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print()
+        print(f"  👤 Accounts:")
+        print(f"     Total      : {accounts['total']}/{accounts['max']}")
+        print(f"     Available  : {accounts['available_slots']} slots")
+        print(f"     Healthy    : {accounts['healthy']}")
+        print(f"     Unhealthy  : {accounts['unhealthy']}")
+        print(f"     By Status  : {accounts['by_status']}")
+        print(f"     By Niche   : {accounts['by_niche']}")
+        print()
+        print(f"  🏥 Health:")
+        print(f"     Score      : {health['overall_score']}/100")
+        print(f"     Healthy    : {health['healthy']}")
+        print(f"     Degraded   : {health['degraded']}")
+        print(f"     Critical   : {health['critical']}")
+        print()
+        print(f"  🔑 Authentication:")
+        print(f"     Tokens     : {auth['tokens']}")
+        print(f"     Healthy    : {auth['healthy']}")
+        print(f"     Expiring   : {auth['expiring_soon']}")
+        print(f"     Expired    : {auth['expired']}")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+
     elif "--website-status" in args:
         from layers.layer23_website_manager.website_manager import get_website
         wm = get_website()

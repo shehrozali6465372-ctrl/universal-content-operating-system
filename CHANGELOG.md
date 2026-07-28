@@ -4,6 +4,21 @@
 ### Added
 - **Layer 23 — Pinterest Business Platform**
   - **Module 1: Website Manager (v1.0.0)** — Complete website lifecycle management
+  - **Module 2: Pinterest Account Manager (v1.0.0)** — Central Pinterest account management
+    - Account Registry (CRUD, 61+ accounts)
+    - OAuth Manager (tokens, refresh, expiry)
+    - Permission Manager (posting, analytics, API)
+    - Branding Manager (colors, logo, voice, consistency)
+    - Website Claim Manager (claim, verify)
+    - Account Health Checker (suspension, restrictions, profile)
+    - Account Selector (AI-powered niche-based selection)
+    - Multi-Account Manager (10 accounts default, scalable to 61+)
+    - Status Manager (active, disabled, expired, error, maintenance)
+  - **55 comprehensive tests** — All passing
+- **New CLI Command**: `python main.py --pinterest-status`
+
+### Changed
+- VERSION updated to v6.0.0 — Complete website lifecycle management
   - **WebsiteConfig** — Domain, branding, theme, language, timezone configuration
   - **SiteStructureManager** — Navigation menus, categories, static pages
   - **Publisher** — Article CRUD, scheduling, publishing workflow
