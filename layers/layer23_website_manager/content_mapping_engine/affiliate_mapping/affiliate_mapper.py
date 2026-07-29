@@ -1,118 +1,82 @@
-"""AffiliateMapper — Automatically detect and attach affiliate products to content."""
+"""AffiliateMapper — Automatically detect best affiliate product and link for content."""
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+
 from layers.layer23_website_manager.content_mapping_engine.exceptions import AffiliateMappingError
 
 
-# Simulated affiliate product registry per niche
-AFFILIATE_PRODUCTS: Dict[str, List[Dict[str, Any]]] = {
-    "home_decor": [
-        {"id": "aff_bed_frame", "name": "Modern Bed Frame", "price": "$299",
-         "commission": 8.0, "url": "https://amzn.to/bedframe", "keywords": ["bed", "bedroom", "frame"]},
-        {"id": "aff_sofa", "name": "Luxury Sofa Set", "price": "$899",
-         "commission": 6.0, "url": "https://amzn.to/sofa", "keywords": ["sofa", "living room", "furniture"]},
-        {"id": "aff_lamp", "name": "Designer Floor Lamp", "price": "$79",
-         "commission": 10.0, "url": "https://amzn.to/lamp", "keywords": ["lamp", "lighting", "decor"]},
-    ],
-    "fashion": [
-        {"id": "aff_dress", "name": "Elegant Evening Dress", "price": "$89",
-         "commission": 12.0, "url": "https://amzn.to/dress", "keywords": ["dress", "evening", "formal"]},
-    ],
-    "beauty": [
-        {"id": "aff_serum", "name": "Vitamin C Serum", "price": "$34",
-         "commission": 15.0, "url": "https://amzn.to/serum", "keywords": ["serum", "skincare", "face"]},
-    ],
-    "food": [
-        {"id": "aff_mixer", "name": "Stand Mixer Pro", "price": "$249",
-         "commission": 7.0, "url": "https://amzn.to/mixer", "keywords": ["mixer", "baking", "kitchen"]},
-    ],
-    "tech": [
-        {"id": "aff_headphone", "name": "Noise Cancelling Headphones", "price": "$149",
-         "commission": 5.0, "url": "https://amzn.to/headphone", "keywords": ["headphone", "audio", "music"]},
-    ],
-    "fitness": [
-        {"id": "aff_yoga_mat", "name": "Premium Yoga Mat", "price": "$49",
-         "commission": 10.0, "url": "https://amzn.to/yogamat", "keywords": ["yoga", "mat", "exercise"]},
-    ],
-    "travel": [
-        {"id": "aff_luggage", "name": "Smart Luggage Set", "price": "$199",
-         "commission": 8.0, "url": "https://amzn.to/luggage", "keywords": ["luggage", "travel", "bag"]},
-    ],
-    "finance": [
-        {"id": "aff_ledger", "name": "Budget Planner", "price": "$24",
-         "commission": 20.0, "url": "https://amzn.to/ledger", "keywords": ["budget", "planner", "finance"]},
-    ],
-    "diy": [
-        {"id": "aff_drill", "name": "Cordless Drill Kit", "price": "$79",
-         "commission": 6.0, "url": "https://amzn.to/drill", "keywords": ["drill", "tool", "diy"]},
-    ],
-    "garden": [
-        {"id": "aff_pot", "name": "Self-Watering Plant Pot", "price": "$39",
-         "commission": 12.0, "url": "https://amzn.to/pot", "keywords": ["pot", "plant", "garden"]},
-    ],
-}
-
-
 class AffiliateMapper:
-    """Map content to the best affiliate product based on niche and keywords."""
+    """Map content to the best affiliate product, program, and commission."""
+
+    # Predefined affiliate products by niche
+    AFFILIATE_PRODUCTS: Dict[str, List[Dict[str, Any]]] = {
+        "home_decor": [
+            {"product": "Bed Frame Set", "url": "https://amzn.to/bedframe", "program": "Amazon",
+             "commission": 8.0},
+            {"product": "LED Strip Lights", "url": "https://amzn.to/ledlights", "program": "Amazon",
+             "commission": 5.0},
+        ],
+        "fashion": [
+            {"product": "Casual Blazer", "url": "https://amzn.to/blazer", "program": "Amazon",
+             "commission": 7.0},
+        ],
+        "beauty": [
+            {"product": "Vitamin C Serum", "url": "https://amzn.to/vitc", "program": "Amazon",
+             "commission": 10.0},
+        ],
+        "food": [
+            {"product": "Air Fryer", "url": "https://amzn.to/airfryer", "program": "Amazon",
+             "commission": 6.0},
+        ],
+        "tech": [
+            {"product": "Wireless Earbuds", "url": "https://amzn.to/earbuds", "program": "Amazon",
+             "commission": 4.0},
+        ],
+        "fitness": [
+            {"product": "Yoga Mat", "url": "https://amzn.to/yogamat", "program": "Amazon",
+             "commission": 5.0},
+        ],
+        "travel": [
+            {"product": "Travel Backpack", "url": "https://amzn.to/backpack", "program": "Amazon",
+             "commission": 6.0},
+        ],
+        "finance": [
+            {"product": "Personal Finance Book", "url": "https://amzn.to/financebook", "program": "Amazon",
+             "commission": 4.0},
+        ],
+        "diy": [
+            {"product": "Tool Set", "url": "https://amzn.to/toolset", "program": "Amazon",
+             "commission": 5.0},
+        ],
+    }
 
     def __init__(self) -> None:
         self._mapping_log: List[dict] = []
-        self._total_mapped = 0
 
-    def map_affiliate(self, niche: str, keywords: Optional[List[str]] = None,
-                       topic: str = "") -> Dict[str, Any]:
-        """Select the best affiliate product for this content."""
-        products = AFFILIATE_PRODUCTS.get(niche, [])
+    def map_affiliate(self, niche: str, topic: str = "") -> Dict[str, Any]:
+        """Map content to the best affiliate product."""
+        products = self.AFFILIATE_PRODUCTS.get(niche, [])
+
         if not products:
-            raise AffiliateMappingError(f"No affiliate products for niche: {niche}")
+            return {"product": "", "url": "", "program": "", "commission": 0.0, "confidence": 0.0}
 
-        keyword_list = [k.lower() for k in (keywords or [])]
-        text = topic.lower()
+        # Try topic match
+        if topic:
+            topic_lower = topic.lower()
+            for p in products:
+                if any(w in p["product"].lower() for w in topic_lower.split()):
+                    result = {**p, "confidence": 0.85}
+                    self._mapping_log.append(result)
+                    return result
 
-        # Score products by keyword relevance
-        scored = []
-        for product in products:
-            score = 0
-            prod_kws = [k.lower() for k in product["keywords"]]
-
-            for kw in keyword_list:
-                if kw in prod_kws:
-                    score += 3
-            for pk in prod_kws:
-                if pk in text:
-                    score += 2
-            # Bonus for high commission
-            score += product["commission"] / 10
-
-            scored.append((score, product))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        best = scored[0][1]
-
-        result = {
-            "product_id": best["id"],
-            "product_name": best["name"],
-            "price": best["price"],
-            "commission": best["commission"],
-            "affiliate_url": best["url"],
-            "confidence": min(0.95, 0.4 + scored[0][0] * 0.1),
-        }
-
+        # Default to first product with highest commission
+        best = max(products, key=lambda p: p["commission"])
+        result = {**best, "confidence": 0.7}
         self._mapping_log.append(result)
-        self._total_mapped += 1
         return result
 
-    def get_products_by_niche(self, niche: str) -> List[Dict[str, Any]]:
-        return AFFILIATE_PRODUCTS.get(niche, [])
-
-    def get_all_products(self) -> Dict[str, List[Dict[str, Any]]]:
-        return dict(AFFILIATE_PRODUCTS)
+    def get_available_products(self, niche: str) -> List[Dict[str, Any]]:
+        return self.AFFILIATE_PRODUCTS.get(niche, [])
 
     def get_stats(self) -> Dict[str, Any]:
-        total_products = sum(len(v) for v in AFFILIATE_PRODUCTS.values())
-        return {
-            "total_mapped": self._total_mapped,
-            "total_products": total_products,
-            "niches_covered": len(AFFILIATE_PRODUCTS),
-        }
+        return {"total_mappings": len(self._mapping_log)}

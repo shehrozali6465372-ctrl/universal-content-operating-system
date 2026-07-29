@@ -1,113 +1,99 @@
-"""SEOMapper — Generate SEO profile: keywords, long-tail, search intent, related topics."""
+"""SEOMapper — Generate keywords, long-tail keywords, search intent, and related topics."""
 from __future__ import annotations
+import random
 from typing import Any, Dict, List, Optional
-from layers.layer23_website_manager.content_mapping_engine.exceptions import SEOMappingError
-
-
-# Related topics by niche
-RELATED_TOPICS: Dict[str, List[str]] = {
-    "home_decor": ["interior design trends", "home renovation", "room makeover", "furniture shopping"],
-    "fashion": ["seasonal trends", "capsule wardrobe", "style tips", "clothing care"],
-    "beauty": ["skincare routine", "beauty hacks", "makeup trends", "hair care tips"],
-    "food": ["meal prep", "healthy eating", "cooking techniques", "kitchen hacks"],
-    "tech": ["tech reviews", "gadget comparisons", "software deals", "tech news"],
-    "fitness": ["workout plans", "nutrition tips", "wellness", "recovery"],
-    "travel": ["travel hacks", "budget travel", "destination guides", "packing tips"],
-    "finance": ["personal finance", "investment tips", "saving strategies", "retirement planning"],
-    "diy": ["home improvement", "craft projects", "upcycling ideas", "tool guides"],
-    "garden": ["gardening tips", "plant care", "landscaping ideas", "seasonal gardening"],
-}
 
 
 class SEOMapper:
-    """Generate comprehensive SEO profile for content."""
+    """Generate SEO profile for mapped content — keywords, long-tail, intent, related topics."""
+
+    NICHE_KEYWORD_MAP: Dict[str, Dict[str, Any]] = {
+        "home_decor": {
+            "keywords": ["interior design", "home decor", "room ideas", "furniture"],
+            "long_tail": ["small bedroom ideas on a budget", "modern living room decor 2026"],
+            "related_topics": ["color schemes", "organization tips", "DIY furniture"],
+        },
+        "fashion": {
+            "keywords": ["fashion trends", "outfit ideas", "style guide"],
+            "long_tail": ["casual outfit ideas for women", "winter fashion trends 2026"],
+            "related_topics": ["accessories", "seasonal fashion", "wardrobe essentials"],
+        },
+        "beauty": {
+            "keywords": ["skincare routine", "makeup tips", "beauty products"],
+            "long_tail": ["best skincare routine for dry skin", "natural makeup tutorial"],
+            "related_topics": ["hair care", "nail art", "beauty hacks"],
+        },
+        "food": {
+            "keywords": ["easy recipes", "cooking tips", "healthy meals"],
+            "long_tail": ["quick 30-minute dinner recipes", "healthy breakfast ideas for weight loss"],
+            "related_topics": ["meal prep", "baking", "smoothie recipes"],
+        },
+        "tech": {
+            "keywords": ["tech gadgets", "software reviews", "digital tools"],
+            "long_tail": ["best budget smartphones 2026", "AI tools for productivity"],
+            "related_topics": ["mobile apps", "smart home", "cybersecurity"],
+        },
+        "fitness": {
+            "keywords": ["workout plans", "fitness tips", "exercise routines"],
+            "long_tail": ["30-day fitness challenge for beginners", "home workout without equipment"],
+            "related_topics": ["yoga", "nutrition", "weight training"],
+        },
+        "travel": {
+            "keywords": ["travel destinations", "vacation ideas", "budget travel"],
+            "long_tail": ["best budget travel destinations 2026", "solo travel tips for women"],
+            "related_topics": ["hotel deals", "travel gear", "road trips"],
+        },
+        "finance": {
+            "keywords": ["personal finance", "investing tips", "money management"],
+            "long_tail": ["passive income ideas for beginners", "how to save money monthly"],
+            "related_topics": ["crypto", "retirement", "budgeting"],
+        },
+        "diy": {
+            "keywords": ["DIY projects", "home improvement", "craft ideas"],
+            "long_tail": ["DIY home decor projects for beginners", "easy crafts to sell"],
+            "related_topics": ["woodworking", "upcycling", "sewing"],
+        },
+    }
+
+    SEARCH_INTENT_MAP = {
+        "educational": "how-to, tutorial, guide",
+        "inspirational": "ideas, inspiration, best",
+        "commercial": "buy, price, review, best",
+        "informational": "what is, why, guide",
+        "entertainment": "fun, interesting, amazing",
+    }
 
     def __init__(self) -> None:
         self._seo_log: List[dict] = []
-        self._total_mapped = 0
 
-    def generate_seo_profile(self, title: str, niche: str = "",
-                               content: str = "",
-                               keywords: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Generate full SEO profile including keywords, long-tail, related topics."""
-        if not title:
-            raise SEOMappingError("Title is required for SEO mapping")
+    def generate_seo_profile(self, niche: str, intent: str, title: str = "") -> Dict[str, Any]:
+        """Generate complete SEO profile for content."""
+        data = self.NICHE_KEYWORD_MAP.get(niche, {
+            "keywords": ["general"],
+            "long_tail": ["general topic guide"],
+            "related_topics": ["related ideas"],
+        })
 
-        keyword_list = self._extract_keywords(title, content, keywords or [])
-        long_tail = self._generate_long_tail(title, keyword_list, niche)
-        search_intent = self._detect_search_intent(title, niche)
-        related = RELATED_TOPICS.get(niche, [])
+        keywords = list(data["keywords"])
+        long_tail = list(data["long_tail"])
+        related = list(data["related_topics"])
 
-        result = {
-            "seo_keywords": keyword_list,
-            "long_tail_keywords": long_tail,
-            "search_intent": search_intent,
+        # Incorporate title words into keywords
+        if title:
+            title_words = [w.lower() for w in title.split() if len(w) > 3][:3]
+            for w in title_words:
+                if w not in keywords:
+                    keywords.append(w)
+
+        profile = {
+            "keywords": keywords[:10],
+            "long_tail_keywords": long_tail[:5],
+            "search_intent": self.SEARCH_INTENT_MAP.get(intent, "informational"),
             "related_topics": related[:5],
         }
 
-        self._seo_log.append(result)
-        self._total_mapped += 1
-        return result
-
-    def _extract_keywords(self, title: str, content: str,
-                           keywords: List[str]) -> List[str]:
-        """Extract and merge keywords from multiple sources."""
-        merged = list(keywords)
-
-        # Extract from title
-        words = title.lower().split()
-        for w in words:
-            cleaned = w.strip(",.!?;:()[]{}'\"").strip()
-            if len(cleaned) > 3 and cleaned not in merged:
-                merged.append(cleaned)
-
-        # Extract from content
-        if content:
-            content_words = content.lower().split()[:50]
-            for w in content_words:
-                cleaned = w.strip(",.!?;:()[]{}'\"").strip()
-                if len(cleaned) > 4 and cleaned not in merged:
-                    merged.append(cleaned)
-
-        return merged[:15]
-
-    def _generate_long_tail(self, title: str, keywords: List[str],
-                             niche: str) -> List[str]:
-        """Generate long-tail keyword variations."""
-        long_tail = []
-
-        # Pattern-based generation
-        patterns = [
-            f"best {title.lower()}",
-            f"{title.lower()} ideas",
-            f"how to {title.lower()}",
-            f"{title.lower()} for beginners",
-            f"affordable {title.lower()}",
-        ]
-
-        for p in patterns:
-            if len(p.split()) >= 3:
-                long_tail.append(p[:80])
-
-        # Add niche context
-        if niche:
-            niche_name = niche.replace("_", " ")
-            long_tail.append(f"{title.lower()} in {niche_name}")
-
-        return long_tail[:5]
-
-    def _detect_search_intent(self, title: str, niche: str) -> str:
-        """Detect search intent for SEO purposes."""
-        t = title.lower()
-        if any(w in t for w in ["buy", "price", "cost", "shop"]):
-            return "transactional"
-        if any(w in t for w in ["how", "guide", "tutorial", "tips"]):
-            return "how-to"
-        if any(w in t for w in ["best", "top", "vs", "review"]):
-            return "commercial"
-        if any(w in t for w in ["what", "why", "when", "define"]):
-            return "informational"
-        return "inspirational"
+        self._seo_log.append(profile)
+        return profile
 
     def get_stats(self) -> Dict[str, Any]:
-        return {"total_seo_profiles": self._total_mapped}
+        return {"total_profiles": len(self._seo_log)}

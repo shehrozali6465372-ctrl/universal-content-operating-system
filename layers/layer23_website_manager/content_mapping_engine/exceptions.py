@@ -23,7 +23,7 @@ class BoardMappingError(Exception):
 
 
 class AffiliateMappingError(Exception):
-    """Raised when affiliate product mapping fails."""
+    """Raised when affiliate mapping fails."""
     pass
 
 
@@ -32,13 +32,13 @@ class ImageMappingError(Exception):
     pass
 
 
-class SchedulingMappingError(Exception):
+class SchedulingError(Exception):
     """Raised when scheduling mapping fails."""
     pass
 
 
 class ValidationError(Exception):
-    """Raised when AI validation fails."""
+    """Raised when validation fails."""
     pass
 
 
@@ -47,16 +47,16 @@ class RelationshipError(Exception):
     pass
 
 
+class PinStrategyError(Exception):
+    """Raised when pin strategy selection fails."""
+    pass
+
+
 class RecommendationError(Exception):
     """Raised when recommendation fails."""
     pass
 
 
-class SEOMappingError(Exception):
-    """Raised when SEO mapping fails."""
-    pass
-
-
-class PinStrategyError(Exception):
-    """Raised when pin strategy selection fails."""
+class MappingNotFoundError(Exception):
+    """Raised when a mapping is not found."""
     pass

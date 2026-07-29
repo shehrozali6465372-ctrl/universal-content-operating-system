@@ -1,103 +1,82 @@
-"""SchedulingMapper — Decide when to publish content: priority, time, strategy."""
+"""SchedulingMapper — Decide publishing priority, timing, and schedule strategy."""
 from __future__ import annotations
 import time
 import random
 from typing import Any, Dict, List, Optional
-from layers.layer23_website_manager.content_mapping_engine.models.content_mapping import MappingPriority
-from layers.layer23_website_manager.content_mapping_engine.exceptions import SchedulingMappingError
 
-
-# Peak posting times per niche (hour in UTC)
-PEAK_TIMES: Dict[str, List[int]] = {
-    "home_decor": [10, 14, 19],  # 10am, 2pm, 7pm UTC
-    "fashion": [11, 15, 20],
-    "beauty": [10, 13, 18],
-    "food": [9, 12, 17],
-    "tech": [10, 14, 18],
-    "fitness": [7, 12, 18],
-    "travel": [10, 15, 20],
-    "finance": [8, 12, 17],
-    "diy": [10, 14, 19],
-    "garden": [9, 13, 17],
-}
+from layers.layer23_website_manager.content_mapping_engine.models.content_mapping import Priority
 
 
 class SchedulingMapper:
-    """Determine optimal publishing time and priority for content."""
+    """Map content to publishing priority and optimal schedule time."""
+
+    # Peak hours per niche (hour in 24h, UTC)
+    NICHE_PEAK_HOURS: Dict[str, List[int]] = {
+        "home_decor": [10, 14, 19],
+        "fashion": [11, 15, 20],
+        "beauty": [12, 16, 21],
+        "food": [9, 13, 17],
+        "tech": [10, 15, 20],
+        "fitness": [7, 12, 18],
+        "travel": [11, 16, 20],
+        "finance": [9, 14, 19],
+        "diy": [10, 15, 18],
+    }
 
     def __init__(self) -> None:
-        self._schedule_log: List[dict] = []
-        self._total_scheduled = 0
+        self._scheduling_log: List[dict] = []
 
-    def map_schedule(self, niche: str = "", intent: str = "",
-                      content_type: str = "article",
-                      confidence: float = 0.7) -> Dict[str, Any]:
-        """Determine priority and optimal publishing schedule."""
-        priority = self._determine_priority(intent, content_type, confidence)
-        schedule_time = self._get_optimal_time(niche)
-        schedule_reason = self._generate_reason(priority, schedule_time, niche)
+    def schedule(self, niche: str, intent: str, confidence: float,
+                  existing_queue: int = 0) -> Dict[str, Any]:
+        """Determine priority, suggested publish time, and reason."""
+        # Priority based on confidence and intent
+        if confidence >= 0.8 and intent in ("commercial", "educational"):
+            priority = Priority.HIGH
+            reason = "High confidence content with commercial/educational value"
+        elif confidence >= 0.6:
+            priority = Priority.MEDIUM
+            reason = "Medium confidence content"
+        else:
+            priority = Priority.LOW
+            reason = "Low confidence content, needs review"
+
+        # Suggest publish time based on niche peak hours
+        peak_hours = self.NICHE_PEAK_HOURS.get(niche, [12])
+        peak_hour = random.choice(peak_hours)
+
+        now = time.time()
+        current_hour = time.gmtime(now).tm_hour
+
+        # Calculate seconds until next peak hour
+        if current_hour < peak_hour:
+            hours_until = peak_hour - current_hour
+        else:
+            hours_until = (24 - current_hour) + peak_hour
+
+        suggested_time = now + (hours_until * 3600)
 
         result = {
             "priority": priority.value,
-            "schedule_time": schedule_time,
-            "schedule_reason": schedule_reason,
-            "peak_hours": PEAK_TIMES.get(niche, [12]),
+            "suggested_publish_time": suggested_time,
+            "schedule_reason": reason,
+            "peak_hour": peak_hour,
+            "queue_position": existing_queue + 1,
         }
 
-        self._schedule_log.append(result)
-        self._total_scheduled += 1
+        # Adjust for queue
+        if existing_queue > 5:
+            result["priority"] = Priority.LOW.value
+            result["schedule_reason"] += " (delayed due to queue)"
+
+        self._scheduling_log.append(result)
         return result
 
-    def _determine_priority(self, intent: str, content_type: str,
-                             confidence: float) -> MappingPriority:
-        """Determine publishing priority based on multiple factors."""
-        score = 0
-
-        if intent in ["commercial", "trending"]:
-            score += 2
-        if content_type in ["news", "deal"]:
-            score += 2
-        if confidence > 0.9:
-            score += 1
-        if intent == "inspirational":
-            score -= 1
-
-        if score >= 3:
-            return MappingPriority.HIGH
-        elif score >= 1:
-            return MappingPriority.MEDIUM
-        return MappingPriority.LOW
-
-    def _get_optimal_time(self, niche: str) -> float:
-        """Get optimal publishing timestamp based on niche."""
-        peaks = PEAK_TIMES.get(niche, [12])
-        # Pick nearest peak hour
-        current_hour = time.gmtime().tm_hour
-        future_hours = [h for h in peaks if h > current_hour]
-
-        if future_hours:
-            target_hour = future_hours[0]
-        else:
-            # Next day first peak
-            target_hour = peaks[0] + 24
-
-        # Calculate seconds until target hour
-        now = time.time()
-        gmt = time.gmtime(now)
-        seconds_to_target = (target_hour - gmt.tm_hour) * 3600 - gmt.tm_min * 60 - gmt.tm_sec
-        if seconds_to_target < 0:
-            seconds_to_target += 86400  # Next day
-
-        return now + seconds_to_target
-
-    def _generate_reason(self, priority: MappingPriority,
-                          schedule_time: float, niche: str) -> str:
-        """Generate human-readable reason for scheduling decision."""
-        if priority == MappingPriority.HIGH:
-            return f"High commercial intent content for {niche} - publish at next peak time"
-        elif priority == MappingPriority.MEDIUM:
-            return f"Standard content for {niche} - schedule during peak hours"
-        return f"Low priority evergreen content for {niche} - publish when queue allows"
-
     def get_stats(self) -> Dict[str, Any]:
-        return {"total_scheduled": self._total_scheduled}
+        priorities: Dict[str, int] = {}
+        for entry in self._scheduling_log:
+            p = entry["priority"]
+            priorities[p] = priorities.get(p, 0) + 1
+        return {
+            "total_scheduled": len(self._scheduling_log),
+            "by_priority": priorities,
+        }

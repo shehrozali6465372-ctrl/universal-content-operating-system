@@ -2,6 +2,25 @@
 
 ## [v6.0.0]
 
+#### Module 5: Content Mapping Engine (v1.0.0)
+- Full AI pipeline: Article → Classify → Website → Account → Board → Strategy → Affiliate → SEO → Schedule → Validate → Recommend
+- ContentClassifier: Auto-detect niche, category, intent, audience, content type (9 niches)
+- WebsiteMapper: Auto-select website by niche, category, subcategory
+- PinterestAccountMapper: Auto-select best Pinterest account by niche
+- BoardMapper: Auto-select best board by niche and topic
+- PinStrategyEngine: Auto-select standard, idea, carousel, product, rich pin
+- AffiliateMapper: Auto-detect affiliate product and link by niche
+- SEOMapper: Generate keywords, long-tail keywords, search intent, related topics
+- ImageMapper: Recommend image style, orientation, vibe by niche
+- SchedulingMapper: Priority and optimal publish time based on confidence
+- ValidationEngine: Full mapping validation with scoring
+- RelationshipEngine: Build related articles, pins, boards
+- RecommendationEngine: Suggest improvements for better mapping
+- CLI: --mapping-status command
+- 97 new tests
+
+
+
 
 #### Module 5: Content Mapping Engine (v1.0.0)
 - Full pipeline: Article → Classification → Website → Account → Board → Pin Strategy → Affiliate → SEO → Image → Schedule → Validate → Recommend

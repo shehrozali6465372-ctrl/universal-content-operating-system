@@ -1,82 +1,84 @@
-"""RelationshipEngine — Build content relationships: related articles, pins, boards."""
+"""RelationshipEngine — Build related articles, pins, boards, and content clusters."""
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
-from layers.layer23_website_manager.content_mapping_engine.exceptions import RelationshipError
 
-
-# Related content registry (simulated)
-RELATED_CONTENT: Dict[str, Dict[str, Any]] = {
-    "small_bedroom": {
-        "article_ids": ["art_bedroom_1", "art_bedroom_2", "art_bedroom_3"],
-        "pin_ids": ["pin_bed_1", "pin_bed_2", "pin_bed_3", "pin_bed_4"],
-        "board_ids": ["board_home_bedroom", "board_home_small_spaces"],
-    },
-    "kitchen_remodel": {
-        "article_ids": ["art_kitchen_1", "art_kitchen_2", "art_kitchen_4"],
-        "pin_ids": ["pin_kitchen_1", "pin_kitchen_2", "pin_kitchen_3"],
-        "board_ids": ["board_home_kitchen", "board_home_renovation"],
-    },
-    "skincare_routine": {
-        "article_ids": ["art_skin_1", "art_skin_2"],
-        "pin_ids": ["pin_skin_1", "pin_skin_2", "pin_skin_3"],
-        "board_ids": ["board_beauty_skin", "board_beauty_tips"],
-    },
-}
+from layers.layer23_website_manager.content_mapping_engine.models.content_mapping import (
+    ContentMapping, ContentCategory,
+)
 
 
 class RelationshipEngine:
-    """Build content relationships for cross-linking and discovery."""
+    """Build content relationships — related articles, pins, boards, clusters."""
+
+    NICHE_RELATIONSHIPS: Dict[str, Dict[str, List[str]]] = {
+        "home_decor": {
+            "related_articles": ["Color Schemes", "Organization Tips", "DIY Furniture"],
+            "related_pins": ["Room Tour", "Before After", "Decor Haul"],
+            "related_boards": ["Outdoor Spaces", "Wall Art Ideas", "Lighting Guide"],
+        },
+        "fashion": {
+            "related_articles": ["Seasonal Trends", "Accessory Guide", "Wardrobe Essentials"],
+            "related_pins": ["OOTD", "Style Inspo", "Fashion Hacks"],
+            "related_boards": ["Shoe Collection", "Bag Gallery", "Jewelry Ideas"],
+        },
+        "beauty": {
+            "related_articles": ["Hair Care", "Nail Art", "Beauty Hacks"],
+            "related_pins": ["Get Ready With Me", "Product Review", "Beauty Routine"],
+            "related_boards": ["Makeup Looks", "Skincare Routine", "Hair Styles"],
+        },
+        "food": {
+            "related_articles": ["Meal Prep", "Baking Tips", "Smoothie Recipes"],
+            "related_pins": ["Recipe Video", "Food Photography", "Kitchen Tools"],
+            "related_boards": ["Dessert Ideas", "Healthy Meals", "Quick Snacks"],
+        },
+        "tech": {
+            "related_articles": ["App Reviews", "Tech News", "How To Guides"],
+            "related_pins": ["Gadget Unboxing", "Tech Setup", "Software Review"],
+            "related_boards": ["Smart Home", "Mobile Apps", "Gear Guide"],
+        },
+        "fitness": {
+            "related_articles": ["Nutrition Guide", "Recovery Tips", "Workout Plans"],
+            "related_pins": ["Exercise Demo", "Fashion Fit", "Transformation"],
+            "related_boards": ["Yoga Poses", "Cardio Workouts", "Healthy Recipes"],
+        },
+        "travel": {
+            "related_articles": ["Hotel Reviews", "Travel Tips", "Packing Guide"],
+            "related_pins": ["Destination Photo", "Travel Vlog", "Local Food"],
+            "related_boards": ["Beach Destinations", "Mountain Trips", "City Guides"],
+        },
+        "finance": {
+            "related_articles": ["Investment Guide", "Saving Tips", "Retirement Plan"],
+            "related_pins": ["Infographic", "Budget Template", "Wealth Tips"],
+            "related_boards": ["Crypto Guide", "Stock Tips", "Passive Income"],
+        },
+        "diy": {
+            "related_articles": ["Woodworking", "Sewing", "Upcycle Ideas"],
+            "related_pins": ["Step by Step", "Before After", "Material List"],
+            "related_boards": ["Home Improvement", "Craft Ideas", "Garden DIY"],
+        },
+    }
 
     def __init__(self) -> None:
         self._relationship_log: List[dict] = []
-        self._total_built = 0
 
-    def build_relationships(self, topic: str, niche: str = "",
-                              keywords: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Find related articles, pins, and boards for this content."""
-        # Find relationship set by keyword matching
-        rel_key = self._find_relationship_key(topic, keywords or [])
-        related = RELATED_CONTENT.get(rel_key)
-
-        if not related:
-            # Generate empty relationships
-            related = {"article_ids": [], "pin_ids": [], "board_ids": []}
+    def build_relationships(self, niche: str, article_title: str = "") -> Dict[str, Any]:
+        """Build content relationships for a given niche."""
+        data = self.NICHE_RELATIONSHIPS.get(niche, {
+            "related_articles": ["General Guides"],
+            "related_pins": ["Popular Pins"],
+            "related_boards": ["Recommended Boards"],
+        })
 
         result = {
-            "related_article_ids": related.get("article_ids", []),
-            "related_pin_ids": related.get("pin_ids", []),
-            "related_board_ids": related.get("board_ids", []),
-            "relationship_count": (
-                len(related.get("article_ids", [])) +
-                len(related.get("pin_ids", [])) +
-                len(related.get("board_ids", []))
-            ),
+            "niche": niche,
+            "related_articles": data["related_articles"][:5],
+            "related_pins": data["related_pins"][:5],
+            "related_boards": data["related_boards"][:5],
+            "content_cluster": article_title[:50] if article_title else niche,
         }
 
         self._relationship_log.append(result)
-        self._total_built += 1
         return result
 
-    def _find_relationship_key(self, topic: str, keywords: List[str]) -> str:
-        """Find best matching relationship key from topic/keywords."""
-        text = f"{topic} {' '.join(keywords)}".lower()
-
-        for key in RELATED_CONTENT:
-            if key.replace("_", " ") in text or key in text:
-                return key
-
-        # Partial match
-        words = set(text.split())
-        best_key = None
-        best_score = 0
-        for key in RELATED_CONTENT:
-            key_words = set(key.split("_"))
-            overlap = len(words & key_words)
-            if overlap > best_score:
-                best_score = overlap
-                best_key = key
-
-        return best_key or "small_bedroom"
-
     def get_stats(self) -> Dict[str, Any]:
-        return {"total_relationships": self._total_built}
+        return {"total_relationships": len(self._relationship_log)}
