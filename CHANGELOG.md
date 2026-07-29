@@ -1,6 +1,25 @@
 # 📋 Changelog
 
-## [v6.0.0] - 2026-07-28
+## [v6.0.0]
+
+#### Module 4: Pinterest Pin Manager (v1.0.0)
+- Full pipeline: Article → AI Builder → SEO → Link → Rich Pin → Registry → Publish
+- PinRegistry: CRUD with duplicate detection, multi-account support
+- AIPinBuilder: AI-generated titles, descriptions, CTAs, hashtags, keywords
+- PinImageManager: Image validation, dimensions, aspect ratio checking
+- PinSEOManager: SEO scores, keyword/hashtag generation, rich pin metadata
+- WebsiteLinkManager: Article + affiliate link attachment, URL validation
+- RichPinManager: Article/Product rich pin metadata generation and validation
+- PinScheduler: Schedule, queue, cancel, get due pins
+- PinPublisher: Publish single/batch, retry failed, rate limit checking
+- PublishingQueue: Priority queue, enqueue/dequeue, clear
+- PinAnalyticsTracker: Record impressions, saves, clicks, CTR, top pins
+- PinHealthChecker: Missing titles, descriptions, URLs, images, duplicates
+- PinOptimizer: Analyze pins, suggest improvements, batch analysis
+- CLI: --pin-status command
+- 131 new tests
+
+ - 2026-07-28
 ### Added
 - **Layer 23 — Pinterest Business Platform**
   - **Module 1: Website Manager (v1.0.0)** — Complete website lifecycle management

@@ -1073,6 +1073,47 @@ if __name__ == "__main__":
         result = boot.boot()
         print(f"\n📊 System: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
 
+    elif "--pin-status" in args:
+        from layers.layer23_website_manager.pinterest_pin_manager.pinterest_pin_manager import get_pin_manager
+        pm = get_pin_manager()
+        status = pm.get_status()
+        pins = status["pins"]
+        health = status["health"]
+        scheduler = status["scheduler"]
+        publisher = status["publisher"]
+        queue = status["queue"]
+        print("\nPINTEREST PIN MANAGER STATUS (Layer 23 / Module 4)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print()
+        print(f"  Pins:")
+        print(f"     Total      : {pins['total_pins']}")
+        print(f"     Published  : {pins['published']}")
+        print(f"     Draft      : {pins['draft']}")
+        print(f"     Scheduled  : {pins['scheduled']}")
+        print(f"     Failed     : {pins['failed']}")
+        print()
+        print(f"  Health:")
+        print(f"     Score      : {health['score']}/100")
+        print(f"     Healthy    : {health['healthy']}")
+        print(f"     Degraded   : {health['degraded']}")
+        print(f"     Critical   : {health['critical']}")
+        print(f"     Issues     : {health['issues']}")
+        print()
+        print(f"  Scheduler: {scheduler['total_scheduled']} scheduled")
+        print(f"  Publisher: {publisher['total_published']} published | {publisher['success_rate']}% success")
+        print(f"  Queue     : {queue['queue_size']} queued")
+        print(f"  Analytics : {status['analytics']['tracked_pins']} tracked")
+        print(f"  SEO       : {status['seo']['total_optimizations']} optimizations")
+        print(f"  Optimizer : {status['optimizer']['total_analyzed']} analyzed")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+        
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\nSystem: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+        
     elif "--board-status" in args:
         from layers.layer23_website_manager.pinterest_board_manager.pinterest_board_manager import get_board_manager
         bm = get_board_manager()
