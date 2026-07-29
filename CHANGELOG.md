@@ -2,6 +2,24 @@
 
 ## [v6.0.0]
 
+#### Module 6: Affiliate Manager (v1.0.0)
+- Full pipeline: Content → Product Match → Link Generation → Insertion → Revenue Tracking → Optimization
+- AffiliateNetworkManager: 8 preset networks (Amazon, Impact, CJ, ShareASale, Awin, etc.)
+- MerchantManager: Register and manage affiliate merchants/brands
+- ProductDatabase: 20 preset products across 9 niches, search by niche/rating/price
+- ProductMatcher: AI-powered product-to-content matching
+- AffiliateLinkManager: Deep links, short links, tracking links, country links
+- LinkValidator: Validate affiliate links, check for broken/invalid URLs
+- AutoLinkInserter: Insert affiliate links at optimal content positions
+- RevenueTracker: Track clicks, sales, commissions, EPC, conversion rates
+- RevenueAnalytics: Dashboard with top products, categories, networks
+- OptimizationEngine: Analyze products, suggest improvements
+- AffiliateRecommendationEngine: Recommend better products with higher commission
+- ComplianceManager: FTC/Pinterest compliance checks, disclosure generation
+- 96 new tests
+
+
+
 #### Module 5: Content Mapping Engine (v1.0.0)
 - Full AI pipeline: Article → Classify → Website → Account → Board → Strategy → Affiliate → SEO → Schedule → Validate → Recommend
 - ContentClassifier: Auto-detect niche, category, intent, audience, content type (9 niches)
