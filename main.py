@@ -629,6 +629,40 @@ if __name__ == "__main__":
         print(f"  Overall: {'✅ PASS' if result['overall'] else '❌ FAIL'}")
         print(json.dumps(result, indent=2, default=str))
 
+    elif "--seo-status" in args:
+        from layers.layer23_website_manager.seo_richpins_manager.seo_richpins_manager import get_seo_manager
+        sm = get_seo_manager()
+        status = sm.get_status()
+        profiles = status["profiles"]
+        print("\nSEO & RICH PINS MANAGER STATUS (Layer 23 / Module 7)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print()
+        print(f"  Profiles:")
+        print(f"     Total      : {profiles['total']}")
+        print(f"     Optimized  : {profiles['optimized']}")
+        print(f"     Avg Score  : {profiles['avg_seo_score']}/100")
+        print()
+        print(f"  Keywords     : {status['keywords']['total_generations']} generated")
+        print(f"  Meta         : {status['meta']['total_generated']} generated")
+        print(f"  Pinterest SEO: {status['pinterest_seo']['total_optimizations']} optimized")
+        print(f"  Rich Pins    : {status['rich_pins']['total_rich_pins']} created")
+        print(f"  Open Graph   : {status['opengraph']['total_og_tags']} tags")
+        print(f"  Twitter      : {status['twitter']['total_cards']} cards")
+        print(f"  Schema       : {status['schema']['total_schemas']} schemas")
+        print(f"  Sitemap      : {status['sitemap']['total_sitemaps']} sitemaps")
+        print(f"  Robots       : {status['robots']['total_robots']} generated")
+        print(f"  Validator    : {status['validator']['total_validations']} validated")
+        print(f"  Optimizer    : {status['optimizer']['total_analyzed']} analyzed")
+        print(f"  Analytics    : {status['analytics']['total_records']} records")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+        
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\nSystem: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+        
     elif "--affiliate-status" in args:
         from layers.layer10_monetization.modules.affiliate_engine.affiliate_engine_manager import get_affiliate_engine
         engine = get_affiliate_engine()
