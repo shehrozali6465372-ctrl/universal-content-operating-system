@@ -629,6 +629,30 @@ if __name__ == "__main__":
         print(f"  Overall: {'✅ PASS' if result['overall'] else '❌ FAIL'}")
         print(json.dumps(result, indent=2, default=str))
 
+    elif "--analytics-status" in args:
+        from layers.layer23_website_manager.analytics_manager.analytics_manager import get_analytics_manager
+        am = get_analytics_manager()
+        status = am.get_status()
+        ws = status["website"]; ps = status["pinterest"]; ss = status["seo"]
+        af = status["affiliate"]; ct = status["content"]
+        print("\nANALYTICS MANAGER STATUS (Layer 23 / Module 9)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}  |  Overall: {status['overall']}")
+        print()
+        print(f"  Website  : {ws['total_tracked']} pages, {ws['total_views']} views")
+        print(f"  Pinterest: {ps['total_pins']} pins, {ps['total_clicks']} clicks")
+        print(f"  SEO      : {ss['total_keywords']} keywords, {ss['indexed_pages']} indexed")
+        print(f"  Affiliate: {af['total_products']} products, ${af['total_revenue']} revenue")
+        print(f"  Content  : {ct['total_articles']} articles")
+        print(f"  Campaigns: {status['campaigns']['total_campaigns']}")
+        print(f"  KPIs     : {status['kpi']['total_kpis']}")
+        print(f"  Insights : {status['insights']['total_insights']}")
+        print(f"  Trends   : {status['trends']['total_trends']}")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+        boot = AIOSBoot(); result = boot.boot()
+        print(f"\nSystem: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+        
     elif "--traffic-status" in args:
         from layers.layer23_website_manager.traffic_manager.traffic_manager import get_traffic_manager
         tm = get_traffic_manager()
