@@ -629,6 +629,43 @@ if __name__ == "__main__":
         print(f"  Overall: {'✅ PASS' if result['overall'] else '❌ FAIL'}")
         print(json.dumps(result, indent=2, default=str))
 
+    elif "--traffic-status" in args:
+        from layers.layer23_website_manager.traffic_manager.traffic_manager import get_traffic_manager
+        tm = get_traffic_manager()
+        status = tm.get_status()
+        sources = status["sources"]
+        visitors = status["visitors"]
+        pinterest = status["pinterest"]
+        search = status["search"]
+        campaigns = status["campaigns"]
+        alerts = status["alerts"]
+        print("\nTRAFFIC MANAGER STATUS (Layer 23 / Module 8)")
+        print("=" * 60)
+        print(f"  Version       : {status['version']}")
+        print(f"  Overall       : {status['overall']}")
+        print()
+        print(f"  Traffic Sources: {sources['total_sources']} ({sources['unique_sources']} types)")
+        print(f"  Visitors       : {visitors['total_visits']} visits, {visitors['unique_visitors']} unique")
+        print()
+        print(f"  Pinterest:")
+        print(f"     Pin Clicks : {pinterest['total_pin_clicks']}")
+        print(f"     Saves      : {pinterest['total_saves']}")
+        print(f"     Boards     : {pinterest['total_boards']}")
+        print()
+        print(f"  Search:")
+        print(f"     Keywords   : {search['total_keywords']}")
+        print(f"     Clicks     : {search['total_clicks']}")
+        print(f"     Impressions: {search['total_impressions']}")
+        print()
+        print(f"  Campaigns     : {campaigns['total_campaigns']} ({campaigns['active']} active)")
+        print(f"  Alerts        : {alerts['total_alerts']} ({alerts['unread']} unread, {alerts['critical']} critical)")
+        print("=" * 60)
+        print(json.dumps(status, indent=2, default=str))
+        
+        boot = AIOSBoot()
+        result = boot.boot()
+        print(f"\nSystem: {result['version']} | {result['layers_loaded']} layers | {result['boot_time_seconds']}s")
+        
     elif "--seo-status" in args:
         from layers.layer23_website_manager.seo_richpins_manager.seo_richpins_manager import get_seo_manager
         sm = get_seo_manager()
