@@ -40,10 +40,13 @@ class PolicyRegistry:
     def get_active(self,scope:LearningScope)->PolicyRecord|None:
         with self._connect() as conn: row=conn.execute("SELECT * FROM policies WHERE scope_key=? AND status='active' ORDER BY version DESC LIMIT 1",(scope.key,)).fetchone()
         return None if row is None else self._record(row)
-    def get_safe_rollback(self,scope:LearningScope,*,exclude_version:int|None=None)->PolicyRecord|None:
+    def get_safe_rollback(self,scope:LearningScope,*,exclude_policy_id:str|None=None,exclude_version:int|None=None)->PolicyRecord|None:
         with self._connect() as conn:
             q="SELECT * FROM policies WHERE scope_key=? AND status='retired'"; args=[scope.key]
-            if exclude_version is not None: q+=" AND version<>?"; args.append(exclude_version)
+            if exclude_policy_id is not None:
+                q+=" AND NOT (policy_id=? AND version=?)"; args.extend([exclude_policy_id,exclude_version])
+            elif exclude_version is not None:
+                q+=" AND version<>?"; args.append(exclude_version)
             row=conn.execute(q+" ORDER BY activated_at DESC,version DESC LIMIT 1",args).fetchone()
         return None if row is None else self._record(row)
     def _record(self,row:sqlite3.Row)->PolicyRecord:
