@@ -1,4 +1,4 @@
-"""Real supervised model with persisted artifacts and honest evaluation."""
+"""Real supervised model with time-aware validation and persisted artifacts."""
 from __future__ import annotations
 
 from hashlib import sha256
@@ -8,48 +8,44 @@ from typing import Any, Sequence
 
 
 class OnlineRegressor:
-    """Real estimator trained only from measured outcomes.
-
-    There is deliberately no synthetic fallback. A model artifact is written
-    only after a real holdout evaluation succeeds.
-    """
+    """Measured-outcome estimator; there is no synthetic or mock fallback."""
 
     def __init__(self) -> None:
         try:
             from sklearn.ensemble import HistGradientBoostingRegressor
             from sklearn.metrics import mean_absolute_error
-            from sklearn.model_selection import train_test_split
         except ImportError as exc:
-            raise RuntimeError(
-                "scikit-learn is required for real Layer 9 training; no fallback/mock model exists"
-            ) from exc
+            raise RuntimeError("scikit-learn is required for real Layer 9 training; no fallback exists") from exc
         self._Estimator = HistGradientBoostingRegressor
         self._mae = mean_absolute_error
-        self._split = train_test_split
         self._model = None
         self.sample_count = 0
         self.version = "untrained"
         self.mae: float | None = None
+        self.validation_samples = 0
 
     def fit(self, X: Sequence[Sequence[float]], y: Sequence[float]) -> dict[str, Any]:
         if len(X) != len(y) or len(X) < 20:
             raise ValueError("training requires matching X/y and at least 20 real observations")
-        if not all(math.isfinite(float(v)) for row in X for v in row):
-            raise ValueError("non-finite feature detected")
-        if not all(math.isfinite(float(v)) for v in y):
-            raise ValueError("non-finite target detected")
-        X_train, X_test, y_train, y_test = self._split(
-            list(X), list(y), test_size=0.2, random_state=42
-        )
+        if not all(math.isfinite(float(v)) for row in X for v in row) or not all(math.isfinite(float(v)) for v in y):
+            raise ValueError("all features and targets must be finite")
+        split = max(1, int(len(X) * 0.8))
+        if split >= len(X):
+            split = len(X) - 1
+        X_train, X_test = list(X[:split]), list(X[split:])
+        y_train, y_test = list(y[:split]), list(y[split:])
+        if len(X_train) < 10 or not X_test:
+            raise ValueError("insufficient chronological holdout data")
         estimator = self._Estimator(random_state=42)
         estimator.fit(X_train, y_train)
         mae = float(self._mae(y_test, estimator.predict(X_test)))
         self._model = estimator
         self.sample_count = len(X)
+        self.validation_samples = len(X_test)
         self.mae = mae
-        fingerprint = sha256((repr(estimator.get_params()) + repr(X_train) + repr(y_train)).encode()).hexdigest()[:20]
+        fingerprint = sha256((repr(estimator.get_params()) + repr(X_train) + repr(y_train) + repr(X_test) + repr(y_test)).encode()).hexdigest()[:20]
         self.version = "ml-" + fingerprint
-        return {"metric_name": "mae_holdout", "metric_value": mae}
+        return {"metric_name": "mae_chronological_holdout", "metric_value": mae, "validation_samples": len(X_test)}
 
     def predict(self, X: Sequence[Sequence[float]]) -> list[float]:
         if self._model is None:
