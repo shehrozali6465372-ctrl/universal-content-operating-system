@@ -117,8 +117,12 @@ class CEODashboard:
         return [self._snapshots[d] for d in dates]
 
     def get_monthly_summary(self) -> Dict[str, Any]:
+        """Return the current month's summary, or the latest available month when current data is absent."""
         month = time.strftime("%Y-%m")
         monthly = [s for s in self._snapshots.values() if s.date.startswith(month)]
+        if not monthly and self._snapshots:
+            month = max(s.date[:7] for s in self._snapshots.values())
+            monthly = [s for s in self._snapshots.values() if s.date.startswith(month)]
         if not monthly:
             return {"month": month, "days": 0}
         return {
