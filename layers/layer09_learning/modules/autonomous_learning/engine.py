@@ -91,7 +91,6 @@ class AutonomousLearningEngine:
                 CREATE INDEX IF NOT EXISTS idx_models_active ON model_registry(scope_key, status);
                 """
             )
-            # Upgrade databases created by the first v7 prototype.
             columns = {row[1] for row in conn.execute("PRAGMA table_info(model_registry)")}
             if "artifact_path" not in columns:
                 conn.execute("ALTER TABLE model_registry ADD COLUMN artifact_path TEXT NOT NULL DEFAULT ''")
@@ -124,10 +123,7 @@ class AutonomousLearningEngine:
         eid = event_id or hashlib.sha256(
             (scope.key + json.dumps(values) + str(reward) + source + experiment_id).encode()
         ).hexdigest()
-        event = LearningEvent(
-            eid, scope, values, reward, label,
-            datetime.now(timezone.utc).isoformat(), source,
-        )
+        event = LearningEvent(eid, scope, values, reward, label, datetime.now(timezone.utc).isoformat(), source)
         with self._connect() as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO learning_events
@@ -166,21 +162,18 @@ class AutonomousLearningEngine:
             status = "rejected"
         with self._connect() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO model_registry
-                (scope_key, model_version, sample_count, metric_name, metric_value, status, artifact_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (scope.key, version, len(rows), report["metric_name"], report["metric_value"], status, str(artifact), datetime.now(timezone.utc).isoformat()),
+                """INSERT OR REPLACE INTO model_registry
+                (scope_key, model_version, sample_count, metric_name, metric_value,
+                 status, artifact_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (scope.key, version, len(rows), report["metric_name"], report["metric_value"],
+                 status, str(artifact), datetime.now(timezone.utc).isoformat()),
             )
         if status == "active":
             self._models[scope.key] = candidate
-        return {
-            "status": status,
-            "scope_key": scope.key,
-            "samples": len(rows),
-            "model_version": version,
-            "candidate_mae": report["metric_value"],
-            "previous_active_mae": old_mae,
-        }
+        return {"status": status, "scope_key": scope.key, "samples": len(rows),
+                "model_version": version, "candidate_mae": report["metric_value"],
+                "previous_active_mae": old_mae}
 
     def predict(self, scope: LearningScope, features: Sequence[float]) -> Prediction:
         model = self._models.get(scope.key)
@@ -188,7 +181,8 @@ class AutonomousLearningEngine:
             raise RuntimeError(f"no active verified model for scope {scope.key}")
         values = list(map(float, features))
         value = model.predict([values])[0]
-        return Prediction(scope.key, model.version, value, model.sample_count, None if model.mae is None else 1.0 / (1.0 + model.mae))
+        confidence = None if model.mae is None else 1.0 / (1.0 + model.mae)
+        return Prediction(scope.key, model.version, value, model.sample_count, confidence)
 
     def _load_active_models(self) -> None:
         with self._connect() as conn:
@@ -198,10 +192,10 @@ class AutonomousLearningEngine:
                 continue
             try:
                 model = OnlineRegressor()
-                model.load(row["artifact_path"], version=row["model_version"], sample_count=row["sample_count"], mae=row["metric_value"])
+                model.load(row["artifact_path"], version=row["model_version"],
+                           sample_count=row["sample_count"], mae=row["metric_value"])
                 self._models[row["scope_key"]] = model
             except (FileNotFoundError, RuntimeError):
-                # Do not fabricate a replacement. Prediction remains unavailable.
                 continue
 
     def _active_registry(self, scope: LearningScope) -> Optional[sqlite3.Row]:
@@ -210,9 +204,7 @@ class AutonomousLearningEngine:
 
     def _rows(self, scope: LearningScope) -> List[sqlite3.Row]:
         with self._connect() as conn:
-            return conn.execute(
-                "SELECT * FROM learning_events WHERE scope_key=? ORDER BY created_at", (scope.key,)
-            ).fetchall()
+            return conn.execute("SELECT * FROM learning_events WHERE scope_key=? ORDER BY created_at", (scope.key,)).fetchall()
 
     def count(self, scope: LearningScope) -> int:
         with self._connect() as conn:
