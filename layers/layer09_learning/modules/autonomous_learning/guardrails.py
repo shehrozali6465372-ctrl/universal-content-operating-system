@@ -24,7 +24,8 @@ class DeploymentGuard:
     def promote(self,scope:LearningScope,policy_id:str,version:int,*,evidence_id:str,evidence_count:int)->DeploymentDecision:
         if evidence_count<self.config.min_observations: return DeploymentDecision("insufficient_evidence",scope.key,"promotion evidence threshold not met",evidence_count)
         self.registry.transition(scope,policy_id,version,"active",evidence_id=evidence_id); return DeploymentDecision("promote",scope.key,"policy promoted from verified canary",evidence_count)
-    def rollback(self,scope:LearningScope,policy_id:str,version:int,*,reason:str,evidence_id:str="rollback-verified")->DeploymentDecision:
+    def rollback(self,scope:LearningScope,policy_id:str,version:int,*,reason:str,evidence_id:str)->DeploymentDecision:
+        if not evidence_id.strip(): raise ValueError("real rollback evidence_id is required")
         self.registry.transition(scope,policy_id,version,"rolled_back",evidence_id=evidence_id,rollback_reason=reason)
         safe=self.registry.get_safe_rollback(scope,exclude_version=version)
         if safe is None: return DeploymentDecision("no_safe_rollback",scope.key,"no previously retired policy exists in exact scope",0)
