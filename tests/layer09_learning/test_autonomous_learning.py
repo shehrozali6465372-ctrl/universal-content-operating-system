@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from layers.layer09_learning.modules.autonomous_learning.engine import AutonomousLearningEngine
+from layers.layer09_learning.modules.autonomous_learning.experiment import ScopedExperiment
 from layers.layer09_learning.modules.autonomous_learning.scope import LearningScope
 
 
@@ -33,3 +34,29 @@ def test_outcomes_never_cross_scope(tmp_path: Path):
     assert engine.count(youtube_ai) == 1
     assert engine.count(tiktok_ai) == 1
     assert engine.audit_scope_isolation([youtube_ai, tiktok_ai])["isolated"] is True
+
+
+def test_experiment_requires_real_outcomes_and_evidence(tmp_path: Path):
+    scope = LearningScope("youtube", "ai")
+    exp = ScopedExperiment(str(tmp_path / "learning.db"))
+    exp.create(scope, "exp-1", control_policy="policy-a", treatment_policy="policy-b", min_samples_per_arm=3)
+    assert exp.assign("exp-1", "user-1") in {"control", "treatment"}
+    result = exp.evaluate("exp-1")
+    assert result.status == "insufficient_evidence"
+    with pytest.raises(ValueError):
+        exp.record_outcome("exp-1", "unknown-user", True)
+
+
+def test_experiment_can_verify_a_large_real_signal(tmp_path: Path):
+    scope = LearningScope("youtube", "ai")
+    exp = ScopedExperiment(str(tmp_path / "learning.db"))
+    exp.create(scope, "exp-2", control_policy="policy-a", treatment_policy="policy-b", min_samples_per_arm=20)
+    for i in range(100):
+        subject = f"subject-{i}"
+        arm = exp.assign("exp-2", subject)
+        success = (i % 20) < (4 if arm == "control" else 12)
+        exp.record_outcome("exp-2", subject, success)
+    result = exp.evaluate("exp-2")
+    assert result.status == "verified_treatment"
+    assert result.winner == "treatment"
+    assert result.p_value is not None and result.p_value < 0.05
