@@ -27,7 +27,7 @@ class DeploymentGuard:
     def rollback(self,scope:LearningScope,policy_id:str,version:int,*,reason:str,evidence_id:str)->DeploymentDecision:
         if not evidence_id.strip(): raise ValueError("real rollback evidence_id is required")
         self.registry.transition(scope,policy_id,version,"rolled_back",evidence_id=evidence_id,rollback_reason=reason)
-        safe=self.registry.get_safe_rollback(scope,exclude_version=version)
+        safe=self.registry.get_safe_rollback(scope,exclude_policy_id=policy_id,exclude_version=version)
         if safe is None: return DeploymentDecision("no_safe_rollback",scope.key,"no previously retired policy exists in exact scope",0)
         restored=self.registry.transition(scope,safe.policy_id,safe.version,"active",evidence_id=evidence_id,rollback_reason=f"restored after rollback of {policy_id}@{version}")
         return DeploymentDecision("rollback",scope.key,f"restored {restored.policy_id}@{restored.version}",0)
