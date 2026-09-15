@@ -23,7 +23,7 @@ class APIGateway:
     def __init__(self,host:str="0.0.0.0",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"POST /generate":self._handle_generate,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms}
+        self._routes={"GET /status":self._handle_status,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms}
     def start(self):
         gateway=self
         class Handler(BaseHTTPRequestHandler):
@@ -71,6 +71,25 @@ class APIGateway:
         try:
             layers=sorted(glob.glob("layers/layer*/")); files=sum(len(glob.glob(f"{d}**/*.py",recursive=True)) for d in layers); tests=len(glob.glob("tests/**/test_*.py",recursive=True))
             return APIResponse(data={"version":self.VERSION,"layers":len(layers),"source_files":files,"test_files":tests})
+        except Exception as exc: return APIResponse(500,error=str(exc))
+    def _handle_accounts(self,params):
+        try:
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+            registry=AccountRegistry(); platform=params.get("platform",[None])[0]; enabled=params.get("enabled",["true"])[0].lower()!="false"
+            accounts=registry.list(platform=platform,enabled_only=enabled)
+            return APIResponse(data={"accounts":[a.__dict__ for a in accounts],"count":len(accounts)})
+        except Exception as exc: return APIResponse(500,error=str(exc))
+    def _handle_account_create(self,data):
+        try:
+            from dataclasses import asdict
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry, AccountSpec
+            required=("account_id","platform","niche")
+            missing=[key for key in required if not str(data.get(key,"")).strip()]
+            if missing: return APIResponse(400,error=f"missing required fields: {', '.join(missing)}")
+            spec=AccountSpec(account_id=str(data["account_id"]),platform=str(data["platform"]),niche=str(data["niche"]),display_name=str(data.get("display_name", "")),audience=str(data.get("audience", "")),credentials_ref=str(data.get("credentials_ref", "")),affiliate_rules=dict(data.get("affiliate_rules") or {}),capabilities=list(data.get("capabilities") or []),constraints=dict(data.get("constraints") or {}),enabled=bool(data.get("enabled",True)))
+            workspace=AccountRegistry().register(spec)
+            return APIResponse(status_code=201,data={"account":asdict(spec),"workspace":str(workspace),"provisioned_stores":["memory","content","analytics","learning"]})
+        except (TypeError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_generate(self,data):
         topic=data.get("topic","artificial intelligence"); platform=data.get("platform"); account_id=data.get("account_id"); tone=data.get("tone","professional"); style=data.get("style","educational"); include_image=bool(data.get("include_image",True))
