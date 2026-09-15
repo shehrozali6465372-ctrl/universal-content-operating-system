@@ -7,6 +7,7 @@ from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_
 from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
+from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
 
 class ProductionPipeline(PipelineWiring):
     """Account-isolated production execution with explicit policy snapshots."""
@@ -25,13 +26,13 @@ class ProductionPipeline(PipelineWiring):
         if not credentials or not publisher.authenticate(credentials): return None,manager
         return manager,publisher
     def _policy_check(self, req: ContentRequest, response: ContentResponse) -> None:
-        policy=PolicyRegistry().get(req.platform,req.metadata.get("policy_version"))
+        registry=ensure_default_snapshots(PolicyRegistry()); policy=registry.get(req.platform,req.metadata.get("policy_version"))
         if policy is None: raise RuntimeError(f"no policy snapshot registered for {req.platform}; production publishing blocked")
         types=policy.constraints.get("content_types")
         if types and req.metadata.get("content_type") not in types: raise RuntimeError(f"content type {req.metadata.get('content_type')} is not allowed by policy {policy.version}")
         max_len=policy.constraints.get("max_length")
         if max_len is not None and len(response.text)>int(max_len): raise RuntimeError(f"content exceeds policy max_length={max_len}")
-        response.quality_report=(response.quality_report or {})|{"policy_version":policy.version,"policy_source":policy.source}
+        response.quality_report=(response.quality_report or {})|{"policy_version":policy.version,"policy_source":policy.source,"policy_scope":policy.content_gate.get("scope")}
     def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str,Any]) -> Dict[str,Any]:
         from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
