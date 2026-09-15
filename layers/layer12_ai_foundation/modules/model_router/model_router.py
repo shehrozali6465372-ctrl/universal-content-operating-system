@@ -153,19 +153,42 @@ class ModelRouter:
 
     def _select_provider(self, request_type: RequestType) -> Optional[ProviderAdapter]:
         """Best provider select karo for this request type."""
-        # Pehle routing table check karo
         order = self._routing_table.get(request_type, [])
         for provider_name in order:
             adapter = self._providers.get(provider_name)
             if adapter and adapter.is_enabled and adapter.supports(request_type):
                 return adapter
-
-        # Routing table mein nahi to capability se dhundo
         for adapter in self._providers.values():
             if adapter.is_enabled and adapter.supports(request_type):
                 return adapter
-
         return None
+
+    def _record(self, request: ModelRequest, provider: str, status: str,
+                latency_ms: float, error: str = "") -> None:
+        self._history.append({
+            "request_id": request.request_id,
+            "type": request.request_type.value,
+            "provider": provider,
+            "status": status,
+            "latency_ms": latency_ms,
+            "time": time.time(),
+            **({"error": error} if error else {}),
+        })
+
+    @staticmethod
+    def _apply_result(response: ModelResponse, result: Any, adapter: ProviderAdapter,
+                      request: ModelRequest) -> ModelResponse:
+        if isinstance(result, ModelResponse):
+            response = result
+        elif isinstance(result, str):
+            response.content = result
+        else:
+            raise RuntimeError("provider returned unsupported response type")
+        if not (response.content or "").strip():
+            raise RuntimeError("provider returned empty content")
+        response.provider = response.provider or adapter.provider_name
+        response.model_used = response.model_used or request.model or adapter.provider_name
+        return response
 
     def route(self, request: ModelRequest) -> ModelResponse:
         """AI Brain ka request route karo.
@@ -173,60 +196,47 @@ class ModelRouter:
         AI Brain ko sirf ModelResponse milegi.
         Keys, providers, routing — sab internal hai.
         """
-        response = ModelResponse(request.request_id)
         start = time.time()
+        attempted: set[str] = set()
+        failures: List[str] = []
 
-        # Try primary provider
-        adapter = self._select_provider(request.request_type)
-        if adapter and adapter.handler:
+        primary = self._select_provider(request.request_type)
+        if primary and primary.handler:
+            attempted.add(primary.provider_name)
             try:
-                result = adapter.handler(request)
-                if isinstance(result, ModelResponse):
-                    response = result
-                elif isinstance(result, str):
-                    response.content = result
-                response.provider = adapter.provider_name
-                response.model_used = request.model or adapter.provider_name
+                response = self._apply_result(ModelResponse(request.request_id), primary.handler(request), primary, request)
                 response.latency_ms = (time.time() - start) * 1000
-                self._history.append({
-                    "request_id": request.request_id,
-                    "type": request.request_type.value,
-                    "provider": adapter.provider_name,
-                    "status": "success",
-                    "latency_ms": response.latency_ms,
-                    "time": time.time(),
-                })
+                self._record(request, primary.provider_name, "success", response.latency_ms)
                 return response
             except Exception as exc:
-                # Fallback enabled hai to try next provider
+                failures.append(f"{primary.provider_name}: {exc}")
+                self._record(request, primary.provider_name, "failed", (time.time() - start) * 1000, str(exc))
                 if not self._fallback_enabled:
-                    response.content = f"Error: {exc}"
-                    return response
+                    raise RuntimeError(str(exc)) from exc
 
-        # Fallback — try all other providers
         if self._fallback_enabled:
-            for padapter in self._providers.values():
-                if padapter.is_enabled and padapter.supports(request.request_type):
-                    try:
-                        if padapter.handler:
-                            result = padapter.handler(request)
-                            if isinstance(result, ModelResponse):
-                                response = result
-                            elif isinstance(result, str):
-                                response.content = result
-                            response.provider = padapter.provider_name
-                            response.latency_ms = (time.time() - start) * 1000
-                            return response
-                    except Exception:
-                        continue
+            for adapter in self._providers.values():
+                if adapter.provider_name in attempted or not adapter.is_enabled or not adapter.supports(request.request_type) or not adapter.handler:
+                    continue
+                attempted.add(adapter.provider_name)
+                try:
+                    response = self._apply_result(ModelResponse(request.request_id), adapter.handler(request), adapter, request)
+                    response.latency_ms = (time.time() - start) * 1000
+                    self._record(request, adapter.provider_name, "success", response.latency_ms)
+                    return response
+                except Exception as exc:
+                    failures.append(f"{adapter.provider_name}: {exc}")
+                    self._record(request, adapter.provider_name, "failed", (time.time() - start) * 1000, str(exc))
 
-        response.content = "No available provider for this request type"
+        detail = "; ".join(failures) if failures else "no enabled provider with a handler"
+        response = ModelResponse(request.request_id)
         response.latency_ms = (time.time() - start) * 1000
+        response.metadata["error"] = detail
+        self._record(request, "", "failed", response.latency_ms, detail)
         return response
 
     def generate_text(self, prompt: str, model: str = "",
                       **kwargs: Any) -> ModelResponse:
-        """Convenience method — AI Brain ka main interface."""
         request = ModelRequest(RequestType.TEXT, prompt, model, **kwargs)
         return self.route(request)
 
@@ -251,7 +261,7 @@ class ModelRouter:
     def get_stats(self) -> Dict[str, Any]:
         total = len(self._history)
         success = sum(1 for h in self._history if h["status"] == "success")
-        providers_used = set(h["provider"] for h in self._history)
+        providers_used = set(h["provider"] for h in self._history if h["provider"])
         return {
             "total_requests": total,
             "success": success,
