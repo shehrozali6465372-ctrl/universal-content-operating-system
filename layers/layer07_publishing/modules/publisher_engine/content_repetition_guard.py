@@ -28,30 +28,45 @@ class ContentRepetitionGuard:
         connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
+    @staticmethod
+    def _schema() -> str:
+        return """CREATE TABLE content_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, platform TEXT NOT NULL,
+            content_fingerprint TEXT NOT NULL, template_fingerprint TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('reserved','pending','published')),
+            post_id TEXT, created_at REAL NOT NULL,
+            UNIQUE(account_id, content_fingerprint), UNIQUE(account_id, template_fingerprint)
+        )"""
+
     def _init_db(self) -> None:
         with self._connect() as db:
             cols = [row[1] for row in db.execute("PRAGMA table_info(content_history)").fetchall()]
-            if cols and "status" in cols:
-                ddl = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='content_history'").fetchone()[0] or ""
-                if "'pending'" not in ddl:
-                    db.execute("""CREATE TABLE content_history_v2 (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, platform TEXT NOT NULL,
-                        content_fingerprint TEXT NOT NULL, template_fingerprint TEXT NOT NULL,
-                        status TEXT NOT NULL CHECK(status IN ('reserved','pending','published')),
-                        post_id TEXT, created_at REAL NOT NULL,
-                        UNIQUE(account_id, content_fingerprint), UNIQUE(account_id, template_fingerprint)
-                    )""")
-                    db.execute("INSERT INTO content_history_v2 SELECT id,account_id,platform,content_fingerprint,template_fingerprint,status,post_id,created_at FROM content_history")
+            if not cols:
+                db.execute(self._schema())
+            else:
+                ddl_row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='content_history'").fetchone()
+                ddl = (ddl_row[0] if ddl_row else "") or ""
+                required = {"id", "account_id", "platform", "content_fingerprint", "template_fingerprint", "status", "post_id", "created_at"}
+                needs_migration = not required.issubset(cols) or "'pending'" not in ddl
+                if needs_migration:
+                    core = {"account_id", "platform", "content_fingerprint", "template_fingerprint", "created_at"}
+                    if not core.issubset(cols):
+                        raise RuntimeError("Unsupported content_history schema: required fingerprint columns are missing")
+                    db.execute("DROP TABLE IF EXISTS content_history_v2")
+                    db.execute(self._schema().replace("content_history", "content_history_v2", 1))
+                    account = "account_id"
+                    platform = "platform"
+                    content_fp = "content_fingerprint"
+                    template_fp = "template_fingerprint"
+                    created = "created_at"
+                    status = "status" if "status" in cols else "'published'"
+                    post_id = "post_id" if "post_id" in cols else "NULL"
+                    db.execute(
+                        "INSERT INTO content_history_v2 (account_id,platform,content_fingerprint,template_fingerprint,status,post_id,created_at) "
+                        f"SELECT {account},{platform},{content_fp},{template_fp},{status},{post_id},{created} FROM content_history"
+                    )
                     db.execute("DROP TABLE content_history")
                     db.execute("ALTER TABLE content_history_v2 RENAME TO content_history")
-            elif not cols:
-                db.execute("""CREATE TABLE content_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, platform TEXT NOT NULL,
-                    content_fingerprint TEXT NOT NULL, template_fingerprint TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN ('reserved','pending','published')),
-                    post_id TEXT, created_at REAL NOT NULL,
-                    UNIQUE(account_id, content_fingerprint), UNIQUE(account_id, template_fingerprint)
-                )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_content_history_account ON content_history(account_id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_content_history_pending ON content_history(account_id,status)")
 
