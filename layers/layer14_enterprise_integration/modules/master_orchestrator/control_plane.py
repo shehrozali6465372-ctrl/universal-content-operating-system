@@ -47,8 +47,22 @@ class ControlPlane:
         request.metadata.update({"account_id":decision.account_id,"niche":decision.niche,"credentials_ref":account.credentials_ref if account else "","affiliate_rules":account.affiliate_rules if account else {},"content_type":decision.content_type,"policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,"control_plane":"account_decision_engine"})
         result=self.pipeline.execute(request).to_dict(); published=bool(result.get("publish_result") and result["publish_result"].get("success"))
         try:
+            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
             from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
-            AccountLearningStore().record(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,quality_score=float(result.get("quality_score") or 0.0),published=published,analytics=result.get("analytics"),content_type=decision.content_type,policy_version=decision.policy_version)
+            local=AccountDataStore()
+            learning=AccountLearningStore(local)
+            learning.record(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,quality_score=float(result.get("quality_score") or 0.0),published=published,analytics=result.get("analytics"),content_type=decision.content_type,policy_version=decision.policy_version)
+            local.append(decision.account_id,"content","execution_history",{
+                "timestamp":__import__("time").time(),"topic":decision.topic,"platform":decision.platform,"niche":decision.niche,
+                "content_type":decision.content_type,"quality_score":float(result.get("quality_score") or 0.0),"published":published,
+                "post_id":(result.get("publish_result") or {}).get("post_id"),"title":result.get("title"),"text":result.get("text"),
+                "policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,
+            })
+            local.append(decision.account_id,"analytics","execution_outcomes",{
+                "timestamp":__import__("time").time(),"topic":decision.topic,"platform":decision.platform,
+                "quality_score":float(result.get("quality_score") or 0.0),"published":published,
+                "post_id":(result.get("publish_result") or {}).get("post_id"),"analytics":result.get("analytics") if result.get("analytics") is not None else "UNKNOWN",
+            })
         except Exception as exc: result["account_learning_error"]=str(exc)
         result["decision"]={"account_id":decision.account_id,"platform":decision.platform,"niche":decision.niche,"content_type":decision.content_type,"policy_version":decision.policy_version,"product":decision.product,"reasons":decision.reasons}
         return result
