@@ -8,21 +8,24 @@ from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard
 from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
+from layers.layer07_publishing.modules.account_control.credential_resolver import AccountCredentialResolver
 
 class ProductionPipeline(PipelineWiring):
     """Account-isolated production execution with explicit policy snapshots."""
-    def _credentials(self, platform: str, account_id: str) -> Dict[str,str]:
-        if platform=="facebook": return {"page_id":os.environ.get("FACEBOOK_PAGE_ID",""),"access_token":os.environ.get("FACEBOOK_ACCESS_TOKEN","")}
-        if platform=="instagram": return {"account_id":os.environ.get("INSTAGRAM_ACCOUNT_ID",""),"access_token":os.environ.get("FACEBOOK_ACCESS_TOKEN","")}
-        if platform=="pinterest": return {"access_token":os.environ.get("PINTEREST_ACCESS_TOKEN",""),"board_id":os.environ.get("PINTEREST_BOARD_ID","")}
-        if platform=="youtube": return {"access_token":os.environ.get("YOUTUBE_ACCESS_TOKEN","")}
-        if platform=="tiktok": return {"access_token":os.environ.get("TIKTOK_ACCESS_TOKEN","")}
+    def _credentials(self, platform: str, account_id: str, credentials_ref: str) -> Dict[str,str]:
+        credentials=AccountCredentialResolver.resolve(credentials_ref)
+        if not credentials: return {}
+        if platform=="facebook": return {"page_id":credentials.get("page_id",credentials.get("account_id","")),"access_token":credentials.get("access_token","")}
+        if platform=="instagram": return {"account_id":credentials.get("account_id",""),"access_token":credentials.get("access_token","")}
+        if platform=="pinterest": return {"access_token":credentials.get("access_token",credentials.get("token","")),"board_id":credentials.get("board_id","")}
+        if platform=="youtube": return {"access_token":credentials.get("access_token",credentials.get("token",""))}
+        if platform=="tiktok": return {"access_token":credentials.get("access_token",credentials.get("token",""))}
         return {}
     def _publisher(self, req: ContentRequest):
         from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
-        manager=PublisherManager(); publisher=manager.plugin_manager.registry.get_instance(req.platform); account_id=req.metadata.get("account_id")
-        if publisher is None or not account_id: return None,manager
-        credentials=self._credentials(req.platform,str(account_id))
+        manager=PublisherManager(); publisher=manager.plugin_manager.registry.get_instance(req.platform); account_id=req.metadata.get("account_id"); credentials_ref=req.metadata.get("credentials_ref")
+        if publisher is None or not account_id or not credentials_ref: return None,manager
+        credentials=self._credentials(req.platform,str(account_id),str(credentials_ref))
         if not credentials or not publisher.authenticate(credentials): return None,manager
         return manager,publisher
     def _policy_check(self, req: ContentRequest, response: ContentResponse) -> None:
@@ -49,7 +52,7 @@ class ProductionPipeline(PipelineWiring):
         if not reservation.allowed: raise RuntimeError(f"content uniqueness gate rejected after regeneration: {reservation.reason}")
         manager,_=self._publisher(req)
         if manager is None:
-            guard.release(reservation.reservation_id); response.publish_result={"success":False,"platform":req.platform,"post_id":None,"url":None,"error":"No real publisher credentials/adapter configured"}; return {"published":False,"skipped":True,"reason":"publisher_unconfigured"}
+            guard.release(reservation.reservation_id); response.publish_result={"success":False,"platform":req.platform,"post_id":None,"url":None,"error":"No account-scoped credentials/real publisher adapter configured"}; return {"published":False,"skipped":True,"reason":"publisher_unconfigured"}
         content_type=req.metadata.get("content_type") or ("photo" if response.image_url else "post")
         if req.platform=="instagram" and content_type=="video": content_type="reel"
         media_path=response.image_url
@@ -61,7 +64,7 @@ class ProductionPipeline(PipelineWiring):
         else: media_for_api=media_path
         request=PublishRequest(platform=req.platform,content=response.text,content_type=content_type)
         request.idempotency_key=f"ucos:{account_id}:{req.platform}:{hashlib.sha256(response.text.encode()).hexdigest()[:24]}"
-        request.metadata.update({"account_id":account_id,"topic":req.topic,"niche":req.metadata.get("niche"),"ai_model":ctx.get("ai_model","unknown"),"policy_version":req.metadata.get("policy_version")})
+        request.metadata.update({"account_id":account_id,"topic":req.topic,"niche":req.metadata.get("niche"),"ai_model":ctx.get("ai_model","unknown"),"policy_version":req.metadata.get("policy_version"),"product":req.metadata.get("product"),"affiliate":req.metadata.get("affiliate")})
         if media_for_api:
             asset=MediaAsset(file_path=media_for_api,media_type="video" if req.metadata.get("content_type")=="video" else "image"); asset.file_name=str(media_for_api).rsplit("/",1)[-1]; asset.platform_ready=True; request.media_assets.append(asset)
         try:
