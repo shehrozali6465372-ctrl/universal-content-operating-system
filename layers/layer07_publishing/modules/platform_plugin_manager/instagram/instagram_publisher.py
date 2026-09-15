@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Any, Dict, List, Optional
@@ -19,152 +20,101 @@ class InstagramPublisher(BasePublisher):
         self._error_count: int = 0
         self._history: List[Dict[str, Any]] = []
 
-    def get_platform_name(self) -> str:
-        return "instagram"
+    def get_platform_name(self) -> str: return "instagram"
 
     def get_capabilities(self) -> PlatformCapabilities:
-        caps = PlatformCapabilities()
-        caps.supports_images = True
-        caps.supports_video = True
-        caps.supports_carousel = True
-        caps.supports_scheduled = False
-        caps.supports_edit = False
-        caps.supports_delete = True
-        caps.supports_analytics = True
-        caps.supports_threads = False
-        caps.supports_stories = True
-        caps.supports_polls = False
-        caps.max_length = 2200
-        caps.max_images = 10
-        caps.features = ["feed", "stories", "reels", "carousel", "insights"]
-        return caps
+        caps = PlatformCapabilities(); caps.supports_images=True; caps.supports_video=True; caps.supports_carousel=True; caps.supports_scheduled=False; caps.supports_edit=False; caps.supports_delete=True; caps.supports_analytics=True; caps.supports_threads=False; caps.supports_stories=True; caps.supports_polls=False; caps.max_length=2200; caps.max_images=10; caps.features=["feed","stories","reels","carousel","insights"]; return caps
 
     def authenticate(self, credentials: Dict[str, str]) -> bool:
-        # Credentials are account-scoped. Never fall back to process-wide environment state.
-        self._account_id = credentials.get("account_id", "")
-        self._access_token = credentials.get("access_token", "")
-        self._authenticated = False
-        if not self._account_id or not self._access_token:
-            return False
+        self._account_id=credentials.get("account_id", ""); self._access_token=credentials.get("access_token", ""); self._authenticated=False
+        if not self._account_id or not self._access_token: return False
         try:
-            result = self._api_get(f"/{self._account_id}", {"fields": "id,username"})
-            self._authenticated = bool(result and result.get("id") == self._account_id)
-        except Exception:
-            self._authenticated = False
+            result=self._api_get(f"/{self._account_id}", {"fields":"id,username"})
+            self._authenticated=bool(result and result.get("id")==self._account_id)
+        except Exception: self._authenticated=False
         return self._authenticated
 
     def validate(self, content: str, content_type: str = "post") -> bool:
-        if not content or not content.strip(): return False
-        if len(content) > self.get_capabilities().max_length: return False
-        return True
+        return bool(content and content.strip() and len(content)<=self.get_capabilities().max_length)
 
-    def publish(self, content: str, media_paths: Optional[List[str]] = None, content_type: str = "post", **kwargs: Any) -> PublishResult:
-        result = PublishResult(platform="instagram")
-        start = time.time()
-        if not self._authenticated:
-            result.error_message = "Not authenticated"; return result
-        if not self.validate(content, content_type):
-            result.error_message = "Content validation failed"; return result
+    def publish(self, content: str, media_paths: Optional[List[str]]=None, content_type: str="post", **kwargs: Any) -> PublishResult:
+        result=PublishResult(platform="instagram"); start=time.time()
+        if not self._authenticated: result.error_message="Not authenticated"; return result
+        if not self.validate(content,content_type): result.error_message="Content validation failed"; return result
         try:
-            if content_type == "story": api_result = self._publish_story(content, media_paths, **kwargs)
-            elif content_type == "reel": api_result = self._publish_reel(content, media_paths, **kwargs)
-            elif media_paths and len(media_paths) > 1: api_result = self._publish_carousel(content, media_paths, **kwargs)
-            else: api_result = self._publish_feed(content, media_paths, **kwargs)
+            if content_type=="story": api_result=self._publish_story(content,media_paths,**kwargs)
+            elif content_type=="reel": api_result=self._publish_reel(content,media_paths,**kwargs)
+            elif media_paths and len(media_paths)>1: api_result=self._publish_carousel(content,media_paths,**kwargs)
+            else: api_result=self._publish_feed(content,media_paths,**kwargs)
             if api_result and "id" in api_result:
-                result.success = True; result.post_id = api_result["id"]; result.url = f"https://instagram.com/p/{api_result['id']}"
-                result.metadata = {"platform":"instagram","content_type":content_type,"account_id":self._account_id}
-                self._success_count += 1
-            else:
-                result.error_message = str(api_result.get("error", "Unknown")) if api_result else "No response"; self._error_count += 1
-        except Exception as exc:
-            result.error_message = str(exc); self._error_count += 1
-        self._request_count += 1
-        self._history.append({"action":"publish","success":result.success,"post_id":result.post_id,"latency_ms":round((time.time()-start)*1000,1),"time":time.time()})
-        return result
+                result.success=True; result.post_id=api_result["id"]; result.url=f"https://instagram.com/p/{api_result['id']}"; result.metadata={"platform":"instagram","content_type":content_type,"account_id":self._account_id}; self._success_count+=1
+            else: result.error_message=str(api_result.get("error","Unknown")) if api_result else "No response"; self._error_count+=1
+        except Exception as exc: result.error_message=str(exc); self._error_count+=1
+        self._request_count+=1; self._history.append({"action":"publish","success":result.success,"post_id":result.post_id,"latency_ms":round((time.time()-start)*1000,1),"time":time.time()}); return result
 
     def edit(self, post_id: str, content: str, **kwargs: Any) -> PublishResult:
-        r = PublishResult(platform="instagram"); r.error_message = "Instagram API does not support post editing"; return r
-
+        r=PublishResult(platform="instagram"); r.error_message="Instagram API does not support post editing"; return r
     def delete(self, post_id: str) -> bool:
         try: return self._api_delete(f"/{post_id}") is not None
         except Exception: return False
-
     def get_post(self, post_id: str) -> Optional[Dict[str, Any]]:
         try: return self._api_get(f"/{post_id}", {"fields":"id,caption,media_type,timestamp,like_count,comments_count"})
         except Exception: return None
-
     def get_status(self, post_id: str) -> str: return "published" if self.get_post(post_id) else "unknown"
-
     def get_analytics(self, post_id: str) -> Dict[str, Any]:
         try:
-            post = self._api_get(f"/{post_id}", {"fields":"like_count,comments_count,insights.metric(impressions,reach,engagement)"})
+            post=self._api_get(f"/{post_id}", {"fields":"like_count,comments_count,insights.metric(impressions,reach,engagement)"})
             if not post: return {"post_id":post_id,"analytics":"UNKNOWN"}
-            insights = post.get("insights", {}).get("data", [])
-            metrics = {i["name"]:i["values"][0]["value"] for i in insights if i.get("values")}
+            insights=post.get("insights",{}).get("data",[]); metrics={i["name"]:i["values"][0]["value"] for i in insights if i.get("values")}
             return {"post_id":post_id,"likes":post.get("like_count",0),"comments":post.get("comments_count",0),"impressions":metrics.get("impressions","UNKNOWN"),"reach":metrics.get("reach","UNKNOWN"),"engagement":metrics.get("engagement","UNKNOWN")}
         except Exception: return {"post_id":post_id,"analytics":"UNKNOWN"}
-
-    def schedule(self, content: str, scheduled_time: float, media_paths: Optional[List[str]] = None, **kwargs: Any) -> PublishResult:
+    def schedule(self, content: str, scheduled_time: float, media_paths: Optional[List[str]]=None, **kwargs: Any) -> PublishResult:
         r=PublishResult(platform="instagram"); r.error_message="Instagram API does not support scheduling via Graph API"; return r
-
     def get_account_info(self) -> Dict[str, Any]:
         try: return self._api_get(f"/{self._account_id}", {"fields":"id,username,name,biography,followers_count,media_count"}) or {}
         except Exception: return {}
+    def get_stats(self) -> Dict[str, Any]: return {"platform":"instagram","authenticated":self._authenticated,"account_id":self._account_id,"total_requests":self._request_count,"successful":self._success_count,"errors":self._error_count}
 
-    def get_stats(self) -> Dict[str, Any]:
-        return {"platform":"instagram","authenticated":self._authenticated,"account_id":self._account_id,"total_requests":self._request_count,"successful":self._success_count,"errors":self._error_count}
-
-    def _publish_feed(self, content: str, media_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[Dict]:
-        # Feed publishing requires media; do not claim support for text-only posts.
+    def _publish_feed(self, content: str, media_paths: Optional[List[str]]=None, **kwargs: Any) -> Optional[Dict]:
         if not media_paths: return {"error":"Instagram feed posts require media"}
-        container=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"caption":content})
-        if not container or "id" not in container: return container
-        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":container["id"]})
-
+        c=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"caption":content})
+        if not c or "id" not in c: return c
+        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _publish_carousel(self, content: str, media_paths: List[str], **kwargs: Any) -> Optional[Dict]:
         children=[]
         for url in media_paths[:10]:
             c=self._api_post(f"/{self._account_id}/media", {"image_url":url,"is_carousel_item":"true"})
             if c and "id" in c: children.append(c["id"])
         if not children: return {"error":"No valid carousel items"}
-        carousel=self._api_post(f"/{self._account_id}/media", {"media_type":"CAROUSEL_ALBUM","caption":content,"children":",".join(children)})
-        if not carousel or "id" not in carousel: return carousel
-        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":carousel["id"]})
-
-    def _publish_story(self, content: str, media_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[Dict]:
+        c=self._api_post(f"/{self._account_id}/media", {"media_type":"CAROUSEL_ALBUM","caption":content,"children":",".join(children)})
+        if not c or "id" not in c: return c
+        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
+    def _publish_story(self, content: str, media_paths: Optional[List[str]]=None, **kwargs: Any) -> Optional[Dict]:
         if not media_paths: return {"error":"Stories require media"}
         c=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"media_type":"STORIES"})
         if not c or "id" not in c: return c
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
-
-    def _publish_reel(self, content: str, media_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[Dict]:
+    def _publish_reel(self, content: str, media_paths: Optional[List[str]]=None, **kwargs: Any) -> Optional[Dict]:
         if not media_paths: return {"error":"Reels require video URL"}
         c=self._api_post(f"/{self._account_id}/media", {"media_type":"REELS","video_url":media_paths[0],"caption":content})
         if not c or "id" not in c: return c
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
-
-    def _api_get(self, endpoint: str, params: Optional[Dict] = None) -> Optional[Dict]:
-        url=f"{self.API_BASE}{endpoint}"
-        if params: url=f"{url}?{urllib.parse.urlencode(params)}"
+    def _api_get(self, endpoint: str, params: Optional[Dict]=None) -> Optional[Dict]:
+        url=f"{self.API_BASE}{endpoint}"; url=f"{url}?{urllib.parse.urlencode(params)}" if params else url
         try:
-            req=urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=30) as resp: return json.loads(resp.read().decode("utf-8"))
+            with urllib.request.urlopen(urllib.request.Request(url,method="GET"),timeout=30) as resp: return json.loads(resp.read().decode("utf-8"))
         except Exception: return None
-
     def _api_post(self, endpoint: str, data: Dict[str, Any]) -> Optional[Dict]:
-        url=f"{self.API_BASE}{endpoint}"
-        data=dict(data); data["access_token"]=self._access_token
+        payload=dict(data); payload["access_token"]=self._access_token
         try:
-            req=urllib.request.Request(url,data=json.dumps(data).encode("utf-8"),headers={"Content-Type":"application/json"},method="POST")
+            req=urllib.request.Request(f"{self.API_BASE}{endpoint}",data=json.dumps(payload).encode("utf-8"),headers={"Content-Type":"application/json"},method="POST")
             with urllib.request.urlopen(req,timeout=30) as resp: return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             try: return {"error":f"HTTP {exc.code}: {exc.read().decode('utf-8','replace')[:200]}"}
             except Exception: return {"error":f"HTTP {exc.code}"}
         except Exception: return {"error":"Network unavailable"}
-
     def _api_delete(self, endpoint: str) -> Optional[Dict]:
         url=f"{self.API_BASE}{endpoint}?{urllib.parse.urlencode({'access_token':self._access_token})}"
         try:
-            req=urllib.request.Request(url,method="DELETE")
-            with urllib.request.urlopen(req,timeout=30) as resp: return json.loads(resp.read().decode("utf-8"))
+            with urllib.request.urlopen(urllib.request.Request(url,method="DELETE"),timeout=30) as resp: return json.loads(resp.read().decode("utf-8"))
         except Exception: return None
