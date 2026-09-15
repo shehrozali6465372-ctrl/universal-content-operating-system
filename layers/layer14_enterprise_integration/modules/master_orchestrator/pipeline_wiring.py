@@ -1,38 +1,42 @@
-"""PipelineWiring — End-to-End Content Pipeline
+"""Canonical UCOS content pipeline.
 
-Chain:
-    Topic → Research (L2) → Intelligence (L3) → Writing Plan (L4)
-        → AI Generation (L12/Gemini) → Image Plan (L5)
-        → Quality Check (L6) → Publish Package (L7)
-        → Analytics Record (L8) → Learning Memory (L9)
+This module is the single execution path for content generation.  It keeps the
+23-layer architecture intact while making the critical runtime hand-off real:
+research -> intelligence -> writing -> AI -> image -> quality -> publishing
+-> platform analytics -> learning -> persistence.
+
+The publisher is never faked.  A successful L7 step means a real platform
+publisher returned a successful result; otherwise the pipeline reports the
+failure and does not claim that content was published.
 """
 from __future__ import annotations
+
 import os
 import time
-import traceback
 from typing import Any, Dict, List, Optional
 
 
-# ── GitHub Secret names (key 2 & 3 have no underscores) ──
-_GEMINI_KEYS = [
+_GEMINI_KEYS = (
     ("GEMINI_API_KEY_1", "GEMINI_API_KEY_1"),
     ("GEMINI_API_KEY_2", "GEMINIAPIKEY2"),
     ("GEMINI_API_KEY_3", "GEMINIAPIKEY3"),
-]
+)
 
-
-# ── Pipeline Data Objects ──
 
 class ContentRequest:
-    """What the user wants to create."""
-    __slots__ = ("topic", "platform", "tone", "style", "include_image",
-                 "max_length", "metadata")
+    __slots__ = ("topic", "platform", "tone", "style", "include_image", "max_length", "metadata")
 
-    def __init__(self, topic: str, platform: str = "facebook",
-                 tone: str = "professional", style: str = "educational",
-                 include_image: bool = True, max_length: int = 1000) -> None:
-        self.topic = topic
-        self.platform = platform
+    def __init__(
+        self,
+        topic: str,
+        platform: str = "facebook",
+        tone: str = "professional",
+        style: str = "educational",
+        include_image: bool = True,
+        max_length: int = 1000,
+    ) -> None:
+        self.topic = topic.strip()
+        self.platform = platform.strip().lower()
         self.tone = tone
         self.style = style
         self.include_image = include_image
@@ -40,13 +44,18 @@ class ContentRequest:
         self.metadata: Dict[str, Any] = {}
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"topic": self.topic, "platform": self.platform,
-                "tone": self.tone, "style": self.style,
-                "include_image": self.include_image}
+        return {
+            "topic": self.topic,
+            "platform": self.platform,
+            "tone": self.tone,
+            "style": self.style,
+            "include_image": self.include_image,
+            "max_length": self.max_length,
+            "metadata": self.metadata,
+        }
 
 
 class PipelineStepResult:
-    """Result of a single pipeline step."""
     __slots__ = ("layer", "status", "data", "error", "duration_ms")
 
     def __init__(self, layer: str) -> None:
@@ -54,11 +63,12 @@ class PipelineStepResult:
         self.status = "pending"
         self.data: Dict[str, Any] = {}
         self.error: Optional[str] = None
-        self.duration_ms: float = 0.0
+        self.duration_ms = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "layer": self.layer, "status": self.status,
+            "layer": self.layer,
+            "status": self.status,
             "duration_ms": round(self.duration_ms, 1),
             "error": self.error,
             "data_keys": list(self.data.keys()),
@@ -66,433 +76,315 @@ class PipelineStepResult:
 
 
 class ContentResponse:
-    """Final output of the full pipeline."""
-    __slots__ = ("request", "steps", "text", "image_prompt",
-                 "quality_score", "quality_report", "publish_package",
-                 "analytics", "learning_entries", "total_duration_ms", "stats")
+    __slots__ = (
+        "request", "steps", "text", "image_prompt", "image_url",
+        "quality_score", "quality_report", "publish_package", "publish_result",
+        "analytics", "learning_entries", "total_duration_ms", "stats",
+    )
 
     def __init__(self, request: ContentRequest) -> None:
         self.request = request
         self.steps: List[PipelineStepResult] = []
-        self.text: str = ""
-        self.image_prompt: str = ""
-        self.quality_score: float = 0.0
+        self.text = ""
+        self.image_prompt = ""
+        self.image_url = ""
+        self.quality_score = 0.0
         self.quality_report: Optional[Dict[str, Any]] = None
         self.publish_package: Optional[Dict[str, Any]] = None
+        self.publish_result: Optional[Dict[str, Any]] = None
         self.analytics: Optional[Dict[str, Any]] = None
         self.learning_entries: List[Dict[str, Any]] = []
-        self.total_duration_ms: float = 0.0
+        self.total_duration_ms = 0.0
         self.stats: Dict[str, Any] = {}
 
     def to_dict(self) -> Dict[str, Any]:
+        published = bool(self.publish_result and self.publish_result.get("success"))
         return {
             "topic": self.request.topic,
             "platform": self.request.platform,
             "content_length": len(self.text),
             "quality_score": self.quality_score,
-            "image_prompt": self.image_prompt[:200] if self.image_prompt else "",
-            "publish_ready": self.publish_package is not None,
-            "steps_completed": len([s for s in self.steps if s.status == "success"]),
-            "steps_failed": len([s for s in self.steps if s.status == "error"]),
-            "steps_skipped": len([s for s in self.steps if s.status == "skipped"]),
+            "image_prompt": self.image_prompt[:200],
+            "image_url": self.image_url,
+            "publish_ready": bool(self.publish_package),
+            "published": published,
+            "publish_result": self.publish_result,
+            "analytics": self.analytics,
+            "steps_completed": sum(s.status == "success" for s in self.steps),
+            "steps_failed": sum(s.status == "error" for s in self.steps),
+            "steps_skipped": sum(s.status == "skipped" for s in self.steps),
             "total_duration_ms": round(self.total_duration_ms, 1),
             "steps": [s.to_dict() for s in self.steps],
         }
 
 
-# ── Pipeline Logger ──
-
 class PipelineLogger:
-    """Simple structured logger for pipeline events."""
-
     def __init__(self) -> None:
         self.events: List[Dict[str, Any]] = []
 
-    def log(self, layer: str, event: str, data: Optional[Dict] = None) -> None:
+    def log(self, layer: str, event: str, data: Optional[Dict[str, Any]] = None) -> None:
         entry = {"time": time.time(), "layer": layer, "event": event}
         if data:
             entry["data"] = data
         self.events.append(entry)
-        icon = "✅" if "success" in event else ("❌" if "error" in event else "🔄")
-        print(f"  {icon} [{layer}] {event}")
+        print(f"{'❌' if 'error' in event or 'failed' in event else '✅' if 'success' in event else '🔄'} [{layer}] {event}")
 
-    def summary(self) -> List[Dict[str, Any]]:
-        return self.events
-
-
-# ── Main Pipeline ──
 
 class PipelineWiring:
-    """End-to-end content pipeline wiring all layers together."""
+    """Canonical single-run execution graph for UCOS."""
 
     def __init__(self) -> None:
         self._logger = PipelineLogger()
         self._key_manager = None
         self._gemini = None
-        self._prompt_builder = None
         self._init_ai()
 
     def _init_ai(self) -> None:
-        """Initialize Gemini AI engine."""
         try:
             from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager
             from layers.layer12_ai_foundation.modules.model_router.gemini_provider import GeminiProvider
-            from layers.layer12_ai_foundation.modules.model_router.prompt_builder import PromptBuilder
 
             self._key_manager = KeyManager()
             for idx, (env_name, secret_name) in enumerate(_GEMINI_KEYS, 1):
                 key = os.environ.get(env_name) or os.environ.get(secret_name)
                 if key:
                     self._key_manager.register_key(f"k{idx}", key, "gemini")
-
             self._gemini = GeminiProvider(self._key_manager)
-            self._prompt_builder = PromptBuilder()
-            self._logger.log("L12-AI", "Gemini initialized",
-                             {"keys": self._key_manager.get_stats().get("total_keys", 0)})
         except Exception as exc:
             self._logger.log("L12-AI", f"init error: {exc}")
 
-    def _run_step(self, layer: str, fn, response: ContentResponse,
-                  required_from: Optional[str] = None) -> bool:
-        """Run a pipeline step with error handling and timing."""
+    def _run_step(self, response: ContentResponse, layer: str, fn, required: bool = True) -> bool:
         step = PipelineStepResult(layer)
         response.steps.append(step)
-
-        if required_from:
-            prev = next((s for s in response.steps if s.layer == required_from), None)
-            if prev and prev.status != "success":
-                step.status = "skipped"
-                step.error = f"Skipped: {required_from} did not succeed"
-                self._logger.log(layer, "skipped", {"reason": step.error})
-                return False
-
         start = time.time()
         try:
             step.data = fn() or {}
             step.status = "success"
-            step.duration_ms = (time.time() - start) * 1000
-            self._logger.log(layer, "success",
-                             {"duration_ms": round(step.duration_ms, 1),
-                              "keys": list(step.data.keys())[:5]})
             return True
         except Exception as exc:
             step.status = "error"
             step.error = str(exc)
-            step.duration_ms = (time.time() - start) * 1000
-            self._logger.log(layer, f"error: {exc}")
+            if required:
+                self._logger.log(layer, f"failed: {exc}")
+            else:
+                self._logger.log(layer, f"warning: {exc}")
             return False
+        finally:
+            step.duration_ms = (time.time() - start) * 1000
 
-    # ── Pipeline Steps ──
-
-    def _step_research(self, req: ContentRequest, response: ContentResponse,
-                       ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L2: Research — add topic to intelligence system."""
+    def _research(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
-        manager = TopicIntelManager()
-        topic_entry = manager.add_topic(
-            name=req.topic,
-            niche=req.platform,
-            category=req.style,
-            confidence=0.5,
+        entry = TopicIntelManager().add_topic(
+            name=req.topic, niche=req.platform, category=req.style, confidence=0.5
         )
-        ctx["topic_id"] = topic_entry.topic_id if hasattr(topic_entry, "topic_id") else ""
-        return {"topic_id": ctx["topic_id"], "topic_name": req.topic}
+        ctx["topic_id"] = getattr(entry, "topic_id", "")
+        return {"topic_id": ctx["topic_id"]}
 
-    def _step_intelligence(self, req: ContentRequest, response: ContentResponse,
-                           ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L3: Intelligence — analyze topic for insights."""
+    def _intelligence(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer03_intelligence.modules.content_understanding.content_analyzer import ContentAnalyzer
-        analyzer = ContentAnalyzer()
-        understanding = analyzer.analyze(req.topic, domain=req.platform)
-        ctx["keywords"] = understanding.keywords if hasattr(understanding, "keywords") else []
-        ctx["entities"] = understanding.entities if hasattr(understanding, "entities") else []
-        ctx["intent"] = understanding.intent if hasattr(understanding, "intent") else "informational"
+        result = ContentAnalyzer().analyze(req.topic, domain=req.platform)
+        ctx["keywords"] = getattr(result, "keywords", [])
+        ctx["entities"] = getattr(result, "entities", [])
+        ctx["intent"] = getattr(result, "intent", "informational")
         return {"keywords": ctx["keywords"], "intent": ctx["intent"]}
 
-    def _step_writing_plan(self, req: ContentRequest, response: ContentResponse,
-                           ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L4: Writing — create content plan."""
+    def _writing(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
-        planner = PlannerManager()
-        result = planner.create_plan(
-            topic=req.topic,
-            platform=req.platform,
-            user_goal="educate",
-            audience_hint="general",
-            tone_override=req.tone,
+        result = PlannerManager().create_plan(
+            topic=req.topic, platform=req.platform, user_goal="educate",
+            audience_hint="general", tone_override=req.tone,
         )
-        plan = result.plan if hasattr(result, "plan") else None
-        if plan:
-            ctx["writing_plan"] = plan
-            structure = plan.structure if hasattr(plan, "structure") else {}
-            return {"plan_id": getattr(plan, "plan_id", ""), "structure": structure}
-        return {"plan_id": "", "note": "Plan created (no structure details)"}
+        plan = getattr(result, "plan", None)
+        ctx["writing_plan"] = plan
+        return {"plan_id": getattr(plan, "plan_id", ""), "structure": getattr(plan, "structure", {})}
 
-    def _step_ai_generate(self, req: ContentRequest, response: ContentResponse,
-                          ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L12: AI Generation — use Gemini to write content."""
+    def _ai(self, req: ContentRequest, ctx: Dict[str, Any], response: ContentResponse) -> Dict[str, Any]:
         if not self._gemini:
-            raise RuntimeError("Gemini not initialized — no API keys configured")
-
-        keywords_str = ", ".join(str(k) for k in ctx.get("keywords", [])[:5])
-
-        # Platform-specific system prompt for high-quality content
-        system_prompt = self._get_platform_system_prompt(req.platform)
-
-        # Build the user prompt with clear instructions
-        prompt_text = f"""Write a viral Facebook post about: {req.topic}
-
-KEY RULES:
-- Start with a powerful hook (question, shocking fact, or bold statement)
-- Use emojis naturally throughout (not spammy)
-- Keep paragraphs SHORT (1-2 lines max)
-- Include bullet points or numbered lists for scannability
-- End with an engaging question or call-to-action
-- Add 5-7 relevant hashtags at the end
-- Tone: {req.tone}
-- Style: {req.style}
-- Length: 150-250 words (perfect for Facebook)
-
-KEYWORDS TO INCLUDE: {keywords_str}
-
-EXAMPLE OF A GREAT FACEBOOK POST:
-"Did you know? The human brain processes images 60,000x faster than text. 🧠
-
-That's why visual content dominates social media. Here are 3 facts that will change how you see marketing:
-
-1️⃣ Posts with images get 2.3x more engagement
-2️⃣ Video content gets 5x more reach
-3️⃣ Stories drive 25% of all platform interactions
-
-The question is: Are you using visual content effectively?
-
-Drop a 👍 if you agree, or comment your best tip below!
-
-#MarketingTips #SocialMedia #ContentStrategy"
-
-NOW WRITE YOUR POST (only the post content, no explanations):"""
-
-        result = self._gemini.generate(prompt_text, system_prompt=system_prompt)
-        content = result.get("content", "")
+            raise RuntimeError("L12 AI unavailable: no Gemini provider could be initialized")
+        keywords = ", ".join(map(str, ctx.get("keywords", [])[:8]))
+        prompt = (
+            f"Create a high-quality {req.platform} {req.style} post about: {req.topic}\n\n"
+            f"Tone: {req.tone}\nKeywords: {keywords}\n"
+            f"Maximum length: {req.max_length} characters.\n"
+            "Use accurate, useful information. Start with a strong hook, use short paragraphs, "
+            "and end with a useful call to action. Do not invent statistics or sources. "
+            "Return only the final post."
+        )
+        system = (
+            f"You are an expert {req.platform} content writer. Prioritize factual accuracy, "
+            "clarity, platform conventions, and non-spammy engagement."
+        )
+        result = self._gemini.generate(prompt, system_prompt=system)
+        content = (result.get("content") or "").strip()
+        if not content:
+            raise RuntimeError("L12 returned empty content")
+        if len(content) > req.max_length:
+            content = content[:req.max_length].rstrip()
         response.text = content
         ctx["ai_model"] = result.get("model", "gemini")
-        ctx["content_length"] = len(content)
-        return {"content_length": len(content), "model": ctx["ai_model"]}
+        return {"model": ctx["ai_model"], "content_length": len(content)}
 
-    def _get_platform_system_prompt(self, platform: str) -> str:
-        """Get platform-specific system prompt for high-quality content."""
-        prompts = {
-            "facebook": """You are an expert Facebook content creator for the page "deeplora" — an educational and informative page.
-
-YOUR STYLE:
-- Write like a knowledgeable friend sharing interesting facts
-- Use emojis naturally (🧠, 💡, 🔥, ✅, ⚠️, etc.) — not spammy
-- Short paragraphs (1-2 lines max)
-- Use bullet points and numbered lists
-- Start every post with a HOOK that stops the scroll
-- End with a question to drive comments
-- Mix facts with storytelling
-- Never use walls of text
-
-FORMATTING:
-- Line breaks between sections
-- Emojis as bullet points (🔹, ✅, ⚠️, 💡)
-- Bold key phrases using **text**
-- Hashtags at the end (5-7 relevant ones)
-
-AVOID:
-- Generic, boring introductions
-- Walls of text
-- Overly formal language
-- Clickbait without substance
-- Repetitive phrasing
-
-Write ONLY the post content. No explanations, no labels.""",
-            "instagram": """You are an expert Instagram content creator. Write visually descriptive, hashtag-rich captions.""",
-            "twitter": """You are an expert Twitter/X content creator. Write concise, punchy tweets under 280 characters.""",
-            "linkedin": """You are an expert LinkedIn content creator. Write professional, thought-leadership content.""",
-            "youtube": """You are an expert YouTube content creator. Write engaging video descriptions and titles.""",
-        }
-        return prompts.get(platform, prompts["facebook"])
-
-    def _step_image_plan(self, req: ContentRequest, response: ContentResponse,
-                         ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L5: Image — plan and generate image via Gemini."""
+    def _image(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
         if not req.include_image:
-            return {"skipped": True, "reason": "include_image=False"}
-
+            return {"generated": False, "reason": "disabled"}
         from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        planner = ImagePlanner()
-        plans = planner.plan(req.topic, platform=req.platform, image_type="photo", count=1)
-        plan = plans[0] if plans else None
-        img_type = plan.image_type if plan and hasattr(plan, "image_type") else "photo"
-        ctx["image_type"] = img_type
+        plans = ImagePlanner().plan(req.topic, platform=req.platform, image_type="photo", count=1)
+        image_type = getattr(plans[0], "image_type", "photo") if plans else "photo"
+        prompt = f"Create a {image_type} image for a {req.platform} post about '{req.topic}'. Professional, factual, engaging, no misleading text."
+        response.image_prompt = prompt
+        result = GeminiImageProvider().generate(prompt, size="1024x1024", style=req.tone)
+        response.image_url = getattr(result, "image_url", "") or ""
+        ctx["image_generated"] = bool(response.image_url or getattr(result, "image_data", None))
+        return {"generated": ctx["image_generated"], "provider": getattr(result, "provider", ""), "image_url": response.image_url}
 
-        img_prompt_text = (
-            f"Create a {img_type} image for a {req.platform} post about '{req.topic}'. "
-            f"Style: {req.tone}, {req.style}. High quality, professional, engaging."
-        )
-        response.image_prompt = img_prompt_text
-
-        # Try to generate actual image via Gemini
-        image_gen = GeminiImageProvider()
-        img_result = image_gen.generate(
-            img_prompt_text,
-            size="1024x1024",
-            style=req.tone,
-        )
-        ctx["image_generated"] = bool(img_result.image_url or img_result.image_data)
-        ctx["image_provider"] = img_result.provider
-
-        return {
-            "image_type": img_type,
-            "prompt": img_prompt_text[:150],
-            "image_url": img_result.image_url,
-            "provider": img_result.provider,
-            "generated": ctx["image_generated"],
-        }
-
-    def _step_quality(self, req: ContentRequest, response: ContentResponse,
-                      ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L6: Quality — analyze content quality."""
-        if not response.text:
-            return {"skipped": True, "reason": "No content to analyze"}
-
+    def _quality(self, req: ContentRequest, response: ContentResponse) -> Dict[str, Any]:
         from layers.layer06_quality.modules.content_quality_analyzer.quality_analyzer import ContentQualityAnalyzer
-        analyzer = ContentQualityAnalyzer()
-        report = analyzer.analyze(response.text, platform=req.platform)
-        score = report.overall_score if hasattr(report, "overall_score") else 5.0
-        response.quality_score = score
+        report = ContentQualityAnalyzer().analyze(response.text, platform=req.platform)
+        response.quality_score = float(getattr(report, "overall_score", 0.0))
         response.quality_report = report.to_dict() if hasattr(report, "to_dict") else {}
-        return {"quality_score": score, "report": response.quality_report}
+        if response.quality_score < 5.0:
+            raise RuntimeError(f"Quality gate rejected content: score={response.quality_score}")
+        return {"quality_score": response.quality_score}
 
-    def _step_publish_package(self, req: ContentRequest, response: ContentResponse,
-                              ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L7: Publishing — create publish package."""
-        if not response.text:
-            return {"skipped": True, "reason": "No content to publish"}
+    def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+        from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
+        from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
 
-        from layers.layer07_publishing.modules.publishing_planner.planner_engine import PlannerEngine
-        engine = PlannerEngine()
-        plan = engine.create_plan(
-            content_id=f"pipe-{int(time.time())}",
-            content_type="post",
-            preferred_platforms=[req.platform],
-            schedule_mode="immediate",
-        )
-        package = plan.to_dict() if hasattr(plan, "to_dict") else {"status": "prepared"}
-        response.publish_package = package
-        return {"publish_package": package}
+        request = PublishRequest(platform=req.platform, content=response.text, content_type="photo" if response.image_url else "post")
+        request.idempotency_key = f"ucos:{req.platform}:{ctx.get('topic_id', '')}:{hash(response.text)}"
+        request.metadata.update({"topic": req.topic, "ai_model": ctx.get("ai_model", "unknown")})
+        if response.image_url:
+            asset = MediaAsset(file_path=response.image_url, media_type="image")
+            asset.file_name = response.image_url.rsplit("/", 1)[-1] or "generated-image"
+            asset.platform_ready = True
+            request.media_assets.append(asset)
 
-    def _step_analytics(self, req: ContentRequest, response: ContentResponse,
-                        ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L8: Analytics — record pipeline metrics."""
-        from layers.layer08_analytics.modules.analytics_orchestrator.orchestrator import AnalyticsOrchestrator
-        orch = AnalyticsOrchestrator()
-        metadata = {
-            "topic": req.topic,
-            "platform": req.platform,
-            "content_length": len(response.text),
-            "quality_score": response.quality_score,
-            "pipeline_steps": len(response.steps),
-            "ai_model": ctx.get("ai_model", "unknown"),
+        manager = PublisherManager()
+        credentials = {
+            "page_id": os.environ.get("FACEBOOK_PAGE_ID", ""),
+            "access_token": os.environ.get("FACEBOOK_ACCESS_TOKEN", ""),
         }
-        result = orch.run_pipeline(collect=True, calculate=True, detect_trends=True)
-        analytics_data = result.to_dict() if hasattr(result, "to_dict") else {}
-        response.analytics = analytics_data
-        return {"analytics_recorded": True, "data": analytics_data}
+        # Authentication is deliberately explicit. Missing credentials are a
+        # real failure, never converted into a fake/mock publication.
+        publisher = manager.plugin_manager.registry.get_instance(req.platform)
+        if publisher is None:
+            raise RuntimeError(f"No publisher registered for '{req.platform}'")
+        if not publisher.authenticate(credentials):
+            raise RuntimeError(f"Authentication failed for '{req.platform}'")
 
-    def _step_learning(self, req: ContentRequest, response: ContentResponse,
-                       ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """L9: Learning — store lesson in memory."""
+        result = manager.publish(request)
+        data = {
+            "success": bool(result.success),
+            "platform": req.platform,
+            "post_id": result.post_id,
+            "url": result.url,
+            "error": result.error_message,
+            "duration_ms": result.duration_ms,
+        }
+        response.publish_result = data
+        if not result.success:
+            raise RuntimeError(result.error_message or "Publisher returned failure")
+        response.publish_package = request.to_dict()
+        ctx["post_id"] = result.post_id
+        return data
+
+    def _analytics(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        post_id = ctx.get("post_id")
+        if not post_id:
+            return {"published": False, "reason": "no_post_id"}
+        from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+        manager = PublisherManager()
+        publisher = manager.plugin_manager.registry.get_instance(req.platform)
+        if publisher is None:
+            raise RuntimeError(f"No publisher available for analytics: {req.platform}")
+        publisher.authenticate({
+            "page_id": os.environ.get("FACEBOOK_PAGE_ID", ""),
+            "access_token": os.environ.get("FACEBOOK_ACCESS_TOKEN", ""),
+        })
+        platform_metrics = publisher.get_analytics(post_id)
+        response.analytics = {
+            "platform": req.platform,
+            "post_id": post_id,
+            "metrics": platform_metrics,
+            "collected_at": time.time(),
+        }
+        return response.analytics
+
+    def _learning(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer09_learning.modules.learning_engine.learning_memory import LearningMemory
         from layers.layer09_learning.modules.learning_engine.lesson_generator import Lesson
-
-        memory = LearningMemory()
         lesson = Lesson(
-            lesson_type="pipeline_execution",
-            title=f"Generated content for '{req.topic}' on {req.platform}",
+            lesson_type="published_content",
+            title=f"Published '{req.topic}' to {req.platform}",
         )
-        lesson.description = f"Quality: {response.quality_score}/10, {len(response.text)} chars"
-        lesson.confidence = min(1.0, response.quality_score / 10.0)
+        lesson.description = (
+            f"quality={response.quality_score}; published={bool(response.publish_result and response.publish_result.get('success'))}; "
+            f"analytics={response.analytics or {}}"
+        )
+        lesson.confidence = max(0.0, min(1.0, response.quality_score / 10.0))
         lesson.platform = req.platform
         lesson.category = req.tone
-
-        entry = memory.store_lesson(lesson)
-        entry_data = entry.to_dict() if hasattr(entry, "to_dict") else {"id": "stored"}
-        response.learning_entries.append(entry_data)
-        return {"lesson_stored": True, "entry": entry_data}
-
-    # ── Main Execute ──
+        entry = LearningMemory().store_lesson(lesson)
+        data = entry.to_dict() if hasattr(entry, "to_dict") else {"id": "stored"}
+        response.learning_entries.append(data)
+        return {"stored": True, "entry": data}
 
     def execute(self, request: ContentRequest) -> ContentResponse:
-        """Run the full end-to-end pipeline."""
-        pipeline_start = time.time()
+        if not request.topic:
+            raise ValueError("topic is required")
         response = ContentResponse(request)
         ctx: Dict[str, Any] = {}
-        self._logger = PipelineLogger()
+        started = time.time()
 
-        print(f"\n{'=' * 60}")
-        print(f"🚀 PIPELINE: \"{request.topic}\" → {request.platform}")
-        print(f"{'=' * 60}")
+        # Required creation path.
+        for layer, fn in (
+            ("L2-Research", lambda: self._research(request, ctx)),
+            ("L3-Intelligence", lambda: self._intelligence(request, ctx)),
+            ("L4-Writing", lambda: self._writing(request, ctx)),
+            ("L12-AI", lambda: self._ai(request, ctx, response)),
+            ("L5-Image", lambda: self._image(request, response, ctx)),
+            ("L6-Quality", lambda: self._quality(request, response)),
+        ):
+            if not self._run_step(response, layer, fn):
+                response.total_duration_ms = (time.time() - started) * 1000
+                self._persist(response)
+                return response
 
-        # Step chain: each step depends on the previous
-        steps = [
-            ("L2-Research",    lambda: self._step_research(request, response, ctx)),
-            ("L3-Intelligence", lambda: self._step_intelligence(request, response, ctx)),
-            ("L4-Writing",     lambda: self._step_writing_plan(request, response, ctx)),
-            ("L12-AI",         lambda: self._step_ai_generate(request, response, ctx)),
-            ("L5-Image",       lambda: self._step_image_plan(request, response, ctx)),
-            ("L6-Quality",     lambda: self._step_quality(request, response, ctx)),
-            ("L7-Publish",     lambda: self._step_publish_package(request, response, ctx)),
-            ("L8-Analytics",   lambda: self._step_analytics(request, response, ctx)),
-            ("L9-Learning",    lambda: self._step_learning(request, response, ctx)),
-        ]
+        # L7 is intentionally a hard gate: no publish claim without a real
+        # publisher result.
+        if not self._run_step(response, "L7-Publish", lambda: self._publish(request, response, ctx)):
+            response.total_duration_ms = (time.time() - started) * 1000
+            self._persist(response)
+            return response
 
-        required_from = None
-        for layer_name, step_fn in steps:
-            ok = self._run_step(layer_name, step_fn, response, required_from)
-            if not ok and required_from is None:
-                # First two steps are required; after that, skip gracefully
-                if layer_name == "L12-AI":
-                    required_from = layer_name
+        self._run_step(response, "L8-Analytics", lambda: self._analytics(request, response, ctx), required=False)
+        self._run_step(response, "L9-Learning", lambda: self._learning(request, response, ctx), required=False)
 
-        response.total_duration_ms = (time.time() - pipeline_start) * 1000
-        response.stats = {"execution_time_ms": round(response.total_duration_ms, 1)}
-
-        # Summary
-        success = len([s for s in response.steps if s.status == "success"])
-        failed = len([s for s in response.steps if s.status == "error"])
-        skipped = len([s for s in response.steps if s.status == "skipped"])
-        print(f"\n{'=' * 60}")
-        print(f"✅ PIPELINE COMPLETE: {success} success, {failed} error, {skipped} skipped")
-        print(f"   Duration: {round(response.total_duration_ms, 1)}ms")
-        print(f"   Content: {len(response.text)} chars | Quality: {response.quality_score}/10")
-        print(f"{'=' * 60}\n")
-
-        # Persist results to database
-        self._persist_results(response)
+        response.total_duration_ms = (time.time() - started) * 1000
+        response.stats = {
+            "execution_time_ms": round(response.total_duration_ms, 1),
+            "published": bool(response.publish_result and response.publish_result.get("success")),
+            "post_id": ctx.get("post_id", ""),
+        }
+        self._persist(response)
         return response
 
-    def _persist_results(self, response: ContentResponse) -> None:
-        """Persist pipeline results to SQLite database."""
+    def _persist(self, response: ContentResponse) -> None:
         try:
             from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
             persist = PipelinePersistence()
             persist.save_pipeline_run(response.to_dict())
             persist.close()
         except Exception as exc:
-            self._logger.log("L-Persist", f"warning: could not persist results: {exc}")
+            self._logger.log("L13/L14-Persistence", f"warning: {exc}")
 
     def status(self) -> Dict[str, Any]:
-        """Return system status."""
-        keys_info = {}
-        if self._key_manager:
-            keys_info = self._key_manager.get_stats()
+        stats = self._key_manager.get_stats() if self._key_manager else {}
         return {
-            "pipeline": "active",
+            "pipeline": "canonical",
             "ai_engine": "gemini" if self._gemini else "unavailable",
-            "api_keys_configured": keys_info.get("total_keys", 0),
-            "healthy_keys": keys_info.get("healthy", 0),
+            "api_keys_configured": stats.get("total_keys", 0),
+            "healthy_keys": stats.get("healthy", 0),
         }
