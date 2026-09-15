@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -67,6 +68,33 @@ def test_repetition_is_account_scoped():
         other_account = guard.reserve(account_id="b", platform="facebook", content="One post with three points.")
         assert not same_account.allowed
         assert other_account.allowed
+
+
+def test_repetition_guard_migrates_legacy_schema_without_status():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "legacy.sqlite3"
+        with sqlite3.connect(db_path) as db:
+            db.execute("""CREATE TABLE content_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                content_fingerprint TEXT NOT NULL,
+                template_fingerprint TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                UNIQUE(account_id, content_fingerprint),
+                UNIQUE(account_id, template_fingerprint)
+            )""")
+            content_fp, template_fp = ContentRepetitionGuard.fingerprints("Legacy post.")
+            db.execute("INSERT INTO content_history (account_id,platform,content_fingerprint,template_fingerprint,created_at) VALUES (?,?,?,?,?)", ("legacy", "facebook", content_fp, template_fp, 1.0))
+        guard = ContentRepetitionGuard(str(db_path))
+        duplicate = guard.reserve(account_id="legacy", platform="facebook", content="Legacy post.")
+        assert not duplicate.allowed
+        assert duplicate.reason == "exact_content_repeat"
+        pending = guard.pending("legacy")
+        assert pending == []
+        with sqlite3.connect(db_path) as db:
+            columns = {row[1] for row in db.execute("PRAGMA table_info(content_history)")}
+            assert {"status", "post_id"}.issubset(columns)
 
 
 def test_product_selector_never_invents_unverified_products():
