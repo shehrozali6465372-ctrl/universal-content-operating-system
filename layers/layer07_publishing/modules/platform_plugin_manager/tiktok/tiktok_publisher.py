@@ -1,7 +1,7 @@
 """TikTok Content Posting API Direct Post publisher.
 
-Supports video and photo URLs. TikTok requires an approved client and the
-video.publish scope; unaudited clients may be restricted to private posts.
+Supports video and photo URLs. The Direct Post API returns a publish_id for
+asynchronous processing; it is never reported as a final post ID.
 """
 from __future__ import annotations
 import json, os, urllib.request, urllib.error
@@ -12,9 +12,10 @@ class TikTokPublisher(BasePublisher):
     def __init__(self): self.token=""; self.authenticated=False; self.privacy="PUBLIC_TO_EVERYONE"
     def get_platform_name(self): return "tiktok"
     def get_capabilities(self):
-        c=PlatformCapabilities(); c.supports_video=True; c.supports_images=True; c.supports_analytics=False; c.max_length=2200; c.features=["direct_post","photo_post","video_post"]; return c
+        c=PlatformCapabilities(); c.supports_video=True; c.supports_images=True; c.supports_analytics=False; c.max_length=2200; c.features=["direct_post","photo_post","video_post","async_status"]
+        return c
     def authenticate(self, credentials):
-        self.token=credentials.get("access_token") or os.getenv("TIKTOK_ACCESS_TOKEN","")
+        self.token=credentials.get("access_token") or ""
         if not self.token: return False
         try:
             data=self._post("/post/publish/creator_info/query/",{})
@@ -29,7 +30,7 @@ class TikTokPublisher(BasePublisher):
         if not self.authenticated: r.error_message="Not authenticated"; return r
         if not media_paths: r.error_message="TikTok requires a public media URL"; return r
         media=media_paths[0]
-        if not media.startswith("http://") and not media.startswith("https://"): r.error_message="TikTok Direct Post requires a verified/public media URL for PULL_FROM_URL"; return r
+        if not media.startswith(("http://","https://")): r.error_message="TikTok Direct Post requires a verified/public media URL for PULL_FROM_URL"; return r
         try:
             if content_type in ("photo","image","post"):
                 body={"post_info":{"title":content[:90],"description":content,"privacy_level":self.privacy,"disable_comment":False},"source_info":{"source":"PULL_FROM_URL","photo_images":[media]},"post_mode":"DIRECT_POST","media_type":"PHOTO"}
@@ -38,7 +39,14 @@ class TikTokPublisher(BasePublisher):
                 body={"post_info":{"title":content[:2200],"privacy_level":self.privacy,"disable_comment":False,"is_aigc":bool(kwargs.get("is_aigc",False))},"source_info":{"source":"PULL_FROM_URL","video_url":media}}
                 data=self._post("/post/publish/video/init/",body)
             pid=(data.get("data") or {}).get("publish_id")
-            if pid: r.success=True; r.post_id=pid; r.url=""; r.metadata={"publish_state":"processing","privacy_level":self.privacy}
+            if pid:
+                # publish_id is only an asynchronous tracking identifier. Do not
+                # claim success, a public URL, or a final TikTok post ID here.
+                r.success=False
+                r.post_id=""
+                r.url=""
+                r.error_message="TikTok accepted the publish request; final publication is pending status confirmation"
+                r.metadata={"publish_state":"processing","tracking_id":pid,"privacy_level":self.privacy}
             else: r.error_message=str(data)
         except Exception as e: r.error_message=str(e)
         return r
