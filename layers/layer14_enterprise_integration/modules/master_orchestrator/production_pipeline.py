@@ -45,8 +45,6 @@ class ProductionPipeline(PipelineWiring):
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
         account_id=str(req.metadata.get("account_id") or "")
         if not account_id: raise RuntimeError("production publishing requires account_id")
-        # Defense in depth: the production publisher must only operate on an actually
-        # provisioned, enabled account whose registered platform matches the request.
         registry=AccountRegistry()
         account=registry.get(account_id)
         if account is None: raise RuntimeError(f"account {account_id!r} is not registered")
@@ -55,8 +53,6 @@ class ProductionPipeline(PipelineWiring):
         if not str(req.metadata.get("credentials_ref") or account.credentials_ref):
             raise RuntimeError(f"account {account_id!r} has no credential reference")
         self._policy_check(req,response)
-        # Resolve the canonical provisioned workspace instead of interpolating account_id into a path.
-        # This preserves collision/path-traversal protection for IDs containing separators or unsafe chars.
         workspace=registry.workspace_path(account_id)
         guard=ContentRepetitionGuard(str(workspace/"publishing_history.sqlite3"))
         reservation=guard.reserve(account_id=account_id,platform=req.platform,content=response.text,template_id=req.metadata.get("template_id"))
@@ -85,12 +81,16 @@ class ProductionPipeline(PipelineWiring):
             asset=MediaAsset(file_path=media_for_api,media_type="video" if req.metadata.get("content_type")=="video" else "image"); asset.file_name=str(media_for_api).rsplit("/",1)[-1]; asset.platform_ready=True; request.media_assets.append(asset)
         try:
             result=manager.publish(request)
-            data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id or None,"url":result.url or None,"error":result.error_message,"metadata":result.metadata|{"template_fingerprint":request_template_fingerprint}}
+            metadata=dict(result.metadata or {})
+            data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id or None,"url":result.url or None,"error":result.error_message,"metadata":metadata|{"template_fingerprint":request_template_fingerprint}}
             response.publish_result=data
             if result.success:
+                if not result.post_id:
+                    guard.release(reservation.reservation_id)
+                    raise RuntimeError("publisher reported success without a real post_id")
                 guard.finalize(reservation.reservation_id,result.post_id); response.publish_package=request.to_dict(); ctx["post_id"]=result.post_id; return data
-            if result.metadata.get("publish_state") in {"processing","pending"} and result.metadata.get("tracking_id"):
-                tracking_id=str(result.metadata["tracking_id"])
+            if metadata.get("publish_state") in {"processing","pending"} and metadata.get("tracking_id"):
+                tracking_id=str(metadata["tracking_id"])
                 guard.mark_pending(reservation.reservation_id,tracking_id)
                 data.update({"pending":True,"tracking_id":tracking_id})
                 response.publish_result=data
@@ -98,7 +98,7 @@ class ProductionPipeline(PipelineWiring):
             guard.release(reservation.reservation_id)
             raise RuntimeError(result.error_message or "publisher returned failure")
         except Exception:
-            if not response.publish_result.get("pending"):
+            if not (response.publish_result or {}).get("pending"):
                 try: guard.release(reservation.reservation_id)
                 except Exception: pass
             raise
