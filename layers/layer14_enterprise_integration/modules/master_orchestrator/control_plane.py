@@ -52,11 +52,13 @@ class ControlPlane:
             local=AccountDataStore()
             learning=AccountLearningStore(local)
             learning.record(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,quality_score=float(result.get("quality_score") or 0.0),published=published,analytics=result.get("analytics"),content_type=decision.content_type,policy_version=decision.policy_version)
+            publish_meta=(result.get("publish_result") or {}).get("metadata") or {}
             local.append(decision.account_id,"content","execution_history",{
                 "timestamp":__import__("time").time(),"topic":decision.topic,"platform":decision.platform,"niche":decision.niche,
                 "content_type":decision.content_type,"quality_score":float(result.get("quality_score") or 0.0),"published":published,
                 "post_id":(result.get("publish_result") or {}).get("post_id"),"title":result.get("title"),"text":result.get("text"),
                 "policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,
+                "template_fingerprint":publish_meta.get("template_fingerprint"),
             })
             local.append(decision.account_id,"analytics","execution_outcomes",{
                 "timestamp":__import__("time").time(),"topic":decision.topic,"platform":decision.platform,
