@@ -37,10 +37,11 @@ def boot() -> Dict[str, Any]:
 
 
 def generate_content(topic: str, platform: str = "facebook", tone: str = "professional",
-                     style: str = "educational", include_image: bool = True) -> Dict[str, Any]:
-    from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import PipelineWiring, ContentRequest
-    return PipelineWiring().execute(ContentRequest(topic=topic, platform=platform, tone=tone,
-                                                    style=style, include_image=include_image)).to_dict()
+                     style: str = "educational", include_image: bool = True,
+                     account_id: Optional[str] = None) -> Dict[str, Any]:
+    from layers.layer14_enterprise_integration.modules.master_orchestrator.control_plane import ControlPlane
+    return ControlPlane().execute(topic=topic, platform=platform, account_id=account_id,
+                                  tone=tone, style=style, include_image=include_image)
 
 
 def status() -> Dict[str, Any]:
@@ -107,14 +108,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         flag = "--topic" if "--topic" in args else "--generate"; idx = args.index(flag)
         topic = args[idx + 1] if idx + 1 < len(args) else "artificial intelligence"
         platform = "facebook"; tone = "professional"; style = "educational"; include_image = "--no-image" not in args
-        for option, default in (("--platform", platform), ("--tone", tone), ("--style", style)):
+        account_id = None
+        for option, default in (("--platform", platform), ("--tone", tone), ("--style", style), ("--account-id", None)):
             if option in args:
                 i = args.index(option); value = args[i + 1] if i + 1 < len(args) else default
                 if option == "--platform": platform = value
                 elif option == "--tone": tone = value
-                else: style = value
+                elif option == "--style": style = value
+                else: account_id = value
         try:
-            print(json.dumps(generate_content(topic, platform, tone, style, include_image), indent=2, default=str)); return 0
+            print(json.dumps(generate_content(topic, platform, tone, style, include_image, account_id), indent=2, default=str)); return 0
         except Exception as exc:
             print(json.dumps({"error": str(exc)}, indent=2)); return 1
     if "--history" in args:
@@ -144,7 +147,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                                    "--vector-db-status", "--publishing-status", "--monitoring-status",
                                    "--docker-status", "--affiliate-status", "--niche-intel-status",
                                    "--empire-status", "--self-improve-status", "--bi-status",
-                                   "--generate <topic>", "--history", "--analytics", "--api"]}, indent=2))
+                                   "--generate <topic> [--account-id <id>]", "--history", "--analytics", "--api"]}, indent=2))
     return 0
 
 
