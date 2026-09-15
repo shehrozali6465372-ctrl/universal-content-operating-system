@@ -38,6 +38,12 @@ SAMPLE_TEXTS = [
 ]
 
 
+@pytest.fixture(scope="class")
+def semantic_analyzer() -> SemanticAnalyzer:
+    """Share one analyzer per test class without deprecated instance fixtures."""
+    return SemanticAnalyzer()
+
+
 def _generate_texts(n: int) -> List[str]:
     return [SAMPLE_TEXTS[i % len(SAMPLE_TEXTS)] for i in range(n)]
 
@@ -45,74 +51,67 @@ def _generate_texts(n: int) -> List[str]:
 class TestPerformanceBenchmarks:
     """Performance benchmarks for semantic analysis."""
 
-    @pytest.fixture(scope="class")
-    def analyzer(self) -> SemanticAnalyzer:
-        return SemanticAnalyzer()
-
-    def test_single_analysis_latency(self, analyzer: SemanticAnalyzer) -> None:
+    def test_single_analysis_latency(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Single text analysis should complete under 100ms."""
         text = "AI developers ki demand 2026 mein barh rahi hai."
         times = []
         for _ in range(10):
             start = time.perf_counter()
-            analyzer.analyze(text)
+            semantic_analyzer.analyze(text)
             times.append(time.perf_counter() - start)
         avg_ms = statistics.mean(times) * 1000
         p95_ms = sorted(times)[int(len(times) * 0.95)] * 1000
         assert avg_ms < 100, f"Average latency {avg_ms:.1f}ms > 100ms"
         assert p95_ms < 200, f"P95 latency {p95_ms:.1f}ms > 200ms"
 
-    def test_batch_100_latency(self, analyzer: SemanticAnalyzer) -> None:
+    def test_batch_100_latency(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Batch of 100 texts should complete under 5 seconds."""
         texts = _generate_texts(100)
         start = time.perf_counter()
         for text in texts:
-            analyzer.analyze(text)
+            semantic_analyzer.analyze(text)
         elapsed = time.perf_counter() - start
         assert elapsed < 5.0, f"100-text batch took {elapsed:.1f}s > 5s"
 
-    def test_batch_1000_latency(self, analyzer: SemanticAnalyzer) -> None:
+    def test_batch_1000_latency(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Batch of 1000 texts should complete under 30 seconds."""
         texts = _generate_texts(1000)
         start = time.perf_counter()
         for text in texts:
-            analyzer.analyze(text)
+            semantic_analyzer.analyze(text)
         elapsed = time.perf_counter() - start
         assert elapsed < 30.0, f"1000-text batch took {elapsed:.1f}s > 30s"
 
-    def test_similarity_latency(self, analyzer: SemanticAnalyzer) -> None:
+    def test_similarity_latency(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Semantic similarity should be fast."""
         a = "AI is transforming healthcare with new diagnostic tools."
         b = "Machine learning is revolutionizing medical diagnosis."
         times = []
         for _ in range(20):
             start = time.perf_counter()
-            analyzer.semantic_similarity(a, b)
+            semantic_analyzer.semantic_similarity(a, b)
             times.append(time.perf_counter() - start)
         avg_ms = statistics.mean(times) * 1000
         assert avg_ms < 50, f"Similarity avg latency {avg_ms:.1f}ms > 50ms"
 
-    def test_memory_usage_bounded(self, analyzer: SemanticAnalyzer) -> None:
+    def test_memory_usage_bounded(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Memory usage should not grow unbounded with repeated calls."""
         import sys
 
         texts = _generate_texts(500)
-        # Get baseline
-        baseline = sys.getsizeof({})
         for text in texts:
-            analyzer.analyze(text)
-        # Verify analyzer state isn't growing excessively
-        analyzer_size = sys.getsizeof(analyzer.__dict__)
+            semantic_analyzer.analyze(text)
+        analyzer_size = sys.getsizeof(semantic_analyzer.__dict__)
         assert analyzer_size < 1_000_000, (
             f"Analyzer state too large: {analyzer_size} bytes"
         )
 
-    def test_throughput(self, analyzer: SemanticAnalyzer) -> None:
+    def test_throughput(self, semantic_analyzer: SemanticAnalyzer) -> None:
         """Should achieve at least 20 analyses per second."""
         texts = _generate_texts(100)
         start = time.perf_counter()
         for text in texts:
-            analyzer.analyze(text)
+            semantic_analyzer.analyze(text)
         elapsed = time.perf_counter() - start
         throughput = len(texts) / elapsed
         assert throughput >= 20, f"Throughput {throughput:.1f}/s < 20/s"
