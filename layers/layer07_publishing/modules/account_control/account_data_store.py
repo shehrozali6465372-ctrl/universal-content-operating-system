@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 
 from .account_registry import AccountRegistry
 
@@ -28,7 +27,9 @@ class AccountDataStore:
         path = self.registry.workspace_path(account_id) / f"{kind}.sqlite3"
         if not path.exists():
             raise RuntimeError(f"account workspace is not provisioned: {account_id}")
-        return sqlite3.connect(path)
+        db = sqlite3.connect(path, timeout=30)
+        db.execute("PRAGMA busy_timeout=30000")
+        return db
 
     def put(self, account_id: str, kind: str, key: str, value: Any) -> None:
         with self._db(account_id, kind) as db:
@@ -42,12 +43,25 @@ class AccountDataStore:
         return json.loads(row[0]) if row else default
 
     def append(self, account_id: str, kind: str, collection: str, value: Any) -> None:
+        """Atomically append to an account-local collection.
+
+        The old read/close/write sequence could lose events when two publishing
+        workers recorded outcomes at the same time. A write transaction with an
+        immediate lock keeps each account's event history lossless under normal
+        concurrent worker activity while retaining physical account isolation.
+        """
         key = f"collection:{collection}"
-        current = self.get(account_id, kind, key, [])
-        if not isinstance(current, list):
-            raise TypeError(f"account collection is not a list: {collection}")
-        current.append(value)
-        self.put(account_id, kind, key, current)
+        with self._db(account_id, kind) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+            current = json.loads(row[0]) if row else []
+            if not isinstance(current, list):
+                db.rollback()
+                raise TypeError(f"account collection is not a list: {collection}")
+            current.append(value)
+            db.execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, json.dumps(current, sort_keys=True)))
+            db.commit()
 
     def snapshot(self, account_id: str, kind: str) -> Dict[str, Any]:
         with self._db(account_id, kind) as db:
