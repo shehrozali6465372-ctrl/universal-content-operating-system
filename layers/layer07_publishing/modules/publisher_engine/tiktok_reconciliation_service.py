@@ -1,7 +1,5 @@
 """Account-aware TikTok reconciliation entrypoint."""
 from __future__ import annotations
-import os
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
@@ -31,14 +29,16 @@ class TikTokReconciliationService:
             accounts = self.registry.list(platform="tiktok", enabled_only=True)
 
         outcomes: list[Dict[str, Any]] = []
-        root = Path(os.environ.get("UCOS_ACCOUNT_WORKSPACES", "./data/accounts/workspaces"))
         for account in accounts:
             credentials = AccountCredentialResolver.resolve(account.credentials_ref)
             publisher = TikTokPublisher()
             if not credentials or not publisher.authenticate(credentials):
                 outcomes.append({"account_id": account.account_id, "status": "UNCONFIGURED", "reconciled": 0})
                 continue
-            guard = ContentRepetitionGuard(str(root / account.account_id / "publishing_history.sqlite3"))
+            # Always use the registry's canonical workspace path so sanitized or
+            # hashed account IDs cannot escape or collide with another account.
+            history_path = self.registry.workspace_path(account.account_id) / "publishing_history.sqlite3"
+            guard = ContentRepetitionGuard(str(history_path))
             results = TikTokReconciliation(guard).reconcile(publisher, account_id=account.account_id)
             outcomes.extend(results or [{"account_id": account.account_id, "status": "NO_PENDING", "reconciled": 0}])
         return outcomes
