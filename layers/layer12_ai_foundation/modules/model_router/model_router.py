@@ -1,27 +1,4 @@
-"""ModelRouter — AI Brain ko abstract kare keys se.
-
-Architecture:
-    AI Brain
-        │
-        ▼
-    ModelRouter        ← AI Brain sirf "text generate" ya "image generate" bole
-        │
-        ├── TextRouter → Any Healthy Key
-        ├── ImageRouter → Any Healthy Key
-        └── EmbeddingRouter → Any Healthy Key
-        │
-        ▼
-    KeyManager         ← Sirf auth, health, rate limits
-        │
-        ▼
-    Provider API
-
-Design Rules:
-    1. AI Brain ko kabhi pata nahi kaunsi key use ho rahi hai
-    2. Keys sirf credentials hain, routing logic router ki hai
-    3. Kal OpenAI/Claude/DeepSeek add karo — AI Brain mein koi change nahi
-    4. PromptBuilder aur KeyManager kabhi mix nahi honge
-"""
+"""ModelRouter — central provider routing with explicit failure semantics."""
 from __future__ import annotations
 import time
 import uuid
@@ -48,12 +25,9 @@ class ModelProvider(str, Enum):
 
 
 class ModelRequest:
-    """AI Brain ka request — keys ka koi mention nahi."""
-    __slots__ = ("request_id", "request_type", "prompt", "model", "parameters",
-                 "system_prompt", "metadata")
+    __slots__ = ("request_id", "request_type", "prompt", "model", "parameters", "system_prompt", "metadata")
 
-    def __init__(self, request_type: RequestType, prompt: str,
-                 model: str = "", **kwargs: Any) -> None:
+    def __init__(self, request_type: RequestType, prompt: str, model: str = "", **kwargs: Any) -> None:
         self.request_id = str(uuid.uuid4())[:12]
         self.request_type = request_type
         self.prompt = prompt
@@ -64,9 +38,7 @@ class ModelRequest:
 
 
 class ModelResponse:
-    """Provider ka response — router format kare."""
-    __slots__ = ("request_id", "content", "provider", "model_used",
-                 "tokens_used", "latency_ms", "metadata")
+    __slots__ = ("request_id", "content", "provider", "model_used", "tokens_used", "latency_ms", "metadata")
 
     def __init__(self, request_id: str, content: str = "") -> None:
         self.request_id = request_id
@@ -89,13 +61,9 @@ class ModelResponse:
 
 
 class ProviderAdapter:
-    """Kal naya provider add karna ho — sirf yeh adapter banaye."""
+    __slots__ = ("provider_name", "capabilities", "is_enabled", "handler", "config", "metadata")
 
-    __slots__ = ("provider_name", "capabilities", "is_enabled", "handler",
-                 "config", "metadata")
-
-    def __init__(self, provider_name: str, handler: Optional[Callable] = None,
-                 capabilities: Optional[List[RequestType]] = None) -> None:
+    def __init__(self, provider_name: str, handler: Optional[Callable] = None, capabilities: Optional[List[RequestType]] = None) -> None:
         self.provider_name = provider_name
         self.handler = handler
         self.capabilities = capabilities or [RequestType.TEXT, RequestType.CHAT]
@@ -107,19 +75,11 @@ class ProviderAdapter:
         return request_type in self.capabilities
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "provider": self.provider_name,
-            "enabled": self.is_enabled,
-            "capabilities": [c.value for c in self.capabilities],
-        }
+        return {"provider": self.provider_name, "enabled": self.is_enabled, "capabilities": [c.value for c in self.capabilities]}
 
 
 class ModelRouter:
-    """AI Brain ka single entry point.
-
-    AI Brain bole: "text generate karo" ya "image generate karo"
-    Router decide kare: kaunsa provider, kaunsi key, kaunsa model
-    """
+    """Single AI entry point; providers and credentials remain behind the router."""
 
     def __init__(self, key_manager: Any = None) -> None:
         self._key_manager = key_manager
@@ -129,9 +89,7 @@ class ModelRouter:
         self._fallback_enabled = True
         self._max_retries = 3
 
-    def register_provider(self, provider_name: str,
-                          handler: Optional[Callable] = None,
-                          capabilities: Optional[List[RequestType]] = None) -> ProviderAdapter:
+    def register_provider(self, provider_name: str, handler: Optional[Callable] = None, capabilities: Optional[List[RequestType]] = None) -> ProviderAdapter:
         adapter = ProviderAdapter(provider_name, handler, capabilities)
         self._providers[provider_name] = adapter
         return adapter
@@ -140,31 +98,24 @@ class ModelRouter:
         if provider_name in self._providers:
             del self._providers[provider_name]
             for rtype in self._routing_table:
-                self._routing_table[rtype] = [
-                    p for p in self._routing_table[rtype] if p != provider_name
-                ]
+                self._routing_table[rtype] = [p for p in self._routing_table[rtype] if p != provider_name]
             return True
         return False
 
-    def set_routing(self, request_type: RequestType,
-                    provider_order: List[str]) -> None:
-        """Routing priority set karo."""
+    def set_routing(self, request_type: RequestType, provider_order: List[str]) -> None:
         self._routing_table[request_type] = provider_order
 
     def _select_provider(self, request_type: RequestType) -> Optional[ProviderAdapter]:
-        """Best provider select karo for this request type."""
-        order = self._routing_table.get(request_type, [])
-        for provider_name in order:
+        for provider_name in self._routing_table.get(request_type, []):
             adapter = self._providers.get(provider_name)
-            if adapter and adapter.is_enabled and adapter.supports(request_type):
+            if adapter and adapter.is_enabled and adapter.supports(request_type) and adapter.handler:
                 return adapter
         for adapter in self._providers.values():
-            if adapter.is_enabled and adapter.supports(request_type):
+            if adapter.is_enabled and adapter.supports(request_type) and adapter.handler:
                 return adapter
         return None
 
-    def _record(self, request: ModelRequest, provider: str, status: str,
-                latency_ms: float, error: str = "") -> None:
+    def _record(self, request: ModelRequest, provider: str, status: str, latency_ms: float, error: str = "") -> None:
         self._history.append({
             "request_id": request.request_id,
             "type": request.request_type.value,
@@ -176,12 +127,18 @@ class ModelRouter:
         })
 
     @staticmethod
-    def _apply_result(response: ModelResponse, result: Any, adapter: ProviderAdapter,
-                      request: ModelRequest) -> ModelResponse:
+    def _apply_result(response: ModelResponse, result: Any, adapter: ProviderAdapter, request: ModelRequest) -> ModelResponse:
         if isinstance(result, ModelResponse):
             response = result
         elif isinstance(result, str):
             response.content = result
+        elif isinstance(result, dict):
+            response.content = result.get("content", result.get("text", ""))
+            response.model_used = result.get("model", "")
+            response.tokens_used = result.get("tokens_used", 0) or 0
+            response.metadata.update(result.get("metadata", {}) or {})
+            if result.get("error"):
+                raise RuntimeError(str(result["error"]))
         else:
             raise RuntimeError("provider returned unsupported response type")
         if not (response.content or "").strip():
@@ -191,17 +148,12 @@ class ModelRouter:
         return response
 
     def route(self, request: ModelRequest) -> ModelResponse:
-        """AI Brain ka request route karo.
-
-        AI Brain ko sirf ModelResponse milegi.
-        Keys, providers, routing — sab internal hai.
-        """
         start = time.time()
         attempted: set[str] = set()
         failures: List[str] = []
-
         primary = self._select_provider(request.request_type)
-        if primary and primary.handler:
+
+        if primary:
             attempted.add(primary.provider_name)
             try:
                 response = self._apply_result(ModelResponse(request.request_id), primary.handler(request), primary, request)
@@ -230,32 +182,23 @@ class ModelRouter:
 
         detail = "; ".join(failures) if failures else "no enabled provider with a handler"
         response = ModelResponse(request.request_id)
-        response.provider = primary.provider_name if primary else ""
+        response.provider = ""
         response.latency_ms = (time.time() - start) * 1000
-        response.content = "No available provider for this request type"
         response.metadata["error"] = detail
-        self._record(request, response.provider, "failed", response.latency_ms, detail)
+        self._record(request, "", "failed", response.latency_ms, detail)
         return response
 
-    def generate_text(self, prompt: str, model: str = "",
-                      **kwargs: Any) -> ModelResponse:
-        request = ModelRequest(RequestType.TEXT, prompt, model, **kwargs)
-        return self.route(request)
+    def generate_text(self, prompt: str, model: str = "", **kwargs: Any) -> ModelResponse:
+        return self.route(ModelRequest(RequestType.TEXT, prompt, model, **kwargs))
 
-    def generate_chat(self, messages: List[Dict[str, str]], model: str = "",
-                      **kwargs: Any) -> ModelResponse:
-        request = ModelRequest(RequestType.CHAT, str(messages), model, **kwargs)
-        return self.route(request)
+    def generate_chat(self, messages: List[Dict[str, str]], model: str = "", **kwargs: Any) -> ModelResponse:
+        return self.route(ModelRequest(RequestType.CHAT, str(messages), model, **kwargs))
 
-    def generate_image(self, prompt: str, model: str = "",
-                       **kwargs: Any) -> ModelResponse:
-        request = ModelRequest(RequestType.IMAGE, prompt, model, **kwargs)
-        return self.route(request)
+    def generate_image(self, prompt: str, model: str = "", **kwargs: Any) -> ModelResponse:
+        return self.route(ModelRequest(RequestType.IMAGE, prompt, model, **kwargs))
 
-    def generate_embedding(self, text: str, model: str = "",
-                           **kwargs: Any) -> ModelResponse:
-        request = ModelRequest(RequestType.EMBEDDING, text, model, **kwargs)
-        return self.route(request)
+    def generate_embedding(self, text: str, model: str = "", **kwargs: Any) -> ModelResponse:
+        return self.route(ModelRequest(RequestType.EMBEDDING, text, model, **kwargs))
 
     def list_providers(self) -> List[Dict[str, Any]]:
         return [p.to_dict() for p in self._providers.values()]
@@ -264,14 +207,7 @@ class ModelRouter:
         total = len(self._history)
         success = sum(1 for h in self._history if h["status"] == "success")
         providers_used = set(h["provider"] for h in self._history if h["provider"])
-        return {
-            "total_requests": total,
-            "success": success,
-            "failed": total - success,
-            "success_rate": round(success / max(total, 1) * 100, 1),
-            "providers_used": list(providers_used),
-            "providers_registered": len(self._providers),
-        }
+        return {"total_requests": total, "success": success, "failed": total - success, "success_rate": round(success / max(total, 1) * 100, 1), "providers_used": list(providers_used), "providers_registered": len(self._providers)}
 
     def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         return self._history[-limit:]
