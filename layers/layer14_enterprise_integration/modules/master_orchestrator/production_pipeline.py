@@ -45,10 +45,19 @@ class ProductionPipeline(PipelineWiring):
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
         account_id=str(req.metadata.get("account_id") or "")
         if not account_id: raise RuntimeError("production publishing requires account_id")
+        # Defense in depth: the production publisher must only operate on an actually
+        # provisioned, enabled account whose registered platform matches the request.
+        registry=AccountRegistry()
+        account=registry.get(account_id)
+        if account is None: raise RuntimeError(f"account {account_id!r} is not registered")
+        if not account.enabled: raise RuntimeError(f"account {account_id!r} is disabled")
+        if account.platform != req.platform: raise RuntimeError(f"account {account_id!r} is registered for {account.platform}, not {req.platform}")
+        if not str(req.metadata.get("credentials_ref") or account.credentials_ref):
+            raise RuntimeError(f"account {account_id!r} has no credential reference")
         self._policy_check(req,response)
         # Resolve the canonical provisioned workspace instead of interpolating account_id into a path.
         # This preserves collision/path-traversal protection for IDs containing separators or unsafe chars.
-        workspace=AccountRegistry().workspace_path(account_id)
+        workspace=registry.workspace_path(account_id)
         guard=ContentRepetitionGuard(str(workspace/"publishing_history.sqlite3"))
         reservation=guard.reserve(account_id=account_id,platform=req.platform,content=response.text,template_id=req.metadata.get("template_id"))
         retries=0
