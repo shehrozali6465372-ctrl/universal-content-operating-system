@@ -230,9 +230,11 @@ class ModelRouter:
 
         detail = "; ".join(failures) if failures else "no enabled provider with a handler"
         response = ModelResponse(request.request_id)
+        response.provider = primary.provider_name if primary else ""
         response.latency_ms = (time.time() - start) * 1000
+        response.content = "No available provider for this request type"
         response.metadata["error"] = detail
-        self._record(request, "", "failed", response.latency_ms, detail)
+        self._record(request, response.provider, "failed", response.latency_ms, detail)
         return response
 
     def generate_text(self, prompt: str, model: str = "",
