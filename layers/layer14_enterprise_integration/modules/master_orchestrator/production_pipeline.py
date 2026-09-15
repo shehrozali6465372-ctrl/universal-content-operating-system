@@ -16,11 +16,12 @@ class ProductionPipeline(PipelineWiring):
         credentials=AccountCredentialResolver.resolve(credentials_ref)
         if not credentials: return {}
         if platform=="facebook": return {"page_id":credentials.get("page_id",credentials.get("account_id","")),"access_token":credentials.get("access_token","")}
-        if platform=="instagram": return {"account_id":credentials.get("account_id",""),"access_token":credentials.get("access_token","")}
+        if platform=="instagram": return {"account_id":credentials.get("account_id","") ,"access_token":credentials.get("access_token","")}
         if platform=="pinterest": return {"access_token":credentials.get("access_token",credentials.get("token","")),"board_id":credentials.get("board_id","")}
         if platform=="youtube": return {"access_token":credentials.get("access_token",credentials.get("token",""))}
         if platform=="tiktok": return {"access_token":credentials.get("access_token",credentials.get("token",""))}
         return {}
+
     def _publisher(self, req: ContentRequest):
         from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
         manager=PublisherManager(); publisher=manager.plugin_manager.registry.get_instance(req.platform); account_id=req.metadata.get("account_id"); credentials_ref=req.metadata.get("credentials_ref")
@@ -28,6 +29,7 @@ class ProductionPipeline(PipelineWiring):
         credentials=self._credentials(req.platform,str(account_id),str(credentials_ref))
         if not credentials or not publisher.authenticate(credentials): return None,manager
         return manager,publisher
+
     def _policy_check(self, req: ContentRequest, response: ContentResponse) -> None:
         registry=ensure_default_snapshots(PolicyRegistry()); policy=registry.get(req.platform,req.metadata.get("policy_version"))
         if policy is None: raise RuntimeError(f"no policy snapshot registered for {req.platform}; production publishing blocked")
@@ -36,6 +38,7 @@ class ProductionPipeline(PipelineWiring):
         max_len=policy.constraints.get("max_length")
         if max_len is not None and len(response.text)>int(max_len): raise RuntimeError(f"content exceeds policy max_length={max_len}")
         response.quality_report=(response.quality_report or {})|{"policy_version":policy.version,"policy_source":policy.source,"policy_scope":policy.content_gate.get("scope")}
+
     def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str,Any]) -> Dict[str,Any]:
         from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
@@ -68,10 +71,23 @@ class ProductionPipeline(PipelineWiring):
         if media_for_api:
             asset=MediaAsset(file_path=media_for_api,media_type="video" if req.metadata.get("content_type")=="video" else "image"); asset.file_name=str(media_for_api).rsplit("/",1)[-1]; asset.platform_ready=True; request.media_assets.append(asset)
         try:
-            result=manager.publish(request); data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id,"url":result.url,"error":result.error_message}; response.publish_result=data
-            if result.success: guard.finalize(reservation.reservation_id,result.post_id); response.publish_package=request.to_dict(); ctx["post_id"]=result.post_id; return data
-            guard.release(reservation.reservation_id); raise RuntimeError(result.error_message or "publisher returned failure")
+            result=manager.publish(request)
+            data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id or None,"url":result.url or None,"error":result.error_message,"metadata":result.metadata}
+            response.publish_result=data
+            if result.success:
+                guard.finalize(reservation.reservation_id,result.post_id); response.publish_package=request.to_dict(); ctx["post_id"]=result.post_id; return data
+            if result.metadata.get("publish_state") in {"processing","pending"} and result.metadata.get("tracking_id"):
+                tracking_id=str(result.metadata["tracking_id"])
+                guard.mark_pending(reservation.reservation_id,tracking_id)
+                data.update({"pending":True,"tracking_id":tracking_id})
+                response.publish_result=data
+                return {"published":False,"pending":True,"platform":req.platform,"tracking_id":tracking_id,"reason":"awaiting_platform_confirmation"}
+            guard.release(reservation.reservation_id)
+            raise RuntimeError(result.error_message or "publisher returned failure")
         except Exception:
-            try: guard.release(reservation.reservation_id)
-            except Exception: pass
+            # Pending submissions deliberately retain their reservation so a retry
+            # cannot duplicate an asynchronously accepted platform operation.
+            if not response.publish_result.get("pending"):
+                try: guard.release(reservation.reservation_id)
+                except Exception: pass
             raise
