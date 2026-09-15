@@ -1,4 +1,4 @@
-"""Plugin Manager — Orchestrates plugin operations."""
+"""Plugin Manager — Orchestrates platform plugin operations."""
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
@@ -12,11 +12,28 @@ from layers.layer07_publishing.modules.platform_plugin_manager.exceptions import
 
 
 class PluginManager:
-    """Manage platform plugins: registration, auth, publish, capabilities."""
+    """Manage platform plugins with a single canonical registry.
+
+    Built-in publishers are registered here so callers cannot accidentally
+    construct an empty registry and report a platform as supported when no
+    publisher is actually available.
+    """
 
     def __init__(self, registry: Optional[PluginRegistry] = None) -> None:
         self.registry = registry or PluginRegistry()
         self._operation_count = 0
+        self._register_builtin_plugins()
+
+    def _register_builtin_plugins(self) -> None:
+        """Register publishers that are shipped with UCOS."""
+        if not self.registry.is_registered("facebook"):
+            try:
+                from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
+                self.registry.register("facebook", FacebookPublisher)
+            except Exception:
+                # Keep the manager importable if an optional platform module
+                # is unavailable; publishing will fail explicitly at runtime.
+                pass
 
     def register(self, platform: str, publisher_class: type) -> None:
         self.registry.register(platform, publisher_class)
