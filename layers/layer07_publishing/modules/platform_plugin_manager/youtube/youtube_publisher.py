@@ -65,4 +65,4 @@ class YouTubePublisher(BasePublisher):
         req=urllib.request.Request(url,data=json.dumps(body).encode() if body is not None else None,method=method,headers={"Authorization":f"Bearer {self.token}","Content-Type":"application/json"})
         try:
             with urllib.request.urlopen(req,timeout=60) as resp: return json.loads(resp.read().decode()) if resp.readable() else {}
-        except urllib.error.HTTPError as e: raise RuntimeError(f"YouTube HTTP {e.code}: {e.read().decode('utf-8','replace')[:1000]})
+        except urllib.error.HTTPError as e: raise RuntimeError(f"YouTube HTTP {e.code}: {e.read().decode('utf-8','replace')[:1000]}")
