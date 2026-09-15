@@ -1,6 +1,6 @@
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
-import json, os, time, threading, glob
+import hmac, json, os, time, threading, glob
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse, parse_qs
@@ -24,13 +24,25 @@ class APIGateway:
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
         self._routes={"GET /status":self._handle_status,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile}
+    def _requires_auth(self) -> bool:
+        return self._host not in {"127.0.0.1", "localhost", "::1"}
+    def _authorized(self, headers: Any) -> bool:
+        if not self._requires_auth(): return True
+        configured=os.getenv("UCOS_API_TOKEN", "").strip()
+        if not configured: return False
+        supplied=str(headers.get("Authorization", ""))
+        return hmac.compare_digest(supplied, f"Bearer {configured}")
     def start(self):
         gateway=self
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                gateway._request_count+=1; parsed=urlparse(self.path); path=parsed.path.rstrip("/"); response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
+                gateway._request_count+=1
+                if not gateway._authorized(self.headers): self._send(APIResponse(401,error="API authentication required")); return
+                parsed=urlparse(self.path); path=parsed.path.rstrip("/"); response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
             def do_POST(self):
-                gateway._request_count+=1; parsed=urlparse(self.path); path=parsed.path.rstrip("/"); n=int(self.headers.get("Content-Length",0)); raw=self.rfile.read(n) if n else b""
+                gateway._request_count+=1
+                if not gateway._authorized(self.headers): self._send(APIResponse(401,error="API authentication required")); return
+                parsed=urlparse(self.path); path=parsed.path.rstrip("/"); n=int(self.headers.get("Content-Length",0)); raw=self.rfile.read(n) if n else b""
                 try: data=json.loads(raw) if raw else {}
                 except json.JSONDecodeError: data={}
                 response=gateway._routes.get(f"POST {path}",lambda d:APIResponse(404,error=f"Endpoint not found: {path}"))(data); self._send(response)
