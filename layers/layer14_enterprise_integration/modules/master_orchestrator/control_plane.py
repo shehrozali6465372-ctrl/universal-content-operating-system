@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
-from layers.layer07_publishing.modules.account_control.decision_engine import DecisionEngine
+from layers.layer07_publishing.modules.account_control.decision_engine import Decision, DecisionEngine
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
 from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import ContentRequest, PipelineWiring
 
@@ -28,11 +28,16 @@ class ControlPlane:
                 raise LookupError(f"unknown or disabled account_id: {account_id}")
             if platform and account.platform != platform.strip().lower():
                 raise ValueError(f"account {account_id} belongs to {account.platform}, not {platform}")
-            decision = self.decisions.decide(topic, platform=account.platform)
-            # Explicit account selection always wins over automatic selection.
-            decision = decision.__class__(account.account_id, account.platform, account.niche, decision.topic,
-                                          decision.content_type, decision.product, decision.affiliate,
-                                          decision.policy_version, ["explicit account_id"])
+            policy = self.policies.get(account.platform)
+            decision = Decision(
+                account_id=account.account_id,
+                platform=account.platform,
+                niche=account.niche,
+                topic=topic.strip(),
+                content_type=self.decisions.choose_content_type(account, topic),
+                policy_version=policy.version if policy else None,
+                reasons=["explicit account_id"],
+            )
         elif accounts:
             decision = self.decisions.decide(topic, platform=platform)
         else:
