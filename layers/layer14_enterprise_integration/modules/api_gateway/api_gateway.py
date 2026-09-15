@@ -122,7 +122,7 @@ class APIGateway:
             if error: return error
             from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
             store=AccountDataStore(); history=store.get(account_id,"content","collection:execution_history",[])
-            template_history=[{"template_id":entry.get("template_id"),"topic":entry.get("topic"),"platform":entry.get("platform"),"timestamp":entry.get("timestamp")} for entry in history if entry.get("template_id")]
+            template_history=[{"template_fingerprint":entry.get("template_fingerprint"),"topic":entry.get("topic"),"platform":entry.get("platform"),"timestamp":entry.get("timestamp")} for entry in history if entry.get("template_fingerprint")]
             return APIResponse(data={"scope":"account","account_id":account_id,"rankings":template_history,"count":len(template_history)})
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_platforms(self,params):
