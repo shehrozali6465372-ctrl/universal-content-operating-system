@@ -1,3 +1,6 @@
-"""Facebook Graph API Publisher Plugin."""
-from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
-__all__ = ["FacebookPublisher"]
+"""Facebook publishing integration."""
+
+from .facebook_publisher import FacebookPublisher
+from .facebook_page_connection import FacebookPageConnection, FacebookPagePublisher
+
+__all__ = ["FacebookPublisher", "FacebookPageConnection", "FacebookPagePublisher"]
