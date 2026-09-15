@@ -24,10 +24,15 @@ class DecisionEngine:
     @staticmethod
     def _score(account:AccountSpec,topic:str)->int:
         return int(hashlib.sha256(f"{account.account_id}|{topic}".encode()).hexdigest()[:12],16)
-    def choose_account(self,topic:str,platform:Optional[str]=None)->AccountSpec:
+    def choose_account(self,topic:str,platform:Optional[str]=None,learning_scores:Optional[Dict[str,float]]=None)->AccountSpec:
         accounts=self.registry.list(platform=platform,enabled_only=True)
         if not accounts: raise LookupError(f"no enabled account configured for platform={platform or '*'}")
-        return max(accounts,key=lambda account:self._score(account,topic))
+        scores=learning_scores or {}
+        def rank(account:AccountSpec):
+            base=self._score(account,topic)
+            learned=max(0.0,min(1.0,float(scores.get(account.account_id,0.0))))
+            return (learned>0.0, learned, base)
+        return max(accounts,key=rank)
     def choose_content_type(self,account:AccountSpec,topic:str)->str:
         allowed=set(account.capabilities or ["post"]); policy=self.policies.get(account.platform); policy_types=set((policy.constraints.get("content_types") if policy else None) or allowed)
         intersection=allowed & policy_types
@@ -35,7 +40,9 @@ class DecisionEngine:
         for value in ("video","photo","post"):
             if value in intersection: return value
         return sorted(intersection)[0]
-    def decide(self,topic:str,platform:Optional[str]=None,product:Optional[Dict[str,Any]]=None,affiliate:Optional[Dict[str,Any]]=None)->Decision:
+    def decide(self,topic:str,platform:Optional[str]=None,product:Optional[Dict[str,Any]]=None,affiliate:Optional[Dict[str,Any]]=None,learning_scores:Optional[Dict[str,float]]=None)->Decision:
         if not topic.strip(): raise ValueError("topic is required")
-        account=self.choose_account(topic,platform); policy=self.policies.get(account.platform)
-        return Decision(account_id=account.account_id,platform=account.platform,niche=account.niche,topic=topic.strip(),content_type=self.choose_content_type(account,topic),product=product,affiliate=affiliate,policy_version=policy.version if policy else None,reasons=["enabled account","platform/niche match","capability/policy intersection"])
+        account=self.choose_account(topic,platform,learning_scores=learning_scores); policy=self.policies.get(account.platform)
+        reasons=["enabled account","platform/niche match","capability/policy intersection"]
+        if account.account_id in (learning_scores or {}): reasons.append("account-local learning feedback")
+        return Decision(account_id=account.account_id,platform=account.platform,niche=account.niche,topic=topic.strip(),content_type=self.choose_content_type(account,topic),product=product,affiliate=affiliate,policy_version=policy.version if policy else None,reasons=reasons)
