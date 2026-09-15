@@ -1,6 +1,7 @@
 """Dynamic UCOS account registry and per-account workspace provisioning."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,7 +49,15 @@ class AccountRegistry:
             db.execute("CREATE INDEX IF NOT EXISTS idx_accounts_niche ON accounts(niche)")
 
     @staticmethod
-    def _safe(value: str) -> str: return _SAFE.sub("_", value.strip())[:120] or "account"
+    def _safe(value: str) -> str:
+        original = value.strip()
+        safe = _SAFE.sub("_", original)[:120] or "account"
+        # Sanitisation must never merge two distinct account IDs into one workspace.
+        if safe != original or len(original) > 120:
+            digest = hashlib.sha256(original.encode("utf-8")).hexdigest()[:12]
+            safe = f"{safe[:100]}-{digest}"
+        return safe
+
     def workspace_path(self, account_id: str) -> Path: return self.root / self._safe(account_id)
 
     def register(self, spec: AccountSpec) -> Path:
