@@ -20,7 +20,7 @@ class APIGateway:
     SUPPORTED_PLATFORMS=["facebook","instagram","linkedin","twitter","youtube","tiktok","pinterest","threads","medium","wordpress","telegram","discord","reddit","binance_square"]
     VERSION="6.0.0"
     LAYER_COUNT=23
-    def __init__(self,host:str="0.0.0.0",port:int=8000):
+    def __init__(self,host:str="127.0.0.1",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
         self._routes={"GET /status":self._handle_status,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms}
