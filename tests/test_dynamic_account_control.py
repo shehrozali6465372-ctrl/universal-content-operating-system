@@ -8,6 +8,8 @@ from layers.layer07_publishing.modules.account_control.decision_engine import De
 from layers.layer07_publishing.modules.account_control.policy_registry import PlatformPolicy, PolicyRegistry
 from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 from layers.layer10_monetization.modules.product_affiliate_selector import ProductAffiliateSelector, ProductCandidate
+from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import ContentRequest, ContentResponse
+import layers.layer14_enterprise_integration.modules.master_orchestrator.production_pipeline as production_pipeline
 
 
 def test_new_account_is_fully_provisioned_and_isolated():
@@ -104,3 +106,21 @@ def test_product_selector_never_invents_unverified_products():
     assert selected["product_id"] == "x"
     assert selected["conversion"] == "UNKNOWN"
     assert selected["sales"] == "UNKNOWN"
+
+
+def test_production_pipeline_rejects_credentials_from_another_account(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        registry = AccountRegistry(str(root / "accounts.sqlite3"), str(root / "workspaces"))
+        registry.register(AccountSpec("account-a", "facebook", "fitness", credentials_ref="account_a"))
+        monkeypatch.setattr(production_pipeline, "AccountRegistry", lambda: registry)
+        req = ContentRequest("secure publishing test", platform="facebook", include_image=False)
+        req.metadata.update({"account_id": "account-a", "credentials_ref": "account_b", "content_type": "post"})
+        response = ContentResponse(req)
+        response.text = "A real account-scoped publishing test."
+        try:
+            production_pipeline.ProductionPipeline()._publish(req, response, {})
+        except RuntimeError as exc:
+            assert "credentials_ref does not belong" in str(exc)
+        else:
+            raise AssertionError("cross-account credentials_ref was accepted")
