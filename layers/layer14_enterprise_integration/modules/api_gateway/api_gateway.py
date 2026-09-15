@@ -1,8 +1,8 @@
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
-import json, os, time, threading
+import json, os, time, threading, glob
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlparse, parse_qs
 
 class APIResponse:
@@ -18,6 +18,8 @@ class APIResponse:
 
 class APIGateway:
     SUPPORTED_PLATFORMS=["facebook","instagram","linkedin","twitter","youtube","tiktok","pinterest","threads","medium","wordpress","telegram","discord","reddit","binance_square"]
+    VERSION="6.0.0"
+    LAYER_COUNT=23
     def __init__(self,host:str="0.0.0.0",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
@@ -43,7 +45,8 @@ class APIGateway:
     def stop(self):
         if self._server: self._server.shutdown(); self._running=False
     def is_running(self): return self._running
-    def _handle_status(self,params): return APIResponse(data={"version":"6.0.0","status":"running","gateway_requests":self._request_count,"platforms":self.SUPPORTED_PLATFORMS})
+    def _handle_status(self,params):
+        return APIResponse(data={"version":self.VERSION,"status":"running","layers":self.LAYER_COUNT,"gateway_requests":self._request_count,"platforms":self.SUPPORTED_PLATFORMS})
     def _handle_health(self,params):
         checks={"api":"healthy","database":"unknown"}
         try:
@@ -66,9 +69,8 @@ class APIGateway:
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_stats(self,params):
         try:
-            import glob
             layers=sorted(glob.glob("layers/layer*/")); files=sum(len(glob.glob(f"{d}**/*.py",recursive=True)) for d in layers); tests=len(glob.glob("tests/**/test_*.py",recursive=True))
-            return APIResponse(data={"version":"6.0.0","layers":len(layers),"source_files":files,"test_files":tests})
+            return APIResponse(data={"version":self.VERSION,"layers":len(layers),"source_files":files,"test_files":tests})
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_generate(self,data):
         topic=data.get("topic","artificial intelligence"); platform=data.get("platform"); account_id=data.get("account_id"); tone=data.get("tone","professional"); style=data.get("style","educational"); include_image=bool(data.get("include_image",True))
