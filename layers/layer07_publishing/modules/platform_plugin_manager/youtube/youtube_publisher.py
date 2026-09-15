@@ -10,7 +10,9 @@ class YouTubePublisher(BasePublisher):
     def get_capabilities(self):
         c=PlatformCapabilities(); c.supports_video=True; c.supports_analytics=True; c.supports_edit=True; c.supports_delete=True; c.max_length=5000; c.features=["video_upload","video_metadata","statistics"]; return c
     def authenticate(self, credentials):
-        self.token=credentials.get("access_token") or os.getenv("YOUTUBE_ACCESS_TOKEN","")
+        # Credentials are account-scoped. Never fall back to process-wide environment state.
+        self.token=credentials.get("access_token", "")
+        self.authenticated=False
         if not self.token: return False
         try: self.authenticated=bool(self._get("/channels",{"part":"id","mine":"true"}).get("items"))
         except Exception: self.authenticated=False
@@ -63,4 +65,4 @@ class YouTubePublisher(BasePublisher):
         req=urllib.request.Request(url,data=json.dumps(body).encode() if body is not None else None,method=method,headers={"Authorization":f"Bearer {self.token}","Content-Type":"application/json"})
         try:
             with urllib.request.urlopen(req,timeout=60) as resp: return json.loads(resp.read().decode()) if resp.readable() else {}
-        except urllib.error.HTTPError as e: raise RuntimeError(f"YouTube HTTP {e.code}: {e.read().decode('utf-8','replace')[:1000]}")
+        except urllib.error.HTTPError as e: raise RuntimeError(f"YouTube HTTP {e.code}: {e.read().decode('utf-8','replace')[:1000]})
