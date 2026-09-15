@@ -192,7 +192,8 @@ class PipelineWiring:
         report = ContentQualityAnalyzer().analyze(response.text, platform=req.platform)
         response.quality_score = float(getattr(report, "overall_score", 0.0))
         response.quality_report = report.to_dict() if hasattr(report, "to_dict") else {}
-        if response.quality_score < 5.0:
+        # Quality analyzer returns a normalized 0..1 score. Keep the gate on the same scale.
+        if response.quality_score < 0.7:
             raise RuntimeError(f"Quality gate rejected content: score={response.quality_score}")
         return {"quality_score": response.quality_score}
 
