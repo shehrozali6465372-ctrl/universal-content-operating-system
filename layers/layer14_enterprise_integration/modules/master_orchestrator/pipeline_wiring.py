@@ -100,11 +100,13 @@ class PipelineWiring:
         self._logger = PipelineLogger()
         self._key_manager = None
         self._gemini = None
+        self._router = None
         self._init_ai()
 
     def _init_ai(self) -> None:
         try:
             from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager
+            from layers.layer12_ai_foundation.modules.model_router.model_router import ModelResponse, ModelRouter, RequestType
             from layers.layer12_ai_foundation.modules.model_router.gemini_provider import GeminiProvider
             self._key_manager = KeyManager()
             for idx, (env_name, secret_name) in enumerate(_GEMINI_KEYS, 1):
@@ -112,8 +114,32 @@ class PipelineWiring:
                 if key:
                     self._key_manager.register_key(f"k{idx}", key, "gemini")
             self._gemini = GeminiProvider(self._key_manager)
+            self._router = ModelRouter(self._key_manager)
+
+            def gemini_handler(request):
+                result = self._gemini.generate(
+                    request.prompt,
+                    model=request.model,
+                    system_prompt=request.system_prompt,
+                    **request.parameters,
+                )
+                content = (result.get("content") or "").strip()
+                if not content:
+                    raise RuntimeError(result.get("error") or "Gemini returned empty content")
+                response = ModelResponse(request.request_id, content)
+                response.provider = result.get("provider", "gemini")
+                response.model_used = result.get("model", request.model or "gemini")
+                response.tokens_used = int(result.get("tokens_used") or 0)
+                response.metadata = {"raw_provider": result.get("provider", "gemini")}
+                return response
+
+            self._router.register_provider("gemini", handler=gemini_handler,
+                                           capabilities=[RequestType.TEXT, RequestType.CHAT])
+            self._router.set_routing(RequestType.TEXT, ["gemini"])
+            self._router.set_routing(RequestType.CHAT, ["gemini"])
         except Exception as exc:
             self._logger.log("L12-AI", f"init unavailable: {exc}")
+            self._router = None
 
     def _run_step(self, response: ContentResponse, layer: str, fn, required: bool = True) -> bool:
         step = PipelineStepResult(layer)
@@ -156,7 +182,8 @@ class PipelineWiring:
 
     def _ai(self, req: ContentRequest, ctx: Dict[str, Any], response: ContentResponse) -> Dict[str, Any]:
         keywords = ", ".join(map(str, ctx.get("keywords", [])[:8]))
-        configured = bool(self._gemini and self._key_manager and self._key_manager.get_stats().get("total_keys", 0))
+        configured = bool(self._router and self._gemini and self._key_manager and
+                          self._key_manager.get_stats().get("total_keys", 0))
         if not configured:
             response.text = (f"{req.topic}\n\nKey points to investigate and explain: {keywords or req.topic}.\n\n"
                              "Offline draft only; connect a configured AI provider before production publishing.")[:req.max_length]
@@ -165,13 +192,19 @@ class PipelineWiring:
         prompt = (f"Create a high-quality {req.platform} {req.style} post about: {req.topic}\n\n"
                   f"Tone: {req.tone}\nKeywords: {keywords}\nMaximum length: {req.max_length} characters.\n"
                   "Use accurate information; do not invent statistics or sources. Return only the final post.")
-        result = self._gemini.generate(prompt, system_prompt=f"You are an expert {req.platform} content writer.")
-        content = (result.get("content") or "").strip()
+        routed = self._router.generate_text(
+            prompt,
+            system_prompt=f"You are an expert {req.platform} content writer.",
+        )
+        content = (routed.content or "").strip()
         if not content:
-            raise RuntimeError("L12 returned empty content")
+            detail = routed.metadata.get("error", "No provider returned content")
+            raise RuntimeError(f"L12 AI routing failed: {detail}")
         response.text = content[:req.max_length].rstrip()
-        ctx["ai_model"] = result.get("model", "gemini")
-        return {"model": ctx["ai_model"], "content_length": len(response.text)}
+        ctx["ai_model"] = routed.model_used or "gemini"
+        ctx["ai_provider"] = routed.provider or "gemini"
+        return {"model": ctx["ai_model"], "provider": ctx["ai_provider"],
+                "content_length": len(response.text), "router_request_id": routed.request_id}
 
     def _image(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
         if not req.include_image:
@@ -192,7 +225,6 @@ class PipelineWiring:
         report = ContentQualityAnalyzer().analyze(response.text, platform=req.platform)
         response.quality_score = float(getattr(report, "overall_score", 0.0))
         response.quality_report = report.to_dict() if hasattr(report, "to_dict") else {}
-        # Quality analyzer returns a normalized 0..1 score. Keep the gate on the same scale.
         if response.quality_score < 0.7:
             raise RuntimeError(f"Quality gate rejected content: score={response.quality_score}")
         return {"quality_score": response.quality_score}
@@ -260,7 +292,7 @@ class PipelineWiring:
         lesson.description = (f"quality={response.quality_score}; published="
                               f"{bool(response.publish_result and response.publish_result.get('success'))}; "
                               f"analytics={response.analytics if response.analytics is not None else 'UNKNOWN'}")
-        lesson.confidence = max(0.0, min(1.0, response.quality_score / 10.0))
+        lesson.confidence = max(0.0, min(1.0, response.quality_score))
         lesson.platform = req.platform
         lesson.category = req.tone
         entry = LearningMemory().store_lesson(lesson)
@@ -308,5 +340,6 @@ class PipelineWiring:
 
     def status(self) -> Dict[str, Any]:
         stats = self._key_manager.get_stats() if self._key_manager else {}
-        return {"pipeline": "canonical", "ai_engine": "gemini" if self._gemini else "unavailable",
+        return {"pipeline": "canonical", "ai_engine": "model-router/gemini" if self._router else "unavailable",
+                "ai_router_providers": self._router.list_providers() if self._router else [],
                 "api_keys_configured": stats.get("total_keys", 0), "healthy_keys": stats.get("healthy", 0)}
