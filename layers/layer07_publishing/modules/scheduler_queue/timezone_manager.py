@@ -33,7 +33,7 @@ class TimezoneManager:
     def get_local_hour(self, timestamp: float, tz: str = "") -> int:
         tz = tz or self._default_tz
         local_ts = self.to_local(timestamp, tz)
-        return datetime.datetime.utcfromtimestamp(local_ts).hour
+        return datetime.datetime.fromtimestamp(local_ts, datetime.UTC).hour
 
     def is_business_hours(self, timestamp: float, tz: str = "", start: int = 9, end: int = 17) -> bool:
         hour = self.get_local_hour(timestamp, tz)
