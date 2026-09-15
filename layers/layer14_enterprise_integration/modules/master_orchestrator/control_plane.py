@@ -29,38 +29,34 @@ class ControlPlane:
             if platform and account.platform != platform.strip().lower():
                 raise ValueError(f"account {account_id} belongs to {account.platform}, not {platform}")
             policy = self.policies.get(account.platform)
-            decision = Decision(
-                account_id=account.account_id,
-                platform=account.platform,
-                niche=account.niche,
-                topic=topic.strip(),
-                content_type=self.decisions.choose_content_type(account, topic),
-                policy_version=policy.version if policy else None,
-                reasons=["explicit account_id"],
-            )
+            decision = Decision(account_id=account.account_id, platform=account.platform, niche=account.niche,
+                                topic=topic.strip(), content_type=self.decisions.choose_content_type(account, topic),
+                                policy_version=policy.version if policy else None, reasons=["explicit account_id"])
         elif accounts:
             decision = self.decisions.decide(topic, platform=platform)
         else:
-            # A fresh installation can still run in draft mode before accounts are provisioned.
             request = ContentRequest(topic=topic, platform=platform or "facebook", tone=tone,
                                      style=style, include_image=include_image)
             return self.pipeline.execute(request).to_dict()
 
         request = ContentRequest(topic=decision.topic, platform=decision.platform, tone=tone,
                                  style=style, include_image=include_image)
-        request.metadata.update({
-            "account_id": decision.account_id,
-            "niche": decision.niche,
-            "content_type": decision.content_type,
-            "policy_version": decision.policy_version,
-            "control_plane": "account_decision_engine",
-        })
+        request.metadata.update({"account_id": decision.account_id, "niche": decision.niche,
+                                 "content_type": decision.content_type, "policy_version": decision.policy_version,
+                                 "control_plane": "account_decision_engine"})
         result = self.pipeline.execute(request).to_dict()
-        result["decision"] = {
-            "account_id": decision.account_id,
-            "platform": decision.platform,
-            "niche": decision.niche,
-            "policy_version": decision.policy_version,
-            "reasons": decision.reasons,
-        }
+        published = bool(result.get("publish_result") and result["publish_result"].get("success"))
+        try:
+            from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
+            AccountLearningStore().record(account_id=decision.account_id, platform=decision.platform,
+                                          niche=decision.niche, topic=decision.topic,
+                                          quality_score=float(result.get("quality_score") or 0.0),
+                                          published=published, analytics=result.get("analytics"),
+                                          content_type=decision.content_type,
+                                          policy_version=decision.policy_version)
+        except Exception as exc:
+            result["account_learning_error"] = str(exc)
+        result["decision"] = {"account_id": decision.account_id, "platform": decision.platform,
+                              "niche": decision.niche, "policy_version": decision.policy_version,
+                              "reasons": decision.reasons}
         return result
