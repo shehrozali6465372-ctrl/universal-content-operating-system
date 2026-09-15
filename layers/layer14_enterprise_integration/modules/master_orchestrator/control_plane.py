@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
 from layers.layer07_publishing.modules.account_control.decision_engine import Decision, DecisionEngine
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
@@ -12,11 +13,15 @@ from layers.layer14_enterprise_integration.modules.master_orchestrator.productio
 class ControlPlane:
     def __init__(self, registry: Optional[AccountRegistry]=None, policies: Optional[PolicyRegistry]=None, pipeline: Optional[PipelineWiring]=None)->None:
         self.registry=registry or AccountRegistry(); self.policies=ensure_default_snapshots(policies or PolicyRegistry()); self.decisions=DecisionEngine(self.registry,self.policies); self.pipeline=pipeline or ProductionPipeline()
+
+    def _account_learning_store(self):
+        from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
+        return AccountLearningStore(AccountDataStore(self.registry))
+
     def _learning_scores(self, accounts: list[Any]) -> Dict[str,float]:
         """Return only observed, account-local performance; never synthesize metrics."""
         try:
-            from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
-            store=AccountLearningStore()
+            store=self._account_learning_store()
             scores: Dict[str,float]={}
             for account in accounts:
                 summary=store.performance_summary(account.account_id)
@@ -27,6 +32,7 @@ class ControlPlane:
             return scores
         except Exception:
             return {}
+
     def execute(self,topic:str,platform:Optional[str]=None,account_id:Optional[str]=None,tone:str="professional",style:str="educational",include_image:bool=True)->Dict[str,Any]:
         accounts=self.registry.list(platform=platform,enabled_only=True)
         account=None
@@ -47,10 +53,8 @@ class ControlPlane:
         request.metadata.update({"account_id":decision.account_id,"niche":decision.niche,"credentials_ref":account.credentials_ref if account else "","affiliate_rules":account.affiliate_rules if account else {},"content_type":decision.content_type,"policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,"control_plane":"account_decision_engine"})
         result=self.pipeline.execute(request).to_dict(); published=bool(result.get("publish_result") and result["publish_result"].get("success"))
         try:
-            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
-            from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
-            local=AccountDataStore()
-            learning=AccountLearningStore(local)
+            local=AccountDataStore(self.registry)
+            learning=self._account_learning_store()
             learning.record(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,quality_score=float(result.get("quality_score") or 0.0),published=published,analytics=result.get("analytics"),content_type=decision.content_type,policy_version=decision.policy_version)
             publish_meta=(result.get("publish_result") or {}).get("metadata") or {}
             local.append(decision.account_id,"content","execution_history",{
@@ -58,7 +62,7 @@ class ControlPlane:
                 "content_type":decision.content_type,"quality_score":float(result.get("quality_score") or 0.0),"published":published,
                 "post_id":(result.get("publish_result") or {}).get("post_id"),"title":result.get("title"),"text":result.get("text"),
                 "policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,
-                "template_fingerprint":publish_meta.get("template_fingerprint"),
+                "template_id":publish_meta.get("template_id"),"template_fingerprint":publish_meta.get("template_fingerprint"),
             })
             local.append(decision.account_id,"analytics","execution_outcomes",{
                 "timestamp":__import__("time").time(),"topic":decision.topic,"platform":decision.platform,
