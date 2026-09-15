@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib, os, re, tempfile, time, sqlite3
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 _DEFAULT_DB = os.path.join(tempfile.gettempdir(), "ucos_content_repetition.sqlite3")
 _RESERVATION_TTL_SECONDS = 1800
@@ -53,8 +53,10 @@ class ContentRepetitionGuard:
                     UNIQUE(account_id, content_fingerprint), UNIQUE(account_id, template_fingerprint)
                 )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_content_history_account ON content_history(account_id)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_content_history_pending ON content_history(account_id,status)")
 
     def _clear_stale_reservations(self, db: sqlite3.Connection) -> None:
+        # Pending submissions do not expire automatically: moderation can take hours.
         db.execute("DELETE FROM content_history WHERE status='reserved' AND created_at < ?", (time.time() - _RESERVATION_TTL_SECONDS,))
 
     @staticmethod
@@ -89,6 +91,18 @@ class ContentRepetitionGuard:
                 cur=db.execute("INSERT INTO content_history (account_id,platform,content_fingerprint,template_fingerprint,status,created_at) VALUES (?,?,?,?,?,?)",(account,platform.strip().lower(),content_fp,template_fp,"reserved",time.time()))
                 return RepetitionDecision(True,"reserved",content_fp,template_fp,cur.lastrowid)
         except sqlite3.IntegrityError: return RepetitionDecision(False,"concurrent_repetition_detected",content_fp,template_fp)
+
+    def pending(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return submitted-but-not-finalized reservations for reconciliation."""
+        query = "SELECT id,account_id,platform,content_fingerprint,template_fingerprint,post_id,created_at FROM content_history WHERE status='pending'"
+        args: list[Any] = []
+        if account_id:
+            query += " AND account_id=?"
+            args.append(account_id)
+        query += " ORDER BY created_at"
+        with self._connect() as db:
+            rows = db.execute(query, args).fetchall()
+        return [{"reservation_id": r[0], "account_id": r[1], "platform": r[2], "content_fingerprint": r[3], "template_fingerprint": r[4], "tracking_id": r[5], "created_at": r[6]} for r in rows]
 
     def mark_pending(self, reservation_id: int, tracking_id: str) -> None:
         if not tracking_id: raise ValueError("tracking_id is required for pending publication")
