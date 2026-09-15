@@ -13,6 +13,7 @@ from layers.layer07_publishing.modules.publisher_engine.status_tracker import St
 from layers.layer07_publishing.modules.publisher_engine.publish_audit import PublishAudit
 from layers.layer07_publishing.modules.publisher_engine.publish_result import PublisherResult
 from layers.layer07_publishing.modules.publisher_engine.publisher_metrics import PublisherMetrics
+from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 
 _MANAGER_COUNTER = itertools.count(1)
 
@@ -20,7 +21,7 @@ _MANAGER_COUNTER = itertools.count(1)
 class PublisherManager:
     """Orchestrate the full publishing pipeline.
 
-    Flow: Request → Validate → Upload → Publish → Parse → Result → Audit
+    Flow: Request → Validate → Repetition Gate → Upload → Publish → Parse → Result → Audit
     """
 
     def __init__(
@@ -31,6 +32,7 @@ class PublisherManager:
         parser: Optional[ResponseParser] = None,
         audit: Optional[PublishAudit] = None,
         metrics: Optional[PublisherMetrics] = None,
+        repetition_guard: Optional[ContentRepetitionGuard] = None,
     ) -> None:
         self.plugin_manager = plugin_manager or PluginManager()
         self.executor = executor or PublishExecutor()
@@ -38,6 +40,7 @@ class PublisherManager:
         self.parser = parser or ResponseParser()
         self.audit = audit or PublishAudit()
         self.metrics = metrics or PublisherMetrics()
+        self.repetition_guard = repetition_guard or ContentRepetitionGuard()
         self._events: List[Dict[str, Any]] = []
         self._request_count = 0
 
@@ -46,6 +49,7 @@ class PublisherManager:
         result = PublisherResult(platform=request.platform)
         tracker = StatusTracker(request.request_id)
         start = time.time()
+        reservation_id: Optional[int] = None
 
         # Step 1: Validate
         errors = request.validate()
@@ -55,53 +59,81 @@ class PublisherManager:
             self._record_event("publish_failed", request, result)
             return result
 
-        # Step 2: Upload media (if any)
-        if request.has_media():
-            tracker.update("uploading", f"Uploading {len(request.media_assets)} assets")
-            upload_results = self.uploader.upload_assets(
-                request.media_assets, self._default_uploader
-            )
-            failed_uploads = [u for u in upload_results if not u.success]
-            if failed_uploads:
-                first_err = failed_uploads[0].error
-                result.set_error(f"Upload failed: {first_err}", "upload")
-                tracker.update("failed", "Upload failed")
-                self._record_event("publish_failed", request, result)
-                return result
-
-        # Step 3: Execute publish
-        tracker.update("publishing", f"Publishing to {request.platform}")
-        pub_result = self.executor.execute_publish(
-            self._get_publisher(request.platform), request
-        )
-
-        # Step 4: Parse response
-        if pub_result.success:
-            result.set_success(pub_result.post_id, pub_result.url)
-            if pub_result.metadata:
-                result.media_ids = pub_result.metadata.get("media_ids", [])
-            tracker.update("published", f"Published: {pub_result.post_id}")
-        else:
-            error_cat = self.parser.classify_error(pub_result.error_message)
-            result.set_error(pub_result.error_message, error_cat)
-            tracker.update("failed", pub_result.error_message[:100])
-
-        # Step 5: Audit
-        duration_ms = (time.time() - start) * 1000
-        result.duration_ms = duration_ms
-        self.audit.log(
-            action="publish",
+        # Step 2: Reserve the account's content/template shape before any external side effect.
+        # account_id is supplied by the canonical account registry; the fallback keeps the
+        # legacy single-account path protected without pretending it represents another account.
+        account_id = str(request.metadata.get("account_id") or f"{request.platform}:default")
+        template_id = request.metadata.get("template_id")
+        decision = self.repetition_guard.reserve(
+            account_id=account_id,
             platform=request.platform,
-            request_id=request.request_id,
-            post_id=result.post_id,
-            success=result.success,
-            duration_ms=duration_ms,
+            content=request.content,
+            template_id=str(template_id) if template_id else None,
         )
-        self.metrics.record_publish(result.success, duration_ms)
+        if not decision.allowed:
+            result.set_error(
+                f"Content rejected by repetition gate: {decision.reason}",
+                "repetition",
+            )
+            tracker.update("failed", "Repetition gate rejected content")
+            self._record_event("publish_rejected_repetition", request, result)
+            return result
+        reservation_id = decision.reservation_id
 
-        self._request_count += 1
-        self._record_event("publish_completed" if result.success else "publish_failed", request, result)
-        return result
+        try:
+            # Step 3: Upload media (if any)
+            if request.has_media():
+                tracker.update("uploading", f"Uploading {len(request.media_assets)} assets")
+                upload_results = self.uploader.upload_assets(
+                    request.media_assets, self._default_uploader
+                )
+                failed_uploads = [u for u in upload_results if not u.success]
+                if failed_uploads:
+                    first_err = failed_uploads[0].error
+                    result.set_error(f"Upload failed: {first_err}", "upload")
+                    tracker.update("failed", "Upload failed")
+                    self._record_event("publish_failed", request, result)
+                    return result
+
+            # Step 4: Execute publish
+            tracker.update("publishing", f"Publishing to {request.platform}")
+            pub_result = self.executor.execute_publish(
+                self._get_publisher(request.platform), request
+            )
+
+            # Step 5: Parse response
+            if pub_result.success:
+                result.set_success(pub_result.post_id, pub_result.url)
+                if pub_result.metadata:
+                    result.media_ids = pub_result.metadata.get("media_ids", [])
+                tracker.update("published", f"Published: {pub_result.post_id}")
+                self.repetition_guard.finalize(reservation_id, pub_result.post_id)
+                reservation_id = None
+            else:
+                error_cat = self.parser.classify_error(pub_result.error_message)
+                result.set_error(pub_result.error_message, error_cat)
+                tracker.update("failed", pub_result.error_message[:100])
+
+            # Step 6: Audit
+            duration_ms = (time.time() - start) * 1000
+            result.duration_ms = duration_ms
+            self.audit.log(
+                action="publish",
+                platform=request.platform,
+                request_id=request.request_id,
+                post_id=result.post_id,
+                success=result.success,
+                duration_ms=duration_ms,
+            )
+            self.metrics.record_publish(result.success, duration_ms)
+
+            self._request_count += 1
+            self._record_event("publish_completed" if result.success else "publish_failed", request, result)
+            return result
+        finally:
+            # A failed upload/publish must not consume the template slot.
+            if reservation_id is not None:
+                self.repetition_guard.release(reservation_id)
 
     def publish_batch(
         self,
