@@ -165,23 +165,23 @@ class TestAPIGateway:
         finally:
             self.gateway.stop()
 
-    def test_analytics_endpoint(self):
+    def test_analytics_endpoint_requires_account_scope(self):
         self.gateway.start()
         time.sleep(0.2)
         try:
-            resp = urllib.request.urlopen(self._url("/analytics"), timeout=5)
-            data = json.loads(resp.read())
-            assert data["success"] is True
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(self._url("/analytics"), timeout=5)
+            assert exc.value.code == 400
         finally:
             self.gateway.stop()
 
-    def test_history_endpoint(self):
+    def test_history_endpoint_requires_account_scope(self):
         self.gateway.start()
         time.sleep(0.2)
         try:
-            resp = urllib.request.urlopen(self._url("/history?limit=3"), timeout=5)
-            data = json.loads(resp.read())
-            assert data["success"] is True
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(self._url("/history?limit=3"), timeout=5)
+            assert exc.value.code == 400
         finally:
             self.gateway.stop()
 
@@ -207,13 +207,13 @@ class TestAPIGateway:
         finally:
             self.gateway.stop()
 
-    def test_templates_endpoint(self):
+    def test_templates_endpoint_requires_account_scope(self):
         self.gateway.start()
         time.sleep(0.2)
         try:
-            resp = urllib.request.urlopen(self._url("/templates"), timeout=5)
-            data = json.loads(resp.read())
-            assert data["success"] is True
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(self._url("/templates"), timeout=5)
+            assert exc.value.code == 400
         finally:
             self.gateway.stop()
 
@@ -298,7 +298,6 @@ class TestFacebookSecrets:
         import os
         fb_token = os.environ.get("FACEBOOK_ACCESS_TOKEN", "")
         fb_page = os.environ.get("FACEBOOK_PAGE_ID", "")
-        # Should not crash even if not set
         assert isinstance(fb_token, str)
         assert isinstance(fb_page, str)
 
@@ -311,8 +310,6 @@ class TestFacebookSecrets:
             from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
             pub = FacebookPublisher()
             result = pub.authenticate({})
-            # With fake token, auth may succeed (marks as configured)
-            # or fail gracefully
             assert isinstance(result, bool)
         finally:
             del os.environ["FACEBOOK_PAGE_ID"]
