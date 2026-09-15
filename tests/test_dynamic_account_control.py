@@ -28,6 +28,20 @@ def test_new_account_is_fully_provisioned_and_isolated():
         assert store.get("yt-travel", "memory", "x") is None
 
 
+def test_account_local_append_preserves_events_and_isolation():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        registry = AccountRegistry(str(root / "accounts.sqlite3"), str(root / "workspaces"))
+        registry.register(AccountSpec("a", "facebook", "fitness"))
+        registry.register(AccountSpec("b", "facebook", "finance"))
+        store = AccountDataStore(registry)
+        store.append("a", "learning", "execution_outcomes", {"id": 1})
+        store.append("a", "learning", "execution_outcomes", {"id": 2})
+        store.append("b", "learning", "execution_outcomes", {"id": 3})
+        assert store.get("a", "learning", "collection:execution_outcomes") == [{"id": 1}, {"id": 2}]
+        assert store.get("b", "learning", "collection:execution_outcomes") == [{"id": 3}]
+
+
 def test_decision_engine_selects_only_enabled_accounts_and_policy():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
