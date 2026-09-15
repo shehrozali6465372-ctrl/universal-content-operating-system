@@ -53,9 +53,10 @@ class ProductionPipeline(PipelineWiring):
             retries+=1; original_style=req.style; req.style=f"{original_style}; structural variation {retries}: different hook, paragraph pattern and CTA; do not reuse the previous template"
             self._ai(req,ctx,response); self._quality(req,response); self._policy_check(req,response); reservation=guard.reserve(account_id=account_id,platform=req.platform,content=response.text,template_id=None); req.style=original_style
         if not reservation.allowed: raise RuntimeError(f"content uniqueness gate rejected after regeneration: {reservation.reason}")
+        request_template_fingerprint=reservation.template_fingerprint
         manager,_=self._publisher(req)
         if manager is None:
-            guard.release(reservation.reservation_id); response.publish_result={"success":False,"platform":req.platform,"post_id":None,"url":None,"error":"No account-scoped credentials/real publisher adapter configured"}; return {"published":False,"skipped":True,"reason":"publisher_unconfigured"}
+            guard.release(reservation.reservation_id); response.publish_result={"success":False,"platform":req.platform,"post_id":None,"url":None,"error":"No account-scoped credentials/real publisher adapter configured","metadata":{"template_fingerprint":request_template_fingerprint}}; return {"published":False,"skipped":True,"reason":"publisher_unconfigured"}
         content_type=req.metadata.get("content_type") or ("photo" if response.image_url else "post")
         if req.platform=="instagram" and content_type=="video": content_type="reel"
         media_path=response.image_url
@@ -67,12 +68,12 @@ class ProductionPipeline(PipelineWiring):
         else: media_for_api=media_path
         request=PublishRequest(platform=req.platform,content=response.text,content_type=content_type)
         request.idempotency_key=f"ucos:{account_id}:{req.platform}:{hashlib.sha256(response.text.encode()).hexdigest()[:24]}"
-        request.metadata.update({"account_id":account_id,"topic":req.topic,"niche":req.metadata.get("niche"),"ai_model":ctx.get("ai_model","unknown"),"policy_version":req.metadata.get("policy_version"),"product":req.metadata.get("product"),"affiliate":req.metadata.get("affiliate")})
+        request.metadata.update({"account_id":account_id,"topic":req.topic,"niche":req.metadata.get("niche"),"ai_model":ctx.get("ai_model","unknown"),"policy_version":req.metadata.get("policy_version"),"product":req.metadata.get("product"),"affiliate":req.metadata.get("affiliate"),"template_fingerprint":request_template_fingerprint})
         if media_for_api:
             asset=MediaAsset(file_path=media_for_api,media_type="video" if req.metadata.get("content_type")=="video" else "image"); asset.file_name=str(media_for_api).rsplit("/",1)[-1]; asset.platform_ready=True; request.media_assets.append(asset)
         try:
             result=manager.publish(request)
-            data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id or None,"url":result.url or None,"error":result.error_message,"metadata":result.metadata}
+            data={"success":bool(result.success),"platform":req.platform,"post_id":result.post_id or None,"url":result.url or None,"error":result.error_message,"metadata":result.metadata|{"template_fingerprint":request_template_fingerprint}}
             response.publish_result=data
             if result.success:
                 guard.finalize(reservation.reservation_id,result.post_id); response.publish_package=request.to_dict(); ctx["post_id"]=result.post_id; return data
@@ -85,8 +86,6 @@ class ProductionPipeline(PipelineWiring):
             guard.release(reservation.reservation_id)
             raise RuntimeError(result.error_message or "publisher returned failure")
         except Exception:
-            # Pending submissions deliberately retain their reservation so a retry
-            # cannot duplicate an asynchronously accepted platform operation.
             if not response.publish_result.get("pending"):
                 try: guard.release(reservation.reservation_id)
                 except Exception: pass
