@@ -18,12 +18,21 @@ class TikTokReconciliationService:
         self.registry = registry or AccountRegistry()
 
     def reconcile(self, account_id: Optional[str] = None) -> list[Dict[str, Any]]:
-        accounts = [self.registry.get(account_id)] if account_id else self.registry.list(platform="tiktok", enabled_only=True)
+        if account_id:
+            account = self.registry.get(account_id)
+            if account is None:
+                raise LookupError(f"unknown account_id: {account_id}")
+            if not account.enabled:
+                raise ValueError(f"disabled account_id: {account_id}")
+            if account.platform != "tiktok":
+                raise ValueError(f"account {account_id} belongs to {account.platform}, not tiktok")
+            accounts = [account]
+        else:
+            accounts = self.registry.list(platform="tiktok", enabled_only=True)
+
         outcomes: list[Dict[str, Any]] = []
         root = Path(os.environ.get("UCOS_ACCOUNT_WORKSPACES", "./data/accounts/workspaces"))
         for account in accounts:
-            if account is None or account.platform != "tiktok" or not account.enabled:
-                continue
             credentials = AccountCredentialResolver.resolve(account.credentials_ref)
             publisher = TikTokPublisher()
             if not credentials or not publisher.authenticate(credentials):
