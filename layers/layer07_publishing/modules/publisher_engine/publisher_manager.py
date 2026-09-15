@@ -19,21 +19,15 @@ _MANAGER_COUNTER = itertools.count(1)
 
 
 class PublisherManager:
-    """Orchestrate the full publishing pipeline.
+    """Orchestrate validate → account repetition gate → upload → publish → audit."""
 
-    Flow: Request → Validate → Repetition Gate → Upload → Publish → Parse → Result → Audit
-    """
-
-    def __init__(
-        self,
-        plugin_manager: Optional[PluginManager] = None,
-        executor: Optional[PublishExecutor] = None,
-        uploader: Optional[UploadCoordinator] = None,
-        parser: Optional[ResponseParser] = None,
-        audit: Optional[PublishAudit] = None,
-        metrics: Optional[PublisherMetrics] = None,
-        repetition_guard: Optional[ContentRepetitionGuard] = None,
-    ) -> None:
+    def __init__(self, plugin_manager: Optional[PluginManager] = None,
+                 executor: Optional[PublishExecutor] = None,
+                 uploader: Optional[UploadCoordinator] = None,
+                 parser: Optional[ResponseParser] = None,
+                 audit: Optional[PublishAudit] = None,
+                 metrics: Optional[PublisherMetrics] = None,
+                 repetition_guard: Optional[ContentRepetitionGuard] = None) -> None:
         self.plugin_manager = plugin_manager or PluginManager()
         self.executor = executor or PublishExecutor()
         self.uploader = uploader or UploadCoordinator()
@@ -45,13 +39,11 @@ class PublisherManager:
         self._request_count = 0
 
     def publish(self, request: PublishRequest) -> PublisherResult:
-        """Execute full publish pipeline for a single request."""
         result = PublisherResult(platform=request.platform)
         tracker = StatusTracker(request.request_id)
         start = time.time()
         reservation_id: Optional[int] = None
 
-        # Step 1: Validate
         errors = request.validate()
         if errors:
             result.set_error("; ".join(errors), "validation")
@@ -59,117 +51,80 @@ class PublisherManager:
             self._record_event("publish_failed", request, result)
             return result
 
-        # Step 2: Reserve the account's content/template shape before any external side effect.
-        # account_id is supplied by the canonical account registry; the fallback keeps the
-        # legacy single-account path protected without pretending it represents another account.
-        account_id = str(request.metadata.get("account_id") or f"{request.platform}:default")
-        template_id = request.metadata.get("template_id")
-        decision = self.repetition_guard.reserve(
-            account_id=account_id,
-            platform=request.platform,
-            content=request.content,
-            template_id=str(template_id) if template_id else None,
-        )
-        if not decision.allowed:
-            result.set_error(
-                f"Content rejected by repetition gate: {decision.reason}",
-                "repetition",
+        # Only canonical account-target requests are protected. Legacy callers without
+        # account_id must not all collide in an invented shared account.
+        account_id = request.metadata.get("account_id")
+        if account_id:
+            decision = self.repetition_guard.reserve(
+                account_id=str(account_id), platform=request.platform,
+                content=request.content,
+                template_id=(str(request.metadata["template_id"])
+                             if request.metadata.get("template_id") else None),
             )
-            tracker.update("failed", "Repetition gate rejected content")
-            self._record_event("publish_rejected_repetition", request, result)
-            return result
-        reservation_id = decision.reservation_id
+            if not decision.allowed:
+                result.set_error(f"Content rejected by repetition gate: {decision.reason}", "repetition")
+                tracker.update("failed", "Repetition gate rejected content")
+                self._record_event("publish_rejected_repetition", request, result)
+                return result
+            reservation_id = decision.reservation_id
 
         try:
-            # Step 3: Upload media (if any)
             if request.has_media():
                 tracker.update("uploading", f"Uploading {len(request.media_assets)} assets")
-                upload_results = self.uploader.upload_assets(
-                    request.media_assets, self._default_uploader
-                )
+                upload_results = self.uploader.upload_assets(request.media_assets, self._default_uploader)
                 failed_uploads = [u for u in upload_results if not u.success]
                 if failed_uploads:
-                    first_err = failed_uploads[0].error
-                    result.set_error(f"Upload failed: {first_err}", "upload")
+                    result.set_error(f"Upload failed: {failed_uploads[0].error}", "upload")
                     tracker.update("failed", "Upload failed")
                     self._record_event("publish_failed", request, result)
                     return result
 
-            # Step 4: Execute publish
             tracker.update("publishing", f"Publishing to {request.platform}")
-            pub_result = self.executor.execute_publish(
-                self._get_publisher(request.platform), request
-            )
-
-            # Step 5: Parse response
-            if pub_result.success:
-                result.set_success(pub_result.post_id, pub_result.url)
-                if pub_result.metadata:
-                    result.media_ids = pub_result.metadata.get("media_ids", [])
-                tracker.update("published", f"Published: {pub_result.post_id}")
-                self.repetition_guard.finalize(reservation_id, pub_result.post_id)
-                reservation_id = None
+            publisher = self._get_publisher(request.platform)
+            if publisher is None:
+                result.set_error(f"No plugin registered for '{request.platform}'", "plugin")
             else:
-                error_cat = self.parser.classify_error(pub_result.error_message)
-                result.set_error(pub_result.error_message, error_cat)
-                tracker.update("failed", pub_result.error_message[:100])
+                pub_result = self.executor.execute_publish(publisher, request)
+                if pub_result.success:
+                    result.set_success(pub_result.post_id, pub_result.url)
+                    if pub_result.metadata:
+                        result.media_ids = pub_result.metadata.get("media_ids", [])
+                    tracker.update("published", f"Published: {pub_result.post_id}")
+                    if reservation_id is not None:
+                        self.repetition_guard.finalize(reservation_id, pub_result.post_id)
+                        reservation_id = None
+                else:
+                    result.set_error(pub_result.error_message, self.parser.classify_error(pub_result.error_message))
+                    tracker.update("failed", pub_result.error_message[:100])
 
-            # Step 6: Audit
             duration_ms = (time.time() - start) * 1000
             result.duration_ms = duration_ms
-            self.audit.log(
-                action="publish",
-                platform=request.platform,
-                request_id=request.request_id,
-                post_id=result.post_id,
-                success=result.success,
-                duration_ms=duration_ms,
-            )
+            self.audit.log(action="publish", platform=request.platform, request_id=request.request_id,
+                           post_id=result.post_id, success=result.success, duration_ms=duration_ms)
             self.metrics.record_publish(result.success, duration_ms)
-
             self._request_count += 1
             self._record_event("publish_completed" if result.success else "publish_failed", request, result)
             return result
         finally:
-            # A failed upload/publish must not consume the template slot.
             if reservation_id is not None:
                 self.repetition_guard.release(reservation_id)
 
-    def publish_batch(
-        self,
-        requests: List[PublishRequest],
-    ) -> List[PublisherResult]:
+    def publish_batch(self, requests: List[PublishRequest]) -> List[PublisherResult]:
         return [self.publish(req) for req in requests]
 
-    def edit(
-        self,
-        platform: str,
-        post_id: str,
-        content: str,
-    ) -> PublisherResult:
+    def edit(self, platform: str, post_id: str, content: str) -> PublisherResult:
         result = PublisherResult(platform=platform)
-        pub_result = self.executor.execute_edit(
-            self._get_publisher(platform), post_id, content
-        )
+        pub_result = self.executor.execute_edit(self._get_publisher(platform), post_id, content)
         if pub_result.success:
             result.set_success(pub_result.post_id, pub_result.url)
         else:
-            cat = self.parser.classify_error(pub_result.error_message)
-            result.set_error(pub_result.error_message, cat)
-        self.audit.log(
-            action="edit", platform=platform, post_id=post_id,
-            success=result.success,
-        )
+            result.set_error(pub_result.error_message, self.parser.classify_error(pub_result.error_message))
+        self.audit.log(action="edit", platform=platform, post_id=post_id, success=result.success)
         return result
 
     def delete(self, platform: str, post_id: str) -> bool:
-        success = self.executor.execute_delete(
-            self._get_publisher(platform), post_id
-        )
-        self.audit.log(
-            action="delete", platform=platform, post_id=post_id,
-            success=success,
-        )
+        success = self.executor.execute_delete(self._get_publisher(platform), post_id)
+        self.audit.log(action="delete", platform=platform, post_id=post_id, success=success)
         return success
 
     def get_status(self, platform: str, post_id: str) -> str:
@@ -185,14 +140,9 @@ class PublisherManager:
         return result
 
     def _record_event(self, event: str, request: PublishRequest, result: PublisherResult) -> None:
-        self._events.append({
-            "event": event,
-            "request_id": request.request_id,
-            "platform": request.platform,
-            "success": result.success,
-            "post_id": result.post_id,
-            "timestamp": time.time(),
-        })
+        self._events.append({"event": event, "request_id": request.request_id,
+                             "platform": request.platform, "success": result.success,
+                             "post_id": result.post_id, "timestamp": time.time()})
 
     @property
     def events(self) -> List[Dict[str, Any]]:
