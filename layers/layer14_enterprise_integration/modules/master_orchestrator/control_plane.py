@@ -12,6 +12,21 @@ from layers.layer14_enterprise_integration.modules.master_orchestrator.productio
 class ControlPlane:
     def __init__(self, registry: Optional[AccountRegistry]=None, policies: Optional[PolicyRegistry]=None, pipeline: Optional[PipelineWiring]=None)->None:
         self.registry=registry or AccountRegistry(); self.policies=ensure_default_snapshots(policies or PolicyRegistry()); self.decisions=DecisionEngine(self.registry,self.policies); self.pipeline=pipeline or ProductionPipeline()
+    def _learning_scores(self, accounts: list[Any]) -> Dict[str,float]:
+        """Return only observed, account-local performance; never synthesize metrics."""
+        try:
+            from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
+            store=AccountLearningStore()
+            scores: Dict[str,float]={}
+            for account in accounts:
+                summary=store.performance_summary(account.account_id)
+                if summary.get("observations",0)>0 and summary.get("quality_average") is not None:
+                    quality=max(0.0,min(1.0,float(summary["quality_average"])))
+                    published=float(summary.get("published_rate") or 0.0)
+                    scores[account.account_id]=0.7*quality+0.3*max(0.0,min(1.0,published))
+            return scores
+        except Exception:
+            return {}
     def execute(self,topic:str,platform:Optional[str]=None,account_id:Optional[str]=None,tone:str="professional",style:str="educational",include_image:bool=True)->Dict[str,Any]:
         accounts=self.registry.list(platform=platform,enabled_only=True)
         account=None
@@ -22,7 +37,8 @@ class ControlPlane:
             policy=self.policies.get(account.platform); product=AffiliateEvidenceProvider().select(topic,account.niche,account.platform)
             decision=Decision(account_id=account.account_id,platform=account.platform,niche=account.niche,topic=topic.strip(),content_type=self.decisions.choose_content_type(account,topic),product=product,affiliate=product,policy_version=policy.version if policy else None,reasons=["explicit account_id","account-scoped affiliate evidence"])
         elif accounts:
-            decision=self.decisions.decide(topic,platform=platform); account=self.registry.get(decision.account_id); product=AffiliateEvidenceProvider().select(decision.topic,decision.niche,decision.platform)
+            learning_scores=self._learning_scores(accounts)
+            decision=self.decisions.decide(topic,platform=platform,learning_scores=learning_scores); account=self.registry.get(decision.account_id); product=AffiliateEvidenceProvider().select(decision.topic,decision.niche,decision.platform)
             decision=Decision(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,content_type=decision.content_type,product=product,affiliate=product,policy_version=decision.policy_version,reasons=decision.reasons+["account-scoped affiliate evidence"])
         else:
             request=ContentRequest(topic=topic,platform=platform or "facebook",tone=tone,style=style,include_image=include_image); return self.pipeline.execute(request).to_dict()
