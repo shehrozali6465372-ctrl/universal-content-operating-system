@@ -2,6 +2,7 @@
 from __future__ import annotations
 import itertools
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
@@ -19,7 +20,7 @@ _MANAGER_COUNTER = itertools.count(1)
 
 
 class PublisherManager:
-    """Orchestrate validate → account repetition gate → upload → publish → audit."""
+    """Orchestrate validate → account-local repetition gate → upload → publish → audit."""
 
     def __init__(self, plugin_manager: Optional[PluginManager] = None,
                  executor: Optional[PublishExecutor] = None,
@@ -38,11 +39,21 @@ class PublisherManager:
         self._events: List[Dict[str, Any]] = []
         self._request_count = 0
 
+    @staticmethod
+    def _account_repetition_guard(account_id: str) -> ContentRepetitionGuard:
+        """Return a physically separate repetition database for this account."""
+        from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+        registry = AccountRegistry()
+        workspace = registry.workspace_path(account_id)
+        workspace.mkdir(parents=True, exist_ok=True)
+        return ContentRepetitionGuard(str(workspace / "publishing_history.sqlite3"))
+
     def publish(self, request: PublishRequest) -> PublisherResult:
         result = PublisherResult(platform=request.platform)
         tracker = StatusTracker(request.request_id)
         start = time.time()
         reservation_id: Optional[int] = None
+        guard = self.repetition_guard
 
         errors = request.validate()
         if errors:
@@ -51,11 +62,10 @@ class PublisherManager:
             self._record_event("publish_failed", request, result)
             return result
 
-        # Only canonical account-target requests are protected. Legacy callers without
-        # account_id must not all collide in an invented shared account.
         account_id = request.metadata.get("account_id")
         if account_id:
-            decision = self.repetition_guard.reserve(
+            guard = self._account_repetition_guard(str(account_id))
+            decision = guard.reserve(
                 account_id=str(account_id), platform=request.platform,
                 content=request.content,
                 template_id=(str(request.metadata["template_id"])
@@ -91,7 +101,7 @@ class PublisherManager:
                         result.media_ids = pub_result.metadata.get("media_ids", [])
                     tracker.update("published", f"Published: {pub_result.post_id}")
                     if reservation_id is not None:
-                        self.repetition_guard.finalize(reservation_id, pub_result.post_id)
+                        guard.finalize(reservation_id, pub_result.post_id)
                         reservation_id = None
                 else:
                     result.set_error(pub_result.error_message, self.parser.classify_error(pub_result.error_message))
@@ -107,7 +117,7 @@ class PublisherManager:
             return result
         finally:
             if reservation_id is not None:
-                self.repetition_guard.release(reservation_id)
+                guard.release(reservation_id)
 
     def publish_batch(self, requests: List[PublishRequest]) -> List[PublisherResult]:
         return [self.publish(req) for req in requests]
