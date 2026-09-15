@@ -6,6 +6,7 @@ from typing import Any, Dict
 from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import PipelineWiring, ContentRequest, ContentResponse
 from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
+from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
 from layers.layer07_publishing.modules.account_control.credential_resolver import AccountCredentialResolver
@@ -45,7 +46,9 @@ class ProductionPipeline(PipelineWiring):
         account_id=str(req.metadata.get("account_id") or "")
         if not account_id: raise RuntimeError("production publishing requires account_id")
         self._policy_check(req,response)
-        workspace=Path(os.environ.get("UCOS_ACCOUNT_WORKSPACES","./data/accounts/workspaces"))/account_id
+        # Resolve the canonical provisioned workspace instead of interpolating account_id into a path.
+        # This preserves collision/path-traversal protection for IDs containing separators or unsafe chars.
+        workspace=AccountRegistry().workspace_path(account_id)
         guard=ContentRepetitionGuard(str(workspace/"publishing_history.sqlite3"))
         reservation=guard.reserve(account_id=account_id,platform=req.platform,content=response.text,template_id=req.metadata.get("template_id"))
         retries=0
