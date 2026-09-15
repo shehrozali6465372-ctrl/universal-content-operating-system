@@ -1,4 +1,4 @@
-"""Tests for Instagram, LinkedIn, API Gateway, Dashboard."""
+"""Tests for Instagram, LinkedIn, API Gateway, Dashboard and platform contracts."""
 from __future__ import annotations
 import os
 import time
@@ -6,6 +6,43 @@ import threading
 import urllib.request
 import json
 import pytest
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Pinterest Publisher Tests
+# ══════════════════════════════════════════════════════════════════════
+
+class TestPinterestPublisher:
+    def setup_method(self):
+        from layers.layer07_publishing.modules.platform_plugin_manager.pinterest.pinterest_publisher import PinterestPublisher
+        self.pub = PinterestPublisher()
+
+    def test_platform_name(self):
+        assert self.pub.get_platform_name() == "pinterest"
+
+    def test_capabilities_match_implemented_media(self):
+        caps = self.pub.get_capabilities()
+        assert caps.supports_images is True
+        assert caps.supports_video is False
+        assert caps.supports_scheduled is False
+        assert caps.max_length == 500
+
+    def test_authenticate_requires_account_scoped_credentials(self):
+        assert self.pub.authenticate({}) is False
+
+    def test_authenticate_does_not_fall_back_to_process_environment(self, monkeypatch):
+        monkeypatch.setenv("PINTEREST_ACCESS_TOKEN", "global-token")
+        monkeypatch.setenv("PINTEREST_BOARD_ID", "global-board")
+        assert self.pub.authenticate({}) is False
+
+    def test_get_analytics_is_unknown_until_analytics_endpoint_is_wired(self):
+        assert self.pub.get_analytics("pin-1") == {"post_id": "pin-1", "analytics": "UNKNOWN"}
+
+    def test_publish_rejects_video_capability_claim(self):
+        self.pub.authenticated = True
+        self.pub.board_id = "board-1"
+        result = self.pub.publish("caption", ["https://example.com/video.mp4"], content_type="video")
+        assert result.success is False
 
 
 # ══════════════════════════════════════════════════════════════════════
