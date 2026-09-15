@@ -56,16 +56,33 @@ class APIGateway:
         checks["gemini"]="configured" if os.environ.get("GEMINI_API_KEY_1","") else "not_configured"
         overall="healthy" if checks["database"]=="healthy" else "degraded"
         return APIResponse(data={"status":overall,"checks":checks})
+    @staticmethod
+    def _account_id(params):
+        value=params.get("account_id",[None])[0]
+        return str(value).strip() if value else None
+    def _require_account(self,params):
+        account_id=self._account_id(params)
+        if not account_id: return None,APIResponse(400,error="account_id is required for account-scoped data")
+        from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+        if AccountRegistry().get(account_id) is None: return None,APIResponse(404,error=f"unknown account_id: {account_id}")
+        return account_id,None
     def _handle_analytics(self,params):
         try:
-            from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
-            p=PipelinePersistence(); data=p.get_analytics_summary(); p.close(); return APIResponse(data={"analytics":data})
+            account_id,error=self._require_account(params)
+            if error: return error
+            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+            store=AccountDataStore(); values=store.get(account_id,"analytics","collection:execution_outcomes",[])
+            return APIResponse(data={"scope":"account","account_id":account_id,"analytics":values,"count":len(values)})
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_history(self,params):
         try:
-            limit=int(params.get("limit",[10])[0]); platform=params.get("platform",[None])[0]
-            from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
-            p=PipelinePersistence(); h=p.get_content_history(platform=platform,limit=limit); p.close(); return APIResponse(data={"history":h,"count":len(h)})
+            account_id,error=self._require_account(params)
+            if error: return error
+            limit=max(1,min(int(params.get("limit",[10])[0]),1000))
+            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+            store=AccountDataStore(); history=store.get(account_id,"content","collection:execution_history",[])[-limit:][::-1]
+            return APIResponse(data={"scope":"account","account_id":account_id,"history":history,"count":len(history)})
+        except (TypeError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_stats(self,params):
         try:
@@ -101,8 +118,12 @@ class APIGateway:
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_templates(self,params):
         try:
-            from layers.layer09_learning.modules.prompt_evolution.template_ranker import TemplateRanker
-            r=TemplateRanker().get_rankings(platform=params.get("platform",[None])[0]); return APIResponse(data={"rankings":r,"count":len(r)})
+            account_id,error=self._require_account(params)
+            if error: return error
+            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+            store=AccountDataStore(); history=store.get(account_id,"content","collection:execution_history",[])
+            template_history=[{"template_id":entry.get("template_id"),"topic":entry.get("topic"),"platform":entry.get("platform"),"timestamp":entry.get("timestamp")} for entry in history if entry.get("template_id")]
+            return APIResponse(data={"scope":"account","account_id":account_id,"rankings":template_history,"count":len(template_history)})
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_platforms(self,params):
         return APIResponse(data={"platforms":self.SUPPORTED_PLATFORMS,"production_publishers":["facebook","instagram","pinterest","youtube","tiktok"]})
