@@ -92,9 +92,8 @@ class MetaAssetDiscovery:
 
     def _discover_pages(self) -> List[MetaAsset]:
         fields = "id,name,access_token,instagram_business_account{id,username,name}"
-        data = self._get("/me/accounts", {"fields": fields, "limit": 100})
         pages: List[MetaAsset] = []
-        for item in data.get("data", []):
+        for item in self._paged_get("/me/accounts", {"fields": fields, "limit": 100}):
             asset_id = str(item.get("id") or "").strip()
             if not asset_id:
                 continue
@@ -104,13 +103,37 @@ class MetaAssetDiscovery:
 
         business_id = os.getenv("META_BUSINESS_ID", "").strip()
         if business_id:
-            data = self._get(f"/{business_id}/owned_pages", {"fields": "id,name", "limit": 100})
             return [
                 MetaAsset("facebook", str(item["id"]), str(item.get("name") or item["id"]))
-                for item in data.get("data", [])
+                for item in self._paged_get(
+                    f"/{business_id}/owned_pages", {"fields": "id,name", "limit": 100}
+                )
                 if item.get("id")
             ]
         return []
+
+    def _paged_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Follow Graph API paging cursors without ever exposing the access token."""
+        query = dict(params or {})
+        items: List[Dict[str, Any]] = []
+        seen_urls = set()
+        while True:
+            data = self._get(path, query)
+            batch = data.get("data") or []
+            if isinstance(batch, list):
+                items.extend(item for item in batch if isinstance(item, dict))
+            paging = data.get("paging") or {}
+            next_url = str(paging.get("next") or "").strip()
+            if not next_url or next_url in seen_urls:
+                break
+            seen_urls.add(next_url)
+            parsed = urllib.parse.urlparse(next_url)
+            if parsed.scheme != "https" or parsed.netloc != "graph.facebook.com":
+                raise RuntimeError("Meta API returned an unexpected paging URL")
+            path = parsed.path
+            query = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+            query.pop("access_token", None)
+        return items
 
     def _page_instagram_account(self, page_id: str) -> Optional[MetaAsset]:
         try:
