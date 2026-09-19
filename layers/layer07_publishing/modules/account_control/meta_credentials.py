@@ -61,11 +61,33 @@ class MetaCredentialProvider:
         raise RuntimeError(f"Meta Page {page_id} is not authorized for this System User")
 
     def _pages(self):
-        data = self._get("/me/accounts", {
+        return self._paged_get("/me/accounts", {
             "fields": "id,name,access_token,tasks,instagram_business_account{id,username,name}",
             "limit": 100,
         })
-        return list(data.get("data") or [])
+
+    def _paged_get(self, path: str, params: Dict[str, Any]) -> list[Dict[str, Any]]:
+        """Follow Meta paging while preserving the single System User secret in-process only."""
+        query = dict(params)
+        items: list[Dict[str, Any]] = []
+        seen_urls = set()
+        while True:
+            data = self._get(path, query)
+            batch = data.get("data") or []
+            if isinstance(batch, list):
+                items.extend(item for item in batch if isinstance(item, dict))
+            paging = data.get("paging") or {}
+            next_url = str(paging.get("next") or "").strip()
+            if not next_url or next_url in seen_urls:
+                break
+            seen_urls.add(next_url)
+            parsed = urllib.parse.urlparse(next_url)
+            if parsed.scheme != "https" or parsed.netloc != "graph.facebook.com":
+                raise RuntimeError("Meta API returned an unexpected paging URL")
+            path = parsed.path
+            query = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+            query.pop("access_token", None)
+        return items
 
     def _get(self, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
         query = dict(params)
