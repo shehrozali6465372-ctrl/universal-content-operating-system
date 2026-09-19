@@ -88,6 +88,8 @@ services:
       - GEMINI_API_KEY_2=${GEMINI_API_KEY_2:-}
       - GEMINI_API_KEY_3=${GEMINI_API_KEY_3:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - META_GRAPH_API_VERSION=${META_GRAPH_API_VERSION:-v26.0}
     healthcheck:
       test: ["CMD", "python", "main.py", "--status"]
       interval: 30s
@@ -130,6 +132,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - META_GRAPH_API_VERSION=${META_GRAPH_API_VERSION:-v26.0}
     deploy:
       resources:
         limits:
