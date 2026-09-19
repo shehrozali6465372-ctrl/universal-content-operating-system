@@ -63,3 +63,25 @@ def test_meta_provider_derives_instagram_credentials_from_linked_page(tmp_path: 
 
     credentials = provider.credentials_for("instagram", "instagram:ig1")
     assert credentials == {"account_id": "ig1", "access_token": "page-token"}
+
+    
+def test_meta_provider_follows_page_pagination_without_reusing_embedded_token(monkeypatch):
+    provider = MetaCredentialProvider(token="system-token")
+    calls = []
+
+    def fake_get(path, params):
+        calls.append((path, params))
+        if len(calls) == 1:
+            return {
+                "data": [{"id": "p1", "access_token": "page-1"}],
+                "paging": {"next": "https://graph.facebook.com/v26.0/me/accounts?after=cursor-2&access_token=system-token"},
+            }
+        return {
+            "data": [{"id": "p2", "access_token": "page-2"}],
+        }
+
+    monkeypatch.setattr(provider, "_get", fake_get)
+    pages = provider._pages()
+    assert [p["id"] for p in pages] == ["p1", "p2"]
+    assert "access_token" not in calls[1][1]
+    assert calls[1][1]["after"] == "cursor-2"
