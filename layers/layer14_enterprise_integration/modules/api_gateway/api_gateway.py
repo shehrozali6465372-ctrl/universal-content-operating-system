@@ -1,6 +1,6 @@
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
-import hmac, json, os, time, threading, glob
+import hashlib, hmac, json, os, time, threading, glob
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse, parse_qs
@@ -23,7 +23,7 @@ class APIGateway:
     def __init__(self,host:str="127.0.0.1",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -32,17 +32,48 @@ class APIGateway:
         if not configured: return False
         supplied=str(headers.get("Authorization", ""))
         return hmac.compare_digest(supplied, f"Bearer {configured}")
+
+    @staticmethod
+    def _aios_authorized(method: str, path: str, raw_body: bytes, headers: Any) -> bool:
+        """Verify the AtoZ/AI OS Bridge HMAC transport contract."""
+        secret=os.getenv("AIOS_API_KEY", "").strip()
+        if not secret:
+            return True
+        try:
+            timestamp=str(headers.get("X-AIOS-Timestamp", ""))
+            nonce=str(headers.get("X-AIOS-Nonce", ""))
+            signature=str(headers.get("X-AIOS-Signature", ""))
+            if not timestamp or not nonce or not signature:
+                return False
+            if abs(int(time.time()) - int(timestamp)) > 300:
+                return False
+            canonical=(f"{method.upper()}\n{path}\n{timestamp}\n{nonce}\n"
+                       f"{raw_body.decode('utf-8')}").encode()
+            expected=hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+            return hmac.compare_digest(expected, signature)
+        except (ValueError, UnicodeDecodeError):
+            return False
+
     def start(self):
         gateway=self
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 gateway._request_count+=1
-                if not gateway._authorized(self.headers): self._send(APIResponse(401,error="API authentication required")); return
-                parsed=urlparse(self.path); path=parsed.path.rstrip("/"); response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
+                parsed=urlparse(self.path); path=parsed.path.rstrip("/")
+                if path == "/heartbeat":
+                    if not gateway._aios_authorized("GET", path, b"", self.headers):
+                        self._send(APIResponse(401,error="AI OS authentication required")); return
+                elif not gateway._authorized(self.headers):
+                    self._send(APIResponse(401,error="API authentication required")); return
+                response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
             def do_POST(self):
                 gateway._request_count+=1
-                if not gateway._authorized(self.headers): self._send(APIResponse(401,error="API authentication required")); return
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/"); n=int(self.headers.get("Content-Length",0)); raw=self.rfile.read(n) if n else b""
+                if path == "/v1/jobs":
+                    if not gateway._aios_authorized("POST", path, raw, self.headers):
+                        self._send(APIResponse(401,error="AI OS authentication required")); return
+                elif not gateway._authorized(self.headers):
+                    self._send(APIResponse(401,error="API authentication required")); return
                 try: data=json.loads(raw) if raw else {}
                 except json.JSONDecodeError: data={}
                 response=gateway._routes.get(f"POST {path}",lambda d:APIResponse(404,error=f"Endpoint not found: {path}"))(data); self._send(response)
@@ -68,6 +99,25 @@ class APIGateway:
         checks["gemini"]="configured" if os.environ.get("GEMINI_API_KEY_1","") else "not_configured"
         overall="healthy" if checks["database"]=="healthy" else "degraded"
         return APIResponse(data={"status":overall,"checks":checks})
+
+    def _handle_heartbeat(self,params):
+        return APIResponse(data={"status":"ok","service":"universal-content-operating-system","layer":23,"component":"website_manager"})
+
+    def _handle_aios_job(self,data):
+        """AtoZ Product Hub -> AI OS Bridge -> Layer 23 dispatch surface."""
+        from layers.layer23_website_manager.integration.atoz_bridge import dispatch_job
+        try:
+            result=dispatch_job(data)
+            return APIResponse(status_code=202,data=result)
+        except ValueError as exc:
+            return APIResponse(status_code=400,error=str(exc))
+        except LookupError as exc:
+            return APIResponse(status_code=404,error=str(exc))
+        except NotImplementedError as exc:
+            return APIResponse(status_code=422,error=str(exc))
+        except Exception as exc:
+            return APIResponse(status_code=500,error=str(exc))
+
     @staticmethod
     def _account_id(params):
         value=params.get("account_id",[None])[0]
