@@ -55,3 +55,29 @@ def test_missing_token_is_explicit():
         assert "META_ACCESS_TOKEN" in str(exc)
     else:
         raise AssertionError("missing Meta token must fail explicitly")
+
+    
+def test_discovery_follows_graph_paging_without_forwarding_token():
+    client = FakeDiscovery({
+        "pages": {
+            "data": [{"id": "p1", "name": "Page One"}],
+            "paging": {"next": "https://graph.facebook.com/v26.0/me/accounts?after=cursor-2&access_token=secret"},
+        },
+        "/p1": {"id": "p1", "name": "Page One"},
+    })
+    original_get = client._get
+    calls = []
+
+    def paged_get(path, params=None):
+        calls.append((path, params))
+        if len(calls) == 1:
+            return {"data": [{"id": "p1", "name": "Page One"}],
+                    "paging": {"next": "https://graph.facebook.com/v26.0/me/accounts?after=cursor-2&access_token=secret"}}
+        if len(calls) == 2:
+            return {"data": [{"id": "p2", "name": "Page Two"}]}
+        return original_get(path, params)
+
+    client._get = paged_get
+    result = client.discover()
+    assert [a.asset_id for a in result["facebook"]] == ["p1", "p2"]
+    assert "secret" not in str(calls[1][1])
