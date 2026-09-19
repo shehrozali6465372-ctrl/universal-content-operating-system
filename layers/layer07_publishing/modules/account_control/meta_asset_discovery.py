@@ -43,6 +43,24 @@ class MetaAssetDiscovery:
     def token_configured(self) -> bool:
         return bool(self._token)
 
+    def health(self) -> Dict[str, Any]:
+        """Validate the configured System User token without returning token material."""
+        try:
+            data = self._get("/me", {"fields": "id,name"})
+            return {
+                "configured": True,
+                "reachable": True,
+                "valid": bool(data.get("id")),
+                "asset_id": str(data.get("id") or ""),
+            }
+        except Exception as exc:
+            return {
+                "configured": True,
+                "reachable": False,
+                "valid": False,
+                "error": str(exc),
+            }
+
     def discover(self) -> Dict[str, List[MetaAsset]]:
         pages = self._discover_pages()
         instagram: Dict[str, MetaAsset] = {}
