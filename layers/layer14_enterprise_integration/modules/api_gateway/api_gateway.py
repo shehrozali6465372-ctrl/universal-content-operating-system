@@ -23,7 +23,7 @@ class APIGateway:
     def __init__(self,host:str="127.0.0.1",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -194,6 +194,15 @@ class APIGateway:
             return APIResponse(data={"platform":"tiktok","account_id":account_id,"results":TikTokReconciliationService().reconcile(account_id)})
         except (LookupError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
+    def _handle_atoz_job(self,data):
+        try:
+            from layers.layer23_website_manager.integration.atoz_bridge import dispatch_job
+            return APIResponse(data=dispatch_job(data))
+        except (ValueError,LookupError) as exc:
+            return APIResponse(status_code=400,error=str(exc))
+        except Exception as exc:
+            return APIResponse(status_code=500,error=str(exc))
+
     def _handle_meta_health(self,params):
         try:
             from layers.layer07_publishing.modules.account_control.meta_asset_discovery import MetaAssetDiscovery
