@@ -18,6 +18,11 @@ class ControlPlane:
         from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
         return AccountLearningStore(AccountDataStore(self.registry))
 
+    def sync_meta_accounts(self, default_niche: str = "general") -> Dict[str, Any]:
+        """Discover and provision Meta assets using the single System User token."""
+        from layers.layer07_publishing.modules.account_control.meta_asset_discovery import MetaAssetDiscovery
+        return MetaAssetDiscovery().provision(self.registry, default_niche=default_niche)
+
     def _learning_scores(self, accounts: list[Any]) -> Dict[str,float]:
         """Return only observed, account-local performance; never synthesize metrics."""
         try:
