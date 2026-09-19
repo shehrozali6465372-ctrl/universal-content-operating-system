@@ -19,6 +19,11 @@ class ProductionPipeline(PipelineWiring):
     """Account-isolated production execution with explicit policy snapshots."""
 
     def _credentials(self, platform: str, account_id: str, credentials_ref: str) -> Dict[str, str]:
+        # Meta assets share one System User secret. Derive the required Page
+        # credential at runtime from the account's registered Meta asset id.
+        if credentials_ref == "META_ACCESS_TOKEN" and platform in ("facebook", "instagram"):
+            from layers.layer07_publishing.modules.account_control.meta_credentials import MetaCredentialProvider
+            return MetaCredentialProvider().credentials_for(platform, account_id)
         credentials = AccountCredentialResolver.resolve(credentials_ref)
         if not credentials:
             return {}
