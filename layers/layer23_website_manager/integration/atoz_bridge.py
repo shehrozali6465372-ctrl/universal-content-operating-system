@@ -37,11 +37,12 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     context = data.get("context")
     if not isinstance(context, dict):
         raise ValueError("context must be an object")
+    domain = str(context.get("domain") or "").strip()
+    site_name = str(context.get("site_name") or "").strip()
+    if not domain or not site_name:
+        raise ValueError("context.domain and context.site_name are required")
 
-    site = get_website(
-        domain=str(context.get("domain") or "example.com"),
-        site_name=str(context.get("site_name") or "AtozProductHub"),
-    )
+    site = get_website(domain=domain, site_name=site_name)
     job_id = str(uuid.uuid4())
 
     if job_type == "content":
