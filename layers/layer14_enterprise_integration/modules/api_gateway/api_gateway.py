@@ -146,9 +146,8 @@ class APIGateway:
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_meta_discover(self,data):
         try:
-            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
-            from layers.layer07_publishing.modules.account_control.meta_asset_discovery import MetaAssetDiscovery
-            result=MetaAssetDiscovery().provision(AccountRegistry(), default_niche=str(data.get("default_niche") or "general"))
+            from layers.layer14_enterprise_integration.modules.master_orchestrator.control_plane import ControlPlane
+            result=ControlPlane().sync_meta_accounts(default_niche=str(data.get("default_niche") or "general"))
             return APIResponse(data=result)
         except (RuntimeError,LookupError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
