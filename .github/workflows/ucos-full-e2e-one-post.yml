@@ -10,9 +10,6 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_API_VERSION: v26.0
-      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
-      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
-      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -25,6 +22,10 @@ jobs:
       - name: Full test suite
         run: pytest -q
       - name: One real post through canonical UCOS autonomous pipeline
+        env:
+          GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
         run: |
           python - <<'PY'
           import json, os, time
