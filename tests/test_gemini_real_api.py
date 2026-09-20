@@ -8,14 +8,19 @@ from layers.layer12_ai_foundation.modules.model_router.model_router import Model
 from layers.layer12_ai_foundation.modules.model_router.prompt_builder import PromptBuilder, PromptStyle
 
 
+def _env_or_fake(name: str, fake: str) -> str:
+    """Use a configured credential, otherwise keep the test network-free."""
+    return os.environ.get(name, "").strip() or fake
+
+
 class TestFullPipeline:
     """End-to-end router wiring; external API availability is not assumed."""
 
     def setup_method(self):
         self.km = KeyManager()
-        self.km.register_key("k1", os.environ.get("GEMINI_API_KEY_1", "AIzaSy_FAKE_11111111111111111111"), "gemini")
-        self.km.register_key("k2", os.environ.get("GEMINIAPIKEY2", "AIzaSy_FAKE_22222222222222222222"), "gemini")
-        self.km.register_key("k3", os.environ.get("GEMINIAPIKEY3", "AIzaSy_FAKE_33333333333333333333"), "gemini")
+        self.km.register_key("k1", _env_or_fake("GEMINI_API_KEY_1", "AIzaSy_FAKE_11111111111111111111"), "gemini")
+        self.km.register_key("k2", _env_or_fake("GEMINIAPIKEY2", "AIzaSy_FAKE_22222222222222222222"), "gemini")
+        self.km.register_key("k3", _env_or_fake("GEMINIAPIKEY3", "AIzaSy_FAKE_33333333333333333333"), "gemini")
         self.gemini = GeminiProvider(self.km)
         self.router = ModelRouter(self.km)
 
