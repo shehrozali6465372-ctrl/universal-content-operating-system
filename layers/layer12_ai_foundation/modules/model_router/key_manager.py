@@ -235,6 +235,14 @@ class KeyManager:
 
             # Selection is not a successful API call. Health is updated only\n            # after the provider reports the real HTTP result.\n            return self._actual_keys.get(best)
 
+    def key_id_for_secret(self, actual_key: str) -> Optional[str]:
+        """Resolve a selected credential back to its internal key id."""
+        with self._lock:
+            for key_id, stored_key in self._actual_keys.items():
+                if stored_key == actual_key and key_id in self._keys:
+                    return key_id
+        return None
+
     def select_healthiest_key(self) -> Optional[str]:
         """Sab se healthy key return karo (actual key)."""
         with self._lock:
