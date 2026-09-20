@@ -44,7 +44,7 @@ class QualityEstimator:
         result.dimensions["originality"] = min(1.0, len(set(w.lower() for w in words)) / max(len(words), 1) + 0.2)
         total_w = sum(self._weights.get(d, 0.2) for d in result.dimensions)
         total_s = sum(result.dimensions[d] * self._weights.get(d, 0.2) for d in result.dimensions)
-        result.overall_score = total_s / total_w if total_w > 0 else 0.5
+        result.overall_score = round(total_s / total_w, 12) if total_w > 0 else 0.5
         if result.overall_score >= 0.9: result.grade = "A+"
         elif result.overall_score >= 0.8: result.grade = "A"
         elif result.overall_score >= 0.7: result.grade = "B"
