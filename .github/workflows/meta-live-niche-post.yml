@@ -1,0 +1,186 @@
+name: Meta Live Niche Posts
+
+on:
+  push:
+    paths:
+      - .github/workflows/meta-live-niche-post.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-niche-posts:
+    runs-on: ubuntu-latest
+    env:
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v25.0
+    steps:
+      - name: Publish one niche post to every accessible Facebook Page and linked Instagram profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.parse
+          import urllib.request
+          import urllib.error
+
+          TOKEN = os.environ["META_ACCESS_TOKEN"]
+          VERSION = os.environ["META_GRAPH_VERSION"]
+          BASE = f"https://graph.facebook.com/{VERSION}"
+
+          if not TOKEN:
+              raise SystemExit("META_ACCESS_TOKEN is empty")
+
+          FB_POSTS = {
+              "DealNest Daily": "Smart shopping starts with value, not impulse. Compare the real price, check reviews, and look for the features you actually need before buying. #Deals #SmartShopping #ProductFinds",
+              "FitNest Daily": "Small habits compound. A consistent mix of strength training, daily movement, good sleep, and balanced meals can build a stronger routine than chasing quick fixes. #Fitness #Workout #HealthyHabits",
+              "KitchenNest Daily": "A better kitchen starts with simple systems: keep everyday tools within reach, prep ingredients before cooking, and clean as you go. Less friction means more enjoyable meals. #Cooking #KitchenTips #HomeCooking",
+              "GlowNest Daily": "Healthy-looking skin starts with the basics: gentle cleansing, daily sun protection, and a routine you can actually maintain. Keep skincare simple before adding more products. #Skincare #BeautyTips #SelfCare",
+              "PawTech Daily": "Pet care and technology can work together. From activity tracking to smart feeders, the useful tools are the ones that make everyday care easier without replacing attention, play, and regular veterinary care. #PetCare #Pets #PetTech",
+              "AI Tools Daily": "The best AI workflow is not about using the most tools. Pick one task, automate the repetitive part, verify the output, and measure whether it actually saves time. #AI #AITools #Productivity",
+              "HomeCraft Daily": "Before a home project, measure twice, plan the materials, and start with the smallest reversible change. Good DIY is as much about preparation as it is about the finished result. #DIY #HomeImprovement #HomeCraft",
+              "WellnessNest Daily": "Wellness is built from repeatable basics: sleep, movement, hydration, nutritious food, and time to recover. Focus on consistency rather than perfection. #Wellness #HealthyLiving #Lifestyle",
+              "BabyNest Daily": "For new parents, simple routines can make busy days easier: prepare essentials ahead of time, keep feeding and sleep notes organized when useful, and give yourself room for imperfect days. #Parenting #BabyCare #NewParents",
+              "MoneyWise Daily": "A practical money habit: know where your money went before deciding where it should go next. Track fixed costs, flexible spending, savings, and debt payments so your decisions are based on real numbers. #PersonalFinance #MoneyTips #Budgeting",
+              "jungle toon": "A little imagination can turn an ordinary moment into a whole new adventure. Keep creating, keep drawing, and keep the stories playful. #Animation #Cartoons #KidsEntertainment",
+              "deeplora": "Curiosity is a powerful filter: ask what something does, why it matters, and what evidence supports it before accepting the headline. Explore deeper, not just louder. #Discovery #Curiosity #LearnMore"
+          }
+
+          IG_POSTS = {
+              "vellorastyle100": ("Style is personal. Build a wardrobe around pieces you genuinely enjoy wearing, then let the details—texture, accessories, and fit—do the work. #Fashion #Style #OutfitIdeas", "https://images.unsplash.com/photo-1445205170230-053b83016050?fm=jpg&fit=crop&w=1080&q=85"),
+              "lumevora.beauty": ("A simple beauty routine can be a strong routine. Start with gentle care, sun protection, and products that suit your skin instead of chasing every trend. #Beauty #Skincare #SelfCare", "https://images.unsplash.com/photo-1596462502278-27bfdc403348?fm=jpg&fit=crop&w=1080&q=85"),
+              "aivora100": ("AI is most useful when it solves a real problem. Start with one repetitive task, give the model clear context, verify the result, and keep the workflow you can measure. #AI #ArtificialIntelligence #AITools", "https://images.unsplash.com/photo-1677442136019-21780ecad995?fm=jpg&fit=crop&w=1080&q=85"),
+              "wellvorahub": ("Make wellness practical: protect your sleep, move your body, eat nourishing food, and create small recovery habits you can repeat. #Wellness #HealthyLifestyle #SelfCare", "https://images.unsplash.com/photo-1506126613408-eca07ce68773?fm=jpg&fit=crop&w=1080&q=85"),
+              "petvoracare": ("The best pet-care routine combines attention with the right tools. Keep essentials organized, make time for play, and use technology only where it genuinely helps. #PetCare #Pets #PetLovers", "https://images.unsplash.com/photo-1450778869180-41d0601e046e?fm=jpg&fit=crop&w=1080&q=85"),
+              "maje_rcim": ("A stronger financial routine starts with visibility. Track income, essential costs, savings, and debt so every money decision has a clear starting point. Educational content only—not financial advice. #Finance #MoneyTips #PersonalFinance", "https://images.unsplash.com/photo-1559526324-593bc073d938?fm=jpg&fit=crop&w=1080&q=85"),
+              "homeloradaily": ("Good home design is useful before it is decorative. Create storage where you need it, improve everyday flow, and then add the details that make the space yours. #Home #InteriorDesign #HomeIdeas", "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?fm=jpg&fit=crop&w=1080&q=85"),
+              "ecoveloradaily": ("A more sustainable lifestyle does not require perfection. Reuse what you can, reduce unnecessary purchases, repair when practical, and choose durable options where they make sense. #Sustainability #EcoLiving #GreenLiving", "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?fm=jpg&fit=crop&w=1080&q=85"),
+              "prodivolab": ("Before buying a product, ask three questions: Does it solve a real problem? Will I use it regularly? Is the quality worth the price? Better buying starts with better questions. #ProductDiscovery #ProductFinds #SmartShopping", "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?fm=jpg&fit=crop&w=1080&q=85"),
+              "fitvorahq": ("Consistency beats an all-or-nothing approach. Build workouts you can repeat, recover properly, and increase difficulty gradually as your capacity improves. #Fitness #Training #Workout", "https://images.unsplash.com/photo-1538805060514-97d9cc17730c?fm=jpg&fit=crop&w=1080&q=85"),
+              "kingmakerbnb": ("A great short-stay experience starts with the basics: accurate listing details, a clean space, clear check-in instructions, and fast communication. #Airbnb #Hospitality #ShortTermRental", "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?fm=jpg&fit=crop&w=1080&q=85")
+          }
+
+          def request(method, path, params):
+              body = urllib.parse.urlencode(params).encode()
+              req = urllib.request.Request(
+                  BASE + path,
+                  data=body if method == "POST" else None,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"},
+                  method=method,
+              )
+              if method == "GET":
+                  req.full_url = BASE + path + "?" + urllib.parse.urlencode(params)
+              try:
+                  with urllib.request.urlopen(req, timeout=45) as resp:
+                      return resp.status, json.loads(resp.read().decode())
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode("utf-8", errors="replace")
+                  try:
+                      return e.code, json.loads(raw)
+                  except Exception:
+                      return e.code, {"error": {"message": raw[:1000]}}
+
+          status, payload = request("GET", "/me/accounts", {
+              "fields": "id,name,access_token,tasks,instagram_business_account{id,username,name}",
+              "limit": "100",
+              "access_token": TOKEN,
+          })
+          if status != 200 or "error" in payload:
+              print("ASSET_DISCOVERY=FAIL")
+              print(json.dumps(payload.get("error", payload), separators=(",", ":")))
+              raise SystemExit(2)
+
+          pages = payload.get("data", [])
+          print(f"DISCOVERED_FACEBOOK_PAGES={len(pages)}")
+
+          fb_success = 0
+          fb_fail = 0
+          ig_success = 0
+          ig_fail = 0
+
+          for page in pages:
+              page_id = str(page.get("id", ""))
+              page_name = str(page.get("name", ""))
+              page_token = page.get("access_token")
+              tasks = set(page.get("tasks") or [])
+
+              if page_name in FB_POSTS:
+                  if "CREATE_CONTENT" not in tasks and "MANAGE" not in tasks:
+                      print(f"FACEBOOK_SKIP name={page_name} reason=CREATE_CONTENT_TASK_MISSING")
+                      fb_fail += 1
+                  else:
+                      st, out = request("POST", f"/{page_id}/feed", {
+                          "message": FB_POSTS[page_name],
+                          "access_token": page_token,
+                      })
+                      if st == 200 and out.get("id"):
+                          print(f"FACEBOOK_POSTED name={page_name} post_id={out['id']}")
+                          fb_success += 1
+                      else:
+                          print(f"FACEBOOK_FAIL name={page_name} http={st} error={json.dumps(out.get('error', out), separators=(',', ':'))[:600]}")
+                          fb_fail += 1
+
+              ig = page.get("instagram_business_account") or {}
+              username = str(ig.get("username", ""))
+              ig_id = str(ig.get("id", ""))
+              if username in IG_POSTS and ig_id:
+                  caption, image_url = IG_POSTS[username]
+                  st, container = request("POST", f"/{ig_id}/media", {
+                      "image_url": image_url,
+                      "caption": caption,
+                      "access_token": page_token,
+                  })
+                  creation_id = container.get("id") if st == 200 else None
+                  if not creation_id:
+                      print(f"INSTAGRAM_FAIL username={username} stage=create_container http={st} error={json.dumps(container.get('error', container), separators=(',', ':'))[:600]}")
+                      ig_fail += 1
+                      continue
+
+                  ready = False
+                  last_status = None
+                  for _ in range(12):
+                      time.sleep(5)
+                      st2, state = request("GET", f"/{creation_id}", {
+                          "fields": "status_code,status",
+                          "access_token": page_token,
+                      })
+                      last_status = state.get("status_code")
+                      if st2 != 200:
+                          break
+                      if last_status == "FINISHED":
+                          ready = True
+                          break
+                      if last_status in {"ERROR", "EXPIRED"}:
+                          break
+
+                  if not ready:
+                      print(f"INSTAGRAM_FAIL username={username} stage=container_status status={last_status}")
+                      ig_fail += 1
+                      continue
+
+                  st3, published = request("POST", f"/{ig_id}/media_publish", {
+                      "creation_id": creation_id,
+                      "access_token": page_token,
+                  })
+                  media_id = published.get("id") if st3 == 200 else None
+                  if media_id:
+                      print(f"INSTAGRAM_POSTED username={username} media_id={media_id}")
+                      ig_success += 1
+                  else:
+                      print(f"INSTAGRAM_FAIL username={username} stage=publish http={st3} error={json.dumps(published.get('error', published), separators=(',', ':'))[:600]}")
+                      ig_fail += 1
+
+          print(f"FACEBOOK_RESULT success={fb_success} fail={fb_fail}")
+          print(f"INSTAGRAM_RESULT success={ig_success} fail={ig_fail}")
+
+          if fb_success != 12 or ig_success != 11 or fb_fail or ig_fail:
+              print("FINAL_RESULT=PARTIAL_OR_FAILED")
+              raise SystemExit(3)
+
+          print("FINAL_RESULT=PASS_12_FACEBOOK_11_INSTAGRAM")
+          PY
