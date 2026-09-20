@@ -1,14 +1,21 @@
-name: UCOS Full End-to-End One Real Post
+name: UCOS Full End-to-End One Real Autonomous Post
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/ucos-full-e2e-one-post.yml"
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_API_VERSION: v26.0
+      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -20,101 +27,102 @@ jobs:
         run: python -m compileall -q layers dashboard
       - name: Full test suite
         run: pytest -q
-      - name: One real post through UCOS
+      - name: One real post through canonical UCOS autonomous pipeline
         run: |
           python - <<'PY'
-          import os,time,json
+          import json, os, time
           from layers.layer07_publishing.modules.account_control.meta_asset_discovery import MetaAssetDiscovery
           from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
-          from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
-          from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
-          from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
-          from layers.layer07_publishing.modules.publishing_orchestrator.publishing_orchestrator import PublishingOrchestrator
-          from layers.layer07_publishing.modules.publishing_orchestrator.pipeline_stage import PipelineDefinition,PipelineStage
-          from layers.layer07_publishing.modules.publishing_planner.planner_engine import PlannerEngine
-          from layers.layer07_publishing.modules.publishing_policies.policy_manager import PolicyManager
-          from layers.layer07_publishing.modules.analytics_hook.analytics_manager import AnalyticsManager
-          from layers.layer07_publishing.modules.publishing_memory.publishing_memory_manager import PublishingMemoryManager
-          from layers.layer07_publishing.modules.publishing_memory.publish_history import PublishRecord
+          from layers.layer14_enterprise_integration.modules.master_orchestrator.production_pipeline import ProductionPipeline, ContentRequest
 
-          token=os.environ["META_ACCESS_TOKEN"].strip()
-          if not token: raise SystemExit("META_ACCESS_TOKEN missing")
-          marker="UCOS-FULL-E2E-REAL-"+str(int(time.time()))
-          content="UCOS full end-to-end verification post. "+marker
+          token = os.environ.get("META_ACCESS_TOKEN", "").strip()
+          if not token:
+              raise SystemExit("META_ACCESS_TOKEN missing")
 
-          d=MetaAssetDiscovery(token=token,api_version=os.environ["META_GRAPH_API_VERSION"])
-          if not d.health().get("valid"): raise SystemExit("Meta health failed")
-          assets=d.discover()
-          if not assets["facebook"]: raise SystemExit("No Facebook Page")
-          reg=AccountRegistry(); d.provision(reg)
-          page=assets["facebook"][0]
-          account_id="facebook:"+page.asset_id
+          discovery = MetaAssetDiscovery(token=token, api_version=os.environ["META_GRAPH_API_VERSION"])
+          health = discovery.health()
+          if not health.get("valid"):
+              raise SystemExit(f"Meta health failed: {health}")
+
+          registry = AccountRegistry()
+          discovered = discovery.discover()
+          if len(discovered["facebook"]) != 12:
+              raise SystemExit(f"Expected 12 Facebook Pages, found {len(discovered['facebook'])}")
+          if len(discovered["instagram"]) != 11:
+              raise SystemExit(f"Expected 11 Instagram profiles, found {len(discovered['instagram'])}")
+
+          provisioned = discovery.provision(registry)
+          page = discovered["facebook"][0]
+          account_id = f"facebook:{page.asset_id}"
+          account = registry.get(account_id)
+          if account is None:
+              raise SystemExit("Selected Meta Page was not provisioned into AccountRegistry")
+
+          marker = "UCOS-AUTONOMOUS-E2E-" + str(int(time.time()))
+          goal = (
+              "Create exactly one useful Facebook post for the selected page. "
+              "Choose a practical, non-controversial topic suitable for a general audience, "
+              "produce original useful content, validate it, and publish it through the canonical UCOS pipeline. "
+              f"Internal verification marker: {marker}"
+          )
+
+          request = ContentRequest(
+              topic=goal,
+              platform="facebook",
+              tone="professional and helpful",
+              style="educational",
+              include_image=False,
+              max_length=1000,
+          )
+          request.metadata.update({
+              "account_id": account_id,
+              "credentials_ref": "META_ACCESS_TOKEN",
+              "content_type": "post",
+              "niche": account.niche,
+              "test_marker": marker,
+          })
+
+          pipeline = ProductionPipeline()
+          response = pipeline.execute(request)
+          data = response.to_dict()
+
           print("META_DISCOVERY=PASS")
           print("ACCOUNT_PROVISIONING=PASS")
+          print("UCOS_PIPELINE=" + json.dumps(data, sort_keys=True))
 
-          planner=PlannerEngine()
-          plan=planner.create_quick_plan("content:"+marker,["facebook"])
-          policies=PolicyManager()
-          validation=policies.validate_content("facebook",content)
-          if not validation.passed or not policies.is_publish_allowed("facebook"): raise SystemExit("Policy failed")
-          print("PLANNING=PASS")
-          print("POLICY=PASS")
+          required = ["L2-Research","L3-Intelligence","L4-Writing","L12-AI","L5-Image","L6-Quality","L7-Publish","L8-Analytics","L9-Learning"]
+          actual = [s["layer"] for s in data["steps"]]
+          print("EXPECTED_CANONICAL_STEPS=" + json.dumps(required))
+          print("ACTUAL_CANONICAL_STEPS=" + json.dumps(actual))
 
-          plugins=PluginManager()
-          plugins.authenticate("facebook",{"page_id":page.asset_id,"access_token":token})
-          publisher=PublisherManager(plugin_manager=plugins)
-          req=PublishRequest("facebook",content,"post")
-          req.metadata["account_id"]=account_id
-          req.metadata["content_id"]="content:"+marker
+          if actual != required:
+              raise SystemExit("Canonical UCOS pipeline did not execute every required stage")
+          if any(s["status"] != "success" for s in data["steps"]):
+              raise SystemExit("One or more canonical UCOS stages did not succeed")
+          if not data.get("published"):
+              raise SystemExit("Canonical UCOS pipeline did not publish a real post")
+          if data.get("publish_result", {}).get("post_id") is None:
+              raise SystemExit("Canonical publisher returned no real post_id")
 
-          analytics=AnalyticsManager()
-          memory=PublishingMemoryManager()
-          pipe=PipelineDefinition("real_ucos_one_post")
-          pipe.add_stage(PipelineStage("validate","validate",1,True,lambda c: {"valid":plugins.get_capabilities("facebook").supports("post")}))
-          pipe.add_stage(PipelineStage("plan","plan",2,True,lambda c: planner.get_plan_summary(plan)))
-          pipe.add_stage(PipelineStage("check_policies","policies",3,True,lambda c: {"passed":validation.passed,"allowed":policies.is_publish_allowed("facebook")}))
-          pipe.add_stage(PipelineStage("schedule","schedule",4,True,lambda c: {"mode":"immediate","scheduled":True}))
-          pipe.add_stage(PipelineStage("upload_media","upload",5,True,lambda c: {"uploaded":0,"required":False}))
-          def do_publish(c):
-              r=publisher.publish(req)
-              if not r.success: raise RuntimeError(r.error_message or "publish failed")
-              return r.to_dict()
-          pipe.add_stage(PipelineStage("publish","REAL PublisherManager -> FacebookPublisher -> Graph API",6,True,do_publish))
-          pipe.add_stage(PipelineStage("handle_failure","recovery",7,True,lambda c: {"status":"no_failure"}))
-          def do_analytics(c):
-              pid=c["stage_results"]["publish"]["post_id"]
-              report=analytics.analyze_post("facebook",pid,lambda platform,pid: plugins.registry.get_instance("facebook").get_post(pid) or {})
-              if not report: raise RuntimeError("analytics collection failed")
-              return report.to_dict()
-          pipe.add_stage(PipelineStage("collect_analytics","analytics",8,True,do_analytics))
-          def do_memory(c):
-              pid=c["stage_results"]["publish"]["post_id"]
-              memory.store(PublishRecord(platform="facebook",post_id=pid,content_id="content:"+marker))
-              return memory.recommend().to_dict()
-          pipe.add_stage(PipelineStage("update_memory","memory",9,True,do_memory))
+          ai_step = next(s for s in data["steps"] if s["layer"] == "L12-AI")
+          if ai_step["data_keys"] and "offline" in ai_step["data_keys"]:
+              raise SystemExit("AI generation fell back to offline draft; production autonomous test requires configured AI")
 
-          orch=PublishingOrchestrator()
-          result=orch.publish("facebook",content,pipeline=pipe,account_id=account_id,content_id="content:"+marker)
-          print("ORCHESTRATOR_RESULT="+json.dumps(result,sort_keys=True))
-          expected=["validate","plan","check_policies","schedule","upload_media","publish","handle_failure","collect_analytics","update_memory"]
-          print("EXPECTED_STAGES="+json.dumps(expected))
-          print("COMPLETED_STAGES="+json.dumps(result["completed_stages"]))
-          if not result["success"] or result["completed_stages"]!=expected:
-              raise SystemExit("Full UCOS pipeline failed")
-          publish_stage=pipe.get_stage("publish")
-          if publish_stage is None or not isinstance(publish_stage.result,dict) or not publish_stage.result.get("post_id"):
-              raise SystemExit("Publisher stage did not return a post_id")
-          pid=str(publish_stage.result["post_id"])
-          analytics_stage=pipe.get_stage("collect_analytics")
-          memory_stage=pipe.get_stage("update_memory")
-          if analytics_stage is None or analytics_stage.result is None: raise SystemExit("Analytics stage produced no result")
-          if memory_stage is None or memory_stage.result is None: raise SystemExit("Memory stage produced no result")
-          print("ANALYTICS_STAGE=PASS")
-          print("MEMORY_STAGE=PASS")
-          verified=plugins.registry.get_instance("facebook").get_post(pid)
-          if not verified or str(verified.get("id"))!=pid or marker not in verified.get("message",""):
-              raise SystemExit("Real post verification failed")
-          print("REAL_FACEBOOK_POST_ID="+str(pid))
+          pid = str(data["publish_result"]["post_id"])
+          if not marker in response.text:
+              raise SystemExit("Generated content lost the E2E marker")
+
+          from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
+          plugins = PluginManager()
+          credentials = __import__("layers.layer07_publishing.modules.account_control.meta_credentials", fromlist=["MetaCredentialProvider"]).MetaCredentialProvider(token=token).credentials_for("facebook", account_id)
+          plugins.authenticate("facebook", credentials)
+          verified = plugins.registry.get_instance("facebook").get_post(pid)
+          if not verified or str(verified.get("id")) != pid:
+              raise SystemExit("Real Facebook post verification failed")
+
+          print("REAL_FACEBOOK_POST_ID=" + pid)
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
-          print("FINAL_RESULT=PASS_FULL_UCOS_ONE_REAL_POST")
+          print("ANALYTICS_STAGE=PASS")
+          print("LEARNING_STAGE=PASS")
+          print("FINAL_RESULT=PASS_FULL_UCOS_AUTONOMOUS_ONE_REAL_POST")
           PY
