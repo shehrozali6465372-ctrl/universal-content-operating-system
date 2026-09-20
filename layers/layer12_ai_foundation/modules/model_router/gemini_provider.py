@@ -66,7 +66,8 @@ class GeminiProvider:
         self._success_count = 0
         self._error_count = 0
         self._simulated_count = 0
-        self._total_tokens = 0\n        self._last_error = ""
+        self._total_tokens = 0
+        self._last_error = ""
 
     def add_key(self, key_id: str, actual_key: str) -> None:
         """Key register karo with KeyManager."""
