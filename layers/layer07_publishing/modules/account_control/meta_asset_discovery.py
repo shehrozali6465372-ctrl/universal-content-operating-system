@@ -34,7 +34,11 @@ class MetaAssetDiscovery:
     DEFAULT_VERSION = os.getenv("META_GRAPH_API_VERSION", "v26.0")
 
     def __init__(self, token: Optional[str] = None, *, api_version: Optional[str] = None) -> None:
-        self._token = (token or os.getenv("META_ACCESS_TOKEN", "")).strip()
+        self._token = (
+            os.getenv("META_ACCESS_TOKEN", "")
+            if token is None
+            else token
+        ).strip()
         self.api_version = (api_version or self.DEFAULT_VERSION).strip().strip("/")
         if not self._token:
             raise RuntimeError("META_ACCESS_TOKEN is not configured")
@@ -66,7 +70,7 @@ class MetaAssetDiscovery:
         instagram: Dict[str, MetaAsset] = {}
         for page in pages:
             page_id = page.asset_id
-            linked = page.username  # populated as a private transport field below when possible
+            linked = page.username
             ig = self._page_instagram_account(page_id)
             if ig:
                 instagram[ig.asset_id] = ig
