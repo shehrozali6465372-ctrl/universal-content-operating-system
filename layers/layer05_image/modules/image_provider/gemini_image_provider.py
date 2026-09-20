@@ -42,7 +42,7 @@ class GeminiImageProvider(BaseImageProvider):
     GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
     SUPPORTED_MODELS = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
 
-    def __init__(self, api_key: str = "", model: str = "gemini-2.0-flash") -> None:
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash") -> None:
         super().__init__(provider_name="gemini_image", api_key=api_key)
         self._model = model
         self._timeout = 60
@@ -226,7 +226,7 @@ class GeminiImageProvider(BaseImageProvider):
 
     def _get_api_key(self) -> str:
         """Get Gemini API key from environment."""
-        if self.api_key:
+        if self.api_key is not None:
             return self.api_key
         return os.environ.get("GEMINI_API_KEY_1", "")
 
