@@ -86,9 +86,8 @@ class GeminiProvider:
         if self._key_manager:
             api_key = self._key_manager.select_key("text")
             if api_key:
-                # Find which key_id was used
-                for kid, khealth in self._key_manager._keys.items():
-                    if khealth.is_available:
+                for kid, actual in self._key_manager._actual_keys.items():
+                    if actual == api_key:
                         key_id_used = kid
                         break
 
@@ -216,6 +215,7 @@ class GeminiProvider:
             # Parse Gemini response
             candidates = body.get("candidates", [])
             if not candidates:
+                self._last_error = "Gemini response contained no candidates"
                 return None
 
             content_parts = candidates[0].get("content", {}).get("parts", [])
@@ -233,6 +233,7 @@ class GeminiProvider:
             }
 
         except urllib.error.HTTPError as exc:
+            self._last_error = f"Gemini HTTP {exc.code}"
             error_body = ""
             try:
                 error_body = exc.read().decode("utf-8")
@@ -244,9 +245,11 @@ class GeminiProvider:
                     for kid in self._key_manager._keys:
                         self._key_manager.report_error(kid, "rate_limited_429", is_rate_limit=True)
             return None
-        except (urllib.error.URLError, TimeoutError, OSError):
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            self._last_error = f"Gemini network error: {type(exc).__name__}"
             return None
-        except (json.JSONDecodeError, KeyError, IndexError):
+        except (json.JSONDecodeError, KeyError, IndexError) as exc:
+            self._last_error = f"Gemini response parse error: {type(exc).__name__}"
             return None
 
     def _real_chat_call(self, messages: List[Dict[str, str]], model: str,
