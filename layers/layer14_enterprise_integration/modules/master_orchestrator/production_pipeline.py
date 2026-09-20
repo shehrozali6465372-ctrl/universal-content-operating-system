@@ -138,6 +138,8 @@ class ProductionPipeline(PipelineWiring):
         request.idempotency_key = f"ucos:{account_id}:{req.platform}:{hashlib.sha256(response.text.encode()).hexdigest()[:24]}"
         request.metadata.update({
             "account_id": account_id,
+            # ProductionPipeline owns the repetition reservation lifecycle.
+            "repetition_reserved_by_pipeline": True,
             "topic": req.topic,
             "niche": req.metadata.get("niche"),
             "ai_model": ctx.get("ai_model", "unknown"),
