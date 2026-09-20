@@ -85,9 +85,9 @@ class GeminiProvider:
         api_key = None
         key_id_used = None
         if self._key_manager:
-            api_key = self._key_manager.select_key("text")
-            if api_key:
-                key_id_used = self._key_manager.key_id_for_secret(api_key)
+            selected = self._key_manager.select_key_with_id("text")
+            if selected:
+                key_id_used, api_key = selected
 
         # Test/dummy credentials must never hit the network. Use the provider's
         # deterministic simulation path and still record a successful logical
