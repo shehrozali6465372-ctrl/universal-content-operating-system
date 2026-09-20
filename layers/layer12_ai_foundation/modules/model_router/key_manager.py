@@ -233,8 +233,7 @@ class KeyManager:
             else:
                 best = available[0]
 
-            self._keys[best].record_success(0, 0)
-            return self._actual_keys.get(best)
+            # Selection is not a successful API call. Health is updated only\n            # after the provider reports the real HTTP result.\n            return self._actual_keys.get(best)
 
     def select_healthiest_key(self) -> Optional[str]:
         """Sab se healthy key return karo (actual key)."""
