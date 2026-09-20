@@ -1,0 +1,121 @@
+name: Meta System User Token Test
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meta-token-test:
+    runs-on: ubuntu-latest
+    env:
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v25.0
+    steps:
+      - name: Validate Meta token and enumerate Pages / Instagram
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${META_ACCESS_TOKEN:-}" ]; then
+            echo "RESULT: META_ACCESS_TOKEN secret is missing or empty."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json, os, sys, urllib.parse, urllib.request, urllib.error
+
+          token = os.environ["META_ACCESS_TOKEN"]
+          version = os.environ["META_GRAPH_VERSION"]
+          base = f"https://graph.facebook.com/{version}"
+
+          def get(path, params=None):
+              params = params or {}
+              url = base + path
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              req = urllib.request.Request(
+                  url,
+                  headers={"Authorization": f"Bearer {token}"},
+                  method="GET",
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      return r.status, json.loads(r.read().decode("utf-8"))
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode("utf-8", errors="replace")
+                  try:
+                      return e.code, json.loads(raw)
+                  except Exception:
+                      return e.code, {"raw_error": raw[:1000]}
+              except Exception as e:
+                  return 0, {"exception": str(e)}
+
+          # 1) Prove the token is accepted by Meta without printing it.
+          status, me = get("/me", {"fields": "id,name"})
+          print(f"META_TOKEN_AUTH_HTTP_STATUS={status}")
+          if status != 200 or "error" in me:
+              print("META_TOKEN_AUTH=FAIL")
+              print(json.dumps({"error": me.get("error", me)}, separators=(",", ":")))
+              sys.exit(1)
+
+          print("META_TOKEN_AUTH=PASS")
+          print("META_ID=" + str(me.get("id", "")))
+          print("META_NAME=" + str(me.get("name", "")))
+
+          # 2) Enumerate assets available to the token.
+          status, pages = get("/me/accounts", {
+              "fields": "id,name,instagram_business_account{id,username,name}",
+              "limit": "100",
+          })
+          print(f"META_PAGES_ENDPOINT_HTTP_STATUS={status}")
+
+          if status != 200 or "error" in pages:
+              print("META_PAGE_ENUMERATION=FAIL")
+              print(json.dumps({"error": pages.get("error", pages)}, separators=(",", ":")))
+              sys.exit(2)
+
+          data = pages.get("data", [])
+          page_count = len(data)
+          instagram = []
+          print(f"META_FACEBOOK_PAGE_COUNT={page_count}")
+
+          for page in data:
+              page_id = str(page.get("id", ""))
+              page_name = str(page.get("name", ""))
+              print(f"FACEBOOK_PAGE id={page_id} name={page_name}")
+
+              ig = page.get("instagram_business_account")
+              if isinstance(ig, dict) and ig.get("id"):
+                  instagram.append(ig)
+                  print(
+                      "INSTAGRAM_PROFILE "
+                      f"id={ig.get('id','')} "
+                      f"username={ig.get('username','')} "
+                      f"name={ig.get('name','')}"
+                  )
+
+          unique_ig = {str(x.get("id")): x for x in instagram if x.get("id")}
+          print(f"META_INSTAGRAM_PROFILE_COUNT={len(unique_ig)}")
+
+          if page_count == 12:
+              print("FACEBOOK_EXPECTED_12=PASS")
+          else:
+              print(f"FACEBOOK_EXPECTED_12=FAIL actual={page_count}")
+
+          if len(unique_ig) == 11:
+              print("INSTAGRAM_EXPECTED_11=PASS")
+          else:
+              print(f"INSTAGRAM_EXPECTED_11=FAIL actual={len(unique_ig)}")
+
+          if page_count == 12 and len(unique_ig) == 11:
+              print("FINAL_RESULT=PASS_12_FACEBOOK_11_INSTAGRAM")
+              sys.exit(0)
+
+          print("FINAL_RESULT=FAIL_EXPECTED_ASSET_COUNTS_NOT_MATCHED")
+          sys.exit(3)
+          PY
