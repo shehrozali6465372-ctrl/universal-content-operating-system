@@ -100,4 +100,4 @@ class Event:
         return e
 
     def __repr__(self) -> str:
-        return f"Event(type={self.event_type}, source='{self.source}')"
+        return f"Event(type={self.event_type!r}, source='{self.source}')"
