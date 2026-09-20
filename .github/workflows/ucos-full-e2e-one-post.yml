@@ -26,6 +26,12 @@ jobs:
           GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINIAPIKEY2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINIAPIKEY3 }}
+          # Isolate the live E2E state from the preceding test suite.
+          # Tests intentionally exercise repetition/history using the default
+          # local stores; the real-post smoke test must start from clean state.
+          UCOS_ACCOUNT_REGISTRY_DB: ${{ runner.temp }}/ucos-e2e/accounts/registry.sqlite3
+          UCOS_ACCOUNT_WORKSPACES: ${{ runner.temp }}/ucos-e2e/accounts/workspaces
+          UCOS_CONTENT_HISTORY_DB: ${{ runner.temp }}/ucos-e2e/content-history.sqlite3
         run: |
           python - <<'PY'
           import json, os, time
@@ -81,9 +87,6 @@ jobs:
               "test_marker": marker,
           })
 
-          # The canonical publisher reads these adapter credentials from the
-          # process environment. Reuse the already-authenticated Meta token
-          # and the page selected by discovery; never expose the token in logs.
           os.environ["FACEBOOK_PAGE_ID"] = page.asset_id
           os.environ["FACEBOOK_ACCESS_TOKEN"] = token
 
@@ -102,8 +105,6 @@ jobs:
 
           if actual != required:
               raise SystemExit("Canonical UCOS pipeline did not execute every required stage")
-          # Image generation is optional for this one-post smoke test;
-          # the stage must execute, but an intentional skip is valid.
           required_failures = [
               s for s in data["steps"]
               if s["status"] != "success" and s["layer"] != "L5-Image"
