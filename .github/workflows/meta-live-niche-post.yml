@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/meta-live-niche-post.yml
   workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read
