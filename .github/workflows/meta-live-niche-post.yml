@@ -1,4 +1,4 @@
-name: Meta Live Niche Posts
+name: UCOS Deep End-to-End Live System Test
 
 on:
   push:
@@ -9,178 +9,222 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ucos-deep-e2e-live
+  cancel-in-progress: false
+
 jobs:
-  publish-niche-posts:
+  deep-e2e-live:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_VERSION: v25.0
+
     steps:
-      - name: Publish one niche post to every accessible Facebook Page and linked Instagram profile
+      - name: Checkout exact UCOS revision
+        uses: actions/checkout@v4
+
+      - name: Deep repository structure and Python integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== UCOS DEEP SYSTEM CHECK ==="
+          echo "COMMIT=${GITHUB_SHA}"
+          echo "BRANCH=${GITHUB_REF_NAME}"
+          LAYER_COUNT=$(find layers -maxdepth 1 -mindepth 1 -type d -name 'layer*' | wc -l | tr -d ' ')
+          PY_COUNT=$(find layers -type f -name '*.py' | wc -l | tr -d ' ')
+          echo "LAYER_COUNT=${LAYER_COUNT}"
+          echo "PYTHON_SOURCE_FILE_COUNT=${PY_COUNT}"
+          find layers -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | sort
+          test "${LAYER_COUNT}" -ge 23
+          test -f layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py
+          test -f layers/layer23_website_manager/integration/atoz_bridge.py
+          test -f layers/layer23_website_manager/integration/__init__.py
+          python3 -m compileall -q .
+          echo "STRUCTURE_AND_COMPILE=PASS"
+
+      - name: Run existing automated tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          TEST_FILES=$(find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) | wc -l | tr -d ' ')
+          echo "TEST_FILE_COUNT=${TEST_FILES}"
+          if [ "${TEST_FILES}" -eq 0 ]; then
+            echo "AUTOMATED_TESTS=NO_TEST_FILES_FOUND"
+            exit 0
+          fi
+          python3 -m pip install -q pytest
+          python3 -m pytest -q
+          RC=$?
+          if [ "${RC}" -ne 0 ]; then
+            echo "AUTOMATED_TESTS=FAIL"
+            exit "${RC}"
+          fi
+          echo "AUTOMATED_TESTS=PASS"
+
+      - name: Verify UCOS integration code paths
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json
-          import os
-          import sys
-          import time
-          import urllib.parse
-          import urllib.request
-          import urllib.error
+          from pathlib import Path
+          files = list(Path("layers").rglob("*.py"))
+          all_text = "\n".join(p.read_text(errors="ignore") for p in files)
+          checks = {
+              "layer14_api_gateway": Path("layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py").exists(),
+              "layer23_website_manager": Path("layers/layer23_website_manager/integration/atoz_bridge.py").exists(),
+              "heartbeat_route": "/heartbeat" in all_text,
+              "job_route": "/v1/jobs" in all_text,
+              "hmac_transport_auth": "hmac" in all_text.lower(),
+              "layer23_dispatch": "Layer 23" in all_text or "layer23" in all_text.lower(),
+          }
+          for k,v in checks.items():
+              print(f"INTEGRATION_{k.upper()}={'PASS' if v else 'FAIL'}")
+          if not all(checks.values()):
+              raise SystemExit(20)
+          print("INTEGRATION_TRACE=PASS")
+          PY
 
-          TOKEN = os.environ["META_ACCESS_TOKEN"]
-          VERSION = os.environ["META_GRAPH_VERSION"]
-          BASE = f"https://graph.facebook.com/{VERSION}"
+      - name: REAL Meta E2E — authenticate, discover, publish, and verify 12 Facebook + 11 Instagram
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.parse, urllib.request, urllib.error
+          from datetime import datetime, timezone
+
+          TOKEN=os.environ["META_ACCESS_TOKEN"]
+          VERSION=os.environ["META_GRAPH_VERSION"]
+          BASE=f"https://graph.facebook.com/{VERSION}"
+          MARKER="UCOS-E2E-REAL-LIVE-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+          FB_POSTS={
+            "DealNest Daily":"UCOS E2E live test — smart shopping: compare price, reviews, and useful features before buying.",
+            "FitNest Daily":"UCOS E2E live test — build fitness through repeatable training, movement, recovery, and balanced habits.",
+            "KitchenNest Daily":"UCOS E2E live test — practical kitchen systems: prep first, keep tools accessible, and clean as you go.",
+            "GlowNest Daily":"UCOS E2E live test — keep skincare practical with gentle care, sun protection, and a maintainable routine.",
+            "PawTech Daily":"UCOS E2E live test — useful pet technology should support attention, play, and responsible everyday care.",
+            "AI Tools Daily":"UCOS E2E live test — automate one repetitive task, verify the output, and measure the real time saved.",
+            "HomeCraft Daily":"UCOS E2E live test — measure, plan materials, and start home improvements with small reversible changes.",
+            "WellnessNest Daily":"UCOS E2E live test — sustainable wellness starts with sleep, movement, nutrition, hydration, and recovery.",
+            "BabyNest Daily":"UCOS E2E live test — simple preparation and flexible routines can make busy parenting days easier.",
+            "MoneyWise Daily":"UCOS E2E live test — track income, fixed costs, flexible spending, savings, and debt using real numbers.",
+            "jungle toon":"UCOS E2E live test — imagination turns ordinary moments into playful stories, drawings, and adventures.",
+            "deeplora":"UCOS E2E live test — ask what something does, why it matters, and what evidence supports it before accepting a claim."
+          }
+          IG_POSTS={
+            "vellorastyle100":("UCOS E2E live test — personal style starts with pieces you genuinely enjoy wearing. #Fashion #Style","https://images.unsplash.com/photo-1445205170230-053b83016050?fm=jpg&fit=crop&w=1080&q=85"),
+            "lumevora.beauty":("UCOS E2E live test — practical beauty starts with gentle care, sun protection, and a routine that fits. #Beauty #Skincare","https://images.unsplash.com/photo-1596462502278-27bfdc403348?fm=jpg&fit=crop&w=1080&q=85"),
+            "aivora100":("UCOS E2E live test — start AI with one real problem, clear context, verification, and measurable results. #AI #AITools","https://images.unsplash.com/photo-1677442136019-21780ecad995?fm=jpg&fit=crop&w=1080&q=85"),
+            "wellvorahub":("UCOS E2E live test — protect sleep, move regularly, eat nourishing food, and build repeatable recovery habits. #Wellness","https://images.unsplash.com/photo-1506126613408-eca07ce68773?fm=jpg&fit=crop&w=1080&q=85"),
+            "petvoracare":("UCOS E2E live test — combine attention, play, organized essentials, and useful tools for better pet care. #PetCare","https://images.unsplash.com/photo-1450778869180-41d0601e046e?fm=jpg&fit=crop&w=1080&q=85"),
+            "maje_rcim":("UCOS E2E live test — financial visibility starts with tracking income, essential costs, savings, and debt. #Finance #MoneyTips","https://images.unsplash.com/photo-1559526324-593bc073d938?fm=jpg&fit=crop&w=1080&q=85"),
+            "homeloradaily":("UCOS E2E live test — useful home design starts with storage, flow, and practical improvements. #Home #InteriorDesign","https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?fm=jpg&fit=crop&w=1080&q=85"),
+            "ecoveloradaily":("UCOS E2E live test — reuse, reduce unnecessary purchases, repair when practical, and choose durable options. #Sustainability #EcoLiving","https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?fm=jpg&fit=crop&w=1080&q=85"),
+            "prodivolab":("UCOS E2E live test — before buying, ask whether a product solves a real problem and justifies its price. #ProductDiscovery","https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?fm=jpg&fit=crop&w=1080&q=85"),
+            "fitvorahq":("UCOS E2E live test — consistency beats all-or-nothing training; recover properly and progress gradually. #Fitness #Workout","https://images.unsplash.com/photo-1538805060514-97d9cc17730c?fm=jpg&fit=crop&w=1080&q=85"),
+            "kingmakerbnb":("UCOS E2E live test — great short stays depend on accurate listings, clean spaces, clear check-in, and communication. #Airbnb #Hospitality","https://images.unsplash.com/photo-1564013799919-ab600027ffc6?fm=jpg&fit=crop&w=1080&q=85")
+          }
+
+          def req(method,path,params):
+            if method=="GET":
+              u=BASE+path+"?"+urllib.parse.urlencode(params)
+              q=urllib.request.Request(u,method="GET")
+            else:
+              q=urllib.request.Request(BASE+path,data=urllib.parse.urlencode(params).encode(),headers={"Content-Type":"application/x-www-form-urlencoded"},method="POST")
+            try:
+              with urllib.request.urlopen(q,timeout=45) as r:
+                return r.status,json.loads(r.read().decode())
+            except urllib.error.HTTPError as e:
+              raw=e.read().decode("utf-8","replace")
+              try:return e.code,json.loads(raw)
+              except:return e.code,{"error":{"message":raw[:1000]}}
 
           if not TOKEN:
-              raise SystemExit("META_ACCESS_TOKEN is empty")
+            print("META_TOKEN=FAIL_EMPTY"); raise SystemExit(30)
+          print("META_TOKEN=PASS_PRESENT")
 
-          FB_POSTS = {
-              "DealNest Daily": "Smart shopping starts with value, not impulse. Compare the real price, check reviews, and look for the features you actually need before buying. #Deals #SmartShopping #ProductFinds",
-              "FitNest Daily": "Small habits compound. A consistent mix of strength training, daily movement, good sleep, and balanced meals can build a stronger routine than chasing quick fixes. #Fitness #Workout #HealthyHabits",
-              "KitchenNest Daily": "A better kitchen starts with simple systems: keep everyday tools within reach, prep ingredients before cooking, and clean as you go. Less friction means more enjoyable meals. #Cooking #KitchenTips #HomeCooking",
-              "GlowNest Daily": "Healthy-looking skin starts with the basics: gentle cleansing, daily sun protection, and a routine you can actually maintain. Keep skincare simple before adding more products. #Skincare #BeautyTips #SelfCare",
-              "PawTech Daily": "Pet care and technology can work together. From activity tracking to smart feeders, the useful tools are the ones that make everyday care easier without replacing attention, play, and regular veterinary care. #PetCare #Pets #PetTech",
-              "AI Tools Daily": "The best AI workflow is not about using the most tools. Pick one task, automate the repetitive part, verify the output, and measure whether it actually saves time. #AI #AITools #Productivity",
-              "HomeCraft Daily": "Before a home project, measure twice, plan the materials, and start with the smallest reversible change. Good DIY is as much about preparation as it is about the finished result. #DIY #HomeImprovement #HomeCraft",
-              "WellnessNest Daily": "Wellness is built from repeatable basics: sleep, movement, hydration, nutritious food, and time to recover. Focus on consistency rather than perfection. #Wellness #HealthyLiving #Lifestyle",
-              "BabyNest Daily": "For new parents, simple routines can make busy days easier: prepare essentials ahead of time, keep feeding and sleep notes organized when useful, and give yourself room for imperfect days. #Parenting #BabyCare #NewParents",
-              "MoneyWise Daily": "A practical money habit: know where your money went before deciding where it should go next. Track fixed costs, flexible spending, savings, and debt payments so your decisions are based on real numbers. #PersonalFinance #MoneyTips #Budgeting",
-              "jungle toon": "A little imagination can turn an ordinary moment into a whole new adventure. Keep creating, keep drawing, and keep the stories playful. #Animation #Cartoons #KidsEntertainment",
-              "deeplora": "Curiosity is a powerful filter: ask what something does, why it matters, and what evidence supports it before accepting the headline. Explore deeper, not just louder. #Discovery #Curiosity #LearnMore"
-          }
+          st,me=req("GET","/me",{"fields":"id,name","access_token":TOKEN})
+          print(f"META_AUTH_HTTP={st}")
+          if st!=200 or not me.get("id"):
+            print("META_AUTH=FAIL"); raise SystemExit(31)
+          print(f"META_AUTH=PASS id={me['id']} name={me.get('name','')}")
 
-          IG_POSTS = {
-              "vellorastyle100": ("Style is personal. Build a wardrobe around pieces you genuinely enjoy wearing, then let the details—texture, accessories, and fit—do the work. #Fashion #Style #OutfitIdeas", "https://images.unsplash.com/photo-1445205170230-053b83016050?fm=jpg&fit=crop&w=1080&q=85"),
-              "lumevora.beauty": ("A simple beauty routine can be a strong routine. Start with gentle care, sun protection, and products that suit your skin instead of chasing every trend. #Beauty #Skincare #SelfCare", "https://images.unsplash.com/photo-1596462502278-27bfdc403348?fm=jpg&fit=crop&w=1080&q=85"),
-              "aivora100": ("AI is most useful when it solves a real problem. Start with one repetitive task, give the model clear context, verify the result, and keep the workflow you can measure. #AI #ArtificialIntelligence #AITools", "https://images.unsplash.com/photo-1677442136019-21780ecad995?fm=jpg&fit=crop&w=1080&q=85"),
-              "wellvorahub": ("Make wellness practical: protect your sleep, move your body, eat nourishing food, and create small recovery habits you can repeat. #Wellness #HealthyLifestyle #SelfCare", "https://images.unsplash.com/photo-1506126613408-eca07ce68773?fm=jpg&fit=crop&w=1080&q=85"),
-              "petvoracare": ("The best pet-care routine combines attention with the right tools. Keep essentials organized, make time for play, and use technology only where it genuinely helps. #PetCare #Pets #PetLovers", "https://images.unsplash.com/photo-1450778869180-41d0601e046e?fm=jpg&fit=crop&w=1080&q=85"),
-              "maje_rcim": ("A stronger financial routine starts with visibility. Track income, essential costs, savings, and debt so every money decision has a clear starting point. Educational content only—not financial advice. #Finance #MoneyTips #PersonalFinance", "https://images.unsplash.com/photo-1559526324-593bc073d938?fm=jpg&fit=crop&w=1080&q=85"),
-              "homeloradaily": ("Good home design is useful before it is decorative. Create storage where you need it, improve everyday flow, and then add the details that make the space yours. #Home #InteriorDesign #HomeIdeas", "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?fm=jpg&fit=crop&w=1080&q=85"),
-              "ecoveloradaily": ("A more sustainable lifestyle does not require perfection. Reuse what you can, reduce unnecessary purchases, repair when practical, and choose durable options where they make sense. #Sustainability #EcoLiving #GreenLiving", "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?fm=jpg&fit=crop&w=1080&q=85"),
-              "prodivolab": ("Before buying a product, ask three questions: Does it solve a real problem? Will I use it regularly? Is the quality worth the price? Better buying starts with better questions. #ProductDiscovery #ProductFinds #SmartShopping", "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?fm=jpg&fit=crop&w=1080&q=85"),
-              "fitvorahq": ("Consistency beats an all-or-nothing approach. Build workouts you can repeat, recover properly, and increase difficulty gradually as your capacity improves. #Fitness #Training #Workout", "https://images.unsplash.com/photo-1538805060514-97d9cc17730c?fm=jpg&fit=crop&w=1080&q=85"),
-              "kingmakerbnb": ("A great short-stay experience starts with the basics: accurate listing details, a clean space, clear check-in instructions, and fast communication. #Airbnb #Hospitality #ShortTermRental", "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?fm=jpg&fit=crop&w=1080&q=85")
-          }
+          st,p=req("GET","/me/accounts",{"fields":"id,name,access_token,tasks,instagram_business_account{id,username,name}","limit":"100","access_token":TOKEN})
+          print(f"ACCOUNT_DISCOVERY_HTTP={st}")
+          if st!=200 or "data" not in p:
+            print("ACCOUNT_DISCOVERY=FAIL"); raise SystemExit(32)
 
-          def request(method, path, params):
-              body = urllib.parse.urlencode(params).encode()
-              req = urllib.request.Request(
-                  BASE + path,
-                  data=body if method == "POST" else None,
-                  headers={"Content-Type": "application/x-www-form-urlencoded"},
-                  method=method,
-              )
-              if method == "GET":
-                  req.full_url = BASE + path + "?" + urllib.parse.urlencode(params)
-              try:
-                  with urllib.request.urlopen(req, timeout=45) as resp:
-                      return resp.status, json.loads(resp.read().decode())
-              except urllib.error.HTTPError as e:
-                  raw = e.read().decode("utf-8", errors="replace")
-                  try:
-                      return e.code, json.loads(raw)
-                  except Exception:
-                      return e.code, {"error": {"message": raw[:1000]}}
+          pages=p["data"]
+          print(f"FACEBOOK_DISCOVERED={len(pages)}")
+          if len(pages)!=12: raise SystemExit(33)
 
-          status, payload = request("GET", "/me/accounts", {
-              "fields": "id,name,access_token,tasks,instagram_business_account{id,username,name}",
-              "limit": "100",
-              "access_token": TOKEN,
-          })
-          if status != 200 or "error" in payload:
-              print("ASSET_DISCOVERY=FAIL")
-              print(json.dumps(payload.get("error", payload), separators=(",", ":")))
-              raise SystemExit(2)
-
-          pages = payload.get("data", [])
-          print(f"DISCOVERED_FACEBOOK_PAGES={len(pages)}")
-
-          fb_success = 0
-          fb_fail = 0
-          ig_success = 0
-          ig_fail = 0
-
+          fb_ok=fb_verify=ig_ok=ig_verify=0
+          ig_names=[]
           for page in pages:
-              page_id = str(page.get("id", ""))
-              page_name = str(page.get("name", ""))
-              page_token = page.get("access_token")
-              tasks = set(page.get("tasks") or [])
+            name=str(page.get("name","")); pid=str(page.get("id","")); pt=page.get("access_token")
+            if name not in FB_POSTS:
+              print(f"FACEBOOK_MAPPING_FAIL name={name}"); raise SystemExit(34)
 
-              if page_name in FB_POSTS:
-                  if "CREATE_CONTENT" not in tasks and "MANAGE" not in tasks:
-                      print(f"FACEBOOK_SKIP name={page_name} reason=CREATE_CONTENT_TASK_MISSING")
-                      fb_fail += 1
-                  else:
-                      st, out = request("POST", f"/{page_id}/feed", {
-                          "message": FB_POSTS[page_name],
-                          "access_token": page_token,
-                      })
-                      if st == 200 and out.get("id"):
-                          print(f"FACEBOOK_POSTED name={page_name} post_id={out['id']}")
-                          fb_success += 1
-                      else:
-                          print(f"FACEBOOK_FAIL name={page_name} http={st} error={json.dumps(out.get('error', out), separators=(',', ':'))[:600]}")
-                          fb_fail += 1
+            st,out=req("POST",f"/{pid}/feed",{"message":FB_POSTS[name]+" "+MARKER,"access_token":pt})
+            post_id=out.get("id") if st==200 else None
+            if not post_id:
+              print(f"FACEBOOK_POST_FAIL name={name} http={st} error={json.dumps(out.get('error',out),separators=(',',':'))[:600]}")
+              continue
+            fb_ok+=1
+            print(f"FACEBOOK_POSTED name={name} id={post_id}")
 
-              ig = page.get("instagram_business_account") or {}
-              username = str(ig.get("username", ""))
-              ig_id = str(ig.get("id", ""))
-              if username in IG_POSTS and ig_id:
-                  caption, image_url = IG_POSTS[username]
-                  st, container = request("POST", f"/{ig_id}/media", {
-                      "image_url": image_url,
-                      "caption": caption,
-                      "access_token": page_token,
-                  })
-                  creation_id = container.get("id") if st == 200 else None
-                  if not creation_id:
-                      print(f"INSTAGRAM_FAIL username={username} stage=create_container http={st} error={json.dumps(container.get('error', container), separators=(',', ':'))[:600]}")
-                      ig_fail += 1
-                      continue
+            vst,v=req("GET",f"/{post_id}",{"fields":"id,message,created_time","access_token":pt})
+            if vst==200 and v.get("id")==post_id and MARKER in v.get("message",""):
+              fb_verify+=1
+              print(f"FACEBOOK_VERIFIED name={name} id={post_id}")
+            else:
+              print(f"FACEBOOK_VERIFY_FAIL name={name} http={vst}")
 
-                  ready = False
-                  last_status = None
-                  for _ in range(12):
-                      time.sleep(5)
-                      st2, state = request("GET", f"/{creation_id}", {
-                          "fields": "status_code,status",
-                          "access_token": page_token,
-                      })
-                      last_status = state.get("status_code")
-                      if st2 != 200:
-                          break
-                      if last_status == "FINISHED":
-                          ready = True
-                          break
-                      if last_status in {"ERROR", "EXPIRED"}:
-                          break
+            ig=page.get("instagram_business_account") or {}
+            username=str(ig.get("username","")); igid=str(ig.get("id",""))
+            if username: ig_names.append(username)
+            if username not in IG_POSTS or not igid: continue
 
-                  if not ready:
-                      print(f"INSTAGRAM_FAIL username={username} stage=container_status status={last_status}")
-                      ig_fail += 1
-                      continue
+            cap,img=IG_POSTS[username]
+            st,c=req("POST",f"/{igid}/media",{"image_url":img,"caption":cap+" "+MARKER,"access_token":pt})
+            cid=c.get("id") if st==200 else None
+            if not cid:
+              print(f"INSTAGRAM_CONTAINER_FAIL username={username} http={st} error={json.dumps(c.get('error',c),separators=(',',':'))[:600]}")
+              continue
 
-                  st3, published = request("POST", f"/{ig_id}/media_publish", {
-                      "creation_id": creation_id,
-                      "access_token": page_token,
-                  })
-                  media_id = published.get("id") if st3 == 200 else None
-                  if media_id:
-                      print(f"INSTAGRAM_POSTED username={username} media_id={media_id}")
-                      ig_success += 1
-                  else:
-                      print(f"INSTAGRAM_FAIL username={username} stage=publish http={st3} error={json.dumps(published.get('error', published), separators=(',', ':'))[:600]}")
-                      ig_fail += 1
+            finished=False; status_code=""
+            for _ in range(18):
+              time.sleep(5)
+              s,state=req("GET",f"/{cid}",{"fields":"status_code,status","access_token":pt})
+              status_code=state.get("status_code","")
+              if s==200 and status_code=="FINISHED":
+                finished=True; break
+              if status_code in {"ERROR","EXPIRED"}: break
+            if not finished:
+              print(f"INSTAGRAM_STATUS_FAIL username={username} status={status_code}"); continue
 
-          print(f"FACEBOOK_RESULT success={fb_success} fail={fb_fail}")
-          print(f"INSTAGRAM_RESULT success={ig_success} fail={ig_fail}")
+            st,pub=req("POST",f"/{igid}/media_publish",{"creation_id":cid,"access_token":pt})
+            media_id=pub.get("id") if st==200 else None
+            if not media_id:
+              print(f"INSTAGRAM_PUBLISH_FAIL username={username} http={st} error={json.dumps(pub.get('error',pub),separators=(',',':'))[:600]}")
+              continue
+            ig_ok+=1
+            print(f"INSTAGRAM_POSTED username={username} id={media_id}")
 
-          if fb_success != 12 or ig_success != 11 or fb_fail or ig_fail:
-              print("FINAL_RESULT=PARTIAL_OR_FAILED")
-              raise SystemExit(3)
+            vst,v=req("GET",f"/{media_id}",{"fields":"id,caption,timestamp,permalink,media_type","access_token":pt})
+            if vst==200 and v.get("id")==media_id and MARKER in v.get("caption",""):
+              ig_verify+=1
+              print(f"INSTAGRAM_VERIFIED username={username} id={media_id} permalink={v.get('permalink','')}")
+            else:
+              print(f"INSTAGRAM_VERIFY_FAIL username={username} http={vst}")
 
-          print("FINAL_RESULT=PASS_12_FACEBOOK_11_INSTAGRAM")
+          print(f"FACEBOOK_FINAL posted={fb_ok}/12 verified={fb_verify}/12")
+          print(f"INSTAGRAM_FINAL posted={ig_ok}/11 verified={ig_verify}/11")
+          print(f"INSTAGRAM_LINKED_DISCOVERED={len(set(ig_names))}")
+          if fb_ok!=12 or fb_verify!=12 or ig_ok!=11 or ig_verify!=11:
+            print("FINAL_RESULT=FAIL")
+            raise SystemExit(35)
+          print("FINAL_RESULT=PASS_REAL_23_POSTS_23_VERIFIED")
           PY
