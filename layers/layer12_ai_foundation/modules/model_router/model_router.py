@@ -88,6 +88,7 @@ class ModelRouter:
         self._history: List[Dict[str, Any]] = []
         self._fallback_enabled = True
         self._max_retries = 3
+        self._max_history = 1000
 
     def register_provider(self, provider_name: str, handler: Optional[Callable] = None, capabilities: Optional[List[RequestType]] = None) -> ProviderAdapter:
         adapter = ProviderAdapter(provider_name, handler, capabilities)
@@ -105,12 +106,23 @@ class ModelRouter:
     def set_routing(self, request_type: RequestType, provider_order: List[str]) -> None:
         self._routing_table[request_type] = provider_order
 
-    def _select_provider(self, request_type: RequestType) -> Optional[ProviderAdapter]:
+    def _provider_order(self, request_type: RequestType) -> List[ProviderAdapter]:
+        """Return configured routing order, then unlisted providers."""
+        ordered: List[ProviderAdapter] = []
+        seen: set[str] = set()
         for provider_name in self._routing_table.get(request_type, []):
             adapter = self._providers.get(provider_name)
-            if adapter and adapter.is_enabled and adapter.supports(request_type) and adapter.handler:
-                return adapter
-        for adapter in self._providers.values():
+            if adapter and provider_name not in seen:
+                ordered.append(adapter)
+                seen.add(provider_name)
+        for provider_name, adapter in self._providers.items():
+            if provider_name not in seen:
+                ordered.append(adapter)
+                seen.add(provider_name)
+        return ordered
+
+    def _select_provider(self, request_type: RequestType) -> Optional[ProviderAdapter]:
+        for adapter in self._provider_order(request_type):
             if adapter.is_enabled and adapter.supports(request_type) and adapter.handler:
                 return adapter
         return None
@@ -125,6 +137,8 @@ class ModelRouter:
             "time": time.time(),
             **({"error": error} if error else {}),
         })
+        if len(self._history) > self._max_history:
+            del self._history[:-self._max_history]
 
     @staticmethod
     def _apply_result(response: ModelResponse, result: Any, adapter: ProviderAdapter, request: ModelRequest) -> ModelResponse:
@@ -151,34 +165,33 @@ class ModelRouter:
         start = time.time()
         attempted: set[str] = set()
         failures: List[str] = []
-        primary = self._select_provider(request.request_type)
+        providers = [
+            adapter for adapter in self._provider_order(request.request_type)
+            if adapter.is_enabled
+            and adapter.supports(request.request_type)
+            and adapter.handler
+        ]
+        if not self._fallback_enabled:
+            providers = providers[:1]
 
-        if primary:
-            attempted.add(primary.provider_name)
+        for adapter in providers:
+            attempted.add(adapter.provider_name)
             try:
-                response = self._apply_result(ModelResponse(request.request_id), primary.handler(request), primary, request)
+                response = self._apply_result(
+                    ModelResponse(request.request_id),
+                    adapter.handler(request),
+                    adapter,
+                    request,
+                )
                 response.latency_ms = (time.time() - start) * 1000
-                self._record(request, primary.provider_name, "success", response.latency_ms)
+                self._record(request, adapter.provider_name, "success", response.latency_ms)
                 return response
             except Exception as exc:
-                failures.append(f"{primary.provider_name}: {exc}")
-                self._record(request, primary.provider_name, "failed", (time.time() - start) * 1000, str(exc))
-                if not self._fallback_enabled:
-                    raise RuntimeError(str(exc)) from exc
-
-        if self._fallback_enabled:
-            for adapter in self._providers.values():
-                if adapter.provider_name in attempted or not adapter.is_enabled or not adapter.supports(request.request_type) or not adapter.handler:
-                    continue
-                attempted.add(adapter.provider_name)
-                try:
-                    response = self._apply_result(ModelResponse(request.request_id), adapter.handler(request), adapter, request)
-                    response.latency_ms = (time.time() - start) * 1000
-                    self._record(request, adapter.provider_name, "success", response.latency_ms)
-                    return response
-                except Exception as exc:
-                    failures.append(f"{adapter.provider_name}: {exc}")
-                    self._record(request, adapter.provider_name, "failed", (time.time() - start) * 1000, str(exc))
+                failures.append(f"{adapter.provider_name}: {exc}")
+                self._record(
+                    request, adapter.provider_name, "failed",
+                    (time.time() - start) * 1000, str(exc)
+                )
 
         detail = "; ".join(failures) if failures else "no enabled provider with a handler"
         response = ModelResponse(request.request_id)
@@ -192,7 +205,11 @@ class ModelRouter:
         return self.route(ModelRequest(RequestType.TEXT, prompt, model, **kwargs))
 
     def generate_chat(self, messages: List[Dict[str, str]], model: str = "", **kwargs: Any) -> ModelResponse:
-        return self.route(ModelRequest(RequestType.CHAT, str(messages), model, **kwargs))
+        # Preserve message structure for chat-capable provider handlers.
+        request = ModelRequest(RequestType.CHAT, "", model, **kwargs)
+        request.metadata["messages"] = messages
+        request.parameters["messages"] = messages
+        return self.route(request)
 
     def generate_image(self, prompt: str, model: str = "", **kwargs: Any) -> ModelResponse:
         return self.route(ModelRequest(RequestType.IMAGE, prompt, model, **kwargs))
@@ -210,4 +227,4 @@ class ModelRouter:
         return {"total_requests": total, "success": success, "failed": total - success, "success_rate": round(success / max(total, 1) * 100, 1), "providers_used": list(providers_used), "providers_registered": len(self._providers)}
 
     def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        return self._history[-limit:]
+        return self._history[-max(1, min(limit, self._max_history)):]
