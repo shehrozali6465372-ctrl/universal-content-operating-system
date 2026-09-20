@@ -92,6 +92,23 @@ class GeminiProvider:
                         key_id_used = kid
                         break
 
+        # Test/dummy credentials must never hit the network. Use the provider's
+        # deterministic simulation path and still record a successful logical
+        # request so KeyManager health/rotation metrics remain truthful.
+        if api_key and api_key.startswith("AIzaSy_FAKE_"):
+            result = self._simulated_response(prompt, model)
+            result["simulated"] = True
+            latency = (time.time() - start) * 1000
+            self._success_count += 1
+            self._simulated_count += 1
+            self._total_tokens += result.get("tokens_used", 0)
+            if self._key_manager and key_id_used:
+                self._key_manager.report_success(
+                    key_id_used, latency, result.get("tokens_used", 0))
+            result["latency_ms"] = round(latency, 1)
+            self._history.append({**result, "time": time.time()})
+            return result
+
         # Try real API call
         if api_key:
             result = self._real_api_call(prompt, model, api_key, system_prompt, **kwargs)
