@@ -1,0 +1,138 @@
+name: UCOS Read-Only E2E Diagnostic
+
+on:
+  push:
+    paths:
+      - ".github/workflows/ucos-readonly-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-e2e:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v25.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repository integrity
+        run: |
+          set -euo pipefail
+          layers=$(find layers -maxdepth 1 -mindepth 1 -type d -name 'layer*' | wc -l)
+          py=$(find layers -type f -name '*.py' | wc -l)
+          tests=$(find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) | wc -l)
+          echo "LAYER_COUNT=$layers"
+          echo "PYTHON_SOURCE_COUNT=$py"
+          echo "TEST_FILE_COUNT=$tests"
+          test "$layers" -ge 23
+          test -f layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py
+          test -f layers/layer23_website_manager/integration/atoz_bridge.py
+          python -m compileall -q .
+          echo "STRUCTURE_COMPILE=PASS"
+
+      - name: Existing CI test suite
+        run: |
+          set -euo pipefail
+          python -m pip install --break-system-packages -q pytest
+          python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
+          echo "CI_TEST_SUITE=PASS"
+
+      - name: Read-only Meta verification of existing 23 objects
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request, urllib.error
+
+          TOKEN=os.environ["META_ACCESS_TOKEN"]
+          BASE=f"https://graph.facebook.com/{os.environ['META_GRAPH_VERSION']}"
+
+          fb={
+            "DealNest Daily":"1238826765982455_122113750215444983",
+            "FitNest Daily":"1322250400972276_122116169433423783",
+            "KitchenNest Daily":"1185299761340856_122115796461430173",
+            "GlowNest Daily":"1290456714144702_122118802995425664",
+            "PawTech Daily":"1290905734099709_122112708483444257",
+            "AI Tools Daily":"1291172867406903_122115389697438327",
+            "HomeCraft Daily":"1325036294017111_122114042871444466",
+            "WellnessNest Daily":"1315164688340318_122114495505438647",
+            "BabyNest Daily":"1240604495807340_122118463131425097",
+            "MoneyWise Daily":"1301126553082004_122113626873439986",
+            "jungle toon":"915181721683080_122142832809189809",
+            "deeplora":"910981795433588_122146898877156482"
+          }
+          ig={
+            "vellorastyle100":"18140163904607422",
+            "lumevora.beauty":"18095853686635994",
+            "aivora100":"18129978148756853",
+            "wellvorahub":"18308783617304743",
+            "petvoracare":"17907315711507433",
+            "maje_rcim":"18040174985906460",
+            "homeloradaily":"18130363498718728",
+            "ecoveloradaily":"17887413705617073",
+            "prodivolab":"18490653877111933",
+            "fitvorahq":"17905648794333596",
+            "kingmakerbnb":"17868901437646160"
+          }
+
+          def get(path, fields):
+            q=urllib.parse.urlencode({"fields":fields,"access_token":TOKEN})
+            req=urllib.request.Request(BASE+path+"?"+q,method="GET")
+            try:
+              with urllib.request.urlopen(req,timeout=45) as r:
+                return r.status,json.loads(r.read().decode())
+            except urllib.error.HTTPError as e:
+              raw=e.read().decode("utf-8","replace")
+              try:return e.code,json.loads(raw)
+              except:return e.code,{"error":{"message":raw[:500]}}
+
+          if not TOKEN:
+            raise SystemExit("META_ACCESS_TOKEN_EMPTY")
+
+          st,me=get("/me","id,name")
+          print("META_AUTH_HTTP="+str(st))
+          if st!=200 or not me.get("id"):
+            print("META_AUTH_ERROR="+json.dumps(me.get("error",me),separators=(",",":"))[:600])
+            raise SystemExit("META_AUTH_FAIL")
+
+          st,p=get("/me/accounts","id,name,instagram_business_account{id,username,name}")
+          print("META_ACCOUNT_DISCOVERY_HTTP="+str(st))
+          if st!=200:
+            print("META_ACCOUNT_DISCOVERY_ERROR="+json.dumps(p.get("error",p),separators=(",",":"))[:600])
+            raise SystemExit("META_ACCOUNT_DISCOVERY_FAIL")
+          pages={str(x.get("name","")):x for x in p.get("data",[])}
+          print("DISCOVERED_FACEBOOK_PAGES="+str(len(pages)))
+          linked={str((x.get("instagram_business_account") or {}).get("username","")) for x in p.get("data",[])}
+          linked.discard("")
+          print("DISCOVERED_INSTAGRAM_PROFILES="+str(len(linked)))
+
+          fb_ok=0
+          for name,pid in fb.items():
+            # Read-only GET against the exact existing object ID.
+            st,obj=get("/"+pid,"id,message,created_time,permalink_url,is_hidden")
+            if st==200 and obj.get("id")==pid:
+              fb_ok+=1
+              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" created="+str(obj.get("created_time",""))+" permalink="+str(obj.get("permalink_url","")))
+            else:
+              print("FACEBOOK_VERIFY_FAIL name="+name+" http="+str(st)+" error="+json.dumps(obj.get("error",obj),separators=(",",":"))[:600])
+
+          ig_ok=0
+          for username,mid in ig.items():
+            st,obj=get("/"+mid,"id,caption,timestamp,permalink,media_type")
+            if st==200 and obj.get("id")==mid:
+              ig_ok+=1
+              print("INSTAGRAM_VERIFY_PASS username="+username+" id="+mid+" timestamp="+str(obj.get("timestamp",""))+" permalink="+str(obj.get("permalink","")))
+            else:
+              print("INSTAGRAM_VERIFY_FAIL username="+username+" http="+str(st)+" error="+json.dumps(obj.get("error",obj),separators=(",",":"))[:600])
+
+          print(f"FACEBOOK_EXISTING_OBJECTS={fb_ok}/12")
+          print(f"INSTAGRAM_EXISTING_OBJECTS={ig_ok}/11")
+          print("WRITE_OPERATIONS=0")
+          if fb_ok!=12 or ig_ok!=11:
+            raise SystemExit("EXISTING_OBJECT_VERIFICATION_PARTIAL")
+          print("META_READONLY_VERIFICATION=PASS_23_OF_23")
+          PY
