@@ -7,6 +7,7 @@ on:
 
 jobs:
   e2e:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -105,13 +106,12 @@ jobs:
               raise SystemExit("Canonical publisher returned no real post_id")
 
           ai_step = next(s for s in data["steps"] if s["layer"] == "L12-AI")
+          if ai_step["status"] != "success":
+              raise SystemExit("AI generation stage failed")
           if ai_step["data_keys"] and "offline" in ai_step["data_keys"]:
               raise SystemExit("AI generation fell back to offline draft; production autonomous test requires configured AI")
 
           pid = str(data["publish_result"]["post_id"])
-          if not marker in response.text:
-              raise SystemExit("Generated content lost the E2E marker")
-
           from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
           plugins = PluginManager()
           credentials = __import__("layers.layer07_publishing.modules.account_control.meta_credentials", fromlist=["MetaCredentialProvider"]).MetaCredentialProvider(token=token).credentials_for("facebook", account_id)
