@@ -1,4 +1,5 @@
 name: UCOS Read-Only E2E Diagnostic
+# Diagnostic only: this workflow performs zero Meta write operations.
 
 on:
   push:
