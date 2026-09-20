@@ -1,6 +1,8 @@
 name: UCOS Full End-to-End One Real Post
 on:
   workflow_dispatch:
+
+jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -95,10 +97,23 @@ on:
           result=orch.publish("facebook",content,pipeline=pipe,account_id=account_id,content_id="content:"+marker)
           print("ORCHESTRATOR_RESULT="+json.dumps(result,sort_keys=True))
           expected=["validate","plan","check_policies","schedule","upload_media","publish","handle_failure","collect_analytics","update_memory"]
-          if not result["success"] or result["completed_stages"]!=expected: raise SystemExit("Full UCOS pipeline failed")
-          pid=result["stage_results"]["publish"]["post_id"]
+          print("EXPECTED_STAGES="+json.dumps(expected))
+          print("COMPLETED_STAGES="+json.dumps(result["completed_stages"]))
+          if not result["success"] or result["completed_stages"]!=expected:
+              raise SystemExit("Full UCOS pipeline failed")
+          publish_stage=pipe.get_stage("publish")
+          if publish_stage is None or not isinstance(publish_stage.result,dict) or not publish_stage.result.get("post_id"):
+              raise SystemExit("Publisher stage did not return a post_id")
+          pid=str(publish_stage.result["post_id"])
+          analytics_stage=pipe.get_stage("collect_analytics")
+          memory_stage=pipe.get_stage("update_memory")
+          if analytics_stage is None or analytics_stage.result is None: raise SystemExit("Analytics stage produced no result")
+          if memory_stage is None or memory_stage.result is None: raise SystemExit("Memory stage produced no result")
+          print("ANALYTICS_STAGE=PASS")
+          print("MEMORY_STAGE=PASS")
           verified=plugins.registry.get_instance("facebook").get_post(pid)
-          if not verified or verified.get("id")!=pid or marker not in verified.get("message",""): raise SystemExit("Real post verification failed")
+          if not verified or str(verified.get("id"))!=pid or marker not in verified.get("message",""):
+              raise SystemExit("Real post verification failed")
           print("REAL_FACEBOOK_POST_ID="+str(pid))
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
           print("FINAL_RESULT=PASS_FULL_UCOS_ONE_REAL_POST")
