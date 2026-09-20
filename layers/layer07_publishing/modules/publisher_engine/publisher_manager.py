@@ -63,7 +63,7 @@ class PublisherManager:
             return result
 
         account_id = request.metadata.get("account_id")
-        if account_id:
+        if account_id and not request.metadata.get("repetition_reserved_by_pipeline"):
             guard = self._account_repetition_guard(str(account_id))
             decision = guard.reserve(
                 account_id=str(account_id), platform=request.platform,
