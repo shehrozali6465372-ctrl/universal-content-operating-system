@@ -213,6 +213,27 @@ class KeyManager:
         if strategy in valid:
             self._strategy = strategy
 
+    def select_key_with_id(self, capability: str = "text") -> Optional[tuple[str, str]]:
+        """Select an available credential and return (key_id, actual_key) atomically."""
+        with self._lock:
+            available = [
+                kid for kid, kh in self._keys.items()
+                if kh.is_available and kid in self._actual_keys
+            ]
+            if not available:
+                return None
+            if self._strategy == "healthiest":
+                best = max(available, key=lambda k: self._keys[k].success_rate)
+            elif self._strategy == "round_robin":
+                best = available[self._round_robin_index % len(available)]
+                self._round_robin_index += 1
+            elif self._strategy == "least_used":
+                best = min(available, key=lambda k: self._keys[k].total_requests)
+            else:
+                best = available[0]
+            actual = self._actual_keys.get(best)
+            return (best, actual) if actual else None
+
     def select_key(self, capability: str = "text") -> Optional[str]:
         """Best available key select karo (actual key return hoti hai)."""
         with self._lock:
