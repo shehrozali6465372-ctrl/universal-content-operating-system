@@ -1,0 +1,81 @@
+name: Meta Live Deeplora Post
+
+on:
+  push:
+    paths:
+      - .github/workflows/meta-live-deeplora-post.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-deeplora:
+    runs-on: ubuntu-latest
+    env:
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v25.0
+    steps:
+      - name: Publish Deeplora niche post
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request, urllib.error
+
+          token = os.environ["META_ACCESS_TOKEN"]
+          base = f"https://graph.facebook.com/{os.environ['META_GRAPH_VERSION']}"
+
+          def request(method, path, params):
+              data = urllib.parse.urlencode(params).encode()
+              req = urllib.request.Request(
+                  base + path,
+                  data=data if method == "POST" else None,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"},
+                  method=method,
+              )
+              if method == "GET":
+                  req = urllib.request.Request(
+                      base + path + "?" + urllib.parse.urlencode(params),
+                      headers={"Content-Type": "application/x-www-form-urlencoded"},
+                      method="GET",
+                  )
+              try:
+                  with urllib.request.urlopen(req, timeout=45) as r:
+                      return r.status, json.loads(r.read().decode())
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode("utf-8", errors="replace")
+                  try:
+                      return e.code, json.loads(raw)
+                  except Exception:
+                      return e.code, {"error": {"message": raw[:1000]}}
+
+          status, payload = request("GET", "/me/accounts", {
+              "fields": "id,name,access_token,tasks",
+              "limit": "100",
+              "access_token": token,
+          })
+          if status != 200 or "error" in payload:
+              raise SystemExit("ASSET_DISCOVERY_FAILED")
+
+          target = next((p for p in payload.get("data", []) if str(p.get("name", "")).strip().lower() == "deeplora"), None)
+          if not target:
+              raise SystemExit("DEEPLORA_PAGE_NOT_FOUND")
+
+          tasks = set(target.get("tasks") or [])
+          if "CREATE_CONTENT" not in tasks and "MANAGE" not in tasks:
+              raise SystemExit("DEEPLORA_CREATE_CONTENT_TASK_MISSING")
+
+          message = "Curiosity is a powerful filter: ask what something does, why it matters, and what evidence supports it before accepting the headline. Explore deeper, not just louder. #Discovery #Curiosity #LearnMore"
+          status, result = request("POST", f"/{target['id']}/feed", {
+              "message": message,
+              "access_token": target["access_token"],
+          })
+
+          if status != 200 or not result.get("id"):
+              print(json.dumps(result.get("error", result), separators=(",", ":"))[:1000])
+              raise SystemExit("DEEPLORA_POST_FAILED")
+
+          print("DEEPLORA_POSTED=PASS")
+          print("DEEPLORA_POST_ID=" + str(result["id"]))
+          PY
