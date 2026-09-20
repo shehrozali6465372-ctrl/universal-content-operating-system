@@ -13,6 +13,8 @@ jobs:
 
     env:
       PYTHONPATH: ${{ github.workspace }}
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v25.0
 
     steps:
       - uses: actions/checkout@v4
@@ -31,5 +33,110 @@ jobs:
         run: |
           python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
 
+      - name: Deep UCOS structural and compile check
+        run: |
+          set -euo pipefail
+          LAYERS=$(find layers -maxdepth 1 -mindepth 1 -type d -name 'layer*' | wc -l | tr -d ' ')
+          PY_FILES=$(find layers -type f -name '*.py' | wc -l | tr -d ' ')
+          echo "TOP_LEVEL_LAYER_COUNT=$LAYERS"
+          echo "PYTHON_SOURCE_FILE_COUNT=$PY_FILES"
+          test "$LAYERS" -eq 23
+          test -f layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py
+          test -f layers/layer23_website_manager/integration/atoz_bridge.py
+          python -m compileall -q .
+          echo "DEEP_STRUCTURE_COMPILE=PASS"
+
       - name: System Status
         run: python main.py --status
+
+      - name: REAL Meta 23-account E2E publish and verification
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time, urllib.parse, urllib.request, urllib.error
+          from datetime import datetime, timezone
+          token=os.environ["META_ACCESS_TOKEN"]
+          version=os.environ["META_GRAPH_VERSION"]
+          base=f"https://graph.facebook.com/{version}"
+          marker="UCOS-CI-E2E-REAL-"+datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+          fb={
+            "DealNest Daily":"UCOS real E2E test — smart shopping: compare price, reviews, and useful features.",
+            "FitNest Daily":"UCOS real E2E test — repeatable training, movement, recovery, and balanced habits.",
+            "KitchenNest Daily":"UCOS real E2E test — prep first, keep tools accessible, and clean as you go.",
+            "GlowNest Daily":"UCOS real E2E test — gentle care, sun protection, and a maintainable skincare routine.",
+            "PawTech Daily":"UCOS real E2E test — useful pet technology should support responsible everyday care.",
+            "AI Tools Daily":"UCOS real E2E test — automate one task, verify output, and measure time saved.",
+            "HomeCraft Daily":"UCOS real E2E test — measure, plan materials, and make small reversible changes.",
+            "WellnessNest Daily":"UCOS real E2E test — sleep, movement, nutrition, hydration, and recovery.",
+            "BabyNest Daily":"UCOS real E2E test — preparation and flexible routines can make parenting days easier.",
+            "MoneyWise Daily":"UCOS real E2E test — track income, costs, savings, and debt using real numbers.",
+            "jungle toon":"UCOS real E2E test — imagination turns ordinary moments into playful stories.",
+            "deeplora":"UCOS real E2E test — ask what, why, and what evidence supports a claim."
+          }
+          ig={
+            "vellorastyle100":("UCOS real E2E test — personal style and useful outfit choices. #Fashion #Style","https://images.unsplash.com/photo-1445205170230-053b83016050?fm=jpg&fit=crop&w=1080&q=85"),
+            "lumevora.beauty":("UCOS real E2E test — practical beauty, gentle care, and sun protection. #Beauty #Skincare","https://images.unsplash.com/photo-1596462502278-27bfdc403348?fm=jpg&fit=crop&w=1080&q=85"),
+            "aivora100":("UCOS real E2E test — one real AI problem, clear context, verification, measurable results. #AI","https://images.unsplash.com/photo-1677442136019-21780ecad995?fm=jpg&fit=crop&w=1080&q=85"),
+            "wellvorahub":("UCOS real E2E test — sleep, movement, nutrition, and recovery. #Wellness","https://images.unsplash.com/photo-1506126613408-eca07ce68773?fm=jpg&fit=crop&w=1080&q=85"),
+            "petvoracare":("UCOS real E2E test — attention, play, and useful pet-care tools. #PetCare","https://images.unsplash.com/photo-1450778869180-41d0601e046e?fm=jpg&fit=crop&w=1080&q=85"),
+            "maje_rcim":("UCOS real E2E test — financial visibility through income, costs, savings, and debt tracking. #Finance","https://images.unsplash.com/photo-1559526324-593bc073d938?fm=jpg&fit=crop&w=1080&q=85"),
+            "homeloradaily":("UCOS real E2E test — useful home design starts with storage and flow. #Home","https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?fm=jpg&fit=crop&w=1080&q=85"),
+            "ecoveloradaily":("UCOS real E2E test — reuse, reduce, repair, and choose durable options. #Sustainability","https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?fm=jpg&fit=crop&w=1080&q=85"),
+            "prodivolab":("UCOS real E2E test — ask whether a product solves a real problem and justifies its price. #ProductDiscovery","https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?fm=jpg&fit=crop&w=1080&q=85"),
+            "fitvorahq":("UCOS real E2E test — consistent training, recovery, and gradual progression. #Fitness","https://images.unsplash.com/photo-1538805060514-97d9cc17730c?fm=jpg&fit=crop&w=1080&q=85"),
+            "kingmakerbnb":("UCOS real E2E test — accurate listings, clean spaces, clear check-in, communication. #Hospitality","https://images.unsplash.com/photo-1564013799919-ab600027ffc6?fm=jpg&fit=crop&w=1080&q=85")
+          }
+          def req(method,path,params):
+            if method=="GET":
+              u=base+path+"?"+urllib.parse.urlencode(params); q=urllib.request.Request(u)
+            else:
+              q=urllib.request.Request(base+path,data=urllib.parse.urlencode(params).encode(),headers={"Content-Type":"application/x-www-form-urlencoded"},method="POST")
+            try:
+              with urllib.request.urlopen(q,timeout=45) as r:return r.status,json.loads(r.read().decode())
+            except urllib.error.HTTPError as e:
+              raw=e.read().decode("utf-8","replace")
+              try:return e.code,json.loads(raw)
+              except:return e.code,{"error":{"message":raw[:500]}}
+          if not token: raise SystemExit("META_TOKEN_EMPTY")
+          st,me=req("GET","/me",{"fields":"id,name","access_token":token})
+          print("META_AUTH_HTTP",st)
+          if st!=200: raise SystemExit("META_AUTH_FAIL")
+          st,p=req("GET","/me/accounts",{"fields":"id,name,access_token,tasks,instagram_business_account{id,username,name}","limit":"100","access_token":token})
+          if st!=200: raise SystemExit("ACCOUNT_DISCOVERY_FAIL")
+          pages=p.get("data",[])
+          print("FACEBOOK_DISCOVERED",len(pages))
+          if len(pages)!=12: raise SystemExit("FACEBOOK_COUNT_FAIL")
+          fbp=igp=fbv=igv=0
+          for page in pages:
+            name=page.get("name",""); pt=page.get("access_token"); pid=page.get("id")
+            if name not in fb: raise SystemExit("FACEBOOK_MAPPING_FAIL:"+name)
+            st,o=req("POST",f"/{pid}/feed",{"message":fb[name]+" "+marker,"access_token":pt})
+            post=o.get("id") if st==200 else None
+            if not post: print("FACEBOOK_FAIL",name,st); continue
+            fbp+=1; print("FACEBOOK_POSTED",name,post)
+            s,v=req("GET",f"/{post}",{"fields":"id,message,created_time","access_token":pt})
+            if s==200 and v.get("id")==post and marker in v.get("message",""): fbv+=1
+            a=page.get("instagram_business_account") or {}; user=a.get("username",""); iid=a.get("id")
+            if user not in ig or not iid: continue
+            cap,img=ig[user]
+            s,c=req("POST",f"/{iid}/media",{"image_url":img,"caption":cap+" "+marker,"access_token":pt})
+            cid=c.get("id") if s==200 else None
+            if not cid: print("INSTAGRAM_CONTAINER_FAIL",user,s); continue
+            ready=False
+            for _ in range(18):
+              time.sleep(5)
+              s,state=req("GET",f"/{cid}",{"fields":"status_code,status","access_token":pt})
+              if s==200 and state.get("status_code")=="FINISHED": ready=True; break
+              if state.get("status_code") in ("ERROR","EXPIRED"): break
+            if not ready: print("INSTAGRAM_STATUS_FAIL",user); continue
+            s,pub=req("POST",f"/{iid}/media_publish",{"creation_id":cid,"access_token":pt})
+            mid=pub.get("id") if s==200 else None
+            if not mid: print("INSTAGRAM_PUBLISH_FAIL",user,s); continue
+            igp+=1; print("INSTAGRAM_POSTED",user,mid)
+            s,v=req("GET",f"/{mid}",{"fields":"id,caption,timestamp,permalink","access_token":pt})
+            if s==200 and v.get("id")==mid and marker in v.get("caption",""): igv+=1
+          print(f"FACEBOOK_REAL_RESULT posted={fbp}/12 verified={fbv}/12")
+          print(f"INSTAGRAM_REAL_RESULT posted={igp}/11 verified={igv}/11")
+          if (fbp,fbv,igp,igv)!=(12,12,11,11): raise SystemExit("META_E2E_FAIL")
+          print("META_E2E_RESULT=PASS_REAL_23_POSTS_AND_23_VERIFICATIONS")
+          PY
