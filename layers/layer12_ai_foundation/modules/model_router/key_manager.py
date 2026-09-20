@@ -81,10 +81,13 @@ class KeyHealth:
         """Key abhi use ho sakti hai?"""
         if self.status in (KeyStatus.DISABLED, KeyStatus.EXHAUSTED):
             return False
-        if self.status in (KeyStatus.COOLDOWN, KeyStatus.DEGRADED):
+        if self.status == KeyStatus.COOLDOWN:
             if time.time() < self.cooldown_until:
                 return False
             self.status = KeyStatus.HEALTHY
+        elif self.status == KeyStatus.DEGRADED:
+            # Degraded is observable health state, not a hard availability gate.
+            # Keep the key eligible; only explicit cooldown/rate-limit states block use.
         if self.status == KeyStatus.RATE_LIMITED:
             if self.rpm_remaining <= 0 and time.time() < self.cooldown_until:
                 return False
