@@ -132,7 +132,11 @@ class KeyHealth:
             self.cooldown_until = time.time() + 60
             self.rpm_remaining = 0
         elif self.consecutive_errors >= 5:
-            self.status = KeyStatus.EXHAUSTED
+            # Transient provider errors must not permanently kill a credential.
+            # Put the key into a bounded cooldown; explicit disabling remains
+            # the only permanent operational state.
+            self.status = KeyStatus.COOLDOWN
+            self.cooldown_until = time.time() + 60
         elif self.consecutive_errors >= 3:
             self.status = KeyStatus.DEGRADED
             self.cooldown_until = time.time() + 10
@@ -149,8 +153,9 @@ class KeyHealth:
         self.tokens_used = 0
         self.rpm_remaining = 60
         self.tpm_remaining = 60_000
-        if self.status == KeyStatus.RATE_LIMITED:
+        if self.status in (KeyStatus.RATE_LIMITED, KeyStatus.COOLDOWN, KeyStatus.EXHAUSTED):
             self.status = KeyStatus.HEALTHY
+            self.consecutive_errors = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -254,7 +259,9 @@ class KeyManager:
             else:
                 best = available[0]
 
-            # Selection is not a successful API call. Health is updated only\n            # after the provider reports the real HTTP result.\n            return self._actual_keys.get(best)
+            # Selection is not a successful API call. Health is updated only
+            # after the provider reports the real HTTP result.
+            return self._actual_keys.get(best)
 
     def key_id_for_secret(self, actual_key: str) -> Optional[str]:
         """Resolve a selected credential back to its internal key id."""
@@ -340,4 +347,4 @@ class KeyManager:
         return [kh.to_dict() for kh in self._keys.values()]
 
     def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        return self._history[-limit:]
+        return self._history[-max(1, min(limit, 1000)):]
