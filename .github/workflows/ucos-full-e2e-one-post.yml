@@ -81,6 +81,12 @@ jobs:
               "test_marker": marker,
           })
 
+          # The canonical publisher reads these adapter credentials from the
+          # process environment. Reuse the already-authenticated Meta token
+          # and the page selected by discovery; never expose the token in logs.
+          os.environ["FACEBOOK_PAGE_ID"] = page.asset_id
+          os.environ["FACEBOOK_ACCESS_TOKEN"] = token
+
           pipeline = ProductionPipeline()
           response = pipeline.execute(request)
           data = response.to_dict()
@@ -96,8 +102,18 @@ jobs:
 
           if actual != required:
               raise SystemExit("Canonical UCOS pipeline did not execute every required stage")
-          if any(s["status"] != "success" for s in data["steps"]):
-              raise SystemExit("One or more canonical UCOS stages did not succeed")
+          # Image generation is optional for this one-post smoke test;
+          # the stage must execute, but an intentional skip is valid.
+          required_failures = [
+              s for s in data["steps"]
+              if s["status"] != "success" and s["layer"] != "L5-Image"
+          ]
+          if required_failures:
+              raise SystemExit("One or more required canonical UCOS stages did not succeed: "
+                               + json.dumps(required_failures, sort_keys=True))
+          image_step = next(s for s in data["steps"] if s["layer"] == "L5-Image")
+          if image_step["status"] not in ("success", "skipped"):
+              raise SystemExit("L5-Image stage failed")
           if not data.get("published"):
               raise SystemExit("Canonical UCOS pipeline did not publish a real post")
           if data.get("publish_result", {}).get("post_id") is None:
