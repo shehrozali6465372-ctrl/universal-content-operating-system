@@ -1,9 +1,6 @@
 name: UCOS Deep End-to-End Live System Test
 
 on:
-  push:
-    paths:
-      - ".github/workflows/meta-live-niche-post.yml"
   workflow_dispatch:
 
 permissions:
