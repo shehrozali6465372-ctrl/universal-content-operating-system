@@ -81,7 +81,7 @@ class KeyHealth:
         """Key abhi use ho sakti hai?"""
         if self.status in (KeyStatus.DISABLED, KeyStatus.EXHAUSTED):
             return False
-        if self.status == KeyStatus.COOLDOWN:
+        if self.status in (KeyStatus.COOLDOWN, KeyStatus.DEGRADED):
             if time.time() < self.cooldown_until:
                 return False
             self.status = KeyStatus.HEALTHY
