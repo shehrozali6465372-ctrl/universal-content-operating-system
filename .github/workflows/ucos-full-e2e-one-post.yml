@@ -1,12 +1,7 @@
 name: UCOS Full End-to-End One Real Post
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/ucos-full-e2e-one-post.yml
-jobs:
   e2e:
-    if: ${{ !contains(github.event.head_commit.message, '[disable-e2e]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
