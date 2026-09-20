@@ -1,6 +1,5 @@
 """Tests for Gemini provider + ModelRouter integration without requiring network access."""
 from __future__ import annotations
-import os
 
 from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager, KeyStatus
 from layers.layer12_ai_foundation.modules.model_router.gemini_provider import GeminiProvider
@@ -8,19 +7,16 @@ from layers.layer12_ai_foundation.modules.model_router.model_router import Model
 from layers.layer12_ai_foundation.modules.model_router.prompt_builder import PromptBuilder, PromptStyle
 
 
-def _env_or_fake(name: str, fake: str) -> str:
-    """Use a configured credential, otherwise keep the test network-free."""
-    return os.environ.get(name, "").strip() or fake
-
-
 class TestFullPipeline:
     """End-to-end router wiring; external API availability is not assumed."""
 
     def setup_method(self):
         self.km = KeyManager()
-        self.km.register_key("k1", _env_or_fake("GEMINI_API_KEY_1", "AIzaSy_FAKE_11111111111111111111"), "gemini")
-        self.km.register_key("k2", _env_or_fake("GEMINIAPIKEY2", "AIzaSy_FAKE_22222222222222222222"), "gemini")
-        self.km.register_key("k3", _env_or_fake("GEMINIAPIKEY3", "AIzaSy_FAKE_33333333333333333333"), "gemini")
+        # These tests are deliberately network-free. Never consume real CI
+        # credentials here: the autonomous E2E workflow owns real-key testing.
+        self.km.register_key("k1", "AIzaSy_FAKE_11111111111111111111", "gemini")
+        self.km.register_key("k2", "AIzaSy_FAKE_22222222222222222222", "gemini")
+        self.km.register_key("k3", "AIzaSy_FAKE_33333333333333333333", "gemini")
         self.gemini = GeminiProvider(self.km)
         self.router = ModelRouter(self.km)
 
