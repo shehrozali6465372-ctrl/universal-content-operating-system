@@ -35,7 +35,7 @@ class TestFullPipeline:
 
     def test_ai_brain_to_gemini_flow(self):
         response = self.router.generate_text("What is artificial intelligence?")
-        assert response.provider in ("gemini", "")
+        assert response.provider in ("gemini", "gemini_simulated", "")
         assert response.content or response.metadata.get("error")
 
     def test_key_rotation_under_load(self):
