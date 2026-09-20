@@ -38,7 +38,7 @@ jobs:
       - name: Existing CI test suite
         run: |
           set -euo pipefail
-          python -m pip install --break-system-packages -q pytest
+          python -m pip install -q pytest
           python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
           echo "CI_TEST_SUITE=PASS"
 
