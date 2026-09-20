@@ -1,6 +1,9 @@
 name: UCOS Deep End-to-End Live System Test
 
 on:
+  push:
+    paths:
+      - ".github/workflows/meta-live-niche-post.yml"
   workflow_dispatch:
 
 permissions:
@@ -33,7 +36,6 @@ jobs:
           PY_COUNT=$(find layers -type f -name '*.py' | wc -l | tr -d ' ')
           echo "LAYER_COUNT=${LAYER_COUNT}"
           echo "PYTHON_SOURCE_FILE_COUNT=${PY_COUNT}"
-          find layers -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | sort
           test "${LAYER_COUNT}" -ge 23
           test -f layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py
           test -f layers/layer23_website_manager/integration/atoz_bridge.py
@@ -44,20 +46,9 @@ jobs:
       - name: Run existing automated tests
         shell: bash
         run: |
-          set -uo pipefail
-          TEST_FILES=$(find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) | wc -l | tr -d ' ')
-          echo "TEST_FILE_COUNT=${TEST_FILES}"
-          if [ "${TEST_FILES}" -eq 0 ]; then
-            echo "AUTOMATED_TESTS=NO_TEST_FILES_FOUND"
-            exit 0
-          fi
+          set -euo pipefail
           python3 -m pip install -q pytest
           python3 -m pytest -q
-          RC=$?
-          if [ "${RC}" -ne 0 ]; then
-            echo "AUTOMATED_TESTS=FAIL"
-            exit "${RC}"
-          fi
           echo "AUTOMATED_TESTS=PASS"
 
       - name: Verify UCOS integration code paths
@@ -74,7 +65,7 @@ jobs:
               "heartbeat_route": "/heartbeat" in all_text,
               "job_route": "/v1/jobs" in all_text,
               "hmac_transport_auth": "hmac" in all_text.lower(),
-              "layer23_dispatch": "Layer 23" in all_text or "layer23" in all_text.lower(),
+              "layer23_dispatch": "layer23" in all_text.lower(),
           }
           for k,v in checks.items():
               print(f"INTEGRATION_{k.upper()}={'PASS' if v else 'FAIL'}")
@@ -88,14 +79,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, sys, time, urllib.parse, urllib.request, urllib.error
+          import json, os, time, urllib.parse, urllib.request, urllib.error
           from datetime import datetime, timezone
-
           TOKEN=os.environ["META_ACCESS_TOKEN"]
-          VERSION=os.environ["META_GRAPH_VERSION"]
-          BASE=f"https://graph.facebook.com/{VERSION}"
+          BASE=f"https://graph.facebook.com/{os.environ['META_GRAPH_VERSION']}"
           MARKER="UCOS-E2E-REAL-LIVE-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
           FB_POSTS={
             "DealNest Daily":"UCOS E2E live test — smart shopping: compare price, reviews, and useful features before buying.",
             "FitNest Daily":"UCOS E2E live test — build fitness through repeatable training, movement, recovery, and balanced habits.",
@@ -123,105 +111,52 @@ jobs:
             "fitvorahq":("UCOS E2E live test — consistency beats all-or-nothing training; recover properly and progress gradually. #Fitness #Workout","https://images.unsplash.com/photo-1538805060514-97d9cc17730c?fm=jpg&fit=crop&w=1080&q=85"),
             "kingmakerbnb":("UCOS E2E live test — great short stays depend on accurate listings, clean spaces, clear check-in, and communication. #Airbnb #Hospitality","https://images.unsplash.com/photo-1564013799919-ab600027ffc6?fm=jpg&fit=crop&w=1080&q=85")
           }
-
           def req(method,path,params):
             if method=="GET":
-              u=BASE+path+"?"+urllib.parse.urlencode(params)
-              q=urllib.request.Request(u,method="GET")
+              q=urllib.request.Request(BASE+path+"?"+urllib.parse.urlencode(params),method="GET")
             else:
               q=urllib.request.Request(BASE+path,data=urllib.parse.urlencode(params).encode(),headers={"Content-Type":"application/x-www-form-urlencoded"},method="POST")
             try:
-              with urllib.request.urlopen(q,timeout=45) as r:
-                return r.status,json.loads(r.read().decode())
+              with urllib.request.urlopen(q,timeout=45) as r: return r.status,json.loads(r.read().decode())
             except urllib.error.HTTPError as e:
               raw=e.read().decode("utf-8","replace")
               try:return e.code,json.loads(raw)
               except:return e.code,{"error":{"message":raw[:1000]}}
-
-          if not TOKEN:
-            print("META_TOKEN=FAIL_EMPTY"); raise SystemExit(30)
-          print("META_TOKEN=PASS_PRESENT")
-
+          if not TOKEN: raise SystemExit("META_TOKEN_EMPTY")
           st,me=req("GET","/me",{"fields":"id,name","access_token":TOKEN})
           print(f"META_AUTH_HTTP={st}")
-          if st!=200 or not me.get("id"):
-            print("META_AUTH=FAIL"); raise SystemExit(31)
-          print(f"META_AUTH=PASS id={me['id']} name={me.get('name','')}")
-
+          if st!=200 or not me.get("id"): raise SystemExit("META_AUTH_FAIL")
           st,p=req("GET","/me/accounts",{"fields":"id,name,access_token,tasks,instagram_business_account{id,username,name}","limit":"100","access_token":TOKEN})
-          print(f"ACCOUNT_DISCOVERY_HTTP={st}")
-          if st!=200 or "data" not in p:
-            print("ACCOUNT_DISCOVERY=FAIL"); raise SystemExit(32)
-
-          pages=p["data"]
-          print(f"FACEBOOK_DISCOVERED={len(pages)}")
-          if len(pages)!=12: raise SystemExit(33)
-
+          if st!=200 or "data" not in p: raise SystemExit("ACCOUNT_DISCOVERY_FAIL")
+          pages=p["data"]; print(f"FACEBOOK_DISCOVERED={len(pages)}")
+          if len(pages)!=12: raise SystemExit("EXPECTED_12_FB")
           fb_ok=fb_verify=ig_ok=ig_verify=0
-          ig_names=[]
           for page in pages:
             name=str(page.get("name","")); pid=str(page.get("id","")); pt=page.get("access_token")
-            if name not in FB_POSTS:
-              print(f"FACEBOOK_MAPPING_FAIL name={name}"); raise SystemExit(34)
-
             st,out=req("POST",f"/{pid}/feed",{"message":FB_POSTS[name]+" "+MARKER,"access_token":pt})
             post_id=out.get("id") if st==200 else None
-            if not post_id:
-              print(f"FACEBOOK_POST_FAIL name={name} http={st} error={json.dumps(out.get('error',out),separators=(',',':'))[:600]}")
-              continue
-            fb_ok+=1
-            print(f"FACEBOOK_POSTED name={name} id={post_id}")
-
-            vst,v=req("GET",f"/{post_id}",{"fields":"id,message,created_time","access_token":pt})
-            if vst==200 and v.get("id")==post_id and MARKER in v.get("message",""):
-              fb_verify+=1
-              print(f"FACEBOOK_VERIFIED name={name} id={post_id}")
-            else:
-              print(f"FACEBOOK_VERIFY_FAIL name={name} http={vst}")
-
-            ig=page.get("instagram_business_account") or {}
-            username=str(ig.get("username","")); igid=str(ig.get("id",""))
-            if username: ig_names.append(username)
+            if not post_id: print(f"FACEBOOK_POST_FAIL={name}"); continue
+            fb_ok+=1; vst,v=req("GET",f"/{post_id}",{"fields":"id,message,created_time","access_token":pt})
+            if vst==200 and v.get("id")==post_id and MARKER in v.get("message",""): fb_verify+=1
+            ig=page.get("instagram_business_account") or {}; username=str(ig.get("username","")); igid=str(ig.get("id",""))
             if username not in IG_POSTS or not igid: continue
-
             cap,img=IG_POSTS[username]
             st,c=req("POST",f"/{igid}/media",{"image_url":img,"caption":cap+" "+MARKER,"access_token":pt})
             cid=c.get("id") if st==200 else None
-            if not cid:
-              print(f"INSTAGRAM_CONTAINER_FAIL username={username} http={st} error={json.dumps(c.get('error',c),separators=(',',':'))[:600]}")
-              continue
-
-            finished=False; status_code=""
+            if not cid: print(f"INSTAGRAM_CONTAINER_FAIL={username}"); continue
+            finished=False
             for _ in range(18):
-              time.sleep(5)
-              s,state=req("GET",f"/{cid}",{"fields":"status_code,status","access_token":pt})
-              status_code=state.get("status_code","")
-              if s==200 and status_code=="FINISHED":
-                finished=True; break
-              if status_code in {"ERROR","EXPIRED"}: break
-            if not finished:
-              print(f"INSTAGRAM_STATUS_FAIL username={username} status={status_code}"); continue
-
+              time.sleep(5); s,state=req("GET",f"/{cid}",{"fields":"status_code,status","access_token":pt})
+              if s==200 and state.get("status_code")=="FINISHED": finished=True; break
+              if state.get("status_code") in {"ERROR","EXPIRED"}: break
+            if not finished: print(f"INSTAGRAM_STATUS_FAIL={username}"); continue
             st,pub=req("POST",f"/{igid}/media_publish",{"creation_id":cid,"access_token":pt})
             media_id=pub.get("id") if st==200 else None
-            if not media_id:
-              print(f"INSTAGRAM_PUBLISH_FAIL username={username} http={st} error={json.dumps(pub.get('error',pub),separators=(',',':'))[:600]}")
-              continue
-            ig_ok+=1
-            print(f"INSTAGRAM_POSTED username={username} id={media_id}")
-
-            vst,v=req("GET",f"/{media_id}",{"fields":"id,caption,timestamp,permalink,media_type","access_token":pt})
-            if vst==200 and v.get("id")==media_id and MARKER in v.get("caption",""):
-              ig_verify+=1
-              print(f"INSTAGRAM_VERIFIED username={username} id={media_id} permalink={v.get('permalink','')}")
-            else:
-              print(f"INSTAGRAM_VERIFY_FAIL username={username} http={vst}")
-
+            if not media_id: print(f"INSTAGRAM_PUBLISH_FAIL={username}"); continue
+            ig_ok+=1; vst,v=req("GET",f"/{media_id}",{"fields":"id,caption,timestamp,permalink,media_type","access_token":pt})
+            if vst==200 and v.get("id")==media_id and MARKER in v.get("caption",""): ig_verify+=1
           print(f"FACEBOOK_FINAL posted={fb_ok}/12 verified={fb_verify}/12")
           print(f"INSTAGRAM_FINAL posted={ig_ok}/11 verified={ig_verify}/11")
-          print(f"INSTAGRAM_LINKED_DISCOVERED={len(set(ig_names))}")
-          if fb_ok!=12 or fb_verify!=12 or ig_ok!=11 or ig_verify!=11:
-            print("FINAL_RESULT=FAIL")
-            raise SystemExit(35)
+          if fb_ok!=12 or fb_verify!=12 or ig_ok!=11 or ig_verify!=11: raise SystemExit("FINAL_23_CHECK_FAILED")
           print("FINAL_RESULT=PASS_REAL_23_POSTS_23_VERIFIED")
           PY
