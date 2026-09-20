@@ -66,7 +66,7 @@ class GeminiProvider:
         self._success_count = 0
         self._error_count = 0
         self._simulated_count = 0
-        self._total_tokens = 0
+        self._total_tokens = 0\n        self._last_error = ""
 
     def add_key(self, key_id: str, actual_key: str) -> None:
         """Key register karo with KeyManager."""
@@ -112,7 +112,7 @@ class GeminiProvider:
                 # API call failed — report error
                 self._error_count += 1
                 if self._key_manager and key_id_used:
-                    self._key_manager.report_error(key_id_used, "api_call_failed")
+                    self._key_manager.report_error(key_id_used, self._last_error or "api_call_failed")
 
         # No simulated fallback — return error
         latency = (time.time() - start) * 1000
@@ -122,7 +122,7 @@ class GeminiProvider:
             "provider": "gemini",
             "tokens_used": 0,
             "simulated": False,
-            "error": "All API keys failed or unavailable",
+            "error": self._last_error or "All API keys failed or unavailable",
             "latency_ms": round(latency, 1),
         }
         self._history.append({**error_result, "time": time.time()})
