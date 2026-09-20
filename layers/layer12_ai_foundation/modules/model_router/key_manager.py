@@ -88,6 +88,7 @@ class KeyHealth:
         elif self.status == KeyStatus.DEGRADED:
             # Degraded is observable health state, not a hard availability gate.
             # Keep the key eligible; only explicit cooldown/rate-limit states block use.
+            pass
         if self.status == KeyStatus.RATE_LIMITED:
             if self.rpm_remaining <= 0 and time.time() < self.cooldown_until:
                 return False
