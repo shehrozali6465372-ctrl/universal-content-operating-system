@@ -18,7 +18,7 @@ from layers.layer07_publishing.modules.platform_plugin_manager.base_publisher im
 
 
 class FacebookPublisher(BasePublisher):
-    API_BASE = "https://graph.facebook.com/v19.0"
+    API_BASE = f"https://graph.facebook.com/{os.environ.get('META_GRAPH_API_VERSION', 'v26.0')}"
 
     def __init__(self) -> None:
         self._page_id = ""
@@ -188,7 +188,7 @@ class FacebookPublisher(BasePublisher):
         with urllib.request.urlopen(request, timeout=30) as response: return json.loads(response.read().decode("utf-8"))
 
     def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(data); payload["access_token"] = self._access_token
+        payload = dict(data); payload["access_token"] = self._access_token\n        if "attached_media" in payload:\n            payload["attached_media"] = json.dumps(payload["attached_media"], separators=(",", ":"))
         request = urllib.request.Request(f"{self.API_BASE}{path}", data=urllib.parse.urlencode(payload).encode("utf-8"), method="POST")
         with urllib.request.urlopen(request, timeout=60) as response: return json.loads(response.read().decode("utf-8"))
 
