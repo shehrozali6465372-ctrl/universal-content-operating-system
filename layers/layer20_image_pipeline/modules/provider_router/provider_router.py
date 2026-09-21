@@ -18,8 +18,8 @@ class ImageProvider:
         self.name = name
         self.status = ProviderStatus.AVAILABLE
         self.cost_per_image = cost_per_image
-        self.quality_score = 0.8
-        self.speed_score = 0.8
+        self.quality_score: Optional[float] = None
+        self.speed_score: Optional[float] = None
         self.handler = handler
         self.metadata: Dict[str, Any] = {}
 
