@@ -21,7 +21,9 @@ class APIGateway:
     VERSION="6.0.0"
     LAYER_COUNT=23
     def __init__(self,host:str="127.0.0.1",port:int=8000):
-        self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0; self._register_routes()
+        self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0
+        self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
+        self._register_routes()
     def _register_routes(self):
         self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job}
     def _requires_auth(self) -> bool:
@@ -33,20 +35,27 @@ class APIGateway:
         supplied=str(headers.get("Authorization", ""))
         return hmac.compare_digest(supplied, f"Bearer {configured}")
 
-    @staticmethod
-    def _aios_authorized(method: str, path: str, raw_body: bytes, headers: Any) -> bool:
-        """Verify the AtoZ/AI OS Bridge HMAC transport contract."""
+    def _aios_authorized(self, method: str, path: str, raw_body: bytes, headers: Any) -> bool:
+        """Verify the AtoZ/AI OS Bridge HMAC transport contract and reject nonce replay."""
         secret=os.getenv("AIOS_API_KEY", "").strip()
         if not secret:
-            return True
+            return False
         try:
             timestamp=str(headers.get("X-AIOS-Timestamp", ""))
             nonce=str(headers.get("X-AIOS-Nonce", ""))
             signature=str(headers.get("X-AIOS-Signature", ""))
             if not timestamp or not nonce or not signature:
                 return False
-            if abs(int(time.time()) - int(timestamp)) > 300:
+            now=int(time.time())
+            ts=int(timestamp)
+            if abs(now - ts) > 300:
                 return False
+            with self._aios_nonce_lock:
+                expired=[n for n,t in self._aios_nonces.items() if now-t > 300]
+                for n in expired: self._aios_nonces.pop(n, None)
+                if nonce in self._aios_nonces:
+                    return False
+                self._aios_nonces[nonce]=now
             canonical=(f"{method.upper()}\n{path}\n{timestamp}\n{nonce}\n"
                        f"{raw_body.decode('utf-8')}").encode()
             expected=hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
@@ -74,8 +83,12 @@ class APIGateway:
                         self._send(APIResponse(401,error="AI OS authentication required")); return
                 elif not gateway._authorized(self.headers):
                     self._send(APIResponse(401,error="API authentication required")); return
-                try: data=json.loads(raw) if raw else {}
-                except json.JSONDecodeError: data={}
+                try:
+                    data=json.loads(raw) if raw else {}
+                except json.JSONDecodeError:
+                    self._send(APIResponse(400,error="Invalid JSON body")); return
+                if not isinstance(data, dict):
+                    self._send(APIResponse(400,error="JSON body must be an object")); return
                 response=gateway._routes.get(f"POST {path}",lambda d:APIResponse(404,error=f"Endpoint not found: {path}"))(data); self._send(response)
             def _send(self,response):
                 self.send_response(response.status_code)
