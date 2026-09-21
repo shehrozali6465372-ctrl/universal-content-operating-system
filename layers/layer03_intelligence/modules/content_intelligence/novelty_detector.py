@@ -44,7 +44,7 @@ class NoveltyDetector:
                     result.similar_content.append(ex[:50])
 
         result.novelty_score = max(0.0, 1.0 - len(result.similar_content) * 0.2)
-        result.is_novel = result.novelty_score > 0.5
+        result.is_novel = result.novelty_score >= self._threshold
         if result.is_novel:
             result.uniqueness_factors.append("No similar content found")
         return result
