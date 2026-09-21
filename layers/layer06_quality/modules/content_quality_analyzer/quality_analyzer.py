@@ -76,26 +76,26 @@ class ContentQualityAnalyzer:
         if len(normalized) < 40:
             hard_issues.append("content_too_short")
         refusal_patterns = (
-            r"\bas an ai(?: language model)?\\b",
-            r"\\bi(?:'|’)m an ai\\b",
-            r"\\bi cannot (?:help|assist|provide)\\b",
-            r"\\bi can(?:not|'t) (?:help|assist|provide)\\b",
+            r"\bas an ai(?: language model)?\b",
+            r"\bi(?:'|’)m an ai\b",
+            r"\bi cannot (?:help|assist|provide)\b",
+            r"\bi can(?:not|'t) (?:help|assist|provide)\b",
         )
         if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in refusal_patterns):
             hard_issues.append("model_refusal")
         placeholder_patterns = (
-            r"\\b(?:lorem ipsum|placeholder|dummy text|sample text|test post)\\b",
-            r"^\\s*(?:hello|hi|test)\\s*[.!?]*\\s*$",
+            r"\b(?:lorem ipsum|placeholder|dummy text|sample text|test post)\b",
+            r"^\s*(?:hello|hi|test)\s*[.!?]*\s*$",
         )
         if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in placeholder_patterns):
             hard_issues.append("placeholder_content")
-        words = re.findall(r"\\b\\w+\\b", normalized.lower())
+        words = re.findall(r"\b\w+\b", normalized.lower())
         if words and len(words) >= 8 and len(set(words)) / len(words) < 0.35:
             hard_issues.append("excessive_word_repetition")
         scam_patterns = (
-            r"\\b(?:500|1000)\\s*%\\s*(?:returns?|profit|guaranteed)",
-            r"\\b(?:send|share|give)\\s+(?:me\\s+)?(?:your\\s+)?(?:bank|banking|account)\\s+password\\b",
-            r"\\bguaranteed\\s+(?:returns?|profit)\\b",
+            r"\b(?:500|1000)\s*%\s*(?:returns?|profit|guaranteed)",
+            r"\b(?:send|share|give)\s+(?:me\s+)?(?:your\s+)?(?:bank|banking|account)\s+password\b",
+            r"\bguaranteed\s+(?:returns?|profit)\b",
         )
         if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in scam_patterns):
             hard_issues.append("unsafe_scam_pattern")
