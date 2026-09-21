@@ -80,6 +80,9 @@ class SelfImprovementManager:
         feedback: Optional[List[Dict[str, Any]]] = None,
         issues: Optional[List[Dict[str, Any]]] = None,
         current_score: float = 0.0,
+        account_id: Optional[str] = None,
+        platform: Optional[str] = None,
+        niche: Optional[str] = None,
     ) -> ImprovementCycleResult:
         start = time.time()
         cycle = ImprovementCycle("optimization", "Auto improvement cycle")
@@ -88,7 +91,7 @@ class SelfImprovementManager:
 
         # Step 1: Detect mistakes
         mistakes = []
-        if metrics and hasattr(self, '_thresholds'):
+        if metrics:
             mistakes.extend(self.mistake_detector.detect_from_metrics(metrics, self._thresholds))
         if quality_scores:
             mistakes.extend(self.mistake_detector.detect_from_quality(quality_scores))
@@ -150,6 +153,9 @@ class SelfImprovementManager:
         self._events.append({
             "event": "improvement_cycle_completed",
             "cycle_id": result.cycle_id,
+            "account_id": account_id,
+            "platform": platform,
+            "niche": niche,
             "mistakes": result.mistakes_found,
             "actions": result.actions_created,
         })
@@ -159,16 +165,25 @@ class SelfImprovementManager:
         """Turn observed analytics diagnoses into scoped, reversible strategy updates."""
         if not analytics_signal.get("available"):
             return {"updated": False, "reason": "insufficient_data"}
+        scope = {
+            "account_id": str(analytics_signal.get("account_id") or "").strip(),
+            "platform": str(analytics_signal.get("platform") or "").strip(),
+            "niche": str(analytics_signal.get("niche") or "").strip(),
+        }
+        if not all(scope.values()):
+            return {"updated": False, "reason": "scope_required", "required": list(scope)}
+
+            return {"updated": False, "reason": "insufficient_data"}
         diagnosis = analytics_signal.get("diagnosis") or analytics_signal.get("findings") or []
         if isinstance(diagnosis, dict):
             diagnosis = diagnosis.get("findings", [])
         updates = []
         for finding in diagnosis:
             if finding == "reach_without_clicks" or finding == "low_click_through_rate":
-                updates.append({"change": "test_clearer_cta_and_offer_alignment", "reversible": True})
+                updates.append({"change": "test_clearer_cta_and_offer_alignment", "reversible": True, **scope})
             elif finding == "low_measurable_engagement":
-                updates.append({"change": "test_more_relevant_hook_and_topic_angle", "reversible": True})
-        result = {"updated": bool(updates), "updates": updates, "source": "observed_analytics"}
+                updates.append({"change": "test_more_relevant_hook_and_topic_angle", "reversible": True, **scope})
+        result = {"updated": bool(updates), "updates": updates, "source": "observed_analytics", **scope}
         if updates:
             self._strategy_updates.append(result)
             self._events.append({"event": "strategy_updated_from_analytics", "updates": updates})
