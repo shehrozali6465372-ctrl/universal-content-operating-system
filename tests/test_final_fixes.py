@@ -126,3 +126,72 @@ class TestRequirementsTxt:
         for line in content.split("\n"):
             if line.startswith("facebook-sdk") or line.startswith("langchain"):
                 assert line.startswith("#"), f"Unused dep not commented: {line}"
+
+
+def test_quality_hard_gates_reject_bad_content():
+    from layers.layer06_quality.modules.content_quality_analyzer.quality_analyzer import ContentQualityAnalyzer
+    analyzer = ContentQualityAnalyzer()
+    for text in ("", "Hello", "lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+                 "As an AI language model, I cannot help with this request.",
+                 "Get 500% guaranteed returns and send your bank password now."):
+        report = analyzer.analyze(text, platform="facebook")
+        assert report.overall_score == 0.0
+        assert report.pass_recommendation == "REVISION REQUIRED"
+        assert report.metadata["hard_gate_failures"]
+
+
+def test_quality_platform_and_score_scale_are_real():
+    from layers.layer06_quality.modules.content_quality_analyzer.quality_analyzer import ContentQualityAnalyzer
+    report = ContentQualityAnalyzer().analyze(
+        "Practical productivity tips can help teams plan focused work, reduce context switching, and review results each week.",
+        platform="linkedin",
+    )
+    assert report.metadata["platform"] == "linkedin"
+    assert 0.0 <= report.overall_score <= 1.0
+
+
+def test_publisher_manager_skips_second_repetition_reservation(monkeypatch):
+    from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+    from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
+    manager = PublisherManager()
+    monkeypatch.setattr(manager, "_get_publisher", lambda platform: None)
+    monkeypatch.setattr(manager, "_account_repetition_guard",
+                        lambda account_id: (_ for _ in ()).throw(AssertionError("second gate")))
+    request = PublishRequest(platform="facebook", content="already reserved by production pipeline")
+    request.metadata.update({"account_id": "acct", "repetition_reserved_by_pipeline": True})
+    result = manager.publish(request)
+    assert result is not None
+    assert "second gate" not in (result.error_message or "")
+
+
+def test_l12_select_key_returns_registered_secret():
+    from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager
+    km = KeyManager()
+    km.register_key("k1", "secret-key-123456")
+    assert km.select_key() == "secret-key-123456"
+
+
+def test_facebook_attached_media_is_json():
+    import json
+    from layers.layer07_publishing.modules.platform_plugin_manager.facebook.facebook_publisher import FacebookPublisher
+    from layers.layer07_publishing.modules.platform_plugin_manager.base_publisher import PublishResult
+    publisher = FacebookPublisher()
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(publisher, "upload_image",
+                            lambda path, caption="": PublishResult(platform="facebook", success=True, post_id="123"))
+        captured = {}
+        monkeypatch.setattr(publisher, "_post", lambda path, payload: (captured.update(payload) or {"id": "post"}))
+        publisher._publish_with_media("hello", ["image.jpg"])
+        assert json.loads(captured["attached_media"]) == [{"media_fbid": "123"}]
+    finally:
+        monkeypatch.undo()
+
+
+def test_instagram_waits_for_finished_container(monkeypatch):
+    from layers.layer07_publishing.modules.platform_plugin_manager.instagram.instagram_publisher import InstagramPublisher
+    publisher = InstagramPublisher()
+    states = iter([{"status_code": "IN_PROGRESS"}, {"status_code": "FINISHED"}])
+    monkeypatch.setattr(publisher, "_api_get", lambda endpoint, params=None: next(states))
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    publisher._wait_for_container("container", timeout=1, interval=0)
