@@ -73,10 +73,11 @@ class ContentResponse:
     def to_dict(self) -> Dict[str, Any]:
         published = bool(self.publish_result and self.publish_result.get("success"))
         return {"topic": self.request.topic, "platform": self.request.platform,
-                "content_length": len(self.text), "quality_score": self.quality_score,
+                "content": self.text, "content_length": len(self.text), "quality_score": self.quality_score,
                 "image_prompt": self.image_prompt[:200], "image_url": self.image_url,
                 "publish_ready": bool(self.publish_package), "published": published,
-                "publish_result": self.publish_result, "analytics": self.analytics,
+                "publish_result": self.publish_result, "post_id": (self.publish_result or {}).get("post_id"),
+                "analytics": self.analytics,
                 "steps_completed": sum(s.status == "success" for s in self.steps),
                 "steps_failed": sum(s.status == "error" for s in self.steps),
                 "steps_skipped": sum(s.status == "skipped" for s in self.steps),
