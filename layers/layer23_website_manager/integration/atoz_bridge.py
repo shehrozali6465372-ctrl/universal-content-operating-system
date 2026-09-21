@@ -7,10 +7,54 @@ AIOS.Job.Request transport surface and calls real Layer 23 operations.
 from __future__ import annotations
 
 import uuid
+import os
+import json
+import hashlib
+import sqlite3
+from pathlib import Path
 from typing import Any
 
 from layers.layer23_website_manager import get_website
 from layers.layer23_website_manager.pinterest_pin_manager.pinterest_pin_manager import get_pin_manager
+
+
+_INBOX_DB = Path(os.environ.get("UCOS_JOB_INBOX_DB", "data/job_inbox.sqlite3"))
+
+def _init_inbox() -> None:
+    _INBOX_DB.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(_INBOX_DB) as db:
+        db.execute("""CREATE TABLE IF NOT EXISTS job_inbox (
+            request_id TEXT PRIMARY KEY,
+            payload_hash TEXT NOT NULL,
+            state TEXT NOT NULL,
+            response_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        db.commit()
+
+def _payload_hash(data: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
+    _init_inbox()
+    with sqlite3.connect(_INBOX_DB) as db:
+        row = db.execute("SELECT payload_hash,state,response_json FROM job_inbox WHERE request_id=?", (request_id,)).fetchone()
+        if row:
+            if row[0] != payload_hash:
+                raise ValueError("request_id replay conflict: payload differs from original request")
+            if row[2]:
+                return json.loads(row[2])
+            raise RuntimeError("request_id is already in progress")
+        db.execute("INSERT INTO job_inbox(request_id,payload_hash,state) VALUES(?,?,?)", (request_id,payload_hash,"processing"))
+        db.commit()
+    return None
+
+def _finish_request(request_id: str, response: dict[str, Any]) -> None:
+    with sqlite3.connect(_INBOX_DB) as db:
+        db.execute("UPDATE job_inbox SET state='succeeded',response_json=?,updated_at=CURRENT_TIMESTAMP WHERE request_id=?",
+                   (json.dumps(response, sort_keys=True, default=str), request_id))
+        db.commit()
 
 SUPPORTED_JOB_TYPES = {
     "content",
@@ -30,6 +74,9 @@ def _uuid(value: Any, field: str) -> str:
 def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     """Dispatch an AIOS job into Layer 23 using real data only."""
     request_id = _uuid(data.get("request_id"), "request_id")
+    cached = _claim_request(request_id, _payload_hash(data))
+    if cached is not None:
+        return cached
     niche_id = _uuid(data.get("niche_id"), "niche_id")
     job_type = str(data.get("job_type") or "").strip()
     if job_type not in SUPPORTED_JOB_TYPES:
@@ -44,6 +91,8 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("context.domain and context.site_name are required")
 
     site = get_website(domain=domain, site_name=site_name)
+    if bool(context.get("publish")) and job_type != "content":
+        raise ValueError("publish is only valid for content jobs")
     job_id = str(uuid.uuid4())
 
     if job_type == "content":
