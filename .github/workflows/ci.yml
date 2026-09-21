@@ -7,6 +7,10 @@ on:
     branches: [main]
 
 jobs:
+permissions:
+  contents: read
+
+jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
@@ -32,4 +36,4 @@ jobs:
           python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
 
       - name: System Status
-        run: python main.py --status
+        run: python main.py --boot
