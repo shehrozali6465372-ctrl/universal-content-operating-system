@@ -39,6 +39,7 @@ class PersistenceConfiguration:
                 setattr(c, k, v)
         return c
 
+    @classmethod
     def for_development(cls) -> "PersistenceConfiguration":
         c = cls()
         c.database_url = "sqlite:///dev.db"
