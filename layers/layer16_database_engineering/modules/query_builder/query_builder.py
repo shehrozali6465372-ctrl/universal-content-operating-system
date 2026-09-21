@@ -62,7 +62,7 @@ class QueryBuilder:
         return self
 
     def group_by(self, *fields: str) -> QueryBuilder:
-        self._group_by = list(fields)
+        self._group_by = [self._identifier(f) for f in fields]
         return self
 
     def join(self, table: str, on: str, join_type: str = "INNER") -> QueryBuilder:
