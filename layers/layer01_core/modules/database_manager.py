@@ -4,6 +4,7 @@ Layer 1: Core System — Module 4
 """
 
 import sqlite3
+import re
 import shutil
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -69,11 +70,20 @@ class DatabaseManager:
         with self.transaction():
             return self._conn.execute(sql, params)
 
+    _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    @classmethod
+    def _identifier(cls, value: str) -> str:
+        if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
+            raise ValueError(f"unsafe SQL identifier: {value}")
+        return value
+
     # ── CRUD ────────────────────────────────
 
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         self._ensure_init()
-        cols = ", ".join(data.keys())
+        table = self._identifier(table)
+        cols = ", ".join(self._identifier(k) for k in data.keys())
         phs = ", ".join(["?" for _ in data])
         cur = self._run(f"INSERT INTO {table} ({cols}) VALUES ({phs})", list(data.values()))
         return cur.lastrowid
@@ -82,7 +92,8 @@ class DatabaseManager:
         self._ensure_init()
         if not rows:
             return 0
-        cols = ", ".join(rows[0].keys())
+        table = self._identifier(table)
+        cols = ", ".join(self._identifier(k) for k in rows[0].keys())
         phs = ", ".join(["?" for _ in rows[0]])
         sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
         data = [list(r.values()) for r in rows]
@@ -104,21 +115,25 @@ class DatabaseManager:
 
     def update(self, table: str, data: Dict[str, Any], where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
-        sets = ", ".join(f"{k} = ?" for k in data)
+        table = self._identifier(table)
+        sets = ", ".join(f"{self._identifier(k)} = ?" for k in data)
         cur = self._run(f"UPDATE {table} SET {sets} WHERE {where}", list(data.values()) + list(where_params))
         return cur.rowcount
 
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
+        table = self._identifier(table)
         cur = self._run(f"DELETE FROM {table} WHERE {where}", where_params)
         return cur.rowcount
 
     def count(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         self._ensure_init()
+        table = self._identifier(table)
         return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {where}", params).fetchone()["c"]
 
     def table_exists(self, name: str) -> bool:
         self._ensure_init()
+        name = self._identifier(name)
         return self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
     def get_tables(self) -> List[str]:
