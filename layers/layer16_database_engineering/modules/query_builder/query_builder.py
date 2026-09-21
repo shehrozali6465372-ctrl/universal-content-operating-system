@@ -34,7 +34,8 @@ class QueryBuilder:
         return self
 
     def where(self, field: str, op: str, value: Any) -> QueryBuilder:
-        self._where_clauses.append((field, op, value))
+        if op not in {"=", "!=", "<", "<=", ">", ">=", "LIKE"}: raise ValueError("unsupported SQL operator")
+        self._where_clauses.append((self._identifier(field), op, value))
         self._params.append(value)
         return self
 
