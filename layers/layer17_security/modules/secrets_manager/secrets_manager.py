@@ -43,7 +43,7 @@ class SecretsManager:
     def get_secret(self, key: str) -> Optional[str]:
         entry = self._secrets.get(key)
         if entry:
-            self._access_log.append({"key": key, "time": time.time()})
+            self._access_log.append({"key_hash": hashlib.sha256(key.encode()).hexdigest(), "time": time.time()})
             return entry._value
         return None
 
