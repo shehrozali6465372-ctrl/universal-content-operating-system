@@ -66,7 +66,7 @@ class RevenueForecasting:
 
     def _generate_forecast(self, days: int, key: str) -> List[ForecastPoint]:
         avg_revenue = 0.0
-        growth_rate = 0.02
+        growth_rate = 0.0
         if self._historical:
             revenues = [h["revenue"] for h in self._historical]
             avg_revenue = sum(revenues) / len(revenues) if revenues else 0
@@ -76,7 +76,9 @@ class RevenueForecasting:
                 if older_avg > 0:
                     growth_rate = max((recent_avg / older_avg - 1), 0.01)
         points = []
-        base = avg_revenue if avg_revenue > 0 else 100.0
+        if not self._historical:
+            raise ValueError("revenue forecast requires real historical observations")
+        base = avg_revenue
         confidence_base = min(len(self._historical) / 30, 1.0) * 70 + 20
         for i in range(1, days + 1):
             day = time.strftime("%Y-%m-%d", time.localtime(time.time() + i * 86400))
