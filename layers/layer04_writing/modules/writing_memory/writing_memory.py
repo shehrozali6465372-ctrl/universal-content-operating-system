@@ -33,7 +33,7 @@ class BrandVoice:
 
 class DraftRecord:
     """A stored draft with brand voice tracking."""
-    __slots__ = ("record_id", "platform", "topic", "text", "tone",
+    __slots__ = ("record_id", "account_id", "platform", "topic", "text", "tone",
                  "brand_voice", "tokens_used", "created_at")
 
     def __init__(self, platform: str = "", topic: str = "", text: str = "") -> None:
