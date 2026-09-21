@@ -38,6 +38,7 @@ class DraftRecord:
 
     def __init__(self, platform: str = "", topic: str = "", text: str = "", account_id: str = "default") -> None:
         self.record_id = f"wm_{int(time.time() * 1000) % 10000000}"
+        self.account_id = account_id
         self.platform = platform
         self.topic = topic
         self.text = text
