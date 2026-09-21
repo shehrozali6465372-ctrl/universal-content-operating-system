@@ -34,7 +34,8 @@ class HealthMonitor:
 
     def register(self, name: str, check_fn: Callable, interval: float = 60.0,
                  max_failures: int = 3, timeout: float = 5.0) -> HealthCheck:
-        check = HealthCheck(name, check_fn, interval, max_failures)
+        if timeout <= 0: raise ValueError("timeout must be positive")
+        check = HealthCheck(name, check_fn, interval, max_failures, timeout)
         self._checks[name] = check
         return check
 
