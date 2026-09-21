@@ -104,6 +104,7 @@ class ProductDatabase:
                      affiliate_link: str = "", merchant_id: str = "",
                      network_id: str = "") -> AffiliateProduct:
         """Add a product to the database."""
+        status = ProductStatus.IN_STOCK if affiliate_link.startswith(("http://", "https://")) and merchant_id and network_id else ProductStatus.PENDING
         product = AffiliateProduct(
             product_name=product_name,
             price=price,
@@ -114,7 +115,7 @@ class ProductDatabase:
             affiliate_link=affiliate_link,
             merchant_id=merchant_id,
             network_id=network_id,
-            status=ProductStatus.IN_STOCK,
+            status=status,
         )
         with self._lock:
             self._products[product.product_id] = product
@@ -129,7 +130,7 @@ class ProductDatabase:
         results = []
         for p in self._products.values():
             if p.niche == niche and p.rating >= min_rating and p.price <= max_price:
-                if p.is_available:
+                if p.is_available and p.affiliate_link.startswith(("http://", "https://")):
                     results.append(p)
         return sorted(results, key=lambda p: p.rating, reverse=True)
 
