@@ -83,13 +83,20 @@ class AnalyticsManager:
         platform: str,
         post_id: str,
         fetcher: Callable[[str, str], Dict[str, Any]],
+        account_id: str = "",
+        content_id: str = "",
     ) -> Optional[AnalyticsReport]:
         """Full pipeline: collect → normalize → analyze → score → store → report."""
+        if not account_id:
+            raise ValueError("account_id is required for account-scoped analytics")
         event = self.collector.collect_single(platform, post_id, fetcher)
         if not event:
             return None
-
+        event.content_id = content_id
+        event.metadata["account_id"] = account_id
+        event.metadata["metric_stage"] = "raw_collected"
         event = self.normalizer.normalize(event)
+        event.metadata["metric_stage"] = "normalized"
         self.trend.record(post_id, event.get("likes", 0) + event.get("comments", 0) + event.get("shares", 0))
         self.memory.store(event)
 
@@ -101,13 +108,33 @@ class AnalyticsManager:
         report.performance = self.scorer.score_event(event).to_dict()
 
         self._reports.append(report)
+        diagnosis = self.diagnose_event(event)
+        report.performance["diagnosis"] = diagnosis
         self._events.append({
             "event": "analytics_collected",
             "platform": platform,
+            "account_id": account_id,
+            "content_id": content_id,
             "post_id": post_id,
             "report_id": report.report_id,
+            "diagnosis": diagnosis,
         })
         return report
+
+    @staticmethod
+    def diagnose_event(event: Any) -> Dict[str, Any]:
+        views = event.get("views", 0) or event.get("impressions", 0)
+        clicks = event.get("link_clicks", 0) or event.get("clicks", 0)
+        engagement = event.get("engagement_rate", 0)
+        findings=[]; actions=[]
+        if views > 0 and clicks == 0:
+            findings.append("reach_without_clicks"); actions.append("test a clearer value proposition and CTA")
+        if views > 0 and clicks > 0 and clicks / views < 0.01:
+            findings.append("low_click_through_rate"); actions.append("align CTA and offer with observed audience intent")
+        if views > 0 and engagement == 0:
+            findings.append("low_measurable_engagement"); actions.append("test stronger topic relevance or opening hook")
+        if not findings: findings.append("insufficient_signal_for_diagnosis")
+        return {"findings": findings, "recommended_actions": actions, "basis": "observed_normalized_metrics"}
 
     def get_reports(self, platform: Optional[str] = None) -> List[AnalyticsReport]:
         if platform:
