@@ -182,16 +182,15 @@ class ConnectionPool:
         self._failed_queries += 1
         raise last_error
 
-    def execute(self, sql: str, params: tuple = ()) -> Any:
-        """Execute a query and return cursor (with retry)."""
+    def execute(self, sql: str, params: tuple = ()) -> int:
+        """Execute a statement in an explicit transaction and return affected rows."""
         def _do():
             with self.connection() as conn:
                 cursor = conn.cursor()
-                exec_sql = sql
-                if not self._pg_available:
-                    exec_sql = sql.replace("%s", "?")
+                exec_sql = sql if self._pg_available else sql.replace("%s", "?")
                 cursor.execute(exec_sql, params)
-                return cursor
+                conn.commit()
+                return cursor.rowcount
         return self._execute_with_retry(_do)
 
     def execute_and_fetch(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
