@@ -14,6 +14,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from layers.layer23_website_manager import get_website
 from layers.layer23_website_manager.pinterest_pin_manager.pinterest_pin_manager import get_pin_manager
@@ -47,12 +48,8 @@ def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
             if row[2]:
                 return json.loads(row[2])
             if row[1] == "processing":
-                age = time.time() - __import__("datetime").datetime.fromisoformat(row[3]).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
-                if age < 900:
-                    raise RuntimeError("request_id is already in progress")
-                db.execute("DELETE FROM job_inbox WHERE request_id=?", (request_id,))
-            else:
-                raise RuntimeError("request_id has no terminal response")
+                raise RuntimeError("request_id is already processing or requires reconciliation")
+            raise RuntimeError("request_id has no terminal response")
         db.execute("INSERT INTO job_inbox(request_id,payload_hash,state) VALUES(?,?,?)", (request_id,payload_hash,"processing"))
         db.commit()
     return None
@@ -98,8 +95,17 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     if cached is not None:
         return cached
     site = get_website(domain=domain, site_name=site_name)
-    if bool(context.get("publish")) and job_type != "content":
+    publish = bool(context.get("publish"))
+    if publish and job_type != "content":
         raise ValueError("publish is only valid for content jobs")
+    if publish:
+        account_id = str(context.get("account_id") or "").strip()
+        if not account_id:
+            raise ValueError("publishing requires context.account_id")
+        from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+        account = AccountRegistry().get(account_id)
+        if account is None or not account.enabled:
+            raise ValueError("publishing account is not registered and enabled")
     job_id = str(uuid.uuid4())
 
     if job_type == "content":
@@ -107,6 +113,8 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
         body = str(context.get("content") or "").strip()
         if not title or not body:
             raise ValueError("content jobs require real context.title and context.content")
+        if publish and not bool(context.get("publish_authorized")):
+            raise ValueError("publishing requires explicit publish_authorized=true")
         article = site.create_article(
             title=title,
             content=body,
@@ -139,6 +147,9 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
         account_id = str(context.get("account_id") or "").strip()
         board_id = str(context.get("board_id") or "").strip()
         image_path = str(context.get("image_path") or "").strip()
+        parsed = urlsplit(website_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("website_url must be a valid public HTTP(S) URL")
         asset_root = Path(os.environ.get("UCOS_ASSET_ROOT", "data/assets")).resolve()
         candidate = Path(image_path).expanduser().resolve()
         if asset_root not in candidate.parents or not candidate.is_file():
