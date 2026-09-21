@@ -105,31 +105,6 @@ services:
       - aios-net
 
 volumes:
-      - aios-data:/app/data
-      - aios-output:/app/output
-      - aios-logs:/app/logs
-    environment:
-      - PYTHONUNBUFFERED=1
-      - APP_ENV=production
-      - APP_ROLE=worker
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=aios
-      - POSTGRES_USER=aios
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
-      - META_GRAPH_API_VERSION=${META_GRAPH_API_VERSION:-v26.0}
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1'
-    networks:
-      - aios-net
-
-volumes:
   postgres-data:
     driver: local
   redis-data:
