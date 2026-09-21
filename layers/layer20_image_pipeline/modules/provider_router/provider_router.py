@@ -86,9 +86,6 @@ class ProviderRouter:
     def list_providers(self) -> List[Dict[str, Any]]:
         return [p.to_dict() for p in self._providers.values()]
 
-    def list_providers(self) -> List[Dict[str, Any]]:
-        return [p.to_dict() for p in self._providers.values()]
-
     def get_provider(self, name: str) -> Optional[ImageProvider]:
         return self._providers.get(name)
 
