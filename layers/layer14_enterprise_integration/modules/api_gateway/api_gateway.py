@@ -96,7 +96,7 @@ class APIGateway:
                 self.end_headers(); self.wfile.write(response.to_json().encode())
             def log_message(self,format,*args): pass
         try:
-            self._server=HTTPServer((self._host,self._port),Handler); self._running=True; self._thread=threading.Thread(target=self._server.serve_forever,daemon=True); self._thread.start()
+            self._server=ThreadingHTTPServer((self._host,self._port),Handler); self._running=True; self._thread=threading.Thread(target=self._server.serve_forever,daemon=True); self._thread.start()
         except OSError as exc: print(f"API Gateway failed to start on {self._host}:{self._port}: {exc}")
     def stop(self):
         if self._server: self._server.shutdown(); self._running=False
