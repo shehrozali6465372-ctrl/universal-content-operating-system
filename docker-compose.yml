@@ -104,20 +104,7 @@ services:
     networks:
       - aios-net
 
-  # ─── Worker Service (background tasks) ──────
-  aios-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: aios-worker
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: ["python", "main.py", "--worker"]
-    volumes:
+volumes:
       - aios-data:/app/data
       - aios-output:/app/output
       - aios-logs:/app/logs
