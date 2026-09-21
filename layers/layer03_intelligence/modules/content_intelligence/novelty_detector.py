@@ -24,7 +24,7 @@ class NoveltyDetector:
         self._threshold = threshold
         self._seen_hashes: Dict[str, set] = {}
 
-    def detect(self, content: str, existing: Optional[List[str]] = None) -> NoveltyResult:
+    def detect(self, content: str, existing: Optional[List[str]] = None, account_id: str = "default", platform: str = "global", niche: str = "general") -> NoveltyResult:
         result = NoveltyResult()
         content_hash = hashlib.sha256(content.lower().strip().encode()).hexdigest()
         if content_hash in self._seen_hashes:
