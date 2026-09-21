@@ -30,7 +30,7 @@ class QueryBuilder:
         return self
 
     def select(self, *fields: str) -> QueryBuilder:
-        self._select_fields = list(fields)
+        self._select_fields = [self._identifier(f) for f in fields]
         return self
 
     def where(self, field: str, op: str, value: Any) -> QueryBuilder:
