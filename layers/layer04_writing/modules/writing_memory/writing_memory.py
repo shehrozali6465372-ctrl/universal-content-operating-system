@@ -50,6 +50,7 @@ class DraftRecord:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "record_id": self.record_id,
+            "account_id": self.account_id,
             "platform": self.platform,
             "topic": self.topic,
             "text_preview": self.text[:80] + "..." if len(self.text) > 80 else self.text,
