@@ -2,6 +2,9 @@ name: UCOS Full End-to-End One Real Autonomous Post
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
