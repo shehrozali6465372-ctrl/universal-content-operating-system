@@ -53,7 +53,26 @@ class InputValidator:
         return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
 
     def is_valid_url(self, url: str) -> bool:
-        return bool(re.match(r'^https?://', url))
+        if not isinstance(url, str) or len(url) > 2048:
+            return False
+        try:
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                return False
+            if parsed.username or parsed.password:
+                return False
+            host = parsed.hostname.rstrip(".").lower()
+            if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+                return False
+            try:
+                addresses = {ipaddress.ip_address(host)}
+            except ValueError:
+                addresses = {ipaddress.ip_address(x[4][0]) for x in socket.getaddrinfo(host, None)}
+            return not any(a.is_private or a.is_loopback or a.is_link_local or a.is_multicast or
+                           a.is_reserved or a.is_unspecified or
+                           (a.version == 4 and str(a) == "169.254.169.254") for a in addresses)
+        except (ValueError, OSError, UnicodeError):
+            return False
 
     def sanitize_string(self, value: str, max_length: int = 1000) -> str:
         value = value.strip()
