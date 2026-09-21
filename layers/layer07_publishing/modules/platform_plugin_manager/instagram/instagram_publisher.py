@@ -88,16 +88,19 @@ class InstagramPublisher(BasePublisher):
         if not children: return {"error":"No valid carousel items"}
         c=self._api_post(f"/{self._account_id}/media", {"media_type":"CAROUSEL_ALBUM","caption":content,"children":",".join(children)})
         if not c or "id" not in c: return c
+        self._wait_for_container(c["id"])
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _publish_story(self, content: str, media_paths: Optional[List[str]]=None, **kwargs: Any) -> Optional[Dict]:
         if not media_paths: return {"error":"Stories require media"}
         c=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"media_type":"STORIES"})
         if not c or "id" not in c: return c
+        self._wait_for_container(c["id"])
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _publish_reel(self, content: str, media_paths: Optional[List[str]]=None, **kwargs: Any) -> Optional[Dict]:
         if not media_paths: return {"error":"Reels require video URL"}
         c=self._api_post(f"/{self._account_id}/media", {"media_type":"REELS","video_url":media_paths[0],"caption":content})
         if not c or "id" not in c: return c
+        self._wait_for_container(c["id"])
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _wait_for_container(self, container_id: str, timeout: float = 120.0, interval: float = 3.0) -> None:
         """Wait for Meta async media processing before media_publish."""
