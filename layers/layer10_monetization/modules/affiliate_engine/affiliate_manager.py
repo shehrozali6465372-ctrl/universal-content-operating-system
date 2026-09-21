@@ -26,7 +26,7 @@ class AffiliateProgram:
         self.categories = categories or []
         self.api_key = ""
         self.api_secret = ""
-        self.status = "active"
+        self.status = "unconfigured"
         self.created_at = time.time()
         self.total_clicks = 0
         self.total_conversions = 0
@@ -194,6 +194,7 @@ class AffiliateManager:
     def _register_presets(self) -> None:
         for key, preset in self.PRESET_PROGRAMS.items():
             prog = AffiliateProgram(**preset)
+            prog.status = "unconfigured"
             self._programs[key] = prog
 
     def add_program(self, name: str, platform: str, base_url: str = "",
