@@ -11,6 +11,7 @@ import os
 import json
 import hashlib
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -39,13 +40,19 @@ def _payload_hash(data: dict[str, Any]) -> str:
 def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
     _init_inbox()
     with sqlite3.connect(_INBOX_DB) as db:
-        row = db.execute("SELECT payload_hash,state,response_json FROM job_inbox WHERE request_id=?", (request_id,)).fetchone()
+        row = db.execute("SELECT payload_hash,state,response_json,updated_at FROM job_inbox WHERE request_id=?", (request_id,)).fetchone()
         if row:
             if row[0] != payload_hash:
                 raise ValueError("request_id replay conflict: payload differs from original request")
             if row[2]:
                 return json.loads(row[2])
-            raise RuntimeError("request_id is already in progress")
+            if row[1] == "processing":
+                age = time.time() - __import__("datetime").datetime.fromisoformat(row[3]).replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
+                if age < 900:
+                    raise RuntimeError("request_id is already in progress")
+                db.execute("DELETE FROM job_inbox WHERE request_id=?", (request_id,))
+            else:
+                raise RuntimeError("request_id has no terminal response")
         db.execute("INSERT INTO job_inbox(request_id,payload_hash,state) VALUES(?,?,?)", (request_id,payload_hash,"processing"))
         db.commit()
     return None
