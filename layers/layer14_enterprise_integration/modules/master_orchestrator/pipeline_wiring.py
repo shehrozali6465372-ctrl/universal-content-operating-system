@@ -166,11 +166,13 @@ class PipelineWiring:
 
     def _intelligence(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer03_intelligence.modules.content_understanding.content_analyzer import ContentAnalyzer
-        result = ContentAnalyzer().analyze(req.topic, domain=req.platform)
-        ctx["keywords"] = getattr(result, "keywords", [])
-        ctx["entities"] = getattr(result, "entities", [])
-        ctx["intent"] = getattr(result, "intent", "informational")
-        return {"keywords": ctx["keywords"], "intent": ctx["intent"]}
+        domain = str(req.metadata.get("niche") or "general").strip().lower()
+        result = ContentAnalyzer().analyze(req.topic, domain=domain)
+        ctx["keywords"] = list(getattr(getattr(result, "keyword_analysis", None), "keywords", []) or [])
+        ctx["entities"] = list(getattr(result, "entities", []) or [])
+        ctx["intent"] = getattr(getattr(result, "intent", None), "primary_intent", "informational")
+        ctx["intelligence"] = result.to_dict() if hasattr(result, "to_dict") else {}
+        return {"keywords": ctx["keywords"], "entities": ctx["entities"], "intent": ctx["intent"], "intelligence": ctx["intelligence"]}
 
     def _writing(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
@@ -246,6 +248,10 @@ class PipelineWiring:
     def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
+        if str(ctx.get("ai_model", "")).lower() == "offline-draft":
+            response.publish_result = {"success": False, "platform": req.platform, "post_id": None,
+                                       "url": None, "error": "Offline draft cannot enter production publishing"}
+            raise RuntimeError("Production publishing blocked: AI provider is offline-draft")
         manager, _ = self._publisher(req)
         if manager is None:
             response.publish_result = {"success": False, "platform": req.platform, "post_id": None,
