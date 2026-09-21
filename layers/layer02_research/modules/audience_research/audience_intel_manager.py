@@ -204,7 +204,7 @@ class AudienceIntelManager:
 
     def find_similar(self, profile_id: str) -> List[str]:
         """Find audiences with similar interests."""
-        target = self.get_audiences(profile_id)
+        target = self.get_audience(profile_id)
         if not target:
             return []
 
