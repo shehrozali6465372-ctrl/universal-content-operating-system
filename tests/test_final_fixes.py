@@ -195,3 +195,48 @@ def test_instagram_waits_for_finished_container(monkeypatch):
     monkeypatch.setattr(publisher, "_api_get", lambda endpoint, params=None: next(states))
     monkeypatch.setattr("time.sleep", lambda _: None)
     publisher._wait_for_container("container", timeout=1, interval=0)
+
+
+def test_affiliate_program_requires_explicit_verification_before_link():
+    from layers.layer10_monetization.modules.affiliate_engine.affiliate_manager import AffiliateManager
+    manager = AffiliateManager()
+    program = manager.get_program("amazon")
+    assert program is not None
+    assert program.status == "unconfigured"
+    with pytest.raises(ValueError):
+        manager.add_link(program.id, "https://example.com/product", "https://example.com/affiliate")
+    manager.verify_program("amazon", "operator-verification-001")
+    link = manager.add_link(program.id, "https://example.com/product", "https://example.com/affiliate")
+    assert link.status == "active"
+
+
+def test_forecast_requires_real_history_and_exposes_provenance():
+    from layers.layer19_analytics_engine.modules.bi_platform.revenue_forecasting import RevenueForecasting
+    model = RevenueForecasting()
+    with pytest.raises(ValueError):
+        model.forecast_30_days()
+    model.add_historical("2026-01-01", 100.0, 20.0)
+    model.add_historical("2026-01-02", 120.0, 24.0)
+    point = model.forecast_30_days()[0]
+    assert point.model == "ordinary_least_squares_linear_trend"
+    assert point.provenance["observation_count"] == 2
+
+
+def test_learning_feedback_requires_account_platform_niche_scope():
+    from layers.layer09_learning.modules.self_improvement.self_improvement_manager import SelfImprovementManager
+    manager = SelfImprovementManager()
+    result = manager.apply_analytics_feedback({
+        "available": True,
+        "diagnosis": ["low_click_through_rate"],
+    })
+    assert result["updated"] is False
+    assert result["reason"] == "scope_required"
+
+
+def test_atoz_replay_is_fail_closed_for_inflight_request(monkeypatch, tmp_path):
+    import layers.layer23_website_manager.integration.atoz_bridge as bridge
+    monkeypatch.setattr(bridge, "_INBOX_DB", tmp_path / "jobs.sqlite3")
+    request_id = str(__import__("uuid").uuid4())
+    bridge._claim_request(request_id, "hash")
+    with pytest.raises(RuntimeError, match="requires reconciliation"):
+        bridge._claim_request(request_id, "hash")
