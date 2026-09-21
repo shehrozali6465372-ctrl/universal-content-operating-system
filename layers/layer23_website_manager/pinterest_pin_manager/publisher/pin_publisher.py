@@ -22,35 +22,14 @@ class PinPublisher:
         self._rate_limit_reset = 0.0
 
     def publish(self, pin: PinterestPin) -> Dict[str, Any]:
-        """Publish a pin (simulated). In production, calls Pinterest API."""
-        if not pin.account_id:
-            raise PublishFailedError("No account assigned to pin")
-        if not pin.board_id:
-            raise PublishFailedError("No board assigned to pin")
-        if not pin.pin_title:
-            raise PublishFailedError("Pin title is required")
-        if not pin.website_url:
-            raise PublishFailedError("Pin requires a website URL")
+        """Publish a pin through a configured real Pinterest API provider.
 
-        # Simulate publishing
-        time.sleep(0.01)  # simulate API call
-
-        with self._lock:
-            pin.status = PinStatus.PUBLISHED
-            pin.published_at = time.time()
-            self._total_published += 1
-
-        result = {
-            "pin_id": pin.pin_id,
-            "account_id": pin.account_id,
-            "board_id": pin.board_id,
-            "status": "published",
-            "published_at": pin.published_at,
-            "url": f"https://pinterest.com/pin/{pin.pin_id}",
-        }
-
-        self._publish_log.append(result)
-        return result
+        This repository currently has no verified Pinterest API transport in this
+        publisher. Never simulate a successful publication.
+        """
+        raise NotImplementedError(
+            "Real Pinterest API publishing is not configured; simulated publication is disabled"
+        )
 
     def publish_batch(self, pins: List[PinterestPin]) -> List[Dict[str, Any]]:
         """Publish multiple pins."""
