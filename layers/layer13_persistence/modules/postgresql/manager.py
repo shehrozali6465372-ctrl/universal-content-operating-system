@@ -81,7 +81,9 @@ class PostgreSQLManager:
         self.benchmark = PerformanceBenchmark(self._pool)
         self.backup_manager = BackupManager(self._pool)
 
-        # Create tables
+        if not pg_available and os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+            raise RuntimeError("PostgreSQL is required for production persistence")
+        # Create tables; schema failures are fatal because partial persistence is unsafe.
         self._create_tables()
 
         self._initialized = True
@@ -92,15 +94,9 @@ class PostgreSQLManager:
         for table in TABLES:
             cols = ", ".join(table["columns"])
             sql = f"CREATE TABLE IF NOT EXISTS {table['name']} ({cols})"
-            try:
-                self._pool.execute(sql)
-            except Exception:
-                pass
+            self._pool.execute(sql)
         for idx_sql in get_all_indexes_sql():
-            try:
-                self._pool.execute(idx_sql)
-            except Exception:
-                pass
+            self._pool.execute(idx_sql)
 
     def health_check(self) -> Dict[str, Any]:
         """Comprehensive health check."""
