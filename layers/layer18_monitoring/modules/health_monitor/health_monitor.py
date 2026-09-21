@@ -65,7 +65,6 @@ class HealthMonitor:
                 else:
                     executor.shutdown(wait=True)
             healthy = result.get("healthy", True) if isinstance(result, dict) else bool(result)
-            healthy = result.get("healthy", True) if isinstance(result, dict) else bool(result)
             level = HealthLevel.HEALTHY if healthy else HealthLevel.DEGRADED
             check.consecutive_failures = 0
         except Exception as exc:
