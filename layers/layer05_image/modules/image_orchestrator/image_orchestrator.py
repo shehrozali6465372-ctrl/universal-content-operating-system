@@ -82,9 +82,13 @@ class ImageOrchestrator:
         # Layout
         result.layout = self.layout_engine.get_layout(platform, image_type)
 
-        # Generate using the explicitly configured real provider
-        if self.provider.is_configured():
-            result.image_response = self.provider.generate(result.prompt.text)
+        # Generate using the explicitly configured real provider.
+        # Never continue with an empty/mock asset.
+        if not self.provider.is_configured():
+            raise RuntimeError("Configured image provider is unavailable or not authenticated")
+        result.image_response = self.provider.generate(result.prompt.text)
+        if not result.image_response or not getattr(result.image_response, "image_url", ""):
+            raise RuntimeError("Image provider returned no real image asset")
 
         # Optimize
         dims = result.layout
