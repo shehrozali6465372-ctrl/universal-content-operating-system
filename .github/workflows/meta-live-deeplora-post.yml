@@ -1,9 +1,6 @@
 name: Meta Live Deeplora Post
 
 on:
-  push:
-    paths:
-      - .github/workflows/meta-live-deeplora-post.yml
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
-      META_GRAPH_VERSION: v25.0
+      META_GRAPH_VERSION: v26.0
     steps:
       - name: Publish Deeplora niche post
         shell: bash
