@@ -76,7 +76,7 @@ class ContentQualityAnalyzer:
         if len(normalized) < 40:
             hard_issues.append("content_too_short")
         refusal_patterns = (
-            r"\\bas an ai(?: language model)?\\b",
+            r"\bas an ai(?: language model)?\\b",
             r"\\bi(?:'|’)m an ai\\b",
             r"\\bi cannot (?:help|assist|provide)\\b",
             r"\\bi can(?:not|'t) (?:help|assist|provide)\\b",
