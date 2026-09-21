@@ -46,24 +46,42 @@ class ProviderRouter:
         return False
 
     def route(self, prompt: Dict[str, Any], strategy: str = "cheapest") -> Optional[Dict[str, Any]]:
-        available = [p for p in self._providers.values() if p.status == ProviderStatus.AVAILABLE]
+        available = [p for p in self._providers.values()
+                     if p.status == ProviderStatus.AVAILABLE and p.handler]
         if not available:
             return None
         if strategy == "cheapest":
             provider = min(available, key=lambda p: p.cost_per_image)
         elif strategy == "highest_quality":
-            provider = max(available, key=lambda p: p.quality_score)
+            measured = [p for p in available if p.quality_score is not None]
+            if not measured: return {"error": "no provider quality telemetry available"}
+            provider = max(measured, key=lambda p: p.quality_score)
         elif strategy == "fastest":
-            provider = max(available, key=lambda p: p.speed_score)
+            measured = [p for p in available if p.speed_score is not None]
+            if not measured: return {"error": "no provider speed telemetry available"}
+            provider = max(measured, key=lambda p: p.speed_score)
         else:
             provider = available[0]
         self._history.append({"provider": provider.name, "strategy": strategy, "time": time.time()})
-        if provider.handler:
-            try:
-                return {"provider": provider.name, "result": provider.handler(prompt)}
-            except Exception as exc:
-                return {"provider": provider.name, "error": str(exc)}
-        return {"provider": provider.name, "status": "no_handler"}
+        started = time.perf_counter()
+        try:
+            value = provider.handler(prompt)
+            elapsed = time.perf_counter() - started
+            provider.metadata["last_latency_seconds"] = elapsed
+            return {"provider": provider.name, "result": value}
+        except Exception as exc:
+            provider.metadata["last_error"] = str(exc)
+            return {"provider": provider.name, "error": str(exc)}
+
+    def record_observation(self, name: str, quality_score: Optional[float] = None,
+                           speed_score: Optional[float] = None) -> bool:
+        provider = self._providers.get(name)
+        if not provider: return False
+        if quality_score is not None and 0.0 <= quality_score <= 1.0:
+            provider.quality_score = quality_score
+        if speed_score is not None and 0.0 <= speed_score <= 1.0:
+            provider.speed_score = speed_score
+        return True
 
     def list_providers(self) -> List[Dict[str, Any]]:
         return [p.to_dict() for p in self._providers.values()]
