@@ -33,6 +33,9 @@ class SecretsManager:
         self._access_log: List[Dict[str, Any]] = []
 
     def set_secret(self, key: str, value: str, category: str = "general") -> SecretEntry:
+        if os.getenv("UCOS_ENV", "development").lower() in {"production", "prod"} and os.getenv("UCOS_ALLOW_IN_MEMORY_SECRETS", "false").lower() != "true":
+            raise RuntimeError("in-memory secret storage is disabled in production")
+        if not key or not value: raise ValueError("secret key and value are required")
         entry = SecretEntry(key, value, category)
         self._secrets[key] = entry
         return entry
