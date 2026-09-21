@@ -69,6 +69,7 @@ class SelfImprovementManager:
         self.metrics = ImprovementMetrics()
         self.history = ImprovementHistory()
         self._cycles: List[ImprovementCycleResult] = []
+        self._thresholds: Dict[str, float] = {}
         self._events: List[Dict[str, Any]] = []
 
     def run_improvement_cycle(
