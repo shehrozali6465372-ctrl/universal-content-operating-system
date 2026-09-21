@@ -135,7 +135,7 @@ class FacebookPublisher(BasePublisher):
             content = handle.read()
         prefix = (
             f"--{boundary}\r\n"
-            f"Content-Disposition: form-data; name="source"; filename="{filename}"\r\n"
+            f'Content-Disposition: form-data; name="source"; filename="{filename}"\r\n'
             f"Content-Type: {mime}\r\n\r\n"
         ).encode()
         suffix = (
