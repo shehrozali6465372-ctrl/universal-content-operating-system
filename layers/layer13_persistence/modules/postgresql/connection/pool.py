@@ -93,14 +93,16 @@ class ConnectionPool:
             self._last_success_time = time.time()
             return True
 
-        except ImportError:
+        except ImportError as exc:
             self._pg_available = False
             self._initialized = True
+            self._last_error = f"PostgreSQL driver unavailable: {exc}"
             return False
 
-        except Exception:
+        except Exception as exc:
             self._pg_available = False
             self._initialized = True
+            self._last_error = str(exc)
             return False
 
     def _auto_reconnect(self) -> bool:
@@ -131,6 +133,8 @@ class ConnectionPool:
                 self._active_conns = max(0, self._active_conns - 1)
                 self._idle_conns += 1
         else:
+            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"} and os.environ.get("UCOS_ALLOW_SQLITE_FALLBACK", "false").lower() != "true":
+                raise RuntimeError("PostgreSQL is unavailable; SQLite fallback is disabled in production")
             import sqlite3
             db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
                 os.path.dirname(os.path.dirname(__file__))))), "ai_content_os.db")
