@@ -58,7 +58,7 @@ class AsyncScheduler:
 
     def schedule(self, coro_fn: Callable, *args: Any, priority: int = 0,
                  delay_seconds: float = 0.0, max_retries: int = 0,
-                 **kwargs: Any) -> ScheduledTask:
+                 timeout_seconds: float = 300.0, **kwargs: Any) -> ScheduledTask:
         task = ScheduledTask(coro_fn, args, kwargs, priority, delay_seconds, max_retries)
         task.state = TaskState.SCHEDULED
         self._tasks[task.task_id] = task
