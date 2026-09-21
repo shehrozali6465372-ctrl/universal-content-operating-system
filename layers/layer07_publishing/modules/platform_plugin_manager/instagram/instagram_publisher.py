@@ -79,7 +79,8 @@ class InstagramPublisher(BasePublisher):
         if not media_paths: return {"error":"Instagram feed posts require media"}
         c=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"caption":content})
         if not c or "id" not in c: return c
-        self._wait_for_container(c["id"])\n        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
+        self._wait_for_container(c["id"])
+        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _publish_carousel(self, content: str, media_paths: List[str], **kwargs: Any) -> Optional[Dict]:
         children=[]
         for url in media_paths[:10]:
