@@ -48,7 +48,18 @@ def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
             if row[2]:
                 return json.loads(row[2])
             if row[1] == "processing":
-                raise RuntimeError("request_id is already processing or requires reconciliation")
+                try:
+                    age = time.time() - time.mktime(time.strptime(row[3], "%Y-%m-%d %H:%M:%S"))
+                except (TypeError, ValueError, OverflowError):
+                    age = 0.0
+                if age < 900:
+                    raise RuntimeError("request_id is already processing")
+                db.execute(
+                    "UPDATE job_inbox SET state='processing',response_json=NULL,updated_at=CURRENT_TIMESTAMP WHERE request_id=?",
+                    (request_id,),
+                )
+                db.commit()
+                return None
             raise RuntimeError("request_id has no terminal response")
         db.execute("INSERT INTO job_inbox(request_id,payload_hash,state) VALUES(?,?,?)", (request_id,payload_hash,"processing"))
         db.commit()
@@ -94,6 +105,9 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     cached = _claim_request(request_id, _payload_hash(data))
     if cached is not None:
         return cached
+    # The inbox is the durable idempotency boundary. Any failure after claim is
+    # recorded as a terminal failure so retries do not silently collide with a
+    # permanently "processing" request.
     site = get_website(domain=domain, site_name=site_name)
     publish = bool(context.get("publish"))
     if publish and job_type != "content":
