@@ -74,9 +74,6 @@ def _uuid(value: Any, field: str) -> str:
 def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     """Dispatch an AIOS job into Layer 23 using real data only."""
     request_id = _uuid(data.get("request_id"), "request_id")
-    cached = _claim_request(request_id, _payload_hash(data))
-    if cached is not None:
-        return cached
     niche_id = _uuid(data.get("niche_id"), "niche_id")
     job_type = str(data.get("job_type") or "").strip()
     if job_type not in SUPPORTED_JOB_TYPES:
@@ -90,6 +87,9 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
     if not domain or not site_name:
         raise ValueError("context.domain and context.site_name are required")
 
+    cached = _claim_request(request_id, _payload_hash(data))
+    if cached is not None:
+        return cached
     site = get_website(domain=domain, site_name=site_name)
     if bool(context.get("publish")) and job_type != "content":
         raise ValueError("publish is only valid for content jobs")
@@ -111,14 +111,9 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
             meta_description=str(context.get("meta_description") or ""),
             status="published" if bool(context.get("publish")) else "draft",
         )
-        return {
-            "job_id": job_id,
-            "request_id": request_id,
-            "niche_id": niche_id,
-            "state": "succeeded",
-            "result_ref": f"layer23:article:{article.article_id}",
-            "result": article.to_dict(),
-        }
+        response = {"job_id": job_id, "request_id": request_id, "niche_id": niche_id, "state": "succeeded", "result_ref": f"layer23:article:{article.article_id}", "result": article.to_dict()}
+        _finish_request(request_id, response)
+        return response
 
     if job_type == "seo_metadata":
         article_id = str(context.get("article_id") or "").strip()
@@ -127,14 +122,9 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
         metadata = site.generate_article_seo(article_id)
         if metadata is None:
             raise LookupError(f"article not found: {article_id}")
-        return {
-            "job_id": job_id,
-            "request_id": request_id,
-            "niche_id": niche_id,
-            "state": "succeeded",
-            "result_ref": f"layer23:seo:{article_id}",
-            "result": metadata.to_dict(),
-        }
+        response = {"job_id": job_id, "request_id": request_id, "niche_id": niche_id, "state": "succeeded", "result_ref": f"layer23:seo:{article_id}", "result": metadata.to_dict()}
+        _finish_request(request_id, response)
+        return response
 
     if job_type == "pinterest_assets":
         title = str(context.get("title") or "").strip()
@@ -142,6 +132,10 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
         account_id = str(context.get("account_id") or "").strip()
         board_id = str(context.get("board_id") or "").strip()
         image_path = str(context.get("image_path") or "").strip()
+        asset_root = Path(os.environ.get("UCOS_ASSET_ROOT", "data/assets")).resolve()
+        candidate = Path(image_path).expanduser().resolve()
+        if asset_root not in candidate.parents or not candidate.is_file():
+            raise ValueError("image_path must reference an existing file under UCOS_ASSET_ROOT")
         if not title or not website_url or not account_id or not board_id or not image_path:
             raise ValueError(
                 "pinterest_assets jobs require title, website_url, account_id, board_id and image_path"
@@ -156,24 +150,13 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
             niche=str(context.get("niche") or ""),
             keywords=list(context.get("keywords") or []),
         )
-        return {
-            "job_id": job_id,
-            "request_id": request_id,
-            "niche_id": niche_id,
-            "state": "succeeded",
-            "result_ref": f"layer23:pinterest-pin:{pin.pin_id}",
-            "result": pin.to_dict(),
-            "published": False,
-        }
+        response = {"job_id": job_id, "request_id": request_id, "niche_id": niche_id, "state": "succeeded", "result_ref": f"layer23:pinterest-pin:{pin.pin_id}", "result": pin.to_dict(), "published": False}
+        _finish_request(request_id, response)
+        return response
 
     if job_type == "analytics_insights":
-        return {
-            "job_id": job_id,
-            "request_id": request_id,
-            "niche_id": niche_id,
-            "state": "succeeded",
-            "result_ref": "layer23:website:status",
-            "result": site.get_status(),
-        }
+        response = {"job_id": job_id, "request_id": request_id, "niche_id": niche_id, "state": "succeeded", "result_ref": "layer23:website:status", "result": site.get_status()}
+        _finish_request(request_id, response)
+        return response
 
     raise NotImplementedError(job_type)
