@@ -40,9 +40,15 @@ class AffiliateLinkManager:
         return link
 
     def generate_short_link(self, product_id: str, original_url: str) -> AffiliateLink:
-        """Generate a shortened affiliate link."""
-        hash_str = hashlib.md5(original_url.encode()).hexdigest()[:8]
-        short_url = f"https://go.affiliate/{hash_str}"
+        """Generate a shortened link using a configured real redirect service."""
+        import os
+        base_url = os.environ.get("UCOS_SHORT_LINK_BASE_URL", "").strip().rstrip("/")
+        if not base_url.startswith(("http://", "https://")):
+            raise LinkGenerationError("A real short-link redirect service must be configured")
+        if not original_url.startswith(("http://", "https://")):
+            raise LinkGenerationError("Invalid URL")
+        hash_str = hashlib.sha256(original_url.encode()).hexdigest()[:12]
+        short_url = f"{base_url}/{hash_str}"
 
         link = AffiliateLink(
             product_id=product_id,
