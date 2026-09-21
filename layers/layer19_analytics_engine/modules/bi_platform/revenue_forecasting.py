@@ -65,30 +65,33 @@ class RevenueForecasting:
         return self._generate_forecast(365, "1year")
 
     def _generate_forecast(self, days: int, key: str) -> List[ForecastPoint]:
-        avg_revenue = 0.0
-        growth_rate = 0.0
-        if self._historical:
-            revenues = [h["revenue"] for h in self._historical]
-            avg_revenue = sum(revenues) / len(revenues) if revenues else 0
-            if len(revenues) >= 2:
-                recent_avg = sum(revenues[-7:]) / min(7, len(revenues))
-                older_avg = sum(revenues[:7]) / min(7, len(revenues))
-                if older_avg > 0:
-                    growth_rate = max((recent_avg / older_avg - 1), 0.01)
-        points = []
         if not self._historical:
             raise ValueError("revenue forecast requires real historical observations")
-        base = avg_revenue
-        confidence_base = min(len(self._historical) / 30, 1.0) * 70 + 20
+        revenues = [float(h["revenue"]) for h in self._historical]
+        profits = [float(h["profit"]) for h in self._historical]
+        n = len(revenues)
+        xs = list(range(n))
+        xbar = sum(xs) / n
+        ybar = sum(revenues) / n
+        denom = sum((x - xbar) ** 2 for x in xs)
+        slope = sum((x - xbar) * (y - ybar) for x, y in zip(xs, revenues)) / denom if denom else 0.0
+        intercept = ybar - slope * xbar
+        residuals = [y - (intercept + slope * x) for x, y in zip(xs, revenues)]
+        residual_std = (sum(e * e for e in residuals) / max(1, n - 2)) ** 0.5
+        total_revenue = sum(revenues)
+        profit_margin = sum(profits) / total_revenue if total_revenue > 0 else 0.0
+        confidence_base = min(95.0, 30.0 + n * 2.0)
+        points = []
         for i in range(1, days + 1):
             day = time.strftime("%Y-%m-%d", time.localtime(time.time() + i * 86400))
-            predicted = base * ((1 + growth_rate) ** i)
-            confidence = max(confidence_base - (i * 0.5), 20)
+            predicted = max(0.0, intercept + slope * (n - 1 + i))
+            confidence = max(20.0, confidence_base - (i * 0.2))
             fp = ForecastPoint(day, predicted)
-            fp.predicted_profit = predicted * 0.7
+            fp.predicted_profit = predicted * profit_margin
             fp.confidence = confidence
-            fp.lower_bound = predicted * (1 - (1 - confidence / 100))
-            fp.upper_bound = predicted * (1 + (1 - confidence / 100))
+            margin = max(residual_std, abs(predicted) * 0.05)
+            fp.lower_bound = max(0.0, predicted - margin * 1.96)
+            fp.upper_bound = predicted + margin * 1.96
             points.append(fp)
         self._forecasts[key] = points
         return points
