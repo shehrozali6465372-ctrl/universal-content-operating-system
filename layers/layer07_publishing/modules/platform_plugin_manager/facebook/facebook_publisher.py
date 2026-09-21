@@ -128,26 +128,31 @@ class FacebookPublisher(BasePublisher):
 
     def _upload_local_image(self, path: str, caption: str) -> Dict[str, Any]:
         import mimetypes
-        boundary = "----UCOSBoundary"; filename = os.path.basename(path); mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        with open(path, "rb") as handle: content = handle.read()
-        body = (f"--{boundary}\r
-Content-Disposition: form-data; name=\"source\"; filename=\"{filename}\"\r
-Content-Type: {mime}\r
-\r
-").encode() + content + (f"\r
---{boundary}\r
-Content-Disposition: form-data; name=\"published\"\r
-\r
-false\r
---{boundary}\r
-Content-Disposition: form-data; name=\"message\"\r
-\r
-{caption}\r
---{boundary}--\r
-").encode()
+        boundary = "----UCOSBoundary"
+        filename = os.path.basename(path)
+        mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        with open(path, "rb") as handle:
+            content = handle.read()
+        prefix = (
+            f"--{boundary}\r\n"
+            f"Content-Disposition: form-data; name="source"; filename="{filename}"\r\n"
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode()
+        suffix = (
+            f"\r\n--{boundary}\r\n"
+            'Content-Disposition: form-data; name="published"\r\n\r\n'
+            "false\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="message"\r\n\r\n'
+            f"{caption}\r\n"
+            f"--{boundary}--\r\n"
+        ).encode()
+        body = prefix + content + suffix
         request = urllib.request.Request(f"{self.API_BASE}/{self._page_id}/photos", data=body, method="POST")
-        request.add_header("Content-Type", f"multipart/form-data; boundary={boundary}"); request.add_header("Authorization", f"Bearer {self._access_token}")
-        with urllib.request.urlopen(request, timeout=60) as response: return json.loads(response.read().decode("utf-8"))
+        request.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        request.add_header("Authorization", f"Bearer {self._access_token}")
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
 
     def edit(self, post_id: str, content: str, **kwargs: Any) -> PublishResult:
         result = PublishResult(platform="facebook")
