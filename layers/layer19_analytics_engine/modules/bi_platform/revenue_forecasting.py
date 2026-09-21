@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 class ForecastPoint:
     __slots__ = ("date", "predicted_revenue", "predicted_profit", "confidence",
-                 "lower_bound", "upper_bound")
+                 "lower_bound", "upper_bound", "model", "provenance")
 
     def __init__(self, date: str, revenue: float = 0.0) -> None:
         self.date = date
@@ -16,6 +16,8 @@ class ForecastPoint:
         self.confidence = 50.0
         self.lower_bound = revenue * 0.6
         self.upper_bound = revenue * 1.4
+        self.model = ""
+        self.provenance = {}
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -24,6 +26,8 @@ class ForecastPoint:
             "profit": round(self.predicted_profit, 2),
             "confidence": round(self.confidence, 1),
             "range": [round(self.lower_bound, 2), round(self.upper_bound, 2)],
+            "model": self.model,
+            "provenance": self.provenance,
         }
 
 
@@ -65,8 +69,8 @@ class RevenueForecasting:
         return self._generate_forecast(365, "1year")
 
     def _generate_forecast(self, days: int, key: str) -> List[ForecastPoint]:
-        if not self._historical:
-            raise ValueError("revenue forecast requires real historical observations")
+        if len(self._historical) < 2:
+            raise ValueError("revenue forecast requires at least two real historical observations")
         revenues = [float(h["revenue"]) for h in self._historical]
         profits = [float(h["profit"]) for h in self._historical]
         n = len(revenues)
@@ -77,10 +81,20 @@ class RevenueForecasting:
         slope = sum((x - xbar) * (y - ybar) for x, y in zip(xs, revenues)) / denom if denom else 0.0
         intercept = ybar - slope * xbar
         residuals = [y - (intercept + slope * x) for x, y in zip(xs, revenues)]
+        ss_res = sum(e * e for e in residuals)
+        ss_tot = sum((y - ybar) ** 2 for y in revenues)
+        r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
         residual_std = (sum(e * e for e in residuals) / max(1, n - 2)) ** 0.5
         total_revenue = sum(revenues)
         profit_margin = sum(profits) / total_revenue if total_revenue > 0 else 0.0
-        confidence_base = min(95.0, 30.0 + n * 2.0)
+        confidence_base = max(0.0, min(95.0, 20.0 + min(40.0, n * 2.0) + max(0.0, r_squared) * 35.0))
+        model_provenance = {
+            "model": "ordinary_least_squares_linear_trend",
+            "observation_count": n,
+            "r_squared": round(r_squared, 6),
+            "historical_start": self._historical[0]["date"],
+            "historical_end": self._historical[-1]["date"],
+        }
         points = []
         for i in range(1, days + 1):
             day = time.strftime("%Y-%m-%d", time.localtime(time.time() + i * 86400))
@@ -92,6 +106,8 @@ class RevenueForecasting:
             margin = max(residual_std, abs(predicted) * 0.05)
             fp.lower_bound = max(0.0, predicted - margin * 1.96)
             fp.upper_bound = predicted + margin * 1.96
+            fp.model = "ordinary_least_squares_linear_trend"
+            fp.provenance = model_provenance
             points.append(fp)
         self._forecasts[key] = points
         return points
@@ -143,6 +159,8 @@ class RevenueForecasting:
         return {
             "historical": len(self._historical),
             "forecasts": len(self._forecasts),
+            "model": "ordinary_least_squares_linear_trend" if self._historical else None,
+            "observations": len(self._historical),
         }
 
 
