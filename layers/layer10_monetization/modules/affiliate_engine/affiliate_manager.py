@@ -217,6 +217,11 @@ class AffiliateManager:
 
     def add_link(self, program_id: str, product_url: str, affiliate_url: str,
                  tracking_id: str = "", niche: str = "", category: str = "") -> AffiliateLink:
+        prog = next((p for p in self._programs.values() if p.id == program_id), None)
+        if not prog or prog.status != "active":
+            raise ValueError("affiliate program must be verified and active before links can be created")
+        if not product_url.startswith(("http://", "https://")) or not affiliate_url.startswith(("http://", "https://")):
+            raise ValueError("real product and affiliate URLs are required")
         link = AffiliateLink(program_id, product_url, affiliate_url,
                              tracking_id, niche, category)
         self._links[link.id] = link
