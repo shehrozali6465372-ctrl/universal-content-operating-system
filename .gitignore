@@ -25,6 +25,7 @@ logs/*.log
 data/*.csv
 data/*.json
 data/*.db
+**/*.db
 
 # OS
 .DS_Store
