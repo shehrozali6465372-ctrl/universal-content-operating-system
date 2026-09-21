@@ -71,27 +71,35 @@ class AsyncScheduler:
             task.started_at = time.time()
             self._running_count += 1
             try:
-                if task.delay_seconds > 0:
-                    await asyncio.sleep(task.delay_seconds)
-                coro = task.coro_fn(*task.args, **task.kwargs)
-                if asyncio.iscoroutine(coro):
-                    task.result = await coro
-                else:
-                    task.result = coro
-                task.state = TaskState.COMPLETED
-                self._completed_count += 1
-            except Exception as exc:
-                task.error = str(exc)
-                if task.retries < task.max_retries:
-                    task.retries += 1
-                    task.state = TaskState.PENDING
-                    self._running_count -= 1
-                    return await self.execute_task(task)
-                task.state = TaskState.FAILED
-                self._failed_count += 1
+                while True:
+                    try:
+                        if task.delay_seconds > 0:
+                            await asyncio.sleep(task.delay_seconds)
+                        result = task.coro_fn(*task.args, **task.kwargs)
+                        if asyncio.iscoroutine(result):
+                            task.result = await asyncio.wait_for(
+                                result, timeout=float(task.metadata.get("timeout_seconds", 300.0))
+                            )
+                        else:
+                            task.result = result
+                        task.state = TaskState.COMPLETED
+                        self._completed_count += 1
+                        break
+                    except asyncio.CancelledError:
+                        task.state = TaskState.CANCELLED
+                        raise
+                    except Exception as exc:
+                        task.error = str(exc)
+                        if task.retries >= task.max_retries:
+                            task.state = TaskState.FAILED
+                            self._failed_count += 1
+                            break
+                        task.retries += 1
+                        task.state = TaskState.RUNNING
+                        await asyncio.sleep(min(2 ** (task.retries - 1), 30))
             finally:
                 task.finished_at = time.time()
-                self._running_count -= 1
+                self._running_count = max(0, self._running_count - 1)
         return task.to_dict()
 
     async def run_all(self) -> List[Dict[str, Any]]:
