@@ -84,7 +84,7 @@ class WritingMemory:
 
     def store_draft(self, platform: str, topic: str, text: str,
                     tone: str = "", brand_voice: str = "",
-                    tokens: int = 0) -> DraftRecord:
+                    tokens: int = 0, account_id: str = "default") -> DraftRecord:
         """Store a generated draft."""
         rec = DraftRecord(platform=platform, topic=topic, text=text)
         rec.tone = tone
