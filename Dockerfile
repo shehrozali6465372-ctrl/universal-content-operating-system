@@ -51,7 +51,7 @@ USER aios
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:8000/health || python main.py --status > /dev/null 2>&1
+    CMD curl -fsS http://localhost:8000/health > /dev/null
 
 ENTRYPOINT ["tini", "--"]
 CMD ["--api"]
