@@ -86,7 +86,7 @@ class WritingMemory:
                     tone: str = "", brand_voice: str = "",
                     tokens: int = 0, account_id: str = "default") -> DraftRecord:
         """Store a generated draft."""
-        rec = DraftRecord(platform=platform, topic=topic, text=text)
+        rec = DraftRecord(platform=platform, topic=topic, text=text, account_id=account_id)
         rec.tone = tone
         rec.brand_voice = brand_voice
         rec.tokens_used = tokens
