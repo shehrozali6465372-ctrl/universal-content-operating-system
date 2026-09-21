@@ -26,8 +26,10 @@ class NoveltyDetector:
 
     def detect(self, content: str, existing: Optional[List[str]] = None, account_id: str = "default", platform: str = "global", niche: str = "general") -> NoveltyResult:
         result = NoveltyResult()
+        scope = f"{account_id}:{platform}:{niche}".lower()
+        seen = self._seen_hashes.setdefault(scope, set())
         content_hash = hashlib.sha256(content.lower().strip().encode()).hexdigest()
-        if content_hash in self._seen_hashes:
+        if content_hash in seen:
             result.novelty_score = 0.0
             result.is_novel = False
             return result
