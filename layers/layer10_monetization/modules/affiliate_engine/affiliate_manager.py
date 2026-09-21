@@ -4,13 +4,15 @@ import hashlib
 import threading
 import time
 import uuid
+from urllib.parse import urlsplit
 from typing import Any, Dict, List, Optional
 
 
 class AffiliateProgram:
     __slots__ = ("id", "name", "platform", "base_url", "commission_type",
                  "commission_rate", "cookie_days", "categories", "api_key",
-                 "api_secret", "status", "created_at", "total_clicks",
+                 "api_secret", "status", "verification_reference", "verified_at",
+                 "created_at", "total_clicks",
                  "total_conversions", "total_revenue")
 
     def __init__(self, name: str, platform: str, base_url: str = "",
@@ -27,6 +29,8 @@ class AffiliateProgram:
         self.api_key = ""
         self.api_secret = ""
         self.status = "unconfigured"
+        self.verification_reference = ""
+        self.verified_at = 0.0
         self.created_at = time.time()
         self.total_clicks = 0
         self.total_conversions = 0
@@ -55,6 +59,9 @@ class AffiliateProgram:
             "cookie_days": self.cookie_days,
             "categories": self.categories,
             "status": self.status,
+            "verified": self.status == "active" and bool(self.verification_reference),
+            "verification_reference": self.verification_reference,
+            "verified_at": self.verified_at,
             "total_clicks": self.total_clicks,
             "total_conversions": self.total_conversions,
             "total_revenue": round(self.total_revenue, 2),
@@ -209,6 +216,18 @@ class AffiliateManager:
         self._programs[key] = prog
         return prog
 
+    def verify_program(self, key: str, verification_reference: str) -> AffiliateProgram:
+        prog = self._programs.get(key)
+        if not prog:
+            raise KeyError(f"unknown affiliate program: {key}")
+        reference = str(verification_reference or "").strip()
+        if len(reference) < 8:
+            raise ValueError("verification_reference is required to activate an affiliate program")
+        prog.verification_reference = reference
+        prog.verified_at = time.time()
+        prog.status = "active"
+        return prog
+
     def get_program(self, key: str) -> Optional[AffiliateProgram]:
         return self._programs.get(key)
 
@@ -220,8 +239,14 @@ class AffiliateManager:
         prog = next((p for p in self._programs.values() if p.id == program_id), None)
         if not prog or prog.status != "active":
             raise ValueError("affiliate program must be verified and active before links can be created")
-        if not product_url.startswith(("http://", "https://")) or not affiliate_url.startswith(("http://", "https://")):
-            raise ValueError("real product and affiliate URLs are required")
+        product = urlsplit(product_url)
+        affiliate = urlsplit(affiliate_url)
+        if product.scheme not in {"http", "https"} or not product.hostname:
+            raise ValueError("real product URL is required")
+        if affiliate.scheme not in {"http", "https"} or not affiliate.hostname:
+            raise ValueError("real affiliate URL is required")
+        if product_url == affiliate_url:
+            raise ValueError("affiliate URL must be a tracked affiliate destination, not the raw product URL")
         link = AffiliateLink(program_id, product_url, affiliate_url,
                              tracking_id, niche, category)
         self._links[link.id] = link
