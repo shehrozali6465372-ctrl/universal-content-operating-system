@@ -1,7 +1,7 @@
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
 import hashlib, hmac, json, os, time, threading, glob
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse, parse_qs
 
