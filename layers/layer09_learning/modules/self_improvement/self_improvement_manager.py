@@ -71,6 +71,7 @@ class SelfImprovementManager:
         self._cycles: List[ImprovementCycleResult] = []
         self._thresholds: Dict[str, float] = {}
         self._events: List[Dict[str, Any]] = []
+        self._strategy_updates: List[Dict[str, Any]] = []
 
     def run_improvement_cycle(
         self,
@@ -152,6 +153,25 @@ class SelfImprovementManager:
             "mistakes": result.mistakes_found,
             "actions": result.actions_created,
         })
+        return result
+
+    def apply_analytics_feedback(self, analytics_signal: Dict[str, Any]) -> Dict[str, Any]:
+        """Turn observed analytics diagnoses into scoped, reversible strategy updates."""
+        if not analytics_signal.get("available"):
+            return {"updated": False, "reason": "insufficient_data"}
+        diagnosis = analytics_signal.get("diagnosis") or analytics_signal.get("findings") or []
+        if isinstance(diagnosis, dict):
+            diagnosis = diagnosis.get("findings", [])
+        updates = []
+        for finding in diagnosis:
+            if finding == "reach_without_clicks" or finding == "low_click_through_rate":
+                updates.append({"change": "test_clearer_cta_and_offer_alignment", "reversible": True})
+            elif finding == "low_measurable_engagement":
+                updates.append({"change": "test_more_relevant_hook_and_topic_angle", "reversible": True})
+        result = {"updated": bool(updates), "updates": updates, "source": "observed_analytics"}
+        if updates:
+            self._strategy_updates.append(result)
+            self._events.append({"event": "strategy_updated_from_analytics", "updates": updates})
         return result
 
     def create_experiment(self, hypothesis: str, control_metric: str = "",
