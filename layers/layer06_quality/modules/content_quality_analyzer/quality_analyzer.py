@@ -1,6 +1,7 @@
 """Content Quality Analyzer — Central orchestrator for quality checks."""
 from __future__ import annotations
 import time
+import re
 from typing import Any, Dict, List
 
 from layers.layer06_quality.modules.content_quality_analyzer.grammar_checker import GrammarChecker
@@ -66,6 +67,40 @@ class ContentQualityAnalyzer:
         start = time.time()
         report = QualityReport(text=text)
 
+        # Hard safety/validity gates run before the heuristic score.  The
+        # heuristic analyzers are not classifiers and must never be allowed
+        # to turn empty, placeholder, refusal, or obvious scam text into a
+        # publishable result merely because its prose features score well.
+        normalized = (text or "").strip()
+        hard_issues: List[str] = []
+        if len(normalized) < 40:
+            hard_issues.append("content_too_short")
+        refusal_patterns = (
+            r"\\bas an ai(?: language model)?\\b",
+            r"\\bi(?:'|’)m an ai\\b",
+            r"\\bi cannot (?:help|assist|provide)\\b",
+            r"\\bi can(?:not|'t) (?:help|assist|provide)\\b",
+        )
+        if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in refusal_patterns):
+            hard_issues.append("model_refusal")
+        placeholder_patterns = (
+            r"\\b(?:lorem ipsum|placeholder|dummy text|sample text|test post)\\b",
+            r"^\\s*(?:hello|hi|test)\\s*[.!?]*\\s*$",
+        )
+        if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in placeholder_patterns):
+            hard_issues.append("placeholder_content")
+        words = re.findall(r"\\b\\w+\\b", normalized.lower())
+        if words and len(words) >= 8 and len(set(words)) / len(words) < 0.35:
+            hard_issues.append("excessive_word_repetition")
+        scam_patterns = (
+            r"\\b(?:500|1000)\\s*%\\s*(?:returns?|profit|guaranteed)",
+            r"\\b(?:send|share|give)\\s+(?:me\\s+)?(?:your\\s+)?(?:bank|banking|account)\\s+password\\b",
+            r"\\bguaranteed\\s+(?:returns?|profit)\\b",
+        )
+        if any(re.search(pattern, normalized, re.IGNORECASE) for pattern in scam_patterns):
+            hard_issues.append("unsafe_scam_pattern")
+        report.issues.extend(hard_issues)
+
         # 1. Grammar
         report.grammar_issues = self.grammar.check(text)
 
@@ -100,7 +135,11 @@ class ContentQualityAnalyzer:
                 break
 
         # Pass/fail
-        if report.overall_score >= 0.7:
+        if hard_issues:
+            report.overall_score = 0.0
+            report.grade = "D"
+            report.pass_recommendation = "REVISION REQUIRED"
+        elif report.overall_score >= 0.7:
             report.pass_recommendation = "READY TO PUBLISH"
         elif report.overall_score >= 0.5:
             report.pass_recommendation = "NEEDS IMPROVEMENT"
@@ -117,6 +156,8 @@ class ContentQualityAnalyzer:
 
         report.metadata["pipeline_time_ms"] = round((time.time() - start) * 1000, 2)
         report.metadata["platform"] = platform
+        report.metadata["hard_gate_failures"] = list(hard_issues)
+        report.metadata["score_scale"] = "0_to_1"
 
         self._analysis_count += 1
         return report
