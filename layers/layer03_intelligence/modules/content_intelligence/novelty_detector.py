@@ -20,8 +20,9 @@ class NoveltyResult:
 
 class NoveltyDetector:
     def __init__(self, threshold: float = 0.7):
+        if not 0.0 < threshold <= 1.0: raise ValueError("threshold must be in (0,1]")
         self._threshold = threshold
-        self._seen_hashes: set = set()
+        self._seen_hashes: Dict[str, set] = {}
 
     def detect(self, content: str, existing: Optional[List[str]] = None) -> NoveltyResult:
         result = NoveltyResult()
