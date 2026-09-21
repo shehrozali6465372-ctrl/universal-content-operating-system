@@ -91,6 +91,45 @@ class AnalyticsOrchestrator:
         self._events.append({"event": "pipeline_run", "pipeline_id": result.pipeline_id})
         return result
 
+    def diagnose_performance(self, points: List[Any], account_id: str = "", platform: str = "", niche: str = "") -> Dict[str, Any]:
+        """Normalize observed metrics and emit scoped, evidence-backed diagnoses."""
+        raw: Dict[str, float] = {}
+        provenance: List[Dict[str, Any]] = []
+        for point in points or []:
+            name = str(getattr(point, "metric_name", "") or "").strip().lower()
+            value = getattr(point, "value", None)
+            if not name or not isinstance(value, (int, float)):
+                continue
+            raw[name] = float(value)
+            provenance.append({
+                "source": getattr(point, "source", ""),
+                "metric": name,
+                "timestamp": getattr(point, "timestamp", 0.0),
+                "dimensions": dict(getattr(point, "dimensions", {}) or {}),
+            })
+        normalized = dict(raw)
+        if "clicks" in raw and "reach" in raw and raw["reach"] > 0:
+            normalized["click_through_rate"] = raw["clicks"] / raw["reach"]
+        if "engagements" in raw and "reach" in raw and raw["reach"] > 0:
+            normalized["engagement_rate"] = raw["engagements"] / raw["reach"]
+        findings: List[str] = []
+        if raw.get("reach", 0) > 0 and raw.get("clicks", 0) <= 0:
+            findings.append("reach_without_clicks")
+        elif normalized.get("click_through_rate", 1.0) < 0.01 and "clicks" in raw:
+            findings.append("low_click_through_rate")
+        if raw.get("reach", 0) > 0 and raw.get("engagements", 0) <= 0:
+            findings.append("low_measurable_engagement")
+        return {
+            "available": bool(raw),
+            "account_id": str(account_id).strip(),
+            "platform": str(platform).strip(),
+            "niche": str(niche).strip(),
+            "raw_metrics": raw,
+            "normalized_metrics": normalized,
+            "diagnosis": findings,
+            "provenance": provenance,
+        }
+
     def get_health(self) -> Dict[str, Any]:
         return {
             "pipeline_runs": len(self._pipeline_runs),
