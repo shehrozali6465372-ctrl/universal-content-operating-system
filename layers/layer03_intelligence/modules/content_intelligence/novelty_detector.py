@@ -33,7 +33,7 @@ class NoveltyDetector:
             result.novelty_score = 0.0
             result.is_novel = False
             return result
-        self._seen_hashes.add(content_hash)
+        seen.add(content_hash)
 
         if existing:
             words = set(content.lower().split())
