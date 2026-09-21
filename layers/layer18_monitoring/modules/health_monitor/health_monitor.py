@@ -51,7 +51,13 @@ class HealthMonitor:
         if not check:
             return {"name": name, "status": HealthLevel.UNHEALTHY.value, "error": "not_found"}
         try:
-            result = check.check_fn()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(check.check_fn)
+                try:
+                    result = future.result(timeout=check.timeout)
+                except concurrent.futures.TimeoutError:
+                    future.cancel()
+                    raise TimeoutError(f"health check timed out after {check.timeout:.2f}s")
             healthy = result.get("healthy", True) if isinstance(result, dict) else bool(result)
             level = HealthLevel.HEALTHY if healthy else HealthLevel.DEGRADED
             check.consecutive_failures = 0
