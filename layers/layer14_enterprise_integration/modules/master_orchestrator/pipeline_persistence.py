@@ -97,13 +97,24 @@ class PipelinePersistence:
         quality_score = response_dict.get("quality_score", 0.0)
 
         # Save content
+        content = str(response_dict.get("content") or "").strip()
+        publish_result = response_dict.get("publish_result") or {}
+        published = bool(response_dict.get("published") and publish_result.get("success"))
+        post_id = publish_result.get("post_id")
         content_id = self.save_content(
             topic=topic,
             platform=platform,
-            content=f"[Pipeline Run] {topic}",
+            content=content or f"[Pipeline Run] {topic}",
             quality_score=quality_score,
-            status="generated",
+            status="published" if published else "generated",
         )
+        if post_id:
+            self._db.update(
+                "published_posts",
+                {"post_id": str(post_id), "published_at": datetime.now(timezone.utc).isoformat()},
+                "id = ?",
+                (content_id,),
+            )
 
         # Save quality metric
         if quality_score > 0:
@@ -123,8 +134,8 @@ class PipelinePersistence:
         self.save_learning(
             lesson_type="pipeline_execution",
             input_summary=f"Topic: {topic} | Platform: {platform}",
-            output_summary=f"Quality: {quality_score}/10, Length: {content_length} chars",
-            feedback_score=quality_score / 10.0,
+            output_summary=f"Quality: {quality_score:.3f}, Length: {content_length} chars, published={published}",
+            feedback_score=max(0.0, min(1.0, float(quality_score))),
         )
 
         # Save log
