@@ -60,6 +60,8 @@ class AsyncScheduler:
                  delay_seconds: float = 0.0, max_retries: int = 0,
                  timeout_seconds: float = 300.0, **kwargs: Any) -> ScheduledTask:
         task = ScheduledTask(coro_fn, args, kwargs, priority, delay_seconds, max_retries)
+        if timeout_seconds <= 0: raise ValueError("timeout_seconds must be positive")
+        task.metadata["timeout_seconds"] = timeout_seconds
         task.state = TaskState.SCHEDULED
         self._tasks[task.task_id] = task
         return task
