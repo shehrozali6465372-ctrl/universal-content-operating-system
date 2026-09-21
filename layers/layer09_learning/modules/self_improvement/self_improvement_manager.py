@@ -172,8 +172,6 @@ class SelfImprovementManager:
         }
         if not all(scope.values()):
             return {"updated": False, "reason": "scope_required", "required": list(scope)}
-
-            return {"updated": False, "reason": "insufficient_data"}
         diagnosis = analytics_signal.get("diagnosis") or analytics_signal.get("findings") or []
         if isinstance(diagnosis, dict):
             diagnosis = diagnosis.get("findings", [])
