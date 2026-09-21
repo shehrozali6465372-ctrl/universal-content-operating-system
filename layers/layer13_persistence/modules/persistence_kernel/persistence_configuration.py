@@ -47,6 +47,7 @@ class PersistenceConfiguration:
         c.enable_backup = False
         return c
 
+    @classmethod
     def for_production(cls) -> "PersistenceConfiguration":
         c = cls()
         c.pool_size = 50
