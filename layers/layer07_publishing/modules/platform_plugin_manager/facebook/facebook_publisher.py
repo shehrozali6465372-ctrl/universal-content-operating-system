@@ -130,7 +130,21 @@ class FacebookPublisher(BasePublisher):
         import mimetypes
         boundary = "----UCOSBoundary"; filename = os.path.basename(path); mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         with open(path, "rb") as handle: content = handle.read()
-        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"source\"; filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n").encode() + content + (f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"published\"\r\n\r\nfalse\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\n{caption}\r\n--{boundary}--\r\n").encode()
+        body = (f"--{boundary}\r
+Content-Disposition: form-data; name=\"source\"; filename=\"{filename}\"\r
+Content-Type: {mime}\r
+\r
+").encode() + content + (f"\r
+--{boundary}\r
+Content-Disposition: form-data; name=\"published\"\r
+\r
+false\r
+--{boundary}\r
+Content-Disposition: form-data; name=\"message\"\r
+\r
+{caption}\r
+--{boundary}--\r
+").encode()
         request = urllib.request.Request(f"{self.API_BASE}/{self._page_id}/photos", data=body, method="POST")
         request.add_header("Content-Type", f"multipart/form-data; boundary={boundary}"); request.add_header("Authorization", f"Bearer {self._access_token}")
         with urllib.request.urlopen(request, timeout=60) as response: return json.loads(response.read().decode("utf-8"))
@@ -188,7 +202,9 @@ class FacebookPublisher(BasePublisher):
         with urllib.request.urlopen(request, timeout=30) as response: return json.loads(response.read().decode("utf-8"))
 
     def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(data); payload["access_token"] = self._access_token\n        if "attached_media" in payload:\n            payload["attached_media"] = json.dumps(payload["attached_media"], separators=(",", ":"))
+        payload = dict(data); payload["access_token"] = self._access_token
+        if "attached_media" in payload:
+            payload["attached_media"] = json.dumps(payload["attached_media"], separators=(",", ":"))
         request = urllib.request.Request(f"{self.API_BASE}{path}", data=urllib.parse.urlencode(payload).encode("utf-8"), method="POST")
         with urllib.request.urlopen(request, timeout=60) as response: return json.loads(response.read().decode("utf-8"))
 
