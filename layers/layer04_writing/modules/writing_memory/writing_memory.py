@@ -36,7 +36,7 @@ class DraftRecord:
     __slots__ = ("record_id", "account_id", "platform", "topic", "text", "tone",
                  "brand_voice", "tokens_used", "created_at")
 
-    def __init__(self, platform: str = "", topic: str = "", text: str = "") -> None:
+    def __init__(self, platform: str = "", topic: str = "", text: str = "", account_id: str = "default") -> None:
         self.record_id = f"wm_{int(time.time() * 1000) % 10000000}"
         self.platform = platform
         self.topic = topic
