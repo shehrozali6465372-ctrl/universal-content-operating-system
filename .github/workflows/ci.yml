@@ -30,9 +30,11 @@ jobs:
           pip install --break-system-packages --upgrade pip
           pip install --break-system-packages -r requirements.txt
 
-      - name: Run Tests
-        run: |
-          python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
+      - name: Compile Python
+        run: python -m compileall -q .
+
+      - name: Run Full Test Suite
+        run: python -m pytest -q --tb=short
 
       - name: System Status
         run: python main.py --boot
