@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from layers.layer07_publishing.modules.platform_plugin_manager.base_publisher import BasePublisher, PublishResult, PlatformCapabilities
 
 class InstagramPublisher(BasePublisher):
-    API_BASE = "https://graph.facebook.com/v19.0"
+    API_BASE = f"https://graph.facebook.com/{__import__('os').environ.get('META_GRAPH_API_VERSION', 'v26.0')}"
 
     def __init__(self) -> None:
         self._account_id: str = ""
@@ -79,7 +79,7 @@ class InstagramPublisher(BasePublisher):
         if not media_paths: return {"error":"Instagram feed posts require media"}
         c=self._api_post(f"/{self._account_id}/media", {"image_url":media_paths[0],"caption":content})
         if not c or "id" not in c: return c
-        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
+        self._wait_for_container(c["id"])\n        return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
     def _publish_carousel(self, content: str, media_paths: List[str], **kwargs: Any) -> Optional[Dict]:
         children=[]
         for url in media_paths[:10]:
@@ -99,6 +99,20 @@ class InstagramPublisher(BasePublisher):
         c=self._api_post(f"/{self._account_id}/media", {"media_type":"REELS","video_url":media_paths[0],"caption":content})
         if not c or "id" not in c: return c
         return self._api_post(f"/{self._account_id}/media_publish", {"creation_id":c["id"]})
+    def _wait_for_container(self, container_id: str, timeout: float = 120.0, interval: float = 3.0) -> None:
+        """Wait for Meta async media processing before media_publish."""
+        deadline = time.time() + timeout
+        last_status = ""
+        while time.time() < deadline:
+            state = self._api_get(f"/{container_id}", {"fields": "status_code,status"}) or {}
+            last_status = str(state.get("status_code") or state.get("status") or "").upper()
+            if last_status == "FINISHED":
+                return
+            if last_status in {"ERROR", "EXPIRED"}:
+                raise RuntimeError(f"Instagram media container {container_id} failed: {last_status}")
+            time.sleep(interval)
+        raise TimeoutError(f"Instagram media container {container_id} did not reach FINISHED (last={last_status or 'UNKNOWN'})")
+
     def _api_get(self, endpoint: str, params: Optional[Dict]=None) -> Optional[Dict]:
         url=f"{self.API_BASE}{endpoint}"; url=f"{url}?{urllib.parse.urlencode(params)}" if params else url
         try:
