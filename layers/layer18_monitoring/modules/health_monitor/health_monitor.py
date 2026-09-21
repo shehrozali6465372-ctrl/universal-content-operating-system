@@ -1,6 +1,7 @@
 """HealthMonitor — continuous health monitoring with alerts."""
 from __future__ import annotations
 import time
+import concurrent.futures
 from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
 
