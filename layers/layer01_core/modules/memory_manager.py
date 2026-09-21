@@ -35,6 +35,7 @@ class MemoryManager:
         self._conn: Optional[sqlite3.Connection] = None
         self._search_engine = MemorySearchEngine()
         self._stm_buffer: List[Dict] = []  # RAM buffer for short-term
+        self._stm_sequence = int(time.time() * 1000) % 2_000_000_000
         self._initialized = False
 
     @property
@@ -98,7 +99,8 @@ class MemoryManager:
             entry = {
                 "level": level, "category": category, "key": key,
                 "value": value, "tags": tags, "importance": importance,
-                "access_count": 0, "id": int(time.time() * 1000) % 100000,
+                "access_count": 0,
+                "id": self._next_stm_id(),
             }
             self._stm_buffer.append(entry)
             self._enforce_stm_limit()
@@ -377,6 +379,11 @@ class MemoryManager:
                    last_accessed = CURRENT_TIMESTAMP WHERE id = ?""",
                 (entry_id,),
             )
+
+    def _next_stm_id(self) -> int:
+        """Return a process-local monotonic STM id to avoid millisecond collisions."""
+        self._stm_sequence += 1
+        return self._stm_sequence
 
     def _enforce_stm_limit(self) -> None:
         config = get_level_config(MemoryLevel.STM)
