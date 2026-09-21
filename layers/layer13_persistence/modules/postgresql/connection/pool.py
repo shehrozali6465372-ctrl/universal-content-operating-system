@@ -263,6 +263,7 @@ class ConnectionPool:
                     conn.commit()
                     return result[0] if result else 0
                 else:
+                    cursor.execute(sql, list(data.values()))
                     conn.commit()
                     return cursor.lastrowid
         return self._execute_with_retry(_do)
