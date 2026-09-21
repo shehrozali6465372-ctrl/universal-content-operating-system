@@ -33,7 +33,7 @@ class HealthMonitor:
         self._history: List[Dict[str, Any]] = []
 
     def register(self, name: str, check_fn: Callable, interval: float = 60.0,
-                 max_failures: int = 3) -> HealthCheck:
+                 max_failures: int = 3, timeout: float = 5.0) -> HealthCheck:
         check = HealthCheck(name, check_fn, interval, max_failures)
         self._checks[name] = check
         return check
