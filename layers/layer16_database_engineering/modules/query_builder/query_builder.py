@@ -5,8 +5,16 @@ import re
 
 
 class QueryBuilder:
+    _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
+
+    @classmethod
+    def _identifier(cls, value: str) -> str:
+        if value == "*": return value
+        if not isinstance(value, str) or not cls._IDENT.fullmatch(value): raise ValueError(f"unsafe SQL identifier: {value}")
+        return value
+
     def __init__(self, table: str = "") -> None:
-        self._table = table
+        self._table = self._identifier(table) if table else table
         self._select_fields: List[str] = ["*"]
         self._where_clauses: List[Tuple[str, str, Any]] = []
         self._order_by: List[Tuple[str, str]] = []
