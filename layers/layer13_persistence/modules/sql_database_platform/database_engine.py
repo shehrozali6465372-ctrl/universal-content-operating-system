@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator
 
 
 class DatabaseEngine:
-    """Small, real database engine used by persistence infrastructure."""
+    """Small real database engine with explicit production safeguards."""
 
     SUPPORTED = {"postgresql", "sqlite"}
 
@@ -26,6 +27,7 @@ class DatabaseEngine:
         self._config: Dict[str, Any] = {}
         self._conn: Any = None
         self._transaction_depth = 0
+        self._lock = threading.RLock()
 
     def configure(self, config: Dict[str, Any]) -> None:
         if not isinstance(config, dict):
@@ -33,39 +35,44 @@ class DatabaseEngine:
         self._config = dict(config)
 
     def connect(self) -> bool:
-        if self._connected:
+        with self._lock:
+            if self._connected:
+                return True
+            env = str(os.environ.get("UCOS_ENV", "development")).strip().lower()
+            if env in {"prod", "production"} and self._type == "sqlite":
+                raise RuntimeError("SQLite is forbidden as the production persistence engine")
+            if self._type == "sqlite":
+                path = self._config.get("path") or os.environ.get("UCOS_SQLITE_PATH", "data/agent.db")
+                parent = os.path.dirname(os.path.abspath(path))
+                os.makedirs(parent, exist_ok=True)
+                self._conn = sqlite3.connect(path, timeout=float(self._config.get("timeout", 30.0)))
+                self._conn.row_factory = sqlite3.Row
+                self._conn.execute("PRAGMA foreign_keys=ON")
+            else:
+                try:
+                    import psycopg2
+                except ImportError as exc:
+                    raise RuntimeError("PostgreSQL driver psycopg2 is required") from exc
+                cfg = {
+                    "host": self._config.get("host", os.environ.get("PG_HOST", "localhost")),
+                    "port": int(self._config.get("port", os.environ.get("PG_PORT", 5432))),
+                    "dbname": self._config.get("database", os.environ.get("PG_DATABASE", "ai_content_os")),
+                    "user": self._config.get("user", os.environ.get("PG_USER", "postgres")),
+                    "password": self._config.get("password", os.environ.get("PG_PASSWORD", "")),
+                    "connect_timeout": int(self._config.get("connect_timeout", 30)),
+                }
+                self._conn = psycopg2.connect(**cfg)
+            self._connected = True
             return True
-        if self._type == "sqlite":
-            path = self._config.get("path") or os.environ.get("UCOS_SQLITE_PATH", "data/agent.db")
-            parent = os.path.dirname(os.path.abspath(path))
-            os.makedirs(parent, exist_ok=True)
-            self._conn = sqlite3.connect(path)
-            self._conn.row_factory = sqlite3.Row
-            self._conn.execute("PRAGMA foreign_keys=ON")
-        else:
-            try:
-                import psycopg2
-            except ImportError as exc:
-                raise RuntimeError("PostgreSQL driver psycopg2 is required") from exc
-            cfg = {
-                "host": self._config.get("host", os.environ.get("PG_HOST", "localhost")),
-                "port": int(self._config.get("port", os.environ.get("PG_PORT", 5432))),
-                "dbname": self._config.get("database", os.environ.get("PG_DATABASE", "ai_content_os")),
-                "user": self._config.get("user", os.environ.get("PG_USER", "postgres")),
-                "password": self._config.get("password", os.environ.get("PG_PASSWORD", "")),
-                "connect_timeout": int(self._config.get("connect_timeout", 30)),
-            }
-            self._conn = psycopg2.connect(**cfg)
-        self._connected = True
-        return True
 
     def disconnect(self) -> bool:
-        if self._conn is not None:
-            self._conn.close()
-        self._conn = None
-        self._connected = False
-        self._transaction_depth = 0
-        return True
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+            self._conn = None
+            self._connected = False
+            self._transaction_depth = 0
+            return True
 
     def is_connected(self) -> bool:
         return self._connected and self._conn is not None
@@ -78,39 +85,49 @@ class DatabaseEngine:
             raise RuntimeError("database engine is not connected")
 
     def execute(self, sql: str, params: Any = None) -> Dict[str, Any]:
-        self._ensure_connected()
-        if not isinstance(sql, str) or not sql.strip():
-            raise ValueError("sql must be a non-empty string")
-        cursor = self._conn.cursor()
-        try:
-            cursor.execute(sql, params or ())
-            rows = cursor.fetchall() if cursor.description else []
-            if self._transaction_depth == 0:
-                self._conn.commit()
-            return {"rows": [dict(r) if isinstance(r, sqlite3.Row) else dict(zip([d[0] for d in cursor.description], r)) for r in rows],
-                    "affected": max(cursor.rowcount, 0)}
-        except Exception:
-            if self._transaction_depth == 0:
-                self._conn.rollback()
-            raise
-        finally:
-            cursor.close()
+        with self._lock:
+            self._ensure_connected()
+            if not isinstance(sql, str) or not sql.strip():
+                raise ValueError("sql must be a non-empty string")
+            cursor = self._conn.cursor()
+            try:
+                cursor.execute(sql, params or ())
+                rows = cursor.fetchall() if cursor.description else []
+                if self._transaction_depth == 0:
+                    self._conn.commit()
+                columns = [d[0] for d in cursor.description] if cursor.description else []
+                return {
+                    "rows": [dict(r) if isinstance(r, sqlite3.Row) else dict(zip(columns, r)) for r in rows],
+                    "affected": max(cursor.rowcount, 0),
+                }
+            except Exception:
+                if self._transaction_depth == 0:
+                    self._conn.rollback()
+                raise
+            finally:
+                cursor.close()
 
     @contextmanager
     def transaction(self) -> Iterator[Any]:
-        self._ensure_connected()
-        self._transaction_depth += 1
-        try:
-            yield self._conn
-            if self._transaction_depth == 1:
-                self._conn.commit()
-        except Exception:
-            if self._transaction_depth == 1:
-                self._conn.rollback()
-            raise
-        finally:
-            self._transaction_depth = max(0, self._transaction_depth - 1)
+        with self._lock:
+            self._ensure_connected()
+            self._transaction_depth += 1
+            try:
+                yield self._conn
+                if self._transaction_depth == 1:
+                    self._conn.commit()
+            except Exception:
+                if self._transaction_depth == 1:
+                    self._conn.rollback()
+                raise
+            finally:
+                self._transaction_depth = max(0, self._transaction_depth - 1)
 
     def stats(self) -> Dict[str, Any]:
-        self._ensure_connected()
-        return {"type": self._type, "connected": True, "transaction_depth": self._transaction_depth}
+        with self._lock:
+            self._ensure_connected()
+            return {
+                "type": self._type,
+                "connected": True,
+                "transaction_depth": self._transaction_depth,
+            }
