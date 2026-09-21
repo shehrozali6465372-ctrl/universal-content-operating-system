@@ -26,6 +26,12 @@ class ProductMatcher:
         search_text = (title + " " + content + " " + " ".join(keywords or [])).lower()
 
         for product in available_products:
+            # Only recommend products with a real, approved affiliate URL and availability.
+            affiliate_url = str(getattr(product, "affiliate_link", "") or "").strip()
+            if not affiliate_url.startswith(("http://", "https://")):
+                continue
+            if hasattr(product, "is_available") and not product.is_available:
+                continue
             score = 0.0
 
             # Match by niche (strong signal)
