@@ -83,6 +83,26 @@ class TestPipelineWiring:
         resp = pw.execute(req)
         assert resp.quality_score >= 0
 
+    def test_l3_intelligence_wires_keyword_analysis(self):
+        pw = self.PipelineWiring()
+        req = self.ContentRequest("AI tools improve productivity", platform="facebook")
+        resp = pw.execute(req)
+        step = next(s for s in resp.steps if s.layer == "L3-Intelligence")
+        assert step.status == "success"
+        assert step.data["keywords"]
+        assert step.data["entities"] is not None
+        assert step.data["intent"]
+
+    def test_offline_draft_cannot_publish(self):
+        pw = self.PipelineWiring()
+        req = self.ContentRequest("offline production guard", platform="facebook")
+        resp = pw.execute(req)
+        assert not (resp.publish_result and resp.publish_result.get("success"))
+        publish_step = next(s for s in resp.steps if s.layer == "L7-Publish")
+        if pw.status()["api_keys_configured"] == 0:
+            assert publish_step.status == "error"
+            assert "offline-draft" in (publish_step.error or "")
+
     def test_pipeline_content_request_to_dict(self):
         req = self.ContentRequest("test", platform="youtube", tone="casual")
         d = req.to_dict()
