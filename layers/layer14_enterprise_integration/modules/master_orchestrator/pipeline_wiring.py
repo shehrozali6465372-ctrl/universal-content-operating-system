@@ -234,16 +234,16 @@ class PipelineWiring:
 
     def _publisher(self, req: ContentRequest):
         from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+        if not req.metadata.get("account_id"):
+            raise ValueError("account_id is required for production publishing")
+        from layers.layer07_publishing.modules.account_control.meta_credentials import MetaCredentialProvider
         manager = PublisherManager()
         publisher = manager.plugin_manager.registry.get_instance(req.platform)
         if publisher is None:
             return None, manager
-        credentials = {}
-        if req.platform == "facebook":
-            credentials = {"page_id": os.environ.get("FACEBOOK_PAGE_ID", ""),
-                           "access_token": os.environ.get("FACEBOOK_ACCESS_TOKEN", "")}
-        if not all(credentials.values()) or not publisher.authenticate(credentials):
-            return None, manager
+        credentials = MetaCredentialProvider().credentials_for(req.platform, str(req.metadata["account_id"]))
+        if not publisher.authenticate(credentials):
+            raise RuntimeError(f"real {req.platform} credentials rejected")
         return manager, publisher
 
     def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
