@@ -83,11 +83,15 @@ class SelfImprovementManager:
         account_id: Optional[str] = None,
         platform: Optional[str] = None,
         niche: Optional[str] = None,
+        analytics_signal: Optional[Dict[str, Any]] = None,
     ) -> ImprovementCycleResult:
         start = time.time()
         cycle = ImprovementCycle("optimization", "Auto improvement cycle")
         cycle.start()
         result = ImprovementCycleResult()
+
+        if analytics_signal:
+            self.apply_analytics_feedback(analytics_signal)
 
         # Step 1: Detect mistakes
         mistakes = []
