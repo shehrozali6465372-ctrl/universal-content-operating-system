@@ -131,7 +131,9 @@ class RevenueForecasting:
         summary = self.get_forecast_summary()
         forecast_30 = summary.get("30day", {})
         predicted_30 = forecast_30.get("total_revenue", 0)
-        inv = investment if investment > 0 else max(predicted_30 * 0.3, 100)
+        if investment <= 0:
+            raise ValueError("ROI forecast requires a real investment amount; no synthetic default is permitted")
+        inv = float(investment)
         roi_30 = ((predicted_30 - inv) / inv * 100) if inv > 0 else 0
         predicted_90 = summary.get("90day", {}).get("total_revenue", 0)
         roi_90 = ((predicted_90 - inv * 3) / (inv * 3) * 100) if inv > 0 else 0
@@ -161,6 +163,8 @@ class RevenueForecasting:
             "forecasts": len(self._forecasts),
             "model": "ordinary_least_squares_linear_trend" if self._historical else None,
             "observations": len(self._historical),
+            "confidence_scale": "0_to_100",
+            "provenance_required": True,
         }
 
 
