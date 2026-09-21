@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner, ImagePlan
 from layers.layer05_image.modules.image_prompt.image_prompt import ImagePromptBuilder, ImagePrompt
-from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, MockImageProvider
+from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider
 from layers.layer05_image.modules.layout_engine.layout_engine import LayoutEngine
 from layers.layer05_image.modules.thumbnail_engine.thumbnail_engine import ThumbnailEngine
 from layers.layer05_image.modules.carousel_planner.carousel_planner import CarouselPlanner
@@ -52,7 +52,9 @@ class ImageOrchestrator:
     def __init__(self, provider: Optional[BaseImageProvider] = None) -> None:
         self.planner = ImagePlanner()
         self.prompt_builder = ImagePromptBuilder()
-        self.provider = provider or MockImageProvider()
+        self.provider = provider
+        if self.provider is None:
+            raise RuntimeError("A real image provider must be explicitly configured; mock providers are test-only.")
         self.layout_engine = LayoutEngine()
         self.thumbnail = ThumbnailEngine()
         self.carousel = CarouselPlanner()
@@ -80,7 +82,7 @@ class ImageOrchestrator:
         # Layout
         result.layout = self.layout_engine.get_layout(platform, image_type)
 
-        # Generate (mock)
+        # Generate using the explicitly configured real provider
         if self.provider.is_configured():
             result.image_response = self.provider.generate(result.prompt.text)
 
