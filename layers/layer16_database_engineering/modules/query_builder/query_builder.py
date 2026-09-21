@@ -48,7 +48,9 @@ class QueryBuilder:
         return self
 
     def order_by(self, field: str, direction: str = "ASC") -> QueryBuilder:
-        self._order_by.append((field, direction))
+        direction = direction.upper()
+        if direction not in {"ASC", "DESC"}: raise ValueError("invalid order direction")
+        self._order_by.append((self._identifier(field), direction))
         return self
 
     def limit(self, n: int) -> QueryBuilder:
