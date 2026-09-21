@@ -101,6 +101,11 @@ class WritingMemory:
         idxs = self._platform_index.get(platform, [])
         return [self._records[i] for i in idxs if i < len(self._records)][:limit]
 
+    def get_history(self, account_id: str = "default", platform: Optional[str] = None, limit: int = 50) -> List[DraftRecord]:
+        records = [r for r in self._records if r.account_id == account_id and
+                   (platform is None or r.platform == platform)]
+        return records[-max(1, limit):]
+
     def get_recent(self, limit: int = 10) -> List[DraftRecord]:
         return self._records[-limit:]
 
