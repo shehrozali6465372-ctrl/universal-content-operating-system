@@ -50,10 +50,10 @@ def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
         db.commit()
     return None
 
-def _finish_request(request_id: str, response: dict[str, Any]) -> None:
+def _finish_request(request_id: str, response: dict[str, Any], state: str = "succeeded") -> None:
     with sqlite3.connect(_INBOX_DB) as db:
-        db.execute("UPDATE job_inbox SET state='succeeded',response_json=?,updated_at=CURRENT_TIMESTAMP WHERE request_id=?",
-                   (json.dumps(response, sort_keys=True, default=str), request_id))
+        db.execute("UPDATE job_inbox SET state=?,response_json=?,updated_at=CURRENT_TIMESTAMP WHERE request_id=?",
+                   (state, json.dumps(response, sort_keys=True, default=str), request_id))
         db.commit()
 
 SUPPORTED_JOB_TYPES = {
