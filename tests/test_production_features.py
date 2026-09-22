@@ -30,8 +30,9 @@ class TestDockerDeployment:
     def test_docker_compose_has_services(self):
         with open("docker-compose.yml") as f:
             content = f.read()
+        assert "postgres:" in content
+        assert "redis:" in content
         assert "aios:" in content
-        assert "aios-worker:" in content
 
     def test_docker_compose_has_volumes(self):
         with open("docker-compose.yml") as f:
