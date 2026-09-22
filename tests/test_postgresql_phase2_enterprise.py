@@ -22,16 +22,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def _ensure_table(pool):
     """Create agent_config using the active database dialect."""
     if getattr(pool, "_pg_available", False):
-        sql = """
-        CREATE TABLE IF NOT EXISTS agent_config (
-            id SERIAL PRIMARY KEY,
-            key VARCHAR(255) UNIQUE NOT NULL,
-            value TEXT NOT NULL,
-            category VARCHAR(100) DEFAULT 'general',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+        from layers.layer13_persistence.modules.postgresql.migrations.schema import get_all_create_sql
+        for sql in get_all_create_sql():
+            pool.execute(sql)
+        return
     else:
         sql = """
         CREATE TABLE IF NOT EXISTS agent_config (
