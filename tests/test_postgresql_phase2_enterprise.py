@@ -27,7 +27,9 @@ def _ensure_table(pool):
             id SERIAL PRIMARY KEY,
             key VARCHAR(255) UNIQUE NOT NULL,
             value TEXT NOT NULL,
-            category VARCHAR(100) DEFAULT 'general'
+            category VARCHAR(100) DEFAULT 'general',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
     else:
