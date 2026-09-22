@@ -1,0 +1,35 @@
+{
+  "program_id": "hostinger_referral",
+  "program_name": "Hostinger Referral Program",
+  "program_type": "referral",
+  "merchant": "Hostinger",
+  "merchant_website": "https://www.hostinger.com",
+  "country": "PK",
+  "currency": "USD",
+  "referral_code": "92OSHEHRO7G1",
+  "referral_url": "https://www.hostinger.com/pk?REFERRALCODE=92OSHEHRO7G1",
+  "landing_locale": "pk",
+  "eligible_reward_rate_public": 20.0,
+  "reward_rate_basis": "eligible first purchase; exact reward depends on order value and program eligibility",
+  "status": "integration_ready",
+  "verification": {
+    "link_supplied_by_user": true,
+    "account_membership_verified": false,
+    "dashboard_access_verified": false,
+    "live_tracking_verified": false
+  },
+  "metrics": {
+    "clicks": null,
+    "qualified_referrals": null,
+    "approved_referrals": null,
+    "declined_referrals": null,
+    "commission_revenue": null,
+    "payouts": null
+  },
+  "authoritative_data_source": "Hostinger Refer and Earn / My Referrals dashboard",
+  "metric_policy": "null until observed from Hostinger dashboard data; never synthesize zeroes or estimates",
+  "source_urls": [
+    "https://www.hostinger.com/support/6080777-how-to-use-the-referral-program-at-hostinger/",
+    "https://www.hostinger.com/legal/referral-program-agreement"
+  ]
+}
