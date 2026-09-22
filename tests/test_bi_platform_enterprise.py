@@ -114,10 +114,14 @@ class TestRevenueForecasting(unittest.TestCase):
         self.assertEqual(len(forecast), 30)
 
     def test_forecast_90_days(self):
+        self.rf.add_historical("2024-01-14", revenue=100)
+        self.rf.add_historical("2024-01-15", revenue=120)
         forecast = self.rf.forecast_90_days()
         self.assertEqual(len(forecast), 90)
 
     def test_forecast_1_year(self):
+        self.rf.add_historical("2024-01-14", revenue=100)
+        self.rf.add_historical("2024-01-15", revenue=120)
         forecast = self.rf.forecast_1_year()
         self.assertEqual(len(forecast), 365)
 
@@ -137,7 +141,8 @@ class TestRevenueForecasting(unittest.TestCase):
         self.assertIn("payback_days", roi)
 
     def test_full_forecast(self):
-        self.rf.add_historical("2024-01-15", revenue=100)
+        self.rf.add_historical("2024-01-14", revenue=100)
+        self.rf.add_historical("2024-01-15", revenue=120)
         self.rf.forecast_30_days()
         full = self.rf.get_full_forecast()
         self.assertIn("forecasts", full)
