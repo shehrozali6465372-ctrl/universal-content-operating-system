@@ -229,7 +229,7 @@ class TestProductDatabase:
         assert count >= 20
 
     def test_search_by_niche(self):
-        self.am.add_product("Bed Frame", 299.99, "furniture", "home_decor", 4.5, 6.0)
+        self.am.add_product("Bed Frame", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         results = self.am.search_products("home_decor")
         assert len(results) >= 1
 
@@ -587,6 +587,7 @@ class TestAffiliateManagerFacade:
 
     def test_full_match_and_link_pipeline(self):
         self.am.initialize()
+        self.am.add_product("Bedroom Product", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         result = self.am.match_and_link(
             "home_decor",
             "10 Small Bedroom Ideas That Save Space",
@@ -606,6 +607,7 @@ class TestAffiliateManagerFacade:
     def test_match_and_link_different_niches(self):
         self.am.initialize()
         for niche in ["home_decor", "fashion", "tech", "food", "beauty"]:
+            self.am.add_product(f"{niche} Product", 99.99, "general", niche, 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
             result = self.am.match_and_link(niche, f"Best {niche} ideas", f"Content about {niche}")
             if result["matched"]:
                 assert result["product"]["commission_rate"] > 0
@@ -623,6 +625,7 @@ class TestAffiliateManagerFacade:
 
     def test_status_after_operations(self):
         self.am.initialize()
+        self.am.add_product("Bedroom Product", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         self.am.match_and_link("home_decor", "Test")
         self.am.record_click("p1")
         status = self.am.get_status()
