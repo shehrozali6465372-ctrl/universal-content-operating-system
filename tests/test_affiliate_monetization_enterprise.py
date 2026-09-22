@@ -68,40 +68,40 @@ class TestAffiliateManager(unittest.TestCase):
         self.assertEqual(link.niche, "tech")
 
     def test_get_links_by_niche(self):
-        self.mgr.add_link("amazon", "url1", "aff1", niche="tech")
-        self.mgr.add_link("amazon", "url2", "aff2", niche="tech")
-        self.mgr.add_link("amazon", "url3", "aff3", niche="health")
+        self.mgr.add_link(self.amazon_id, "https://example.com/product1", "https://example.com/affiliate1", niche="tech")
+        self.mgr.add_link(self.amazon_id, "https://example.com/product2", "https://example.com/affiliate2", niche="tech")
+        self.mgr.add_link(self.amazon_id, "https://example.com/product3", "https://example.com/affiliate3", niche="health")
         tech_links = self.mgr.get_links_by_niche("tech")
         self.assertEqual(len(tech_links), 2)
 
     def test_record_click(self):
-        link = self.mgr.add_link("amazon", "url", "aff", niche="tech")
+        link = self.mgr.add_link(self.amazon_id, "https://example.com/product", "https://example.com/affiliate", niche="tech")
         event = self.mgr.record_click(link.id, source="facebook")
         self.assertIsNotNone(event)
         self.assertEqual(link.clicks, 1)
 
     def test_record_conversion(self):
-        link = self.mgr.add_link("amazon", "url", "aff", niche="tech")
+        link = self.mgr.add_link(self.amazon_id, "https://example.com/product", "https://example.com/affiliate", niche="tech")
         self.mgr.record_click(link.id)
         event = self.mgr.record_conversion(link.id, revenue=25.50)
         self.assertIsNotNone(event)
         self.assertEqual(link.revenue, 25.50)
 
     def test_revenue_summary(self):
-        self.mgr.add_link("amazon", "url", "aff", niche="tech")
+        self.mgr.add_link(self.amazon_id, "https://example.com/product", "https://example.com/affiliate", niche="tech")
         summary = self.mgr.get_revenue_summary()
         self.assertIn("total_programs", summary)
         self.assertIn("total_revenue", summary)
         self.assertEqual(summary["total_programs"], 6)
 
     def test_click_increments_program(self):
-        link = self.mgr.add_link("amazon", "url", "aff")
+        link = self.mgr.add_link(self.amazon_id, "https://example.com/product", "https://example.com/affiliate")
         self.mgr.record_click(link.id)
         p = self.mgr.get_program("amazon")
         self.assertEqual(p.total_clicks, 1)
 
     def test_conversion_increments_program(self):
-        link = self.mgr.add_link("amazon", "url", "aff")
+        link = self.mgr.add_link(self.amazon_id, "https://example.com/product", "https://example.com/affiliate")
         self.mgr.record_conversion(link.id, revenue=10.0)
         p = self.mgr.get_program("amazon")
         self.assertEqual(p.total_conversions, 1)
