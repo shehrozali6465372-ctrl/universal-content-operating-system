@@ -32,6 +32,7 @@ class TestAffiliateManager(unittest.TestCase):
         AffiliateManager._instance = None
         self.mgr = get_affiliate_manager()
         self.mgr.verify_program("amazon", "ci-test-verification")
+        self.amazon_id = self.mgr.get_program("amazon").id
 
     def tearDown(self):
         AffiliateManager._instance = None
@@ -61,7 +62,7 @@ class TestAffiliateManager(unittest.TestCase):
         self.assertEqual(p.commission_rate, 15.0)
 
     def test_add_link(self):
-        link = self.mgr.add_link("amazon", "https://product.com",
+        link = self.mgr.add_link(self.amazon_id, "https://product.com",
                                   "https://amzn.to/xyz", niche="tech")
         self.assertIsNotNone(link.id)
         self.assertEqual(link.niche, "tech")
