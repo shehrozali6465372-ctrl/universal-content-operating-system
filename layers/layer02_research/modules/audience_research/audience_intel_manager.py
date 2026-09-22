@@ -16,6 +16,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
+import os
+import tempfile
 from typing import Dict, List, Optional
 
 from layers.layer02_research.modules.audience_research.audience_profile import AudienceProfile
@@ -283,7 +285,24 @@ class AudienceIntelManager:
             "audiences": [a.to_dict() for a in self._audiences.values()],
             "history": self._history[-50:],
         }
-        self._storage_path.write_text(json.dumps(data, indent=2))
+        # Write-then-atomic-replace so a process crash cannot leave a truncated
+        # audience store behind.
+        payload = json.dumps(data, indent=2)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{self._storage_path.name}.",
+            suffix=".tmp",
+            dir=str(self._storage_path.parent),
+            text=True,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, self._storage_path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
     def _load(self):
         if self._storage_path is None or not self._storage_path.exists():
