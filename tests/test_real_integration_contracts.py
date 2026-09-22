@@ -73,7 +73,7 @@ def test_lineage_requires_order_and_is_idempotent(tmp_path):
         provider="test",
         status="observed",
         payload={"stage": "revenue"},
-        parent_event_id=parent,
+        parent_event_id=events["conversion"].event_id,
     )
     assert duplicate.event_id == events["revenue"].event_id
     assert len(store.get_lineage(lineage_id)) == len(STAGES)
