@@ -133,8 +133,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         port = 8000
         if "--port" in args:
             i = args.index("--port"); port = int(args[i + 1])
-        gateway = APIGateway(host=os.environ.get("APP_HOST", "0.0.0.0"), port=port); gateway.start()
-        print(f"UCOS API listening on http://0.0.0.0:{port}")
+        gateway = APIGateway(host=os.environ.get("APP_HOST", "127.0.0.1"), port=port); gateway.start()
+        print(f"UCOS API listening on http://127.0.0.1:{port}")
         try:
             while gateway.is_running(): time.sleep(1)
         except KeyboardInterrupt: gateway.stop()
