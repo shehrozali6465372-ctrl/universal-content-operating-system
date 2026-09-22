@@ -184,7 +184,7 @@ class TestImageMemory:
 
 class TestImageOrchestrator:
     def setup_method(self):
-        self.orch = ImageOrchestrator()
+        self.orch = ImageOrchestrator(provider=MockImageProvider())
 
     def test_run(self):
         r = self.orch.run("AI Jobs", "facebook")
