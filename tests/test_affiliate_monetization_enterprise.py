@@ -31,6 +31,7 @@ class TestAffiliateManager(unittest.TestCase):
     def setUp(self):
         AffiliateManager._instance = None
         self.mgr = get_affiliate_manager()
+        self.mgr.verify_program("amazon", "ci-test-verification")
 
     def tearDown(self):
         AffiliateManager._instance = None
