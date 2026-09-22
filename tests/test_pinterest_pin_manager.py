@@ -563,21 +563,21 @@ class TestPinPublisher:
         pin = self.pm.registry.create(
             pin_title="No Account", board_id="b1", website_url="https://example.com"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_no_board(self):
         pin = self.pm.registry.create(
             pin_title="No Board", account_id="acc1", website_url="https://example.com"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_no_url(self):
         pin = self.pm.registry.create(
             pin_title="No URL", account_id="acc1", board_id="b1"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_batch(self):
