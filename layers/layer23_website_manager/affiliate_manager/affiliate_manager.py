@@ -160,8 +160,13 @@ class AffiliateManager:
 
     def add_product(self, product_name: str, price: float = 0.0,
                      category: str = "", niche: str = "",
-                     rating: float = 0.0, commission_rate: float = 0.0) -> AffiliateProduct:
-        return self.products.add_product(product_name, price, category, niche, rating, commission_rate)
+                     rating: float = 0.0, commission_rate: float = 0.0,
+                     affiliate_link: str = "", merchant_id: str = "",
+                     network_id: str = "") -> AffiliateProduct:
+        return self.products.add_product(
+            product_name, price, category, niche, rating, commission_rate,
+            affiliate_link=affiliate_link, merchant_id=merchant_id, network_id=network_id,
+        )
 
     def search_products(self, niche: str, min_rating: float = 0.0) -> List[AffiliateProduct]:
         return self.products.search_by_niche(niche, min_rating)
