@@ -53,8 +53,13 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q .
 
+      - name: Run Integration Contract Tests
+        run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+
       - name: Run Full Test Suite
         run: python -m pytest -q --tb=short
 
       - name: System Status
-        run: python main.py --boot
+        run: |
+          python main.py --boot
+          python main.py --integration-status
