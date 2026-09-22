@@ -362,6 +362,12 @@ class PipelineWiring:
         if not any(s.layer == "L9-Learning" for s in response.steps):
             self._run_step(response, "L9-Learning", lambda: self._learning(request, response, ctx), required=False)
         response.total_duration_ms = (time.time() - started) * 1000
+        request.metadata["topic_id"] = ctx.get("topic_id", "")
+        request.metadata["research_provider"] = ctx.get("research_provider", "")
+        request.metadata["research_source_id"] = ctx.get("research_source_id", "")
+        request.metadata["ai_provider"] = ctx.get("ai_provider", "")
+        request.metadata["post_id"] = ctx.get("post_id", "")
+        request.metadata["niche"] = request.metadata.get("niche") or "general"
         response.stats = {"execution_time_ms": round(response.total_duration_ms, 1),
                           "published": bool(response.publish_result and response.publish_result.get("success")),
                           "post_id": ctx.get("post_id", "")}
@@ -378,6 +384,140 @@ class PipelineWiring:
                 persist.close()
         except Exception as exc:
             self._logger.log("L13/L14-Persistence", f"warning: {exc}")
+
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        enabled = os.environ.get("UCOS_ENABLE_LINEAGE", "true" if production else "false").lower() == "true"
+        if not enabled:
+            return
+        try:
+            from layers.layer14_enterprise_integration.modules.real_integrations import LineageStore
+            metadata = response.request.metadata
+            store = LineageStore()
+            try:
+                parent = None
+
+                research_source_id = str(metadata.get("research_source_id") or "")
+                research_provider = str(metadata.get("research_provider") or "")
+                if research_source_id and research_provider:
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="source",
+                        entity_id=research_source_id, source=research_provider,
+                        source_id=research_source_id, provider=research_provider,
+                        status="observed", payload={"query": response.request.topic},
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="niche",
+                        entity_id=str(metadata.get("niche") or "general"),
+                        source=research_provider, source_id=research_source_id,
+                        provider=research_provider, status="observed",
+                        payload={"niche": metadata.get("niche")},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="keyword",
+                        entity_id=hashlib.sha256(response.request.topic.encode("utf-8")).hexdigest(),
+                        source=research_provider, source_id=research_source_id,
+                        provider=research_provider, status="observed",
+                        payload={"seed_keyword": response.request.topic},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="content",
+                        entity_id=hashlib.sha256(response.text.encode("utf-8")).hexdigest(),
+                        source="ucos", source_id=str(metadata.get("topic_id") or response.request.topic),
+                        provider=str(metadata.get("ai_provider") or metadata.get("ai_model") or "unknown"),
+                        status="observed", payload={"content_length": len(response.text)},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    if response.image_url:
+                        event = store.record(
+                            lineage_id=str(metadata["lineage_id"]), stage="asset",
+                            entity_id=hashlib.sha256(response.image_url.encode("utf-8")).hexdigest(),
+                            source="ucos", source_id=response.image_url,
+                            provider="runtime-media",
+                            status="observed", payload={"url": response.image_url},
+                            parent_event_id=parent,
+                        )
+                        parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="platform",
+                        entity_id=response.request.platform,
+                        source="ucos", source_id=response.request.platform,
+                        provider="ucos", status="observed",
+                        payload={"platform": response.request.platform},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    account_id = str(metadata.get("account_id") or "")
+                    if account_id:
+                        event = store.record(
+                            lineage_id=str(metadata["lineage_id"]), stage="account",
+                            entity_id=account_id, source="ucos",
+                            source_id=account_id, provider="ucos",
+                            status="observed", payload={"account_id": account_id},
+                            parent_event_id=parent,
+                        )
+                        parent = event.event_id
+
+                    post_id = str(metadata.get("post_id") or "")
+                    if post_id:
+                        event = store.record(
+                            lineage_id=str(metadata["lineage_id"]), stage="publish",
+                            entity_id=post_id, source=response.request.platform,
+                            source_id=post_id, provider=response.request.platform,
+                            status="observed",
+                            payload={"url": (response.publish_result or {}).get("url")},
+                            parent_event_id=parent,
+                        )
+                        parent = event.event_id
+
+                    metrics = (response.analytics or {}).get("metrics") if isinstance(response.analytics, dict) else None
+                    if isinstance(metrics, dict):
+                        click_value = metrics.get("clicks", metrics.get("click_count"))
+                        conversion_value = metrics.get("conversions", metrics.get("conversion_count"))
+                        revenue_value = metrics.get("revenue", metrics.get("revenue_amount"))
+                        if click_value is not None:
+                            event = store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="click",
+                                entity_id=f"{post_id}:clicks", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"clicks": click_value},
+                                parent_event_id=parent,
+                            )
+                            parent = event.event_id
+                        if conversion_value is not None and click_value is not None:
+                            event = store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="conversion",
+                                entity_id=f"{post_id}:conversions", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"conversions": conversion_value},
+                                parent_event_id=parent,
+                            )
+                            parent = event.event_id
+                        if revenue_value is not None and conversion_value is not None and click_value is not None:
+                            store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="revenue",
+                                entity_id=f"{post_id}:revenue", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"revenue": revenue_value},
+                                parent_event_id=parent,
+                            )
+            finally:
+                store.close()
+        except Exception as exc:
+            self._logger.log("L13/L14-Lineage", f"{'error' if production else 'warning'}: {exc}")
+            if production:
+                raise
 
     def status(self) -> Dict[str, Any]:
         stats = self._key_manager.get_stats() if self._key_manager else {}
