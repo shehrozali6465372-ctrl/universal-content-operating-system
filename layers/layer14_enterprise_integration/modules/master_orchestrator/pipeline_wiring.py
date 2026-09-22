@@ -375,17 +375,17 @@ class PipelineWiring:
         return response
 
     def _persist(self, response: ContentResponse) -> None:
-        try:
-            from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
-            persist = PipelinePersistence()
-            try:
-                persist.save_pipeline_run(response.to_dict())
-            finally:
-                persist.close()
-        except Exception as exc:
-            self._logger.log("L13/L14-Persistence", f"warning: {exc}")
-
         production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        if not production:
+            try:
+                from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+                persist = PipelinePersistence()
+                try:
+                    persist.save_pipeline_run(response.to_dict())
+                finally:
+                    persist.close()
+            except Exception as exc:
+                self._logger.log("L13/L14-Persistence", f"warning: {exc}")
         enabled = os.environ.get("UCOS_ENABLE_LINEAGE", "true" if production else "false").lower() == "true"
         if not enabled:
             return
