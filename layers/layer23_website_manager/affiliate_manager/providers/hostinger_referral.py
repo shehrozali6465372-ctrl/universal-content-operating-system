@@ -29,7 +29,7 @@ class HostingerReferral:
 def load_hostinger_referral(path: Optional[str] = None) -> HostingerReferral:
     """Load the committed real-link record without fabricating performance data."""
     record_path = Path(path) if path else (
-        Path(__file__).resolve().parents[5] / "data" / "affiliate" / "hostinger_referral.json"
+        Path(__file__).resolve().parents[4] / "data" / "affiliate" / "hostinger_referral.json"
     )
     data = json.loads(record_path.read_text(encoding="utf-8"))
     return normalize_hostinger_referral(data)
