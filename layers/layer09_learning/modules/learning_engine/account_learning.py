@@ -20,6 +20,7 @@ class AccountLearningStore:
             "timestamp": time.time(), "account_id": account_id, "platform": platform,
             "niche": niche, "topic": topic, "quality_score": float(quality_score),
             "published": bool(published), "analytics": analytics if analytics is not None else "UNKNOWN",
+            "observed": analytics is not None,
             "content_type": content_type, "policy_version": policy_version,
         }
         self.store.append(account_id, "learning", "execution_outcomes", event)
@@ -31,12 +32,19 @@ class AccountLearningStore:
 
     def performance_summary(self, account_id: str) -> Dict[str, Any]:
         values = self.recent(account_id, 1000)
-        if not values:
-            return {"account_id": account_id, "observations": 0, "quality_average": None, "published_rate": None}
+        observed = [v for v in values if bool(v.get("observed")) and v.get("analytics") != "UNKNOWN"]
+        if not observed:
+            return {
+                "account_id": account_id,
+                "observations": 0,
+                "quality_average": None,
+                "published_rate": None,
+                "analytics_known": 0,
+            }
         return {
             "account_id": account_id,
-            "observations": len(values),
-            "quality_average": sum(v["quality_score"] for v in values) / len(values),
-            "published_rate": sum(1 for v in values if v["published"]) / len(values),
-            "analytics_known": sum(1 for v in values if v["analytics"] != "UNKNOWN"),
+            "observations": len(observed),
+            "quality_average": sum(v["quality_score"] for v in observed) / len(observed),
+            "published_rate": sum(1 for v in observed if v["published"]) / len(observed),
+            "analytics_known": len(observed),
         }
