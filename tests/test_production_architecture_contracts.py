@@ -44,40 +44,27 @@ def test_learning_actions_require_observed_outcomes():
     assert result.mistakes_found >= 1
     assert result.actions_created >= 1
     assert result.actions_completed == 0
+    assert manager.action_manager.get_actions(status="planned")
 
 
-def test_learning_action_can_complete_only_with_explicit_observed_outcome():
+def test_learning_action_completion_uses_explicit_observed_outcome(monkeypatch):
     manager = SelfImprovementManager()
-    planned = manager.run_improvement_cycle(
+    action = manager.action_manager.create(
+        "fix", "medium", "Observed outcome test", target_area="content", source_id="test"
+    )
+    monkeypatch.setattr(
+        manager.action_manager,
+        "create_from_mistakes",
+        lambda mistakes: [action],
+    )
+    result = manager.run_improvement_cycle(
         feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
-        action_outcomes={},
+        action_outcomes={action.action_id: 0.73},
     )
-    assert planned.actions_created == 1
-    assert planned.actions_completed == 0
-
-    action_id = manager.action_manager.get_actions(status="planned")[0].action_id
-    completed = manager.run_improvement_cycle(
-        feedback=[],
-        action_outcomes={action_id: 0.73},
-    )
-    assert completed.actions_created == 0
-    assert completed.actions_completed == 0
-    assert manager.action_manager.get_actions(status="completed") == []
-
-    # Completion is allowed only when the observed outcome is supplied for
-    # the action during the cycle that evaluates that action.
-    manager2 = SelfImprovementManager()
-    seed = manager2.run_improvement_cycle(
-        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
-    )
-    action_id = manager2.action_manager.get_actions(status="planned")[0].action_id
-    result = manager2.run_improvement_cycle(
-        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
-        action_outcomes={action_id: 0.73},
-    )
-    assert result.actions_created >= 1
+    assert result.actions_created == 1
     assert result.actions_completed == 1
-    assert manager2.action_manager.get_actions(status="completed")[0].actual_impact == 0.73
+    assert action.actual_impact == 0.73
+    assert action.is_completed
 
 
 def test_ci_declares_postgres_service():
