@@ -47,7 +47,7 @@ class ProviderRouter:
 
     def route(self, prompt: Dict[str, Any], strategy: str = "cheapest") -> Optional[Dict[str, Any]]:
         available = [p for p in self._providers.values()
-                     if p.status == ProviderStatus.AVAILABLE and p.handler]
+                     if p.status == ProviderStatus.AVAILABLE]
         if not available:
             return None
         if strategy == "cheapest":
@@ -63,6 +63,8 @@ class ProviderRouter:
         else:
             provider = available[0]
         self._history.append({"provider": provider.name, "strategy": strategy, "time": time.time()})
+        if provider.handler is None:
+            return {"provider": provider.name, "result": None, "error": "provider handler is not configured"}
         started = time.perf_counter()
         try:
             value = provider.handler(prompt)
