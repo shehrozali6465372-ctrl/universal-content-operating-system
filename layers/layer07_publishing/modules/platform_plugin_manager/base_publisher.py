@@ -9,9 +9,9 @@ class PublishResult:
 
     __slots__ = ("success", "post_id", "url", "platform", "error_message", "metadata")
 
-    def __init__(self, success: bool = False, platform: str = "") -> None:
+    def __init__(self, success: bool = False, platform: str = "", post_id: str = "") -> None:
         self.success = success
-        self.post_id: str = ""
+        self.post_id: str = post_id
         self.url: str = ""
         self.platform = platform
         self.error_message: str = ""

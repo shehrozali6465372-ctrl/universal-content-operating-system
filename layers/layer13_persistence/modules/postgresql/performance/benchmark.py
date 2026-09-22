@@ -111,7 +111,7 @@ class PerformanceBenchmark:
             try:
                 self._pool.update("agent_config",
                     {"value": f"updated_{i}"},
-                    f"key = {self._ph}", (f"bench_update_{i}",),
+                    f"key = {self._ph}", (f"{prefix}_{i}",),
                 )
                 latencies.append((time.time() - start) * 1000)
                 updated += 1

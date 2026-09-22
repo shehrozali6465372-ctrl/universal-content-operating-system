@@ -24,7 +24,6 @@ LAYER_MAP = [
     ("Layer 23 — Website Manager", "layers.layer23_website_manager"),
 ]
 
-
 def boot() -> Dict[str, Any]:
     started = time.time(); loaded = []; errors = []
     for name, module_path in LAYER_MAP:
@@ -35,14 +34,12 @@ def boot() -> Dict[str, Any]:
     return {"version": VERSION, "expected_layers": len(LAYER_MAP), "loaded_layers": len(loaded),
             "layers": loaded, "errors": errors, "boot_time_seconds": round(time.time() - started, 3)}
 
-
 def generate_content(topic: str, platform: str = "facebook", tone: str = "professional",
                      style: str = "educational", include_image: bool = True,
                      account_id: Optional[str] = None) -> Dict[str, Any]:
     from layers.layer14_enterprise_integration.modules.master_orchestrator.control_plane import ControlPlane
     return ControlPlane().execute(topic=topic, platform=platform, account_id=account_id,
                                   tone=tone, style=style, include_image=include_image)
-
 
 def status() -> Dict[str, Any]:
     layer_dirs = sorted(glob.glob("layers/layer*/"))
@@ -51,6 +48,10 @@ def status() -> Dict[str, Any]:
             "python_files": sum(len(glob.glob(f"{d}**/*.py", recursive=True)) for d in layer_dirs),
             "layers": [os.path.basename(d.rstrip("/\\")) for d in layer_dirs]}
 
+def integration_status() -> Dict[str, Any]:
+    from layers.layer14_enterprise_integration.modules.real_integrations import IntegrationConfig
+    config = IntegrationConfig.from_env()
+    return {"version": VERSION, "real_only": True, "providers": config.status()}
 
 def history(limit: int = 10, platform: Optional[str] = None) -> Dict[str, Any]:
     from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
@@ -61,7 +62,6 @@ def history(limit: int = 10, platform: Optional[str] = None) -> Dict[str, Any]:
     finally:
         persist.close()
 
-
 def analytics() -> Dict[str, Any]:
     from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
     persist = PipelinePersistence()
@@ -70,7 +70,6 @@ def analytics() -> Dict[str, Any]:
         return {"analytics": data, "total_metrics": len(data)}
     finally:
         persist.close()
-
 
 def stats() -> Dict[str, Any]:
     db = {}
@@ -81,11 +80,9 @@ def stats() -> Dict[str, Any]:
         db = {"error": str(exc)}
     return {"version": VERSION, "layers": len(LAYER_MAP), "database": db}
 
-
 def subsystem_status(name: str) -> Dict[str, Any]:
     return {"subsystem": name, "status": "available", "verified": False,
             "note": "Module availability only; external services/credentials are not claimed."}
-
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
@@ -93,6 +90,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(status(), indent=2, default=str)); return 0
     if "--boot" in args:
         result = boot(); print(json.dumps(result, indent=2, default=str)); return 0
+    if "--integration-status" in args:
+        print(json.dumps(integration_status(), indent=2, default=str)); return 0
     if "--stats" in args:
         print(json.dumps(stats(), indent=2, default=str)); return 0
     subsystem_commands = {
@@ -134,8 +133,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         port = 8000
         if "--port" in args:
             i = args.index("--port"); port = int(args[i + 1])
-        gateway = APIGateway(host=os.environ.get("APP_HOST", "0.0.0.0"), port=port); gateway.start()
-        print(f"UCOS API listening on http://0.0.0.0:{port}")
+        gateway = APIGateway(host=os.environ.get("APP_HOST", "127.0.0.1"), port=port); gateway.start()
+        print(f"UCOS API listening on http://127.0.0.1:{port}")
         try:
             while gateway.is_running(): time.sleep(1)
         except KeyboardInterrupt: gateway.stop()
@@ -143,13 +142,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     result = boot()
     print(f"Boot complete: {result['loaded_layers']}/{result['expected_layers']} layers loaded")
     print(json.dumps({"name": "Universal Content Operating System", "version": VERSION,
-                      "commands": ["--boot", "--status", "--stats", "--db-status", "--redis-status",
+                      "commands": ["--boot", "--status", "--integration-status", "--stats", "--db-status", "--redis-status",
                                    "--vector-db-status", "--publishing-status", "--monitoring-status",
                                    "--docker-status", "--affiliate-status", "--niche-intel-status",
                                    "--empire-status", "--self-improve-status", "--bi-status",
                                    "--generate <topic> [--account-id <id>]", "--history", "--analytics", "--api"]}, indent=2))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

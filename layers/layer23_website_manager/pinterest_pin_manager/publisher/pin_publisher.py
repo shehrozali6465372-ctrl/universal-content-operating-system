@@ -43,7 +43,7 @@ class PinPublisher:
                     pin.last_error = str(e)[:200]
                     pin.retry_count += 1
                     self._total_failed += 1
-                results.append({"pin_id": pin.pin_id, "error": str(e)})
+                results.append({"pin_id": pin.pin_id, "status": "failed", "error": str(e)})
         return results
 
     def retry_pin(self, pin: PinterestPin) -> Optional[Dict[str, Any]]:

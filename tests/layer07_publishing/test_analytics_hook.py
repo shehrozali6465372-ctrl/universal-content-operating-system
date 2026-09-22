@@ -540,7 +540,7 @@ class TestAnalyticsManager:
         }
 
     def test_analyze_post(self):
-        report = self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        report = self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         assert report is not None
         assert report.platform == "facebook"
         assert "engagement" in report.to_dict()
@@ -552,21 +552,21 @@ class TestAnalyticsManager:
             raise RuntimeError("API down")
         from layers.layer07_publishing.modules.analytics_hook.exceptions import FetchError
         try:
-            self.mgr.analyze_post("fb", "p1", bad_fetcher)
+            self.mgr.analyze_post("fb", "p1", bad_fetcher, account_id="acct_test")
             assert False
         except FetchError:
             pass
 
     def test_get_reports(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
-        self.mgr.analyze_post("linkedin", "p2", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
+        self.mgr.analyze_post("linkedin", "p2", self._fetcher, account_id="acct_test")
         all_reports = self.mgr.get_reports()
         assert len(all_reports) == 2
         fb_reports = self.mgr.get_reports("facebook")
         assert len(fb_reports) == 1
 
     def test_learning_signals(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         signals = self.mgr.get_learning_signals()
         assert signals["available"] is True
         assert signals["report_count"] == 1
@@ -577,22 +577,22 @@ class TestAnalyticsManager:
         assert signals["available"] is False
 
     def test_events_tracked(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         events = self.mgr.events
         assert len(events) == 1
         assert events[0]["event"] == "analytics_collected"
 
     def test_report_count(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         assert self.mgr.report_count == 1
 
     def test_trend_tracked(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         history = self.mgr.trend.get_history("p1")
         assert len(history) >= 1
 
     def test_memory_stored(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         assert self.mgr.memory.record_count >= 1
 
 

@@ -80,6 +80,7 @@ class SelfImprovementManager:
         feedback: Optional[List[Dict[str, Any]]] = None,
         issues: Optional[List[Dict[str, Any]]] = None,
         current_score: float = 0.0,
+        action_outcomes: Optional[Dict[str, float]] = None,
         account_id: Optional[str] = None,
         platform: Optional[str] = None,
         niche: Optional[str] = None,
@@ -117,14 +118,19 @@ class SelfImprovementManager:
         )
         result.actions_created = len(actions)
 
-        # Step 4: Complete simple actions
+        # Step 4: Complete only actions with an observed outcome.
+        # Never mark an action successful using a synthetic/default impact.
         completed = 0
+        outcomes = action_outcomes or {}
         for action in actions:
-            if action.priority in ("low", "medium"):
-                action.complete(0.5)
-                self.action_manager.complete_action(action.action_id, 0.5)
+            if action.action_id in outcomes:
+                actual_impact = float(outcomes[action.action_id])
+                action.complete(actual_impact)
+                self.action_manager.complete_action(action.action_id, actual_impact)
                 completed += 1
                 self.metrics.record_action(completed=True)
+            else:
+                self.metrics.record_action(completed=False)
         result.actions_completed = completed
 
         # Step 5: Track snapshot

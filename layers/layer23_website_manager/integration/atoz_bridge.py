@@ -53,7 +53,7 @@ def _claim_request(request_id: str, payload_hash: str) -> dict[str, Any] | None:
                 except (TypeError, ValueError, OverflowError):
                     age = 0.0
                 if age < 900:
-                    raise RuntimeError("request_id is already processing")
+                    raise RuntimeError("request_id requires reconciliation: already processing")
                 db.execute(
                     "UPDATE job_inbox SET state='processing',response_json=NULL,updated_at=CURRENT_TIMESTAMP WHERE request_id=?",
                     (request_id,),

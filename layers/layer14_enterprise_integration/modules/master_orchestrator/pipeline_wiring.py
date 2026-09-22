@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 _GEMINI_KEYS = (("GEMINI_API_KEY_1", "GEMINI_API_KEY_1"),
@@ -82,7 +83,8 @@ class ContentResponse:
                 "steps_failed": sum(s.status == "error" for s in self.steps),
                 "steps_skipped": sum(s.status == "skipped" for s in self.steps),
                 "total_duration_ms": round(self.total_duration_ms, 1),
-                "steps": [s.to_dict() for s in self.steps]}
+                "steps": [s.to_dict() for s in self.steps],
+                "metadata": dict(self.request.metadata)}
 
 
 class PipelineLogger:
@@ -161,9 +163,35 @@ class PipelineWiring:
 
     def _research(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
-        entry = TopicIntelManager().add_topic(name=req.topic, niche=req.platform, category=req.style, confidence=0.5)
+
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        external_research = production or os.environ.get("UCOS_ENABLE_EXTERNAL_RESEARCH", "").lower() == "true"
+        niche = str(req.metadata.get("niche") or "general").strip().lower()
+
+        if external_research:
+            from layers.layer14_enterprise_integration.modules.real_integrations import IntegrationGateway
+            result = IntegrationGateway().search(req.topic, location=req.metadata.get("location"))
+            results = result.get("results") or []
+            if not results:
+                raise RuntimeError("real research provider returned no usable source results")
+            source = results[0]
+            source_id = str(source["source_id"])
+            keywords = [str(item.get("title") or "").strip() for item in results[:8] if str(item.get("title") or "").strip()]
+            entry = TopicIntelManager().add_topic(
+                name=req.topic, niche=niche, category=req.style,
+                keywords=keywords, source_trend_id=source_id, confidence=1.0,
+            )
+            ctx["topic_id"] = getattr(entry, "topic_id", "")
+            ctx["research_provider"] = result.get("provider", "serpapi")
+            ctx["research_source_id"] = source_id
+            ctx["research_results"] = results
+            return {"topic_id": ctx["topic_id"], "provider": ctx["research_provider"],
+                    "source_id": source_id, "result_count": len(results)}
+
+        entry = TopicIntelManager().add_topic(name=req.topic, niche=niche, category=req.style, confidence=0.0)
         ctx["topic_id"] = getattr(entry, "topic_id", "")
-        return {"topic_id": ctx["topic_id"]}
+        ctx["research_observed"] = False
+        return {"topic_id": ctx["topic_id"], "observed": False}
 
     def _intelligence(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer03_intelligence.modules.content_understanding.content_analyzer import ContentAnalyzer
@@ -293,6 +321,11 @@ class PipelineWiring:
         return response.analytics
 
     def _learning(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        observed_outcome = bool(response.analytics is not None and response.analytics.get("metrics") is not None)
+        if production and not observed_outcome:
+            return {"stored": False, "skipped": True, "reason": "no_observed_external_outcome"}
+
         from layers.layer09_learning.modules.learning_engine.learning_memory import LearningMemory
         from layers.layer09_learning.modules.learning_engine.lesson_generator import Lesson
         lesson = Lesson(lesson_type="content_execution", title=f"Executed '{req.topic}' for {req.platform}")
@@ -310,6 +343,7 @@ class PipelineWiring:
     def execute(self, request: ContentRequest) -> ContentResponse:
         if not request.topic:
             raise ValueError("topic is required")
+        request.metadata.setdefault("lineage_id", str(uuid.uuid4()))
         response = ContentResponse(request)
         ctx: Dict[str, Any] = {}
         started = time.time()
@@ -328,6 +362,12 @@ class PipelineWiring:
         if not any(s.layer == "L9-Learning" for s in response.steps):
             self._run_step(response, "L9-Learning", lambda: self._learning(request, response, ctx), required=False)
         response.total_duration_ms = (time.time() - started) * 1000
+        request.metadata["topic_id"] = ctx.get("topic_id", "")
+        request.metadata["research_provider"] = ctx.get("research_provider", "")
+        request.metadata["research_source_id"] = ctx.get("research_source_id", "")
+        request.metadata["ai_provider"] = ctx.get("ai_provider", "")
+        request.metadata["post_id"] = ctx.get("post_id", "")
+        request.metadata["niche"] = request.metadata.get("niche") or "general"
         response.stats = {"execution_time_ms": round(response.total_duration_ms, 1),
                           "published": bool(response.publish_result and response.publish_result.get("success")),
                           "post_id": ctx.get("post_id", "")}
@@ -335,15 +375,154 @@ class PipelineWiring:
         return response
 
     def _persist(self, response: ContentResponse) -> None:
-        try:
-            from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
-            persist = PipelinePersistence()
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        if not production:
             try:
-                persist.save_pipeline_run(response.to_dict())
+                from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_persistence import PipelinePersistence
+                persist = PipelinePersistence()
+                try:
+                    persist.save_pipeline_run(response.to_dict())
+                finally:
+                    persist.close()
+            except Exception as exc:
+                self._logger.log("L13/L14-Persistence", f"warning: {exc}")
+        enabled = os.environ.get("UCOS_ENABLE_LINEAGE", "true" if production else "false").lower() == "true"
+        if not enabled:
+            return
+        try:
+            from layers.layer14_enterprise_integration.modules.real_integrations import LineageStore
+            metadata = response.request.metadata
+            store = LineageStore()
+            try:
+                parent = None
+
+                research_source_id = str(metadata.get("research_source_id") or "")
+                research_provider = str(metadata.get("research_provider") or "")
+                if research_source_id and research_provider:
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="source",
+                        entity_id=research_source_id, source=research_provider,
+                        source_id=research_source_id, provider=research_provider,
+                        status="observed", payload={"query": response.request.topic},
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="niche",
+                        entity_id=str(metadata.get("niche") or "general"),
+                        source=research_provider, source_id=research_source_id,
+                        provider=research_provider, status="observed",
+                        payload={"niche": metadata.get("niche")},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="keyword",
+                        entity_id=hashlib.sha256(response.request.topic.encode("utf-8")).hexdigest(),
+                        source=research_provider, source_id=research_source_id,
+                        provider=research_provider, status="observed",
+                        payload={"seed_keyword": response.request.topic},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="content",
+                        entity_id=hashlib.sha256(response.text.encode("utf-8")).hexdigest(),
+                        source="ucos", source_id=str(metadata.get("topic_id") or response.request.topic),
+                        provider=str(metadata.get("ai_provider") or metadata.get("ai_model") or "unknown"),
+                        status="observed", payload={"content_length": len(response.text)},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    asset_value = response.image_url or hashlib.sha256(response.text.encode("utf-8")).hexdigest()
+                    asset_payload = (
+                        {"url": response.image_url, "asset_type": "image"}
+                        if response.image_url
+                        else {"asset_type": "text", "content_hash": asset_value}
+                    )
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="asset",
+                        entity_id=hashlib.sha256(str(asset_value).encode("utf-8")).hexdigest(),
+                        source="ucos", source_id=str(asset_value),
+                        provider="runtime-media" if response.image_url else str(metadata.get("ai_provider") or "unknown"),
+                        status="observed", payload=asset_payload,
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="platform",
+                        entity_id=response.request.platform,
+                        source="ucos", source_id=response.request.platform,
+                        provider="ucos", status="observed",
+                        payload={"platform": response.request.platform},
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
+
+                    account_id = str(metadata.get("account_id") or "")
+                    if account_id:
+                        event = store.record(
+                            lineage_id=str(metadata["lineage_id"]), stage="account",
+                            entity_id=account_id, source="ucos",
+                            source_id=account_id, provider="ucos",
+                            status="observed", payload={"account_id": account_id},
+                            parent_event_id=parent,
+                        )
+                        parent = event.event_id
+
+                    post_id = str(metadata.get("post_id") or "")
+                    if post_id:
+                        event = store.record(
+                            lineage_id=str(metadata["lineage_id"]), stage="publish",
+                            entity_id=post_id, source=response.request.platform,
+                            source_id=post_id, provider=response.request.platform,
+                            status="observed",
+                            payload={"url": (response.publish_result or {}).get("url")},
+                            parent_event_id=parent,
+                        )
+                        parent = event.event_id
+
+                    metrics = (response.analytics or {}).get("metrics") if isinstance(response.analytics, dict) else None
+                    if isinstance(metrics, dict):
+                        click_value = metrics.get("clicks", metrics.get("click_count"))
+                        conversion_value = metrics.get("conversions", metrics.get("conversion_count"))
+                        revenue_value = metrics.get("revenue", metrics.get("revenue_amount"))
+                        if click_value is not None:
+                            event = store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="click",
+                                entity_id=f"{post_id}:clicks", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"clicks": click_value},
+                                parent_event_id=parent,
+                            )
+                            parent = event.event_id
+                        if conversion_value is not None and click_value is not None:
+                            event = store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="conversion",
+                                entity_id=f"{post_id}:conversions", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"conversions": conversion_value},
+                                parent_event_id=parent,
+                            )
+                            parent = event.event_id
+                        if revenue_value is not None and conversion_value is not None and click_value is not None:
+                            store.record(
+                                lineage_id=str(metadata["lineage_id"]), stage="revenue",
+                                entity_id=f"{post_id}:revenue", source=response.request.platform,
+                                source_id=post_id, provider=response.request.platform,
+                                status="observed", payload={"revenue": revenue_value},
+                                parent_event_id=parent,
+                            )
             finally:
-                persist.close()
+                store.close()
         except Exception as exc:
-            self._logger.log("L13/L14-Persistence", f"warning: {exc}")
+            self._logger.log("L13/L14-Lineage", f"{'error' if production else 'warning'}: {exc}")
+            if production:
+                raise
 
     def status(self) -> Dict[str, Any]:
         stats = self._key_manager.get_stats() if self._key_manager else {}

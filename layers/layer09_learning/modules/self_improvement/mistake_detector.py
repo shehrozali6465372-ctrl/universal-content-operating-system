@@ -18,7 +18,6 @@ class DetectedMistake:
     _counter = 0
 
     def __init__(self, category: str = "content", severity: str = "medium") -> None:
-        next(_MDTC)
         self.mistake_id: str = f"mdt_{next(_MDTC)}"
         self.category = category if category in MISTAKE_CATEGORIES else "content"
         self.severity = severity if severity in MISTAKE_SEVERITY else "medium"

@@ -3831,11 +3831,15 @@ class TestDatabaseEngine:
         e = DatabaseEngine("postgresql")
         assert e.get_type() == "postgresql"
     def test_connect(self):
-        e = DatabaseEngine()
+        # PostgreSQL is the production engine; use explicit SQLite for this
+        # isolated unit test so it does not require an external DB credential.
+        e = DatabaseEngine("sqlite")
+        e.configure({"path": ":memory:"})
         assert e.connect() is True
         assert e.is_connected() is True
     def test_disconnect(self):
-        e = DatabaseEngine()
+        e = DatabaseEngine("sqlite")
+        e.configure({"path": ":memory:"})
         e.connect()
         e.disconnect()
         assert e.is_connected() is False

@@ -229,7 +229,7 @@ class TestProductDatabase:
         assert count >= 20
 
     def test_search_by_niche(self):
-        self.am.add_product("Bed Frame", 299.99, "furniture", "home_decor", 4.5, 6.0)
+        self.am.add_product("Bed Frame", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         results = self.am.search_products("home_decor")
         assert len(results) >= 1
 
@@ -272,6 +272,7 @@ class TestProductMatcher:
         self.am.initialize()
 
     def test_match_product(self):
+        self.am.add_product("Bedroom Product", 100.0, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         products = self.am.search_products("home_decor")
         result = self.am.matcher.match_product("home_decor", "Bedroom Ideas", "bedroom", ["bedroom"], products)
         assert result["product_id"] != ""
@@ -282,6 +283,7 @@ class TestProductMatcher:
         assert result["confidence"] == 0.0
 
     def test_match_stats(self):
+        self.am.add_product("Tech Product", 100.0, "electronics", "tech", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         products = self.am.search_products("tech")
         self.am.matcher.match_product("tech", "Gadgets", "", [], products)
         stats = self.am.matcher.get_stats()
@@ -307,8 +309,8 @@ class TestAffiliateLinkManager:
             self.am.links.generate_deep_link("p1", "not-a-url", "test123")
 
     def test_generate_short_link(self):
-        link = self.am.links.generate_short_link("p1", "https://amazon.com/product")
-        assert link.short_url.startswith("https://go.affiliate/")
+        with pytest.raises(LinkGenerationError):
+            self.am.links.generate_short_link("p1", "https://amazon.com/product")
 
     def test_generate_tracking_link(self):
         link = self.am.links.generate_tracking_link("p1", "https://amazon.com/product", "pinterest")
@@ -487,8 +489,8 @@ class TestAffiliateRecommendationEngine:
         self.am = AffiliateManager()
 
     def test_recommend_better(self):
-        p1 = self.am.add_product("Current", rating=3.0, commission_rate=3.0, niche="tech")
-        p2 = self.am.add_product("Better", rating=5.0, commission_rate=10.0, niche="tech")
+        p1 = self.am.add_product("Current", rating=3.0, commission_rate=3.0, niche="tech", affiliate_link="https://example.com/current", merchant_id="merchant-ci", network_id="network-ci")
+        p2 = self.am.add_product("Better", rating=5.0, commission_rate=10.0, niche="tech", affiliate_link="https://example.com/better", merchant_id="merchant-ci", network_id="network-ci")
         result = self.am.recommend_better(p1.product_id)
         assert result["recommended"] == "Better"
 
@@ -504,8 +506,8 @@ class TestAffiliateRecommendationEngine:
         assert top[0].product_name == "T1"
 
     def test_recommender_stats(self):
-        p1 = self.am.add_product("Rec1", rating=4.0, commission_rate=5.0, niche="tech")
-        p2 = self.am.add_product("Rec2", rating=4.5, commission_rate=8.0, niche="tech")
+        p1 = self.am.add_product("Rec1", rating=4.0, commission_rate=5.0, niche="tech", affiliate_link="https://example.com/rec1", merchant_id="merchant-ci", network_id="network-ci")
+        p2 = self.am.add_product("Rec2", rating=4.5, commission_rate=8.0, niche="tech", affiliate_link="https://example.com/rec2", merchant_id="merchant-ci", network_id="network-ci")
         self.am.recommend_better(p1.product_id)
         stats = self.am.recommender.get_stats()
         assert stats["total_recommendations"] >= 1
@@ -585,6 +587,7 @@ class TestAffiliateManagerFacade:
 
     def test_full_match_and_link_pipeline(self):
         self.am.initialize()
+        self.am.add_product("Bedroom Product", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         result = self.am.match_and_link(
             "home_decor",
             "10 Small Bedroom Ideas That Save Space",
@@ -604,6 +607,7 @@ class TestAffiliateManagerFacade:
     def test_match_and_link_different_niches(self):
         self.am.initialize()
         for niche in ["home_decor", "fashion", "tech", "food", "beauty"]:
+            self.am.add_product(f"{niche} Product", 99.99, "general", niche, 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
             result = self.am.match_and_link(niche, f"Best {niche} ideas", f"Content about {niche}")
             if result["matched"]:
                 assert result["product"]["commission_rate"] > 0
@@ -621,6 +625,7 @@ class TestAffiliateManagerFacade:
 
     def test_status_after_operations(self):
         self.am.initialize()
+        self.am.add_product("Bedroom Product", 299.99, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         self.am.match_and_link("home_decor", "Test")
         self.am.record_click("p1")
         status = self.am.get_status()

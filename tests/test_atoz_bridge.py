@@ -27,7 +27,7 @@ def test_atoz_bridge_rejects_unknown_job_type():
         dispatch_job(payload)
 
 
-def test_atoz_pinterest_assets_requires_real_publish_inputs(monkeypatch):
+def test_atoz_pinterest_assets_requires_real_publish_inputs(monkeypatch, tmp_path):
     class FakePin:
         pin_id = "pin-1"
         def to_dict(self):
@@ -39,6 +39,11 @@ def test_atoz_pinterest_assets_requires_real_publish_inputs(monkeypatch):
             return FakePin()
 
     import layers.layer23_website_manager.integration.atoz_bridge as bridge
+    asset_root = tmp_path / "assets"
+    asset_root.mkdir()
+    asset = asset_root / "real-image.png"
+    asset.write_bytes(b"real test asset")
+    monkeypatch.setenv("UCOS_ASSET_ROOT", str(asset_root))
     monkeypatch.setattr(bridge, "get_pin_manager", lambda: FakeManager())
 
     payload = {
@@ -52,7 +57,7 @@ def test_atoz_pinterest_assets_requires_real_publish_inputs(monkeypatch):
             "website_url": "https://atoz.example/article",
             "account_id": "pinterest:1",
             "board_id": "board-1",
-            "image_path": "/tmp/real-image.png",
+            "image_path": str(asset),
         },
     }
     result = dispatch_job(payload)

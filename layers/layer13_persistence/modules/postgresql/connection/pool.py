@@ -2,7 +2,7 @@
 
 Features:
 - Thread-safe connection pooling
-- Automatic PostgreSQL with SQLite fallback
+- PostgreSQL with SQLite fallback only outside production
 - Retry with exponential backoff
 - Auto-reconnect on connection loss
 - Connection pool metrics (active, idle, queries, latency)
@@ -17,13 +17,14 @@ from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import re
 
 
 @dataclass
 class ConnectionConfig:
     host: str = "localhost"
     port: int = 5432
-    database: str = "ai_content_os"
+    database: str = "aios"
     user: str = "postgres"
     password: str = ""
     min_connections: int = 2
@@ -36,11 +37,11 @@ class ConnectionConfig:
     @classmethod
     def from_env(cls) -> "ConnectionConfig":
         return cls(
-            host=os.environ.get("PG_HOST", "localhost"),
-            port=int(os.environ.get("PG_PORT", "5432")),
-            database=os.environ.get("PG_DATABASE", "ai_content_os"),
-            user=os.environ.get("PG_USER", "postgres"),
-            password=os.environ.get("PG_PASSWORD", ""),
+            host=os.environ.get("POSTGRES_HOST", os.environ.get("PG_HOST", "localhost")),
+            port=int(os.environ.get("POSTGRES_PORT", os.environ.get("PG_PORT", "5432"))),
+            database=os.environ.get("POSTGRES_DB", os.environ.get("PG_DATABASE", "aios")),
+            user=os.environ.get("POSTGRES_USER", os.environ.get("PG_USER", "postgres")),
+            password=os.environ.get("POSTGRES_PASSWORD", os.environ.get("PG_PASSWORD", "")),
             min_connections=int(os.environ.get("PG_MIN_CONN", "2")),
             max_connections=int(os.environ.get("PG_MAX_CONN", "10")),
         )
@@ -97,12 +98,16 @@ class ConnectionPool:
             self._pg_available = False
             self._initialized = True
             self._last_error = f"PostgreSQL driver unavailable: {exc}"
+            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                raise RuntimeError("PostgreSQL driver is unavailable in production") from exc
             return False
 
         except Exception as exc:
             self._pg_available = False
             self._initialized = True
             self._last_error = str(exc)
+            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                raise RuntimeError("PostgreSQL initialization failed in production") from exc
             return False
 
     def _auto_reconnect(self) -> bool:
@@ -133,7 +138,7 @@ class ConnectionPool:
                 self._active_conns = max(0, self._active_conns - 1)
                 self._idle_conns += 1
         else:
-            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"} and os.environ.get("UCOS_ALLOW_SQLITE_FALLBACK", "false").lower() != "true":
+            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
                 raise RuntimeError("PostgreSQL is unavailable; SQLite fallback is disabled in production")
             import sqlite3
             db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -231,24 +236,34 @@ class ConnectionPool:
         self._total_queries += 1
         return result
 
+    _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    @classmethod
+    def _identifier(cls, value: str) -> str:
+        if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
+            raise ValueError(f"unsafe SQL identifier: {value}")
+        return value
+
     def _placeholder(self) -> str:
         return "%s" if self._pg_available else "?"
 
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         """Insert a row and return the inserted ID (with retry)."""
         def _do():
-            cols = ", ".join(data.keys())
+            table_name = self._identifier(table)
+            cols = ", ".join(self._identifier(k) for k in data.keys())
             ph = self._placeholder()
             phs = ", ".join([ph for _ in data])
-            sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
+            sql = f"INSERT INTO {table_name} ({cols}) VALUES ({phs})"
             with self.connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(sql, list(data.values()))
                 if self._pg_available:
-                    conn.commit()
+                    cursor.execute(f"INSERT INTO {table} ({cols}) VALUES ({phs}) RETURNING id", list(data.values()))
                     result = cursor.fetchone()
+                    conn.commit()
                     return result[0] if result else 0
                 else:
+                    cursor.execute(sql, list(data.values()))
                     conn.commit()
                     return cursor.lastrowid
         return self._execute_with_retry(_do)
@@ -258,7 +273,8 @@ class ConnectionPool:
         if not rows:
             return 0
         def _do():
-            cols = ", ".join(rows[0].keys())
+            table = self._identifier(table)
+            cols = ", ".join(self._identifier(k) for k in rows[0].keys())
             ph = self._placeholder()
             phs = ", ".join([ph for _ in rows[0]])
             sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
@@ -274,8 +290,9 @@ class ConnectionPool:
         """Update rows and return affected count (with retry)."""
         def _do():
             ph = self._placeholder()
-            sets = ", ".join(f"{k} = {ph}" for k in data)
-            sql = f"UPDATE {table} SET {sets} WHERE {where}"
+            table_name = self._identifier(table)
+            sets = ", ".join(f"{self._identifier(k)} = {ph}" for k in data)
+            sql = f"UPDATE {table_name} SET {sets} WHERE {where}"
             with self.connection() as conn:
                 cursor = conn.cursor()
                 exec_sql = sql
@@ -289,7 +306,8 @@ class ConnectionPool:
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         """Delete rows and return affected count (with retry)."""
         def _do():
-            sql = f"DELETE FROM {table} WHERE {where}"
+            table_name = self._identifier(table)
+            sql = f"DELETE FROM {table_name} WHERE {where}"
             with self.connection() as conn:
                 cursor = conn.cursor()
                 exec_sql = sql
@@ -310,6 +328,7 @@ class ConnectionPool:
 
     def count(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         """Count rows in a table."""
+        table = self._identifier(table)
         sql = f"SELECT COUNT(*) as c FROM {table} WHERE {where}"
         exec_sql = sql
         if not self._pg_available:

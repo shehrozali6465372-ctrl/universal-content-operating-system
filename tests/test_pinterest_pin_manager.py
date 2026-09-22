@@ -555,29 +555,29 @@ class TestPinPublisher:
             board_id="b1",
             website_url="https://example.com",
         )
-        result = self.pm.publisher.publish(pin)
-        assert result["status"] == "published"
-        assert pin.is_published is True
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
+            self.pm.publisher.publish(pin)
+        assert pin.is_published is False
 
     def test_publish_no_account(self):
         pin = self.pm.registry.create(
             pin_title="No Account", board_id="b1", website_url="https://example.com"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_no_board(self):
         pin = self.pm.registry.create(
             pin_title="No Board", account_id="acc1", website_url="https://example.com"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_no_url(self):
         pin = self.pm.registry.create(
             pin_title="No URL", account_id="acc1", board_id="b1"
         )
-        with pytest.raises(PublishFailedError):
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.publish(pin)
 
     def test_publish_batch(self):
@@ -592,16 +592,18 @@ class TestPinPublisher:
             pins.append(pin)
         results = self.pm.publisher.publish_batch(pins)
         assert len(results) == 3
-        assert all(r["status"] == "published" for r in results)
+        assert all(r["status"] == "failed" for r in results)
+        assert all(pin.status == PinStatus.FAILED for pin in pins)
 
     def test_retry_failed_pin(self):
         pin = self.pm.registry.create(
             pin_title="Retry Pin", account_id="acc1", board_id="b1",
             website_url="https://example.com",
         )
-        # First publish
-        self.pm.publisher.publish(pin)
-        assert pin.is_published is True
+        pin.status = PinStatus.FAILED
+        with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
+            self.pm.publisher.retry_pin(pin)
+        assert pin.is_published is False
 
     def test_check_rate_limit(self):
         result = self.pm.publisher.check_rate_limit()
@@ -613,9 +615,10 @@ class TestPinPublisher:
             pin_title="Pub Stats", account_id="acc1", board_id="b1",
             website_url="https://example.com",
         )
-        self.pm.publisher.publish(pin)
+        with pytest.raises(NotImplementedError):
+            self.pm.publisher.publish(pin)
         stats = self.pm.publisher.get_stats()
-        assert stats["total_published"] >= 1
+        assert stats["total_published"] == 0
         assert "success_rate" in stats
 
 
@@ -884,8 +887,8 @@ class TestPinterestPinManagerFacade:
         pin = self.pm.create_pin(
             "Publish Facade", "acc1", "board1", website_url="https://example.com"
         )
-        result = self.pm.publish_pin(pin.pin_id)
-        assert result["status"] == "published"
+        with pytest.raises(NotImplementedError):
+            self.pm.publish_pin(pin.pin_id)
 
     def test_publish_nonexistent(self):
         result = self.pm.publish_pin("nonexistent")
@@ -897,7 +900,8 @@ class TestPinterestPinManagerFacade:
         )
         self.pm.queue_pin(pin.pin_id)
         count = self.pm.process_queue()
-        assert count >= 1
+        assert count == 0
+        assert pin.status == PinStatus.FAILED
 
     def test_process_scheduled(self):
         pin = self.pm.create_pin(
@@ -907,7 +911,8 @@ class TestPinterestPinManagerFacade:
         pin.status = PinStatus.SCHEDULED
         pin.publish_time = time.time() - 100
         count = self.pm.process_scheduled()
-        assert count >= 1
+        assert count == 0
+        assert pin.status == PinStatus.FAILED
 
     def test_track_performance(self):
         analytics = self.pm.track_performance("pin1", 1000, 100, 50)

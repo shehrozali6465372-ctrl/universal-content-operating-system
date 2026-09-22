@@ -14,8 +14,28 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aios"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       PYTHONPATH: ${{ github.workspace }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
 
     steps:
       - uses: actions/checkout@v4
@@ -33,8 +53,13 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q .
 
+      - name: Run Integration Contract Tests
+        run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+
       - name: Run Full Test Suite
         run: python -m pytest -q --tb=short
 
       - name: System Status
-        run: python main.py --boot
+        run: |
+          python main.py --boot
+          python main.py --integration-status

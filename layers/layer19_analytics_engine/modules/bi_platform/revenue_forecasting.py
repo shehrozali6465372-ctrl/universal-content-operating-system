@@ -152,7 +152,10 @@ class RevenueForecasting:
         return {
             "historical_days": len(self._historical),
             "forecasts": self.get_forecast_summary(),
-            "roi": self.forecast_roi(),
+            "roi": dict(self._roi_forecast) if self._roi_forecast else {
+                "available": False,
+                "reason": "investment_required",
+            },
             "30day_points": [p.to_dict() for p in self._forecasts.get("30day", [])[:7]],
             "90day_points": [p.to_dict() for p in self._forecasts.get("90day", [])[:7]],
         }

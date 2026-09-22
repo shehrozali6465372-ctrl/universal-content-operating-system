@@ -121,7 +121,7 @@ The API gateway defaults to loopback. When exposed on a non-loopback host, `UCOS
 
 ## Testing
 
-The CI suite currently runs **10,000+ tests** across the repository. The verified latest CI run for the current baseline passed **10,133 tests** with no failures.
+The repository contains **10,000+ tests** across the full test surface. Production certification is only claimed when the exact production commit has a recorded green CI run and the required integration/security evidence is present. A source-level test count is not certification evidence.
 
 ```bash
 # Full CI test scope

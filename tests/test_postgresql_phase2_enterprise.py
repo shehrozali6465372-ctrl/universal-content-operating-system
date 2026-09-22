@@ -19,23 +19,23 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# SQLite-compatible table creation for tests
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS agent_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE NOT NULL,
-    value TEXT NOT NULL,
-    category TEXT DEFAULT 'general'
-)
-"""
-
-
 def _ensure_table(pool):
-    """Create agent_config table if it doesn't exist."""
-    try:
-        pool.execute(_CREATE_TABLE_SQL)
-    except Exception:
-        pass
+    """Create agent_config using the active database dialect."""
+    if getattr(pool, "_pg_available", False):
+        from layers.layer13_persistence.modules.postgresql.migrations.schema import get_all_create_sql
+        for sql in get_all_create_sql():
+            pool.execute(sql)
+        return
+    else:
+        sql = """
+        CREATE TABLE IF NOT EXISTS agent_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            category TEXT DEFAULT 'general'
+        )
+        """
+    pool.execute(sql)
 
 
 
@@ -483,3 +483,46 @@ class TestPhase2EnterpriseIntegration:
         self.manager._pool.query_one("SELECT 1")
         status = self.manager.get_db_status()
         assert status["connections"]["total_queries"] >= 1
+
+
+# ─── Production Persistence Guard Tests ───────────────────────────────
+
+class TestProductionPersistenceGuards:
+    def test_sqlite_fallback_is_hard_disabled_in_production(self, monkeypatch):
+        from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool
+
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("UCOS_ALLOW_SQLITE_FALLBACK", "true")
+
+        pool = ConnectionPool()
+        try:
+            pool._initialized = True
+            pool._pg_available = False
+            with pytest.raises(RuntimeError, match="SQLite fallback is disabled in production"):
+                with pool.connection():
+                    pass
+        finally:
+            pool.close()
+
+    def test_postgres_configuration_uses_production_env_names(self, monkeypatch):
+        from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionConfig
+
+        monkeypatch.setenv("POSTGRES_HOST", "postgres")
+        monkeypatch.setenv("POSTGRES_PORT", "5432")
+        monkeypatch.setenv("POSTGRES_DB", "aios")
+        monkeypatch.setenv("POSTGRES_USER", "aios")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "secret")
+
+        config = ConnectionConfig.from_env()
+        assert config.host == "postgres"
+        assert config.port == 5432
+        assert config.database == "aios"
+        assert config.user == "aios"
+        assert config.password == "secret"
+
+    def test_sql_identifiers_are_allowlisted(self):
+        from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool
+
+        assert ConnectionPool._identifier("agent_config") == "agent_config"
+        with pytest.raises(ValueError):
+            ConnectionPool._identifier("agent_config; DROP TABLE users")

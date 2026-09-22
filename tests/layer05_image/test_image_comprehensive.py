@@ -627,7 +627,7 @@ class TestPromptEvaluator:
 
 class TestImageOrchestratorComprehensive:
     def setup_method(self):
-        self.orch = ImageOrchestrator()
+        self.orch = ImageOrchestrator(provider=MockImageProvider())
 
     def test_run_all_platforms(self):
         for p in ("facebook", "instagram", "twitter", "linkedin", "youtube", "pinterest", "tiktok", "threads"):
