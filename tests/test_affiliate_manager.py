@@ -272,7 +272,7 @@ class TestProductMatcher:
         self.am.initialize()
 
     def test_match_product(self):
-        self.am.add_product("Bedroom Product", 100.0, "furniture", "home_decor", 4.5, 6.0)
+        self.am.add_product("Bedroom Product", 100.0, "furniture", "home_decor", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         products = self.am.search_products("home_decor")
         result = self.am.matcher.match_product("home_decor", "Bedroom Ideas", "bedroom", ["bedroom"], products)
         assert result["product_id"] != ""
@@ -283,7 +283,7 @@ class TestProductMatcher:
         assert result["confidence"] == 0.0
 
     def test_match_stats(self):
-        self.am.add_product("Tech Product", 100.0, "electronics", "tech", 4.5, 6.0)
+        self.am.add_product("Tech Product", 100.0, "electronics", "tech", 4.5, 6.0, "https://example.com/affiliate", "merchant-ci", "network-ci")
         products = self.am.search_products("tech")
         self.am.matcher.match_product("tech", "Gadgets", "", [], products)
         stats = self.am.matcher.get_stats()
@@ -489,8 +489,8 @@ class TestAffiliateRecommendationEngine:
         self.am = AffiliateManager()
 
     def test_recommend_better(self):
-        p1 = self.am.add_product("Current", rating=3.0, commission_rate=3.0, niche="tech")
-        p2 = self.am.add_product("Better", rating=5.0, commission_rate=10.0, niche="tech")
+        p1 = self.am.add_product("Current", rating=3.0, commission_rate=3.0, niche="tech", affiliate_link="https://example.com/current", merchant_id="merchant-ci", network_id="network-ci")
+        p2 = self.am.add_product("Better", rating=5.0, commission_rate=10.0, niche="tech", affiliate_link="https://example.com/better", merchant_id="merchant-ci", network_id="network-ci")
         result = self.am.recommend_better(p1.product_id)
         assert result["recommended"] == "Better"
 
@@ -506,8 +506,8 @@ class TestAffiliateRecommendationEngine:
         assert top[0].product_name == "T1"
 
     def test_recommender_stats(self):
-        p1 = self.am.add_product("Rec1", rating=4.0, commission_rate=5.0, niche="tech")
-        p2 = self.am.add_product("Rec2", rating=4.5, commission_rate=8.0, niche="tech")
+        p1 = self.am.add_product("Rec1", rating=4.0, commission_rate=5.0, niche="tech", affiliate_link="https://example.com/rec1", merchant_id="merchant-ci", network_id="network-ci")
+        p2 = self.am.add_product("Rec2", rating=4.5, commission_rate=8.0, niche="tech", affiliate_link="https://example.com/rec2", merchant_id="merchant-ci", network_id="network-ci")
         self.am.recommend_better(p1.product_id)
         stats = self.am.recommender.get_stats()
         assert stats["total_recommendations"] >= 1
