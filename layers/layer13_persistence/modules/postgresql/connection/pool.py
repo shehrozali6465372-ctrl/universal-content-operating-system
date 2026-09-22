@@ -250,11 +250,11 @@ class ConnectionPool:
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         """Insert a row and return the inserted ID (with retry)."""
         def _do():
-            table = self._identifier(table)
+            table_name = self._identifier(table)
             cols = ", ".join(self._identifier(k) for k in data.keys())
             ph = self._placeholder()
             phs = ", ".join([ph for _ in data])
-            sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
+            sql = f"INSERT INTO {table_name} ({cols}) VALUES ({phs})"
             with self.connection() as conn:
                 cursor = conn.cursor()
                 if self._pg_available:
@@ -290,9 +290,9 @@ class ConnectionPool:
         """Update rows and return affected count (with retry)."""
         def _do():
             ph = self._placeholder()
-            table = self._identifier(table)
+            table_name = self._identifier(table)
             sets = ", ".join(f"{self._identifier(k)} = {ph}" for k in data)
-            sql = f"UPDATE {table} SET {sets} WHERE {where}"
+            sql = f"UPDATE {table_name} SET {sets} WHERE {where}"
             with self.connection() as conn:
                 cursor = conn.cursor()
                 exec_sql = sql
@@ -306,8 +306,8 @@ class ConnectionPool:
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         """Delete rows and return affected count (with retry)."""
         def _do():
-            table = self._identifier(table)
-            sql = f"DELETE FROM {table} WHERE {where}"
+            table_name = self._identifier(table)
+            sql = f"DELETE FROM {table_name} WHERE {where}"
             with self.connection() as conn:
                 cursor = conn.cursor()
                 exec_sql = sql
