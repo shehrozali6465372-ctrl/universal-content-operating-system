@@ -437,16 +437,21 @@ class PipelineWiring:
                     )
                     parent = event.event_id
 
-                    if response.image_url:
-                        event = store.record(
-                            lineage_id=str(metadata["lineage_id"]), stage="asset",
-                            entity_id=hashlib.sha256(response.image_url.encode("utf-8")).hexdigest(),
-                            source="ucos", source_id=response.image_url,
-                            provider="runtime-media",
-                            status="observed", payload={"url": response.image_url},
-                            parent_event_id=parent,
-                        )
-                        parent = event.event_id
+                    asset_value = response.image_url or hashlib.sha256(response.text.encode("utf-8")).hexdigest()
+                    asset_payload = (
+                        {"url": response.image_url, "asset_type": "image"}
+                        if response.image_url
+                        else {"asset_type": "text", "content_hash": asset_value}
+                    )
+                    event = store.record(
+                        lineage_id=str(metadata["lineage_id"]), stage="asset",
+                        entity_id=hashlib.sha256(str(asset_value).encode("utf-8")).hexdigest(),
+                        source="ucos", source_id=str(asset_value),
+                        provider="runtime-media" if response.image_url else str(metadata.get("ai_provider") or "unknown"),
+                        status="observed", payload=asset_payload,
+                        parent_event_id=parent,
+                    )
+                    parent = event.event_id
 
                     event = store.record(
                         lineage_id=str(metadata["lineage_id"]), stage="platform",
