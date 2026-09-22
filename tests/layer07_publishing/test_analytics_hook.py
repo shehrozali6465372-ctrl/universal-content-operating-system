@@ -558,7 +558,7 @@ class TestAnalyticsManager:
             pass
 
     def test_get_reports(self):
-        self.mgr.analyze_post("facebook", "p1", self._fetcher)
+        self.mgr.analyze_post("facebook", "p1", self._fetcher, account_id="acct_test")
         self.mgr.analyze_post("linkedin", "p2", self._fetcher, account_id="acct_test")
         all_reports = self.mgr.get_reports()
         assert len(all_reports) == 2
