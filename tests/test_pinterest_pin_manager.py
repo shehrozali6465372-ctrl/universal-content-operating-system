@@ -600,6 +600,7 @@ class TestPinPublisher:
             pin_title="Retry Pin", account_id="acc1", board_id="b1",
             website_url="https://example.com",
         )
+        pin.status = PinStatus.FAILED
         with pytest.raises(NotImplementedError, match="simulated publication is disabled"):
             self.pm.publisher.retry_pin(pin)
         assert pin.is_published is False
