@@ -275,7 +275,7 @@ class AffiliateManager:
         link.clicks += 1
         link.last_clicked = time.time()
 
-        prog = self._programs.get(link.program_id)
+        prog = next((p for p in self._programs.values() if p.id == link.program_id), None)
         if prog:
             prog.total_clicks += 1
 
@@ -298,7 +298,7 @@ class AffiliateManager:
         link.conversions += 1
         link.revenue += revenue
 
-        prog = self._programs.get(link.program_id)
+        prog = next((p for p in self._programs.values() if p.id == link.program_id), None)
         if prog:
             prog.total_conversions += 1
             prog.total_revenue += revenue
