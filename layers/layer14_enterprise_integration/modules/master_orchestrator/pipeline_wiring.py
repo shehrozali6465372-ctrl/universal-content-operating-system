@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 _GEMINI_KEYS = (("GEMINI_API_KEY_1", "GEMINI_API_KEY_1"),
@@ -82,7 +83,8 @@ class ContentResponse:
                 "steps_failed": sum(s.status == "error" for s in self.steps),
                 "steps_skipped": sum(s.status == "skipped" for s in self.steps),
                 "total_duration_ms": round(self.total_duration_ms, 1),
-                "steps": [s.to_dict() for s in self.steps]}
+                "steps": [s.to_dict() for s in self.steps],
+                "metadata": dict(self.request.metadata)}
 
 
 class PipelineLogger:
@@ -161,9 +163,35 @@ class PipelineWiring:
 
     def _research(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
-        entry = TopicIntelManager().add_topic(name=req.topic, niche=req.platform, category=req.style, confidence=0.5)
+
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        external_research = production or os.environ.get("UCOS_ENABLE_EXTERNAL_RESEARCH", "").lower() == "true"
+        niche = str(req.metadata.get("niche") or "general").strip().lower()
+
+        if external_research:
+            from layers.layer14_enterprise_integration.modules.real_integrations import IntegrationGateway
+            result = IntegrationGateway().search(req.topic, location=req.metadata.get("location"))
+            results = result.get("results") or []
+            if not results:
+                raise RuntimeError("real research provider returned no usable source results")
+            source = results[0]
+            source_id = str(source["source_id"])
+            keywords = [str(item.get("title") or "").strip() for item in results[:8] if str(item.get("title") or "").strip()]
+            entry = TopicIntelManager().add_topic(
+                name=req.topic, niche=niche, category=req.style,
+                keywords=keywords, source_trend_id=source_id, confidence=1.0,
+            )
+            ctx["topic_id"] = getattr(entry, "topic_id", "")
+            ctx["research_provider"] = result.get("provider", "serpapi")
+            ctx["research_source_id"] = source_id
+            ctx["research_results"] = results
+            return {"topic_id": ctx["topic_id"], "provider": ctx["research_provider"],
+                    "source_id": source_id, "result_count": len(results)}
+
+        entry = TopicIntelManager().add_topic(name=req.topic, niche=niche, category=req.style, confidence=0.0)
         ctx["topic_id"] = getattr(entry, "topic_id", "")
-        return {"topic_id": ctx["topic_id"]}
+        ctx["research_observed"] = False
+        return {"topic_id": ctx["topic_id"], "observed": False}
 
     def _intelligence(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer03_intelligence.modules.content_understanding.content_analyzer import ContentAnalyzer
@@ -293,6 +321,11 @@ class PipelineWiring:
         return response.analytics
 
     def _learning(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        observed_outcome = bool(response.analytics is not None and response.analytics.get("metrics") is not None)
+        if production and not observed_outcome:
+            return {"stored": False, "skipped": True, "reason": "no_observed_external_outcome"}
+
         from layers.layer09_learning.modules.learning_engine.learning_memory import LearningMemory
         from layers.layer09_learning.modules.learning_engine.lesson_generator import Lesson
         lesson = Lesson(lesson_type="content_execution", title=f"Executed '{req.topic}' for {req.platform}")
@@ -310,6 +343,7 @@ class PipelineWiring:
     def execute(self, request: ContentRequest) -> ContentResponse:
         if not request.topic:
             raise ValueError("topic is required")
+        request.metadata.setdefault("lineage_id", str(uuid.uuid4()))
         response = ContentResponse(request)
         ctx: Dict[str, Any] = {}
         started = time.time()
