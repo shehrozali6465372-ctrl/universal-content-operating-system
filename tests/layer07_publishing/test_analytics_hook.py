@@ -552,7 +552,7 @@ class TestAnalyticsManager:
             raise RuntimeError("API down")
         from layers.layer07_publishing.modules.analytics_hook.exceptions import FetchError
         try:
-            self.mgr.analyze_post("fb", "p1", bad_fetcher)
+            self.mgr.analyze_post("fb", "p1", bad_fetcher, account_id="acct_test")
             assert False
         except FetchError:
             pass
