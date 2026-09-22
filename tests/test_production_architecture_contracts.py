@@ -38,11 +38,46 @@ def test_image_orchestration_fails_closed_without_real_provider():
 def test_learning_actions_require_observed_outcomes():
     manager = SelfImprovementManager()
     result = manager.run_improvement_cycle(
-        feedback=[{"type": "negative", "message": "weak CTA"}],
+        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
         issues=[{"category": "cta", "severity": "medium"}],
     )
+    assert result.mistakes_found >= 1
     assert result.actions_created >= 1
     assert result.actions_completed == 0
+
+
+def test_learning_action_can_complete_only_with_explicit_observed_outcome():
+    manager = SelfImprovementManager()
+    planned = manager.run_improvement_cycle(
+        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
+        action_outcomes={},
+    )
+    assert planned.actions_created == 1
+    assert planned.actions_completed == 0
+
+    action_id = manager.action_manager.get_actions(status="planned")[0].action_id
+    completed = manager.run_improvement_cycle(
+        feedback=[],
+        action_outcomes={action_id: 0.73},
+    )
+    assert completed.actions_created == 0
+    assert completed.actions_completed == 0
+    assert manager.action_manager.get_actions(status="completed") == []
+
+    # Completion is allowed only when the observed outcome is supplied for
+    # the action during the cycle that evaluates that action.
+    manager2 = SelfImprovementManager()
+    seed = manager2.run_improvement_cycle(
+        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
+    )
+    action_id = manager2.action_manager.get_actions(status="planned")[0].action_id
+    result = manager2.run_improvement_cycle(
+        feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
+        action_outcomes={action_id: 0.73},
+    )
+    assert result.actions_created >= 1
+    assert result.actions_completed == 1
+    assert manager2.action_manager.get_actions(status="completed")[0].actual_impact == 0.73
 
 
 def test_ci_declares_postgres_service():
