@@ -19,23 +19,27 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# SQLite-compatible table creation for tests
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS agent_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE NOT NULL,
-    value TEXT NOT NULL,
-    category TEXT DEFAULT 'general'
-)
-"""
-
-
 def _ensure_table(pool):
-    """Create agent_config table if it doesn't exist."""
-    try:
-        pool.execute(_CREATE_TABLE_SQL)
-    except Exception:
-        pass
+    """Create agent_config using the active database dialect."""
+    if getattr(pool, "_pg_available", False):
+        sql = """
+        CREATE TABLE IF NOT EXISTS agent_config (
+            id SERIAL PRIMARY KEY,
+            key VARCHAR(255) UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            category VARCHAR(100) DEFAULT 'general'
+        )
+        """
+    else:
+        sql = """
+        CREATE TABLE IF NOT EXISTS agent_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            category TEXT DEFAULT 'general'
+        )
+        """
+    pool.execute(sql)
 
 
 
