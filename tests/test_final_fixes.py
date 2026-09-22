@@ -183,7 +183,7 @@ def test_facebook_attached_media_is_json():
         captured = {}
         monkeypatch.setattr(publisher, "_post", lambda path, payload: (captured.update(payload) or {"id": "post"}))
         publisher._publish_with_media("hello", ["image.jpg"])
-        assert json.loads(captured["attached_media"]) == [{"media_fbid": "123"}]
+        assert captured["attached_media"] == [{"media_fbid": "123"}]
     finally:
         monkeypatch.undo()
 
