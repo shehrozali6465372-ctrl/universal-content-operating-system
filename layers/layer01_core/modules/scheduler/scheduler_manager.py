@@ -13,6 +13,7 @@ Task Orchestrator with:
 
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone
 from threading import Event
@@ -35,6 +36,7 @@ class SchedulerManager:
         self._cron_jobs: Dict[str, Dict] = {}
         self._running = False
         self._stop_event = Event()
+        self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="layer1-task")
 
     # ── Job Registration ────────────────────
 
@@ -117,14 +119,25 @@ class SchedulerManager:
 
         start_time = time.time()
         try:
-            handler(task.params)
+            future = self._executor.submit(handler, task.params)
+            future.result(timeout=max(1, task.timeout_seconds))
             result["status"] = "SUCCESS"
             self._queue.update_status(task.task_id, TaskStatus.SUCCESS)
             self._retry_manager.record_success(task.task_id)
+        except FutureTimeoutError:
+            result["error"] = f"Task timed out after {task.timeout_seconds}s"
+            future.cancel()
+            retry_info = self._retry_manager.record_failure(task.task_id)
+            if self._retry_manager.should_retry(task.task_id, task.max_retries):
+                result["status"] = "RETRY"
+                result["retry"] = retry_info
+                self._queue.update_status(task.task_id, TaskStatus.PENDING)
+            else:
+                result["status"] = "FAILED"
+                self._queue.update_status(task.task_id, TaskStatus.FAILED)
         except Exception as e:
-            result["error"] = str(e)
-            result["traceback"] = traceback.format_exc()
-
+            result["error"] = str(e)[:500]
+            result["traceback"] = traceback.format_exc(limit=5)
             retry_info = self._retry_manager.record_failure(task.task_id)
             if self._retry_manager.should_retry(task.task_id, task.max_retries):
                 result["status"] = "RETRY"
@@ -173,7 +186,8 @@ class SchedulerManager:
                 break
             results.append(result)
             if result["status"] == "RETRY":
-                time.sleep(1)
+                delay = result.get("retry", {}).get("delay_seconds", 1)
+                self._stop_event.wait(min(delay, 300))
         return results
 
     def _record_history(self, task: Task, result: Dict) -> None:
@@ -213,6 +227,12 @@ class SchedulerManager:
                 results.append(result)
 
         return results
+
+    def shutdown(self, wait: bool = True) -> None:
+        """Stop scheduling and release worker resources."""
+        self._stop_event.set()
+        self._running = False
+        self._executor.shutdown(wait=wait, cancel_futures=True)
 
     # ── Query ───────────────────────────────
 
