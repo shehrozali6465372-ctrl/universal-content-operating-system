@@ -356,8 +356,11 @@ class MemoryManager:
             for entry in level_data.get("entries", []):
                 if not isinstance(entry, dict):
                     raise ValueError("Invalid memory entry in snapshot")
+                entry_level = entry.get("level", level_name)
+                if entry_level != level_name or entry_level not in allowed_levels:
+                    raise ValueError("Memory snapshot entry level mismatch")
                 rows.append((
-                    entry.get("level", level_name),
+                    entry_level,
                     entry.get("category", "general"),
                     entry.get("key", ""),
                     entry.get("value", ""),
