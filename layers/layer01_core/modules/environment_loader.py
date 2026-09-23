@@ -11,7 +11,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from threading import Lock
+from threading import RLock
 from datetime import datetime, timezone
 
 from layers.layer01_core.modules.env_profiles import (
@@ -35,7 +35,7 @@ class EnvironmentLoader:
         self._loaded = False
         self._last_mtime: float = 0.0
         self._env_file: Optional[Path] = None
-        self._lock = Lock()
+        self._lock = RLock()
 
     @property
     def current_profile(self) -> Optional[str]:
@@ -46,7 +46,9 @@ class EnvironmentLoader:
         return self._loaded
 
     def all(self) -> Dict[str, str]:
-        return dict(self._env)
+        """Return a redacted environment snapshot; raw credentials require explicit get()."""
+        with self._lock:
+            return {k: self._redact_key(k, v) for k, v in self._env.items()}
 
     def load(self, profile: str = "development", env_file: str = ".env") -> "EnvironmentLoader":
         """
@@ -138,13 +140,16 @@ class EnvironmentLoader:
             raise InvalidConfig("ENVIRONMENT", msg)
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._env.get(key, default)
+        with self._lock:
+            return self._env.get(key, default)
 
     def set(self, key: str, value: str) -> None:
-        self._env[key] = value
+        with self._lock:
+            self._env[key] = value
 
     def has(self, key: str) -> bool:
-        return key in self._env
+        with self._lock:
+            return key in self._env
 
     def get_profile_info(self) -> dict:
         profile_obj = get_profile(self._current_profile) if self._current_profile else None
@@ -199,7 +204,17 @@ class EnvironmentLoader:
 
     def _redact_key(self, key: str, value: str) -> str:
         normalized = key.upper()
-        return "***SECRET***" if any(marker in normalized for marker in _SECRET_MARKERS) else value
+        terminal = normalized.rsplit(".", 1)[-1]
+        secret = (
+            terminal.endswith("_KEY")
+            or terminal.endswith("_TOKEN")
+            or terminal.endswith("_SECRET")
+            or terminal.endswith("_PASSWORD")
+            or terminal.endswith("_CREDENTIAL")
+            or terminal in {"KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL"}
+            or terminal in {"OPENAI_API_KEY", "FACEBOOK_ACCESS_TOKEN", "GITHUB_TOKEN", "GITHUB_ACCESS_TOKEN", "MASTER_KEY", "AGENT_MASTER_KEY"}
+        )
+        return "***SECRET***" if secret else value
 
     def snapshot(self, filepath: str = "data/env_snapshot.json") -> dict:
         """Atomically save a secret-redacted environment snapshot."""
