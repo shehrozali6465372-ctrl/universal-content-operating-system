@@ -44,48 +44,55 @@ class Layer1Runtime:
         from layers.layer01_core.modules.backup_manager.backup_manager import BackupManager
 
         # Fail closed: do not mark readiness until every required foundation
-        # component has initialized successfully.
-        self.environment = EnvironmentLoader(project_root=self.project_root)
-        self.environment.load(profile=profile, env_file=env_file)
-        self.environment.validate_strict()
+        # component has initialized successfully. A partial startup is rolled
+        # back so failed initialization cannot leak open resources.
+        if self._started:
+            return self
 
-        self.config = ConfigManager(project_root=self.project_root)
-        self.config.load(env_file=env_file)
-        if strict_config:
-            self.config.validate_strict()
+        try:
+            self.environment = EnvironmentLoader(project_root=self.project_root)
+            self.environment.load(profile=profile, env_file=env_file)
+            self.environment.validate_strict()
 
-        self.secrets = SecretsManager(
-            project_root=self.project_root,
-            secrets_path=".secrets",
-            audit_log_path="logs/audit.log",
-        )
-        self.secrets.setup(master_key=master_key)
+            self.config = ConfigManager(project_root=self.project_root)
+            self.config.load(env_file=env_file)
+            if strict_config:
+                self.config.validate_strict()
 
-        self.database = DatabaseManager(
-            db_path=self.config.get("DATABASE_PATH", "data/agent.db"),
-            project_root=self.project_root,
-        ).initialize()
+            self.secrets = SecretsManager(
+                project_root=self.project_root,
+                secrets_path=".secrets",
+                audit_log_path="logs/audit.log",
+            )
+            self.secrets.setup(master_key=master_key)
 
-        self.memory = MemoryManager(
-            db_path="data/agent_memory.db",
-            project_root=self.project_root,
-        ).initialize()
-        self.file_manager = FileManager(
-            base_path=self.project_root or "."
-        )
-        self.logger = LoggerManager(
-            log_dir=str((self.file_manager._base / "logs").resolve())
-        )
-        self.scheduler = SchedulerManager(
-            queue_persist_path=str((self.file_manager._base / "data" / "scheduler_queue.json").resolve()),
-            retry_persist_path=str((self.file_manager._base / "data" / "scheduler_retries.json").resolve()),
-        )
-        self.settings = SettingsManager(
-            persist_path=str((self.file_manager._base / "data" / "settings.json").resolve())
-        )
-        self.backup = BackupManager(
-            backup_dir=str((self.file_manager._base / "backups").resolve())
-        )
+            self.database = DatabaseManager(
+                db_path=self.config.get("DATABASE_PATH", "data/agent.db"),
+                project_root=self.project_root,
+            ).initialize()
+
+            self.memory = MemoryManager(
+                db_path="data/agent_memory.db",
+                project_root=self.project_root,
+            ).initialize()
+            self.file_manager = FileManager(base_path=self.project_root or ".")
+            self.logger = LoggerManager(
+                log_dir=str((self.file_manager._base / "logs").resolve())
+            )
+            self.scheduler = SchedulerManager(
+                queue_persist_path=str((self.file_manager._base / "data" / "scheduler_queue.json").resolve()),
+                retry_persist_path=str((self.file_manager._base / "data" / "scheduler_retries.json").resolve()),
+            )
+            self.settings = SettingsManager(
+                persist_path=str((self.file_manager._base / "data" / "settings.json").resolve())
+            )
+            self.backup = BackupManager(
+                backup_dir=str((self.file_manager._base / "backups").resolve())
+            )
+        except Exception:
+            self.shutdown()
+            raise
+
         self._started = True
         return self
 
