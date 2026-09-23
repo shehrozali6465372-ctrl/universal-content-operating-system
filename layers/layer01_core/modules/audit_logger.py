@@ -102,5 +102,6 @@ class AuditLogger:
 
     def clear(self) -> None:
         """Clear audit log (use carefully)."""
-        if self._log_path.exists():
-            self._log_path.write_text("")
+        with self._lock:
+            if self._log_path.exists():
+                self._log_path.write_text("")
