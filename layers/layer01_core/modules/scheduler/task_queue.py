@@ -8,6 +8,10 @@ Priority-based task queue with states.
 from typing import Dict, Any, Optional, List
 from enum import Enum
 from datetime import datetime, timezone
+from pathlib import Path
+import json
+import os
+import tempfile
 from dataclasses import dataclass, field
 import uuid
 from threading import RLock
@@ -54,6 +58,30 @@ class Task:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     conditions: Optional[Dict] = None  # Decision-based conditions
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name, "job_type": self.job_type,
+            "priority": self.priority.value, "status": self.status.value,
+            "params": self.params, "dependencies": self.dependencies,
+            "timeout_seconds": self.timeout_seconds, "max_retries": self.max_retries,
+            "task_id": self.task_id, "created_at": self.created_at,
+            "conditions": self.conditions,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+        return cls(
+            name=data["name"], job_type=data["job_type"],
+            priority=TaskPriority(data.get("priority", "NORMAL")),
+            status=TaskStatus(data.get("status", "PENDING")),
+            params=data.get("params", {}), dependencies=data.get("dependencies", []),
+            timeout_seconds=int(data.get("timeout_seconds", 300)),
+            max_retries=int(data.get("max_retries", 3)),
+            task_id=data.get("task_id") or uuid.uuid4().hex[:12],
+            created_at=data.get("created_at") or datetime.now(timezone.utc).isoformat(),
+            conditions=data.get("conditions"),
+        )
+
     def __lt__(self, other: "Task") -> bool:
         return TASK_PRIORITY_ORDER[self.priority] < TASK_PRIORITY_ORDER[other.priority]
 
@@ -61,9 +89,11 @@ class Task:
 class TaskQueue:
     """Priority queue for tasks with dependency management."""
 
-    def __init__(self):
+    def __init__(self, persist_path: Optional[str] = None):
         self._tasks: Dict[str, Task] = {}
         self._lock = RLock()
+        self._persist_path = Path(persist_path) if persist_path else None
+        self._load()
 
     def add(self, task: Task) -> str:
         with self._lock:
@@ -75,6 +105,7 @@ class TaskQueue:
                 ):
                     return existing.task_id
             self._tasks[task.task_id] = task
+            self._save()
             return task.task_id
 
     def get(self, task_id: str) -> Optional[Task]:
@@ -103,6 +134,7 @@ class TaskQueue:
         with self._lock:
             if task_id in self._tasks:
                 self._tasks[task_id].status = status
+                self._save()
 
     def get_by_status(self, status: TaskStatus) -> List[Task]:
         with self._lock:
@@ -119,6 +151,7 @@ class TaskQueue:
         with self._lock:
             if task_id in self._tasks:
                 self._tasks[task_id].status = TaskStatus.CANCELLED
+                self._save()
                 return True
         return False
 
@@ -128,6 +161,36 @@ class TaskQueue:
                 tid: t for tid, t in self._tasks.items()
                 if t.status not in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
             }
+            self._save()
+
+    def _load(self) -> None:
+        if not self._persist_path or not self._persist_path.exists():
+            return
+        data = json.loads(self._persist_path.read_text(encoding="utf-8"))
+        for item in data.get("tasks", []):
+            task = Task.from_dict(item)
+            # A process cannot safely resume an in-flight handler after a crash.
+            if task.status == TaskStatus.RUNNING:
+                task.status = TaskStatus.PENDING
+            self._tasks[task.task_id] = task
+
+    def _save(self) -> None:
+        if not self._persist_path:
+            return
+        self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(self._persist_path.parent), prefix=".queue.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"tasks": [t.to_dict() for t in self._tasks.values()]}, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self._persist_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @property
     def pending_count(self) -> int:
