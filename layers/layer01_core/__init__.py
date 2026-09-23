@@ -5,6 +5,7 @@ Production persistence is delegated to Layer 13; local SQLite components are
 therefore intentionally development/test-only.
 """
 from __future__ import annotations
+import os
 from typing import Any, Dict, Optional
 
 
@@ -68,7 +69,7 @@ class Layer1Runtime:
             )
             self.secrets.setup(master_key=master_key)
 
-            production = profile.lower() in {"production", "prod"} or __import__("os").environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+            production = profile.lower() in {"production", "prod"} or os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
             if production:
                 if database_backend is None or memory_backend is None:
                     raise RuntimeError(
