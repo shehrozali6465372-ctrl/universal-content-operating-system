@@ -80,13 +80,16 @@ def audit():
         modules[mod] = {"path": str(p.relative_to(ROOT)), "classes": classes,
                         "functions": functions}
 
-    duplicate_groups = [v for v in duplicate_hashes.values() if len(v) > 1]
-    defined_names = defaultdict(list)
-    for q, s in symbols.items():
-        defined_names[s["name"]].append(q)
+    duplicate_groups = [
+        [q for q in group if ".tests." not in q]
+        for group in duplicate_hashes.values()
+        if len([q for q in group if ".tests." not in q]) > 1
+    ]
     called_names = {c["callee"] for c in calls}
     orphan_candidates = []
     for q, s in symbols.items():
+        if ".tests." in s["module"]:
+            continue
         if s["name"].startswith("_") or s["name"] in {"__init__", "__new__", "__enter__", "__exit__"}:
             continue
         if s["name"] not in called_names:
