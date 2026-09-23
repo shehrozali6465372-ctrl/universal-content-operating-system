@@ -68,10 +68,11 @@ class DatabaseManager:
                 self._in_transaction = old_flag
 
     def _run(self, sql: str, params=()):
-        if self._in_transaction:
-            return self._conn.execute(sql, params)
-        with self.transaction():
-            return self._conn.execute(sql, params)
+        with self._lock:
+            if self._in_transaction:
+                return self._conn.execute(sql, params)
+            with self.transaction():
+                return self._conn.execute(sql, params)
 
     _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -117,12 +118,14 @@ class DatabaseManager:
 
     def query(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         self._ensure_init()
-        return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
 
     def query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         self._ensure_init()
-        row = self._conn.execute(sql, params).fetchone()
-        return dict(row) if row else None
+        with self._lock:
+            row = self._conn.execute(sql, params).fetchone()
+            return dict(row) if row else None
 
     def update(self, table: str, data: Dict[str, Any], where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
