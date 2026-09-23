@@ -12,6 +12,7 @@ Designed with swappable backend (SQLite → Vector DB later).
 """
 
 import sqlite3
+import os
 import json
 import time
 from pathlib import Path
@@ -45,7 +46,11 @@ class MemoryManager:
     # ── Initialization ──────────────────────
 
     def initialize(self) -> "MemoryManager":
-        """Create database and tables."""
+        """Create the development/test local store; production memory belongs to Layer 13."""
+        if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+            raise RuntimeError(
+                "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
+            )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._db_path))
         self._conn.row_factory = sqlite3.Row
