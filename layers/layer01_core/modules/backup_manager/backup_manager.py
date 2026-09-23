@@ -7,7 +7,7 @@ Comprehensive data protection:
 - SHA-256 integrity verification
 - Auto backup rotation with retention policy
 - Compression support
-- Encrypted backup support (Fernet)
+- Integrity-verified backup/restore (encryption is owned by deployment/storage policy)
 - Disaster recovery with restore wizard
 - Full audit trail
 """
