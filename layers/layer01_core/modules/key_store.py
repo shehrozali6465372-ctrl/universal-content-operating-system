@@ -50,6 +50,10 @@ class KeyStore:
 
     def save(self, secrets: Dict[str, str]) -> None:
         """Atomically replace the secrets file with restrictive permissions."""
+        if not isinstance(secrets, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in secrets.items()
+        ):
+            raise TypeError("Secret store values must be a mapping of string names to strings")
         self._path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(
             dir=str(self._path.parent),
