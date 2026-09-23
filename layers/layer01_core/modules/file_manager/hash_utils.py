@@ -51,7 +51,7 @@ def verify_hash(filepath: str) -> tuple:
     """Verify file hash against saved hash. Returns (match, current_hash)."""
     hash_file = filepath + ".sha256"
     if not Path(hash_file).exists():
-        return True, None  # No hash file = skip check
+        return False, None  # Integrity cannot be established without metadata
     saved = Path(hash_file).read_text().strip()
     current = calculate_hash(filepath)
     return saved == current, current
