@@ -958,3 +958,9 @@ Work remains locked to Layer 1:
 20. Layer 1 production certification
 
 **Layer 2 remains blocked until this definition of done is satisfied.**
+
+## Production persistence boundary
+
+Layer 1 does not instantiate local SQLite persistence in production. The production runtime requires explicit persistence backends supplied by Layer 13: a PostgreSQL-owned database backend and a PostgreSQL-owned memory backend. Layer 1 validates the lifecycle contract (health_check() and close()) and fails closed when those backends are absent. Local SQLite DatabaseManager and MemoryManager remain development/test-only.
+
+This boundary prevents Layer 1 from silently creating a competing production source of truth and makes the Layer 1 ↔ Layer 13 dependency explicit at the runtime entry point.
