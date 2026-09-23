@@ -152,15 +152,16 @@ class MemoryManager:
         """Load memory entries with optional filters."""
         self._ensure_init()
 
-        if level == MemoryLevel.STM.value:
-            results = self._stm_buffer
-            if category:
-                results = [e for e in results if e.get("category") == category]
-            if key:
-                results = [e for e in results if e.get("key") == key]
-            return results
+        with self._lock:
+            if level == MemoryLevel.STM.value:
+                results = list(self._stm_buffer)
+                if category:
+                    results = [e for e in results if e.get("category") == category]
+                if key:
+                    results = [e for e in results if e.get("key") == key]
+                return [dict(e) for e in results]
 
-        sql = "SELECT * FROM memory_entries WHERE level = ?"
+            sql = "SELECT * FROM memory_entries WHERE level = ?"
         params: list = [level]
         if category:
             sql += " AND category = ?"
@@ -170,7 +171,7 @@ class MemoryManager:
             params.append(key)
         sql += " ORDER BY importance DESC, updated_at DESC"
 
-        return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
+            return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
 
     def get(self, entry_id: int) -> Optional[Dict]:
         """Get single entry by ID."""
@@ -231,6 +232,8 @@ class MemoryManager:
         limit: int = 20,
     ) -> List[SearchResult]:
         """Search across all memory levels."""
+        if not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("search limit must be between 1 and 1000")
         query = SearchQuery(
             keyword=keyword,
             levels=levels or [],
@@ -286,8 +289,19 @@ class MemoryManager:
                 "entries": entries,
             }
 
-        with open(save_path, "w") as f:
-            json.dump(snapshot, f, indent=2, default=str)
+        fd, tmp_name = tempfile.mkstemp(dir=str(save_path.parent), suffix=".snapshot.tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, save_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         return save_path
 
     def restore(self, filepath: str) -> int:
@@ -409,11 +423,11 @@ class MemoryManager:
     def _get_all_entries(self) -> List[Dict]:
         self._ensure_init()
         # STM from buffer
-        all_entries = list(self._stm_buffer)
-        # Persistent from DB
-        rows = self._conn.execute("SELECT * FROM memory_entries").fetchall()
-        all_entries.extend([dict(r) for r in rows])
-        return all_entries
+        with self._lock:
+            all_entries = [dict(e) for e in self._stm_buffer]
+            rows = self._conn.execute("SELECT * FROM memory_entries LIMIT 10000").fetchall()
+            all_entries.extend([dict(r) for r in rows])
+            return all_entries
 
     def _ensure_init(self):
         if not self._initialized:
