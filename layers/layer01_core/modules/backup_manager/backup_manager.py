@@ -118,31 +118,39 @@ class BackupManager:
         backup_filename = f"{backup_id}.bak"
         backup_path = self._backup_dir / backup_filename
 
-        # Capture the source hash before compression so restore verification
-        # validates the recovered payload, not the compressed container.
-        source_hash = self._calculate_hash(src)
-
-        # Copy file or directory
+        # Copy first; integrity is recorded from the exact backup payload so
+        # restore verification is independent of concurrent source changes.
         if src.is_file():
             shutil.copy2(str(src), str(backup_path))
         else:
             backup_path = self._backup_dir / f"{backup_id}.dir"
             shutil.copytree(str(src), str(backup_path), dirs_exist_ok=True)
 
-        # Compress if requested
+        # Calculate the hash of the exact uncompressed backup payload.
+        file_hash = self._calculate_hash(backup_path)
+
+        # Compress if requested, using a staged container so a failed
+        # compression never destroys the valid uncompressed backup.
         final_path = backup_path
         is_compressed = False
         if compress and backup_path.is_file():
             gz_path = Path(str(backup_path) + ".gz")
-            with open(backup_path, "rb") as f_in:
-                with gzip.open(str(gz_path), "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            fd, tmp_gz = tempfile.mkstemp(dir=str(self._backup_dir), suffix=".gz.tmp")
+            os.close(fd)
+            try:
+                with open(backup_path, "rb") as f_in:
+                    with gzip.open(str(tmp_gz), "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                os.replace(tmp_gz, str(gz_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_gz)
+                except OSError:
+                    pass
+                raise
             backup_path.unlink()
             final_path = gz_path
             is_compressed = True
-
-        # Calculate hash
-        file_hash = source_hash
         size = self._get_size(final_path)
 
         entry = BackupEntry(
