@@ -18,6 +18,7 @@ import shutil
 import tempfile
 import os
 import hashlib
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -215,14 +216,30 @@ class BackupManager:
 
             if self._calculate_hash(temp_target) != entry.hash_sha256:
                 raise BackupIntegrityError(f"Restored payload verification failed for '{backup_id}'")
-            if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(str(target))
-                else:
-                    target.unlink()
-            temp_target.replace(target)
+
+            displaced = None
+            try:
+                if target.exists():
+                    displaced = target.parent / f".{target.name}.pre-restore-{uuid.uuid4().hex}"
+                    target.replace(displaced)
+                temp_target.replace(target)
+                temp_target = None
+                if displaced is not None:
+                    if displaced.is_dir():
+                        shutil.rmtree(str(displaced))
+                    else:
+                        displaced.unlink()
+            except Exception:
+                if target.exists():
+                    if target.is_dir():
+                        shutil.rmtree(str(target))
+                    else:
+                        target.unlink()
+                if displaced is not None and displaced.exists():
+                    displaced.replace(target)
+                raise
         finally:
-            shutil.rmtree(str(temp_target.parent), ignore_errors=True)
+            shutil.rmtree(str(temp_target.parent), ignore_errors=True) if temp_target is not None else None
 
         with self._lock:
             self._audit("RESTORE", backup_id, f"target={target_path}")
