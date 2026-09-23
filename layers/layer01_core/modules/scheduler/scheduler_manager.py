@@ -16,7 +16,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone
-from threading import Event
+from threading import Event, RLock
 
 from layers.layer01_core.modules.scheduler.task_queue import (
     Task, TaskQueue, TaskPriority, TaskStatus,
@@ -36,12 +36,16 @@ class SchedulerManager:
         self._cron_jobs: Dict[str, Dict] = {}
         self._running = False
         self._stop_event = Event()
+        self._lock = RLock()
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="layer1-task")
 
     # ── Job Registration ────────────────────
 
     def register_handler(self, job_type: str, handler: Callable) -> None:
-        self._handlers[job_type] = handler
+        if not job_type or not callable(handler):
+            raise ValueError("job_type and callable handler are required")
+        with self._lock:
+            self._handlers[job_type] = handler
 
     # ── Add Jobs ────────────────────────────
 
@@ -191,13 +195,16 @@ class SchedulerManager:
         return results
 
     def _record_history(self, task: Task, result: Dict) -> None:
-        self._history.append({
-            "task_id": task.task_id,
-            "name": task.name,
-            "status": result["status"],
-            "duration_ms": result["duration_ms"],
-            "timestamp": result["started_at"],
-        })
+        with self._lock:
+            self._history.append({
+                "task_id": task.task_id,
+                "name": task.name,
+                "status": result["status"],
+                "duration_ms": result["duration_ms"],
+                "timestamp": result["started_at"],
+            })
+            if len(self._history) > 10000:
+                del self._history[:-10000]
 
     # ── Cron Processing ─────────────────────
 
@@ -205,7 +212,9 @@ class SchedulerManager:
         """Check and run due cron jobs."""
         results = []
         now = datetime.now()
-        for job_id, job in self._cron_jobs.items():
+        with self._lock:
+            jobs = list(self._cron_jobs.items())
+        for job_id, job in jobs:
             last_run = job.get("last_run")
             if last_run:
                 # Convert string back to datetime if needed
@@ -223,7 +232,10 @@ class SchedulerManager:
                     params=job["params"],
                 )
                 result = self.run_task(task)
-                job["last_run"] = now
+                with self._lock:
+                    current = self._cron_jobs.get(job_id)
+                    if current is not None:
+                        current["last_run"] = now
                 results.append(result)
 
         return results
@@ -240,7 +252,10 @@ class SchedulerManager:
         return self._queue.get(task_id)
 
     def get_history(self, limit: int = 50) -> List[Dict]:
-        return self._history[-limit:]
+        if not isinstance(limit, int) or limit < 1:
+            raise ValueError("history limit must be positive")
+        with self._lock:
+            return list(self._history[-min(limit, 10000):])
 
     def get_queue_stats(self) -> Dict[str, Any]:
         return {
