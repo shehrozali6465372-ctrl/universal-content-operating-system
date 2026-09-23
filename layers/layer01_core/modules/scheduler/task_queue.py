@@ -57,6 +57,7 @@ class Task:
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     conditions: Optional[Dict] = None  # Decision-based conditions
+    not_before: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -65,7 +66,7 @@ class Task:
             "params": self.params, "dependencies": self.dependencies,
             "timeout_seconds": self.timeout_seconds, "max_retries": self.max_retries,
             "task_id": self.task_id, "created_at": self.created_at,
-            "conditions": self.conditions,
+            "conditions": self.conditions, "not_before": self.not_before,
         }
 
     @classmethod
@@ -79,7 +80,7 @@ class Task:
             max_retries=int(data.get("max_retries", 3)),
             task_id=data.get("task_id") or uuid.uuid4().hex[:12],
             created_at=data.get("created_at") or datetime.now(timezone.utc).isoformat(),
-            conditions=data.get("conditions"),
+            conditions=data.get("conditions"), not_before=data.get("not_before"),
         )
 
     def __lt__(self, other: "Task") -> bool:
@@ -115,10 +116,18 @@ class TaskQueue:
     def next_task(self) -> Optional[Task]:
         """Get the highest priority task that's ready to run."""
         with self._lock:
-            ready = [
-                t for t in self._tasks.values()
-                if t.status == TaskStatus.PENDING and self._dependencies_met(t)
-            ]
+            now = datetime.now(timezone.utc)
+            ready = []
+            for t in self._tasks.values():
+                if t.status != TaskStatus.PENDING or not self._dependencies_met(t):
+                    continue
+                if t.not_before:
+                    try:
+                        if now < datetime.fromisoformat(t.not_before):
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+                ready.append(t)
         if not ready:
             return None
         ready.sort()
