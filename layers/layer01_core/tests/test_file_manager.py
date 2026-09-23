@@ -162,6 +162,12 @@ class TestHashVerification:
         match, _ = fm.verify_hash("tampered.txt")
         assert match is False
 
+    def test_verify_missing_metadata_fails_closed(self, fm):
+        fm.write("unverified.txt", "content", create_backup=False)
+        match, current = fm.verify_hash("unverified.txt")
+        assert match is False
+        assert current is None
+
     def test_string_hash(self):
         h = calculate_string_hash("test")
         assert len(h) == 64
