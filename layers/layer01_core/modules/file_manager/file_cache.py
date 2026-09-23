@@ -7,6 +7,7 @@ In-memory LRU cache for frequently accessed files.
 
 from collections import OrderedDict
 from typing import Any, Optional
+from threading import RLock
 
 
 class FileCache:
@@ -17,41 +18,49 @@ class FileCache:
         self._max_size = max_size
         self._hits = 0
         self._misses = 0
+        self._lock = RLock()
 
     def get(self, key: str) -> Optional[Any]:
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            self._hits += 1
-            return self._cache[key]["content"]
-        self._misses += 1
-        return None
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                self._hits += 1
+                return self._cache[key]["content"]
+            self._misses += 1
+            return None
 
     def set(self, key: str, content: Any) -> None:
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            self._cache[key]["content"] = content
-        else:
-            self._cache[key] = {"content": content}
-            if len(self._cache) > self._max_size:
-                self._cache.popitem(last=False)
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                self._cache[key]["content"] = content
+            else:
+                self._cache[key] = {"content": content}
+                if len(self._cache) > self._max_size:
+                    self._cache.popitem(last=False)
 
     def has(self, key: str) -> bool:
-        return key in self._cache
+        with self._lock:
+            return key in self._cache
 
     def invalidate(self, key: str) -> None:
-        self._cache.pop(key, None)
+        with self._lock:
+            self._cache.pop(key, None)
 
     def clear(self) -> None:
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
     @property
     def size(self) -> int:
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)
 
     @property
     def hit_rate(self) -> float:
-        total = self._hits + self._misses
-        return self._hits / total if total > 0 else 0.0
+        with self._lock:
+            total = self._hits + self._misses
+            return self._hits / total if total > 0 else 0.0
 
     def stats(self) -> dict:
         return {
