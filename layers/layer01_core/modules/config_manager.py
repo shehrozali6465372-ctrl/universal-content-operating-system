@@ -7,9 +7,11 @@ Central configuration manager with:
 - Immutable settings protection
 - Config versioning for migration support
 - Schema validation
+- Secret-safe persistence
 """
 
 import os
+import tempfile
 import yaml
 import json
 from pathlib import Path
@@ -28,6 +30,17 @@ from layers.layer01_core.modules.exceptions import (
 )
 
 CONFIG_VERSION = 1
+
+# Values for these keys are credentials and must never be persisted by the
+# configuration plane. Layer 1 SecretsManager is the credential source of truth.
+SECRET_KEYS = frozenset({
+    "OPENAI_API_KEY",
+    "FACEBOOK_ACCESS_TOKEN",
+    "GITHUB_TOKEN",
+    "GITHUB_ACCESS_TOKEN",
+    "MASTER_KEY",
+    "AGENT_MASTER_KEY",
+})
 
 
 class ConfigManager:
@@ -67,8 +80,6 @@ class ConfigManager:
     def config_version(self) -> int:
         return self._config.get("CONFIG_VERSION", CONFIG_VERSION)
 
-    # ── Loading ─────────────────────────────
-
     def load(self, env_file: str = ".env", yaml_file: str = "config/default.yaml") -> "ConfigManager":
         self._config.clear()
         self._load_yaml(self._project_root / yaml_file)
@@ -81,16 +92,14 @@ class ConfigManager:
 
         self._apply_env_overrides()
 
-        # Always set config version
         self._config["CONFIG_VERSION"] = CONFIG_VERSION
-
         self._loaded = True
         return self
 
     def _load_yaml(self, yaml_path: Path) -> None:
         if not yaml_path.exists():
             return
-        with open(yaml_path, "r") as f:
+        with open(yaml_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if data and isinstance(data, dict):
             self._flatten_dict(data)
@@ -98,7 +107,7 @@ class ConfigManager:
     def _load_env(self, env_path: Path) -> None:
         if not env_path.exists():
             return
-        with open(env_path, "r") as f:
+        with open(env_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -123,20 +132,17 @@ class ConfigManager:
             else:
                 self._config[full_key] = value
 
-    # ── Access ──────────────────────────────
-
     def get(self, key: str, default: Any = None) -> Any:
         return self._config.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
         """Set config value. Blocked for immutable keys unless admin_mode."""
-        if key in IMMUTABLE_KEYS:
-            if not self._admin_mode:
-                raise InvalidConfig(
-                    key,
-                    f"'{key}' is immutable and cannot be changed at runtime. "
-                    f"Use admin_mode=True to override."
-                )
+        if key in IMMUTABLE_KEYS and not self._admin_mode:
+            raise InvalidConfig(
+                key,
+                f"'{key}' is immutable and cannot be changed at runtime. "
+                f"Use admin_mode=True to override."
+            )
         self._config[key] = value
 
     def has(self, key: str) -> bool:
@@ -147,8 +153,6 @@ class ConfigManager:
 
     def get_immutable_keys(self) -> List[str]:
         return list(IMMUTABLE_KEYS)
-
-    # ── Validation ──────────────────────────
 
     def validate(self) -> List[str]:
         errors = []
@@ -172,15 +176,34 @@ class ConfigManager:
         if errors:
             raise SchemaError(errors)
 
-    # ── Save ────────────────────────────────
+    def _safe_persist_config(self) -> Dict[str, Any]:
+        """Return a persistence-safe snapshot with credential values redacted."""
+        return {
+            key: ("***SECRET***" if key in SECRET_KEYS else value)
+            for key, value in self._config.items()
+        }
 
     def save(self, filepath: str = "config/agent_config.json") -> None:
+        """Atomically persist non-secret configuration; credentials are redacted."""
         save_path = self._project_root / filepath
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, "w") as f:
-            json.dump(self._config, f, indent=2, default=str)
-
-    # ── Reset ───────────────────────────────
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(save_path.parent),
+            prefix=f".{save_path.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self._safe_persist_config(), f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, save_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @classmethod
     def reset(cls) -> None:
