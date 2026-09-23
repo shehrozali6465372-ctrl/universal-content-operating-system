@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
+from threading import RLock
+import tempfile
 
 from layers.layer01_core.modules.memory_store import (
     MemoryLevel, get_level_config, get_persistent_levels,
@@ -32,8 +34,13 @@ class MemoryManager:
 
     def __init__(self, db_path: str = "data/agent_memory.db", project_root: Optional[str] = None):
         self._project_root = Path(project_root) if project_root else Path.cwd()
-        self._db_path = self._project_root / db_path
+        self._db_path = (self._project_root / db_path).resolve()
+        try:
+            self._db_path.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Memory database path escapes project root: {db_path}") from exc
         self._conn: Optional[sqlite3.Connection] = None
+        self._lock = RLock()
         self._search_engine = MemorySearchEngine()
         self._stm_buffer: List[Dict] = []  # RAM buffer for short-term
         self._stm_sequence = int(time.time() * 1000) % 2_000_000_000
@@ -52,7 +59,7 @@ class MemoryManager:
                 "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
             )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path))
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
         self._initialized = True
@@ -80,10 +87,11 @@ class MemoryManager:
         self._conn.commit()
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
-            self._initialized = False
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
+                self._initialized = False
 
     # ── Save (CRUD) ────────────────────────
 
@@ -98,7 +106,10 @@ class MemoryManager:
     ) -> int:
         """Save a memory entry. Returns entry ID."""
         self._ensure_init()
+        with self._lock:
+            return self._save_locked(level, category, key, value, tags, importance)
 
+    def _save_locked(self, level: str, category: str, key: str, value: str, tags: str, importance: float) -> int:
         # STM goes to RAM buffer
         if level == MemoryLevel.STM.value:
             entry = {
