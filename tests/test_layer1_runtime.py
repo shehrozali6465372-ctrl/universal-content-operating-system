@@ -44,3 +44,32 @@ def test_production_accepts_explicit_persistence_backends(tmp_path, monkeypatch)
     )
     assert runtime.health_check()["ready"] is True
     runtime.shutdown()
+
+
+def test_production_runtime_contracts_with_real_layer13_postgresql(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "test-page")
+    monkeypatch.setenv("FACEBOOK_ACCESS_TOKEN", "test-token")
+    from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
+
+    pg = PostgreSQLManager()
+    assert pg.initialize() is True
+
+    class _L13MemoryLifecycle:
+        def health_check(self):
+            return pg.health_check()
+        def close(self):
+            pass
+
+    runtime = Layer1Runtime(project_root=str(tmp_path))
+    try:
+        runtime.start(
+            profile="production",
+            master_key="runtime-test-master-key",
+            database_backend=pg,
+            memory_backend=_L13MemoryLifecycle(),
+        )
+        assert runtime.health_check()["ready"] is True
+    finally:
+        runtime.shutdown()
