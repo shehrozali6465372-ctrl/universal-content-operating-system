@@ -183,27 +183,34 @@ class MemoryManager:
                 return [dict(e) for e in results]
 
             sql = "SELECT * FROM memory_entries WHERE level = ?"
-        params: list = [level]
-        if category:
-            sql += " AND category = ?"
-            params.append(category)
-        if key:
-            sql += " AND key = ?"
-            params.append(key)
-        sql += " ORDER BY importance DESC, updated_at DESC"
-
+            params: list = [level]
+            if category:
+                sql += " AND category = ?"
+                params.append(category)
+            if key:
+                sql += " AND key = ?"
+                params.append(key)
+            sql += " ORDER BY importance DESC, updated_at DESC"
             return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
 
     def get(self, entry_id: int) -> Optional[Dict]:
         """Get single entry by ID."""
         self._ensure_init()
-        row = self._conn.execute(
-            "SELECT * FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
-        if row:
-            self._update_access(entry_id)
-            return dict(row)
-        return None
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM memory_entries WHERE id = ?", (entry_id,)
+            ).fetchone()
+            if row:
+                self._conn.execute(
+                    "UPDATE memory_entries SET access_count = access_count + 1, "
+                    "last_accessed = CURRENT_TIMESTAMP WHERE id = ?",
+                    (entry_id,),
+                )
+                self._conn.commit()
+                result = dict(row)
+                result["access_count"] = result.get("access_count", 0) + 1
+                return result
+            return None
 
     # ── Update ──────────────────────────────
 
@@ -216,31 +223,34 @@ class MemoryManager:
             return False
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
-        with self._conn:
-            self._conn.execute(
-                f"UPDATE memory_entries SET {set_clause} WHERE id = ?",
-                list(updates.values()) + [entry_id],
-            )
+        with self._lock:
+            with self._conn:
+                self._conn.execute(
+                    f"UPDATE memory_entries SET {set_clause} WHERE id = ?",
+                    list(updates.values()) + [entry_id],
+                )
         return True
 
     # ── Delete ──────────────────────────────
 
     def delete(self, entry_id: int) -> bool:
         self._ensure_init()
-        with self._conn:
-            cursor = self._conn.execute("DELETE FROM memory_entries WHERE id = ?", (entry_id,))
-            return cursor.rowcount > 0
+        with self._lock:
+            with self._conn:
+                cursor = self._conn.execute("DELETE FROM memory_entries WHERE id = ?", (entry_id,))
+                return cursor.rowcount > 0
 
     def clear_level(self, level: str) -> int:
         """Clear all entries for a memory level."""
         self._ensure_init()
-        if level == MemoryLevel.STM.value:
-            count = len(self._stm_buffer)
-            self._stm_buffer.clear()
-            return count
-        with self._conn:
-            cursor = self._conn.execute("DELETE FROM memory_entries WHERE level = ?", (level,))
-            return cursor.rowcount
+        with self._lock:
+            if level == MemoryLevel.STM.value:
+                count = len(self._stm_buffer)
+                self._stm_buffer.clear()
+                return count
+            with self._conn:
+                cursor = self._conn.execute("DELETE FROM memory_entries WHERE level = ?", (level,))
+                return cursor.rowcount
 
     # ── Search ──────────────────────────────
 
