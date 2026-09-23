@@ -28,9 +28,9 @@ from layers.layer01_core.modules.scheduler.cron_parser import CronParser
 class SchedulerManager:
     """Task Orchestrator with decision-based scheduling."""
 
-    def __init__(self):
-        self._queue = TaskQueue()
-        self._retry_manager = RetryManager()
+    def __init__(self, queue_persist_path: Optional[str] = None, retry_persist_path: Optional[str] = None):
+        self._queue = TaskQueue(persist_path=queue_persist_path)
+        self._retry_manager = RetryManager(persist_path=retry_persist_path)
         self._handlers: Dict[str, Callable] = {}
         self._history: List[Dict] = []
         self._cron_jobs: Dict[str, Dict] = {}
