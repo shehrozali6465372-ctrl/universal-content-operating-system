@@ -53,6 +53,16 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q .
 
+      - name: Layer 1 Static Code Audit
+        run: |
+          python tools/layer1_code_audit.py --json layer1-code-audit.json
+
+      - name: Upload Layer 1 Audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer1-code-audit
+          path: layer1-code-audit.json
+
       - name: Run Integration Contract Tests
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
 
