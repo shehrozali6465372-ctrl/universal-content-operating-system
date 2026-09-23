@@ -100,6 +100,12 @@ class TestLoading:
         assert isinstance(result, dict)
         assert "OPENAI_API_KEY" in result
 
+    def test_all_redacts_secret_values(self, loader):
+        loader.load(profile="dev")
+        result = loader.all()
+        assert result["OPENAI_API_KEY"] == "***SECRET***"
+        assert result["FACEBOOK_ACCESS_TOKEN"] == "***SECRET***"
+
 
 # ── Test 3: Override Priority ───────────────
 
