@@ -41,7 +41,7 @@ except ImportError:
 
 from layers.layer01_core.modules.key_store import KeyStore
 from layers.layer01_core.modules.audit_logger import AuditLogger
-from layers.layer01_core.modules.exceptions import InvalidConfig
+from layers.layer01_core.modules.exceptions import InvalidConfig, SecretAccessError
 
 
 class SecretsManager:
@@ -126,7 +126,12 @@ class SecretsManager:
         self._audit.log(name, "CREATED", "SUCCESS")
 
     def retrieve(self, name: str) -> Optional[str]:
-        """Retrieve and decrypt a secret."""
+        """Retrieve and decrypt a secret.
+
+        Missing secrets return None; an existing secret that cannot be
+        decrypted is a hard failure so callers cannot mistake corruption,
+        wrong-key access, or tampering for a legitimate missing secret.
+        """
         self._ensure_setup()
         encrypted = self._key_store.get(name)
         if encrypted is None:
@@ -136,9 +141,11 @@ class SecretsManager:
             decrypted = self.decrypt(encrypted)
             self._audit.log(name, "ACCESSED", "SUCCESS")
             return decrypted
-        except Exception as e:
-            self._audit.log(name, "FAILED_ACCESS", "FAILED", str(e))
-            return None
+        except Exception as exc:
+            # Never persist cryptographic exception text: it may expose
+            # implementation/provider details. Keep the audit record generic.
+            self._audit.log(name, "FAILED_ACCESS", "FAILED", "Decryption failed")
+            raise SecretAccessError(name) from exc
 
     def delete(self, name: str) -> bool:
         """Delete a secret."""
@@ -148,9 +155,10 @@ class SecretsManager:
         return found
 
     def rotate(self, name: str, new_value: str) -> bool:
-        """Delete old secret and store new one."""
-        self.delete(name)
-        self.store(name, new_value)
+        """Replace a secret without a delete-then-create gap."""
+        self._ensure_setup()
+        encrypted = self.encrypt(new_value)
+        self._key_store.add(name, encrypted)
         self._audit.log(name, "ROTATED", "SUCCESS")
         return True
 
