@@ -46,15 +46,18 @@ SECRET_KEYS = frozenset({
 class ConfigManager:
     """Singleton config manager with immutable protection and versioning."""
 
-    _instance = None
+    _instances: Dict[tuple, "ConfigManager"] = {}
     _lock = Lock()
 
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
+    def __new__(cls, project_root: Optional[str] = None, admin_mode: bool = False, *args, **kwargs):
+        root = str(Path(project_root).resolve()) if project_root else str(Path(__file__).resolve().parents[3])
+        key = (root, bool(admin_mode))
+        with cls._lock:
+            instance = cls._instances.get(key)
+            if instance is None:
+                instance = super().__new__(cls)
+                cls._instances[key] = instance
+            return instance
 
     def __init__(self, project_root: Optional[str] = None, admin_mode: bool = False):
         if hasattr(self, "_initialized") and self._initialized:
@@ -224,4 +227,4 @@ class ConfigManager:
     @classmethod
     def reset(cls) -> None:
         with cls._lock:
-            cls._instance = None
+            cls._instances.clear()
