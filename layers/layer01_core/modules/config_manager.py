@@ -149,7 +149,23 @@ class ConfigManager:
         return key in self._config
 
     def all(self) -> Dict[str, Any]:
-        return dict(self._config)
+        """Return a redacted configuration snapshot; raw credentials require explicit get()."""
+        return {
+            key: ("***SECRET***" if self._is_secret_key(key) else value)
+            for key, value in self._config.items()
+        }
+
+    @staticmethod
+    def _is_secret_key(key: str) -> bool:
+        terminal = key.upper().rsplit(".", 1)[-1]
+        return (
+            terminal in SECRET_KEYS
+            or terminal.endswith("_KEY")
+            or terminal.endswith("_TOKEN")
+            or terminal.endswith("_SECRET")
+            or terminal.endswith("_PASSWORD")
+            or terminal.endswith("_CREDENTIAL")
+        )
 
     def get_immutable_keys(self) -> List[str]:
         return list(IMMUTABLE_KEYS)
