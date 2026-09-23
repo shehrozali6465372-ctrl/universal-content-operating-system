@@ -72,6 +72,8 @@ class FileManager:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp_path, str(full))
         except Exception:
             if os.path.exists(tmp_path):
@@ -90,6 +92,8 @@ class FileManager:
         full.parent.mkdir(parents=True, exist_ok=True)
         with open(full, "a", encoding="utf-8") as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
         self._cache.invalidate(str(full))
         return True
 
@@ -134,7 +138,7 @@ class FileManager:
             return None
         backup_dir = self._base / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         backup_name = f"{full.name}.{ts}.bak"
         backup_path = backup_dir / backup_name
         shutil.copy2(str(full), str(backup_path))
@@ -146,7 +150,17 @@ class FileManager:
             return False
         tp = self._resolve(target_path)
         tp.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(bp), str(tp))
+        fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
+        try:
+            os.close(fd)
+            shutil.copy2(str(bp), tmp_name)
+            os.replace(tmp_name, str(tp))
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         self._cache.invalidate(str(tp))
         return True
 
