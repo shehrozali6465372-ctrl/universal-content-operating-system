@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from contextlib import contextmanager
-from threading import RLock
+from threading import RLock, local
 
 from layers.layer01_core.modules.models import get_all_table_names
 from layers.layer01_core.modules.migrations import MigrationManager
@@ -25,7 +25,7 @@ class DatabaseManager:
         self._conn: Optional[sqlite3.Connection] = None
         self._migration_manager: Optional[MigrationManager] = None
         self._initialized = False
-        self._in_transaction = False
+        self._tx_local = local()
         self._lock = RLock()
 
     def _safe_path(self, path: str, label: str) -> Path:
@@ -45,6 +45,14 @@ class DatabaseManager:
         except ValueError as exc:
             raise ValueError(f"{label} escapes project root: {path}") from exc
         return candidate
+
+    @property
+    def _in_transaction(self) -> bool:
+        return bool(getattr(self._tx_local, "active", False))
+
+    @_in_transaction.setter
+    def _in_transaction(self, value: bool) -> None:
+        self._tx_local.active = bool(value)
 
     @property
     def db_path(self) -> Path:
@@ -107,12 +115,15 @@ class DatabaseManager:
             raise ValueError(f"unsafe SQL identifier: {value}")
         return value
 
-    @staticmethod
-    def _where_clause(where: str) -> str:
+    @classmethod
+    def _where_clause(cls, where: str) -> str:
+        """Allow only parameterized, identifier-based predicates."""
         if not isinstance(where, str) or not where.strip():
             raise ValueError("WHERE clause cannot be empty")
-        if ";" in where or "--" in where or "/*" in where or "*/" in where:
-            raise ValueError("unsafe SQL in WHERE clause")
+        atom = r"(?:[A-Za-z_][A-Za-z0-9_]*\s*(?:=|!=|<>|<=|>=|<|>|LIKE)\s*\?|[A-Za-z_][A-Za-z0-9_]*\s+IS(?:\s+NOT)?\s+NULL|[0-9]+\s*=\s*[0-9]+)"
+        pattern = rf"^\s*{atom}(?:\s+(?:AND|OR)\s+{atom})*\s*$"
+        if not re.fullmatch(pattern, where, flags=re.IGNORECASE):
+            raise ValueError("unsafe or unsupported SQL WHERE clause")
         return where
 
     # ── CRUD ────────────────────────────────
@@ -253,7 +264,8 @@ class DatabaseManager:
         report = {"timestamp": datetime.now(timezone.utc).isoformat(), "checks": {}, "overall": "PASS"}
         try:
             self._ensure_init()
-            self._conn.execute("SELECT 1")
+            with self._lock:
+                self._conn.execute("SELECT 1")
             report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
         except Exception as e:
             report["checks"]["connection"] = {"status": "FAIL", "message": str(e)}
