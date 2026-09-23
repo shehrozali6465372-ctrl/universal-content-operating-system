@@ -13,9 +13,11 @@ def validate_api_key(key: str, value: str) -> None:
     """Validate known credential formats without logging or exposing values."""
     if not value:
         raise InvalidConfig(key, "API key cannot be empty")
-    valid_prefixes = ("sk-", "sk_live-", "gho_", "ghp_", "ghs_")
-    if not any(value.startswith(p) for p in valid_prefixes):
-        raise InvalidConfig(key, f"API key must start with: {', '.join(valid_prefixes)}")
+    # Layer 1 must not guess provider-specific credential formats. Provider
+    # adapters own format validation; the core contract only requires a
+    # non-empty string so valid credentials from new providers are accepted.
+    if not isinstance(value, str) or not value.strip():
+        raise InvalidConfig(key, "Credential cannot be empty")
 
 
 def validate_path(key: str, value: str) -> None:
