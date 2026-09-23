@@ -20,7 +20,7 @@ from layers.layer01_core.modules.migrations import MigrationManager
 
 class DatabaseManager:
     def __init__(self, db_path: str = "data/agent.db", project_root: Optional[str] = None):
-        self._project_root = Path(project_root) if project_root else Path.cwd()
+        self._project_root = Path(project_root).resolve() if project_root else None
         self._db_path = self._safe_path(db_path, "database path")
         self._conn: Optional[sqlite3.Connection] = None
         self._migration_manager: Optional[MigrationManager] = None
@@ -30,9 +30,18 @@ class DatabaseManager:
 
     def _safe_path(self, path: str, label: str) -> Path:
         raw = Path(path)
-        candidate = raw.resolve() if raw.is_absolute() else (self._project_root / raw).resolve()
+        if raw.is_absolute():
+            candidate = raw.resolve()
+            if self._project_root is not None:
+                try:
+                    candidate.relative_to(self._project_root)
+                except ValueError as exc:
+                    raise ValueError(f"{label} escapes project root: {path}") from exc
+            return candidate
+        root = self._project_root or Path.cwd().resolve()
+        candidate = (root / raw).resolve()
         try:
-            candidate.relative_to(self._project_root.resolve())
+            candidate.relative_to(root)
         except ValueError as exc:
             raise ValueError(f"{label} escapes project root: {path}") from exc
         return candidate
@@ -214,7 +223,7 @@ class DatabaseManager:
                     os.replace(str(self._db_path), old_name)
                 os.replace(str(staged), str(self._db_path))
                 staged = None
-                if was_initialized:
+                if was_initialized or self._conn is None:
                     try:
                         self.initialize()
                     except Exception:
