@@ -71,6 +71,14 @@ class ConfigManager:
         self._admin_mode = admin_mode
         self._loaded = False
 
+    def _safe_path(self, value: str) -> Path:
+        candidate = (self._project_root / value).resolve()
+        try:
+            candidate.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Config path escapes project root: {value}") from exc
+        return candidate
+
     @property
     def project_root(self) -> Path:
         return self._project_root
@@ -85,8 +93,8 @@ class ConfigManager:
 
     def load(self, env_file: str = ".env", yaml_file: str = "config/default.yaml") -> "ConfigManager":
         self._config.clear()
-        self._load_yaml(self._project_root / yaml_file)
-        self._load_env(self._project_root / env_file)
+        self._load_yaml(self._safe_path(yaml_file))
+        self._load_env(self._safe_path(env_file))
 
         defaults = get_defaults()
         for key, value in defaults.items():
@@ -204,7 +212,7 @@ class ConfigManager:
 
     def save(self, filepath: str = "config/agent_config.json") -> None:
         """Atomically persist non-secret configuration; credentials are redacted."""
-        save_path = self._project_root / filepath
+        save_path = self._safe_path(filepath)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(
             dir=str(save_path.parent),
