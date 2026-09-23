@@ -129,12 +129,16 @@ class FileManager:
             return True
 
     def delete(self, filepath: str) -> bool:
-        full = self._resolve(filepath)
-        if full.exists():
-            full.unlink()
-            self._cache.invalidate(str(full))
-            return True
-        return False
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if full.exists():
+                full.unlink()
+                hash_file = Path(str(full) + ".sha256")
+                if hash_file.exists():
+                    hash_file.unlink()
+                self._cache.invalidate(str(full))
+                return True
+            return False
 
     def exists(self, filepath: str) -> bool:
         return self._resolve(filepath).exists()
@@ -160,6 +164,7 @@ class FileManager:
         backup_name = f"{full.name}.{ts}.bak"
         backup_path = backup_dir / backup_name
         shutil.copy2(str(full), str(backup_path))
+        save_hash(str(backup_path))
         return str(backup_path.relative_to(self._base))
 
     def restore(self, backup_path: str, target_path: str) -> bool:
@@ -167,12 +172,16 @@ class FileManager:
         if not bp.exists():
             return False
         tp = self._resolve(target_path)
+        ok, current_hash = verify_hash(str(bp))
+        if not ok or current_hash is None:
+            raise ValueError("Backup integrity verification failed")
         tp.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
         try:
             os.close(fd)
             shutil.copy2(str(bp), tmp_name)
             os.replace(tmp_name, str(tp))
+            save_hash(str(tp))
         except Exception:
             try:
                 os.unlink(tmp_name)
