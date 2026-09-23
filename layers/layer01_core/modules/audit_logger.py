@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+import os
 from threading import Lock
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,6 +66,7 @@ class AuditLogger:
             with open(self._log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
                 f.flush()
+                os.fsync(f.fileno())
 
         return entry
 
