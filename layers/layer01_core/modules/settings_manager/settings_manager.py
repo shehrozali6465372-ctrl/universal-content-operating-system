@@ -11,6 +11,8 @@ Intelligent settings management with:
 """
 
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -209,12 +211,14 @@ class SettingsManager:
         self._event_bus.emit(SettingsEvent("override_set", key, new_value=value))
 
     def clear_override(self, key: str) -> bool:
+        removed = False
         with self._lock:
             if key in self._overrides:
                 del self._overrides[key]
-                self._event_bus.emit(SettingsEvent("override_cleared", key))
-                return True
-        return False
+                removed = True
+        if removed:
+            self._event_bus.emit(SettingsEvent("override_cleared", key))
+        return removed
 
     def clear_all_overrides(self) -> int:
         with self._lock:
@@ -363,7 +367,19 @@ class SettingsManager:
                 data["settings"][key] = entry.to_dict()
             for name, flag in self._feature_flags.items():
                 data["flags"][name] = flag.to_dict()
-        path.write_text(json.dumps(data, indent=2, default=str))
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         return True
 
     def load(self, filepath: Optional[str] = None) -> bool:
