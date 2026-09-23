@@ -82,13 +82,14 @@ class SchedulerManager:
         """Add a recurring cron-based job."""
         parser = CronParser(cron_expr)
         task_id = self.add_task(name, job_type, params=params)
-        self._cron_jobs[task_id] = {
-            "name": name,
-            "cron": parser,
-            "job_type": job_type,
-            "params": params or {},
-            "last_run": None,
-        }
+        with self._lock:
+            self._cron_jobs[task_id] = {
+                "name": name,
+                "cron": parser,
+                "job_type": job_type,
+                "params": params or {},
+                "last_run": None,
+            }
         return task_id
 
     # ── Execution ───────────────────────────
@@ -130,14 +131,18 @@ class SchedulerManager:
             self._retry_manager.record_success(task.task_id)
         except FutureTimeoutError:
             result["error"] = f"Task timed out after {task.timeout_seconds}s"
-            future.cancel()
+            cancelled = future.cancel()
             retry_info = self._retry_manager.record_failure(task.task_id)
-            if self._retry_manager.should_retry(task.task_id, task.max_retries):
+            # A running Python thread cannot be safely killed. Retrying it could duplicate side effects.
+            if cancelled and self._retry_manager.should_retry(task.task_id, task.max_retries):
                 result["status"] = "RETRY"
                 result["retry"] = retry_info
+                task.not_before = retry_info["next_retry_at"]
                 self._queue.update_status(task.task_id, TaskStatus.PENDING)
             else:
                 result["status"] = "FAILED"
+                if not cancelled:
+                    result["error"] += "; retry suppressed because handler is still running"
                 self._queue.update_status(task.task_id, TaskStatus.FAILED)
         except Exception as e:
             result["error"] = str(e)[:500]
