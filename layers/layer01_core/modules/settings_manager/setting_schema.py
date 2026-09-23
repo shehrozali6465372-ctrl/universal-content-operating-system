@@ -77,6 +77,12 @@ class SettingEntry:
 
     def validate_value(self, value: Any) -> bool:
         """Run type check and custom validator."""
+        if self.datatype is not Any:
+            if self.datatype is bool:
+                if type(value) is not bool:
+                    return False
+            elif not isinstance(value, self.datatype):
+                return False
         if self.validator and not self.validator(value):
             return False
         return True
