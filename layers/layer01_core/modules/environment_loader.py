@@ -28,7 +28,7 @@ class EnvironmentLoader:
     """Loads, validates, and monitors the environment."""
 
     def __init__(self, project_root: Optional[str] = None, audit_log_path: str = "logs/audit.log"):
-        self._project_root = Path(project_root) if project_root else Path.cwd()
+        self._project_root = (Path(project_root) if project_root else Path.cwd()).resolve()
         self._audit = AuditLogger(str(self._project_root / audit_log_path))
         self._current_profile: Optional[str] = None
         self._env: Dict[str, str] = {}
@@ -36,6 +36,14 @@ class EnvironmentLoader:
         self._last_mtime: float = 0.0
         self._env_file: Optional[Path] = None
         self._lock = RLock()
+
+    def _safe_path(self, value: str) -> Path:
+        candidate = (self._project_root / value).resolve()
+        try:
+            candidate.relative_to(self._project_root)
+        except ValueError as exc:
+            raise ValueError(f"Environment path escapes project root: {value}") from exc
+        return candidate
 
     @property
     def current_profile(self) -> Optional[str]:
@@ -64,7 +72,7 @@ class EnvironmentLoader:
                 )
 
             self._current_profile = profile_obj.name
-            self._env_file = self._project_root / env_file
+            self._env_file = self._safe_path(env_file)
             self._env = {}
 
             for key, value in profile_obj.defaults.items():
@@ -218,7 +226,7 @@ class EnvironmentLoader:
 
     def snapshot(self, filepath: str = "data/env_snapshot.json") -> dict:
         """Atomically save a secret-redacted environment snapshot."""
-        save_path = self._project_root / filepath
+        save_path = self._safe_path(filepath)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         snapshot = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
