@@ -21,7 +21,7 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from threading import Lock
+from threading import RLock
 
 from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
 from layers.layer01_core.modules.backup_manager.exceptions import (
@@ -45,7 +45,7 @@ class BackupManager:
         self._max_backups = max_backups
         self._default_retention_days = default_retention_days
         self._entries: Dict[str, BackupEntry] = {}
-        self._lock = Lock()
+        self._lock = RLock()
         self._audit_log: List[dict] = []
         self._counter = 0
         self._load_registry()
@@ -53,11 +53,21 @@ class BackupManager:
     # ── Registry Persistence ─────────────────
 
     def _load_registry(self) -> None:
-        if self._registry_path.exists():
-            data = json.loads(self._registry_path.read_text())
-            for key, entry_data in data.get("entries", {}).items():
+        if not self._registry_path.exists():
+            return
+        try:
+            data = json.loads(self._registry_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("registry must be a JSON object")
+            entries = data.get("entries", {})
+            audit_log = data.get("audit_log", [])
+            if not isinstance(entries, dict) or not isinstance(audit_log, list):
+                raise ValueError("invalid registry structure")
+            for key, entry_data in entries.items():
                 self._entries[key] = BackupEntry.from_dict(entry_data)
-            self._audit_log = data.get("audit_log", [])
+            self._audit_log = audit_log[-200:]
+        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+            raise RuntimeError(f"Backup registry is unreadable: {self._registry_path}") from exc
 
     def _save_registry(self) -> None:
         data = {
@@ -148,9 +158,8 @@ class BackupManager:
 
         with self._lock:
             self._entries[backup_id] = entry
+            self._audit("CREATE", backup_id, f"source={source}, size={size}")
             self._save_registry()
-
-        self._audit("CREATE", backup_id, f"source={source}, size={size}")
         return entry
 
     def backup_json(self, source: str, data: Any,
@@ -207,7 +216,9 @@ class BackupManager:
         finally:
             shutil.rmtree(str(temp_target.parent), ignore_errors=True)
 
-        self._audit("RESTORE", backup_id, f"target={target_path}")
+        with self._lock:
+            self._audit("RESTORE", backup_id, f"target={target_path}")
+            self._save_registry()
         return True
 
     # ── Integrity ────────────────────────────
@@ -329,8 +340,8 @@ class BackupManager:
                     shutil.rmtree(str(backup_file))
                 else:
                     backup_file.unlink()
+            self._audit("DELETE", backup_id)
             self._save_registry()
-        self._audit("DELETE", backup_id)
         return True
 
     def count(self, source: Optional[str] = None) -> int:
