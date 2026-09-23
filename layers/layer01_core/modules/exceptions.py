@@ -46,3 +46,10 @@ class SchemaError(ConfigError):
         msg = f"Schema validation failed with {len(errors)} error(s):\n"
         msg += "\n".join(f"  - {e}" for e in errors)
         super().__init__(msg)
+
+
+class SecretAccessError(ConfigError):
+    """Stored secret exists but cannot be safely decrypted."""
+    def __init__(self, key_name: str):
+        self.key_name = key_name
+        super().__init__(f"Secret '{key_name}' could not be decrypted safely")
