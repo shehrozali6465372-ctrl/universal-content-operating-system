@@ -133,18 +133,39 @@ class MemoryManager:
 
     def save_batch(self, entries: List[Dict[str, Any]]) -> int:
         """Save multiple entries at once. Returns count saved."""
-        count = 0
-        for entry in entries:
-            self.save(
-                level=entry.get("level", "long_term"),
-                category=entry.get("category", "general"),
-                key=entry.get("key", ""),
-                value=entry.get("value", ""),
-                tags=entry.get("tags", ""),
-                importance=entry.get("importance", 0.5),
-            )
-            count += 1
-        return count
+        self._ensure_init()
+        if not entries:
+            return 0
+        with self._lock:
+            original_stm = list(self._stm_buffer)
+            persistent = []
+            try:
+                for entry in entries:
+                    level = entry.get("level", "long_term")
+                    if level == MemoryLevel.STM.value:
+                        self._save_locked(
+                            level, entry.get("category", "general"),
+                            entry.get("key", ""), entry.get("value", ""),
+                            entry.get("tags", ""), entry.get("importance", 0.5),
+                        )
+                    else:
+                        persistent.append((
+                            level, entry.get("category", "general"),
+                            entry.get("key", ""), entry.get("value", ""),
+                            entry.get("tags", ""), entry.get("importance", 0.5),
+                        ))
+                if persistent:
+                    with self._conn:
+                        self._conn.executemany(
+                            "INSERT INTO memory_entries "
+                            "(level, category, key, value, tags, importance) "
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            persistent,
+                        )
+                return len(entries)
+            except Exception:
+                self._stm_buffer = original_stm
+                raise
 
     # ── Load ────────────────────────────────
 
