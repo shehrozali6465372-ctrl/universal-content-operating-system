@@ -18,6 +18,7 @@ import csv
 import shutil
 import gzip
 import tempfile
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
@@ -26,12 +27,14 @@ from threading import Lock
 from layers.layer01_core.modules.file_manager.hash_utils import calculate_hash, save_hash, verify_hash
 from layers.layer01_core.modules.file_manager.file_cache import FileCache
 
+logger = logging.getLogger(__name__)
+
 
 class FileManager:
     """Central storage gateway for the AI Agent."""
 
     def __init__(self, base_path: str = ".", cache_size: int = 100):
-        self._base = Path(base_path)
+        self._base = Path(base_path).resolve()
         self._cache = FileCache(cache_size)
         self._locks: Dict[str, Lock] = {}
         self._global_lock = Lock()
@@ -243,7 +246,7 @@ class FileManager:
         if len(lines) < 2:
             return []
         headers = lines[0].split(",")
-        return [dict(zip(headers, line.split(","))) for line in lines[1:]]
+        return [dict(row) for row in csv.DictReader(content.splitlines())]
 
     # ── Cache Stats ─────────────────────────
 
