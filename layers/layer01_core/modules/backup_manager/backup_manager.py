@@ -15,6 +15,8 @@ Comprehensive data protection:
 import json
 import gzip
 import shutil
+import tempfile
+import os
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,7 +64,19 @@ class BackupManager:
             "entries": {k: v.to_dict() for k, v in self._entries.items()},
             "audit_log": self._audit_log[-200:],
         }
-        self._registry_path.write_text(json.dumps(data, indent=2, default=str))
+        fd, tmp_name = tempfile.mkstemp(dir=str(self._backup_dir), prefix="._registry.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self._registry_path)
+        except Exception:
+            try:
+                Path(tmp_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
 
     def _audit(self, action: str, backup_id: str, details: str = "") -> None:
         entry = {
@@ -94,6 +108,10 @@ class BackupManager:
         backup_filename = f"{backup_id}.bak"
         backup_path = self._backup_dir / backup_filename
 
+        # Capture the source hash before compression so restore verification
+        # validates the recovered payload, not the compressed container.
+        source_hash = self._calculate_hash(src)
+
         # Copy file or directory
         if src.is_file():
             shutil.copy2(str(src), str(backup_path))
@@ -114,7 +132,7 @@ class BackupManager:
             is_compressed = True
 
         # Calculate hash
-        file_hash = self._calculate_hash(final_path)
+        file_hash = source_hash
         size = self._get_size(final_path)
 
         entry = BackupEntry(
@@ -167,14 +185,27 @@ class BackupManager:
         target.parent.mkdir(parents=True, exist_ok=True)
 
         # Decompress if needed
-        if entry.compressed:
-            with gzip.open(str(backup_file), "rb") as f_in:
-                with open(str(target), "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        elif backup_file.is_dir():
-            shutil.copytree(str(backup_file), str(target), dirs_exist_ok=True)
-        else:
-            shutil.copy2(str(backup_file), str(target))
+        temp_target = Path(tempfile.mkdtemp(dir=str(target.parent), prefix=".restore-")) / target.name
+        try:
+            if entry.compressed:
+                with gzip.open(str(backup_file), "rb") as f_in:
+                    with open(str(temp_target), "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+            elif backup_file.is_dir():
+                shutil.copytree(str(backup_file), str(temp_target), dirs_exist_ok=True)
+            else:
+                shutil.copy2(str(backup_file), str(temp_target))
+
+            if self._calculate_hash(temp_target) != entry.hash_sha256:
+                raise BackupIntegrityError(f"Restored payload verification failed for '{backup_id}'")
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(str(target))
+                else:
+                    target.unlink()
+            temp_target.replace(target)
+        finally:
+            shutil.rmtree(str(temp_target.parent), ignore_errors=True)
 
         self._audit("RESTORE", backup_id, f"target={target_path}")
         return True
@@ -206,7 +237,17 @@ class BackupManager:
         if not backup_file.exists():
             return False
 
-        current_hash = self._calculate_hash(backup_file)
+        if entry.compressed:
+            temp_dir = Path(tempfile.mkdtemp(dir=str(self._backup_dir), prefix=".verify-"))
+            try:
+                temp_file = temp_dir / "payload"
+                with gzip.open(str(backup_file), "rb") as src, open(str(temp_file), "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                current_hash = self._calculate_hash(temp_file)
+            finally:
+                shutil.rmtree(str(temp_dir), ignore_errors=True)
+        else:
+            current_hash = self._calculate_hash(backup_file)
         return current_hash == entry.hash_sha256
 
     def verify_all(self) -> Dict[str, bool]:
