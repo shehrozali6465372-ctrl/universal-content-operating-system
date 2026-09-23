@@ -53,9 +53,16 @@ class SecretsManager:
         audit_log_path: str = "logs/audit.log",
         project_root: Optional[str] = None,
     ):
-        self._project_root = Path(project_root) if project_root else Path.cwd()
-        self._key_store = KeyStore(str(self._project_root / secrets_path))
-        self._audit = AuditLogger(str(self._project_root / audit_log_path))
+        self._project_root = (Path(project_root) if project_root else Path.cwd()).resolve()
+        secrets_file = (self._project_root / secrets_path).resolve()
+        audit_file = (self._project_root / audit_log_path).resolve()
+        try:
+            secrets_file.relative_to(self._project_root)
+            audit_file.relative_to(self._project_root)
+        except ValueError as exc:
+            raise ValueError("Secrets or audit path escapes project root") from exc
+        self._key_store = KeyStore(str(secrets_file))
+        self._audit = AuditLogger(str(audit_file))
         self._fernet: Optional["Fernet"] = None
         self._master_key: Optional[str] = None
 
