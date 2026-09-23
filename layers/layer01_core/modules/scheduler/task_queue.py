@@ -114,7 +114,7 @@ class TaskQueue:
             return self._tasks.get(task_id)
 
     def next_task(self) -> Optional[Task]:
-        """Get the highest priority task that's ready to run."""
+        """Atomically claim and return the highest-priority ready task."""
         with self._lock:
             now = datetime.now(timezone.utc)
             ready = []
@@ -128,10 +128,27 @@ class TaskQueue:
                     except (TypeError, ValueError):
                         continue
                 ready.append(t)
-        if not ready:
-            return None
-        ready.sort()
-        return ready[0]
+            if not ready:
+                return None
+            ready.sort()
+            task = ready[0]
+            task.status = TaskStatus.RUNNING
+            self._save()
+            return task
+
+    def claim(self, task_id: str) -> bool:
+        """Atomically claim a pending task for direct execution."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return False
+            if task.status == TaskStatus.RUNNING:
+                return True
+            if task.status != TaskStatus.PENDING:
+                return False
+            task.status = TaskStatus.RUNNING
+            self._save()
+            return True
 
     def _dependencies_met(self, task: Task) -> bool:
         return all(
