@@ -76,7 +76,10 @@ class Layer1Runtime:
         self.logger = LoggerManager(
             log_dir=str((self.file_manager._base / "logs").resolve())
         )
-        self.scheduler = SchedulerManager()
+        self.scheduler = SchedulerManager(
+            queue_persist_path=str((self.file_manager._base / "data" / "scheduler_queue.json").resolve()),
+            retry_persist_path=str((self.file_manager._base / "data" / "scheduler_retries.json").resolve()),
+        )
         self.settings = SettingsManager(
             persist_path=str((self.file_manager._base / "data" / "settings.json").resolve())
         )
