@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from contextlib import contextmanager
+from threading import RLock
 
 from layers.layer01_core.modules.models import get_all_table_names
 from layers.layer01_core.modules.migrations import MigrationManager
@@ -23,6 +24,7 @@ class DatabaseManager:
         self._migration_manager: Optional[MigrationManager] = None
         self._initialized = False
         self._in_transaction = False
+        self._lock = RLock()
 
     @property
     def db_path(self) -> Path:
@@ -34,7 +36,7 @@ class DatabaseManager:
 
     def initialize(self) -> "DatabaseManager":
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path))
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
@@ -55,14 +57,15 @@ class DatabaseManager:
             raise RuntimeError("Database not initialized.")
         old_flag = self._in_transaction
         self._in_transaction = True
-        try:
-            yield self._conn
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        finally:
-            self._in_transaction = old_flag
+        with self._lock:
+            try:
+                yield self._conn
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            finally:
+                self._in_transaction = old_flag
 
     def _run(self, sql: str, params=()):
         if self._in_transaction:
@@ -77,6 +80,14 @@ class DatabaseManager:
         if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
             raise ValueError(f"unsafe SQL identifier: {value}")
         return value
+
+    @staticmethod
+    def _where_clause(where: str) -> str:
+        if not isinstance(where, str) or not where.strip():
+            raise ValueError("WHERE clause cannot be empty")
+        if ";" in where or "--" in where or "/*" in where or "*/" in where:
+            raise ValueError("unsafe SQL in WHERE clause")
+        return where
 
     # ── CRUD ────────────────────────────────
 
@@ -117,19 +128,19 @@ class DatabaseManager:
         self._ensure_init()
         table = self._identifier(table)
         sets = ", ".join(f"{self._identifier(k)} = ?" for k in data)
-        cur = self._run(f"UPDATE {table} SET {sets} WHERE {where}", list(data.values()) + list(where_params))
+        cur = self._run(f"UPDATE {table} SET {sets} WHERE {self._where_clause(where)}", list(data.values()) + list(where_params))
         return cur.rowcount
 
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
-        cur = self._run(f"DELETE FROM {table} WHERE {where}", where_params)
+        cur = self._run(f"DELETE FROM {table} WHERE {self._where_clause(where)}", where_params)
         return cur.rowcount
 
     def count(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
-        return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {where}", params).fetchone()["c"]
+        return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {self._where_clause(where)}", params).fetchone()["c"]
 
     def table_exists(self, name: str) -> bool:
         self._ensure_init()
