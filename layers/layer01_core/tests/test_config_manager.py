@@ -26,6 +26,16 @@ class TestSingleton:
         c1.set("CUSTOM_KEY", "value1")
         assert ConfigManager().get("CUSTOM_KEY") == "value1"
 
+    def test_singleton_isolated_by_project_root(self, tmp_path):
+        other = tmp_path / "other"
+        other.mkdir()
+        first = ConfigManager(project_root=tmp_path)
+        second = ConfigManager(project_root=other)
+        first.set("SCOPED_KEY", "one")
+        second.set("SCOPED_KEY", "two")
+        assert first.get("SCOPED_KEY") == "one"
+        assert second.get("SCOPED_KEY") == "two"
+
 
 class TestLoading:
     def test_load_yaml(self, tmp_path):
