@@ -233,3 +233,10 @@ class TestStats:
         assert stats["tables"] >= 8
         assert stats["total_rows"] >= 1
         assert stats["db_size_kb"] >= 0
+
+
+def test_health_check_uninitialized_fails_cleanly():
+    manager = DatabaseManager()
+    report = manager.health_check()
+    assert report["overall"] == "FAIL"
+    assert report["checks"]["connection"]["status"] == "FAIL"
