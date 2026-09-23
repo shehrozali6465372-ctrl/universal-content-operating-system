@@ -1,5 +1,6 @@
 """Trend Confidence - Confidence scoring for trend analysis results."""
 from __future__ import annotations
+import os
 from typing import Dict, List
 
 
@@ -56,6 +57,13 @@ class TrendConfidence:
         """Calculate confidence from multiple trend signals."""
         result = TrendConfidenceResult(topic)
         factors = []
+
+        production = os.getenv("APP_ENV", "").strip().lower() == "production"
+        if production:
+            required = ("data_points", "source_count", "hours_since_latest", "score_variance")
+            missing = [key for key in required if key not in signals or signals.get(key) is None]
+            if missing:
+                raise ValueError("production trend confidence requires observed inputs: " + ", ".join(missing))
 
         data_points = signals.get("data_points", 0)
         result.data_confidence = min(1.0, data_points / 10.0)

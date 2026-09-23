@@ -1,5 +1,6 @@
 """Trend Manager - Orchestrator for Trend Intelligence Module."""
 from __future__ import annotations
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -113,12 +114,28 @@ class TrendManager:
         if platform_data:
             result.cross_platform = self.cross_platform.fuse(topic, platform_data)
 
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        observed_inputs = bool(scores or momentum_data or time_series or platform_data or virality_data)
+        if production and not observed_inputs:
+            raise ValueError("production trend analysis requires observed source data")
+
         confidence_signals = {
             "data_points": len(scores) or len(momentum_data),
             "source_count": len(platform_data) or len(scores),
-            "hours_since_latest": data.get("hours_since_latest", 24),
-            "score_variance": data.get("score_variance", 0.2),
+            "hours_since_latest": data.get("hours_since_latest"),
+            "score_variance": data.get("score_variance"),
         }
+        if production and (
+            confidence_signals["hours_since_latest"] is None
+            or confidence_signals["score_variance"] is None
+        ):
+            raise ValueError(
+                "production trend analysis requires observed hours_since_latest and score_variance"
+            )
+        if confidence_signals["hours_since_latest"] is None:
+            confidence_signals["hours_since_latest"] = 48
+        if confidence_signals["score_variance"] is None:
+            confidence_signals["score_variance"] = 0.5
         result.confidence = self.confidence.calculate(topic, confidence_signals)
 
         # Build evidence
