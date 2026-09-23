@@ -240,3 +240,18 @@ def test_health_check_uninitialized_fails_cleanly():
     report = manager.health_check()
     assert report["overall"] == "FAIL"
     assert report["checks"]["connection"]["status"] == "FAIL"
+
+
+def test_restore_rejects_path_escape(db, tmp_path):
+    with pytest.raises(ValueError):
+        db.restore(str(tmp_path.parent / "outside.db"))
+
+
+def test_restore_rejects_corrupt_backup_without_touching_live_db(db, tmp_path):
+    db.insert("agent_config", {"key": "keep", "value": "live"})
+    corrupt = tmp_path / "corrupt.db"
+    corrupt.write_bytes(b"not a sqlite database")
+    with pytest.raises(RuntimeError):
+        db.restore(str(corrupt))
+    row = db.query_one("SELECT value FROM agent_config WHERE key = ?", ("keep",))
+    assert row["value"] == "live"
