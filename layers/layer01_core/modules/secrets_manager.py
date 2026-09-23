@@ -32,6 +32,7 @@ import base64
 from typing import Dict, List, Optional
 from pathlib import Path
 from datetime import datetime, timezone
+from threading import RLock
 
 try:
     from cryptography.fernet import Fernet
@@ -65,6 +66,7 @@ class SecretsManager:
         self._audit = AuditLogger(str(audit_file))
         self._fernet: Optional["Fernet"] = None
         self._master_key: Optional[str] = None
+        self._lock = RLock()
 
     # ── Setup ───────────────────────────────
 
@@ -124,13 +126,14 @@ class SecretsManager:
 
     def store(self, name: str, value: str) -> None:
         """Store a secret (encrypts if plaintext)."""
-        self._ensure_setup()
-        if self.is_encrypted(value):
-            encrypted = value
-        else:
-            encrypted = self.encrypt(value)
-        self._key_store.add(name, encrypted)
-        self._audit.log(name, "CREATED", "SUCCESS")
+        with self._lock:
+            self._ensure_setup()
+            if self.is_encrypted(value):
+                encrypted = value
+            else:
+                encrypted = self.encrypt(value)
+            self._key_store.add(name, encrypted)
+            self._audit.log(name, "CREATED", "SUCCESS")
 
     def retrieve(self, name: str) -> Optional[str]:
         """Retrieve and decrypt a secret.
@@ -156,18 +159,20 @@ class SecretsManager:
 
     def delete(self, name: str) -> bool:
         """Delete a secret."""
-        found = self._key_store.remove(name)
-        status = "SUCCESS" if found else "FAILED"
-        self._audit.log(name, "DELETED", status)
-        return found
+        with self._lock:
+            found = self._key_store.remove(name)
+            status = "SUCCESS" if found else "FAILED"
+            self._audit.log(name, "DELETED", status)
+            return found
 
     def rotate(self, name: str, new_value: str) -> bool:
         """Replace a secret without a delete-then-create gap."""
-        self._ensure_setup()
-        encrypted = self.encrypt(new_value)
-        self._key_store.add(name, encrypted)
-        self._audit.log(name, "ROTATED", "SUCCESS")
-        return True
+        with self._lock:
+            self._ensure_setup()
+            encrypted = self.encrypt(new_value)
+            self._key_store.add(name, encrypted)
+            self._audit.log(name, "ROTATED", "SUCCESS")
+            return True
 
     def exists(self, name: str) -> bool:
         """Check if a secret exists."""
