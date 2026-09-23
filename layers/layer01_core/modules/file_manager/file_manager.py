@@ -270,4 +270,11 @@ class FileManager:
     # ── Internal ────────────────────────────
 
     def _resolve(self, filepath: str) -> Path:
-        return self._base / filepath
+        """Resolve a path and enforce the FileManager storage boundary."""
+        base = self._base.resolve()
+        candidate = (self._base / filepath).resolve()
+        try:
+            candidate.relative_to(base)
+        except ValueError as exc:
+            raise ValueError(f"Path escapes FileManager base directory: {filepath}") from exc
+        return candidate
