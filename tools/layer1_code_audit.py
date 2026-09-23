@@ -114,7 +114,7 @@ def audit():
         "orphan_candidates": orphan_candidates,
         "limitations": [
             "Static AST call resolution cannot prove dynamic dispatch, reflection or external callers.",
-            "Orphan candidates require runtime/coverage review before deletion.",
+            "Orphan candidates are scoped to production modules and require runtime/coverage review before deletion.",
             "Duplicate bodies are candidates, not proof of duplicate responsibility.",
         ],
     }
