@@ -12,6 +12,7 @@ from pathlib import Path
 import json
 import os
 import tempfile
+from threading import RLock
 
 
 class RetryManager:
@@ -22,42 +23,47 @@ class RetryManager:
         self._max_delay = max_delay
         self._retries: Dict[str, Dict] = {}
         self._persist_path = Path(persist_path) if persist_path else None
+        self._lock = RLock()
         self._load()
 
     def record_failure(self, task_id: str) -> Dict[str, Any]:
         """Record a failure for a task. Returns delay info."""
-        now = time.time()
-        if task_id not in self._retries:
-            self._retries[task_id] = {"attempts": 0, "last_failure": now}
+        with self._lock:
+            now = time.time()
+            if task_id not in self._retries:
+                self._retries[task_id] = {"attempts": 0, "last_failure": now}
 
-        info = self._retries[task_id]
-        info["attempts"] += 1
-        info["last_failure"] = now
+            info = self._retries[task_id]
+            info["attempts"] += 1
+            info["last_failure"] = now
 
-        delay = min(self._base_delay * (2 ** (info["attempts"] - 1)), self._max_delay)
-        result = {
-            "attempt": info["attempts"],
-            "delay_seconds": delay,
-            "next_retry_at": datetime.fromtimestamp(now + delay, tz=timezone.utc).isoformat(),
-        }
-        self._save()
-        return result
+            delay = min(self._base_delay * (2 ** (info["attempts"] - 1)), self._max_delay)
+            result = {
+                "attempt": info["attempts"],
+                "delay_seconds": delay,
+                "next_retry_at": datetime.fromtimestamp(now + delay, tz=timezone.utc).isoformat(),
+            }
+            self._save()
+            return result
 
     def record_success(self, task_id: str) -> None:
         """Reset retry count on success."""
-        self._retries.pop(task_id, None)
-        self._save()
+        with self._lock:
+            self._retries.pop(task_id, None)
+            self._save()
 
     def should_retry(self, task_id: str, max_retries: int = 3) -> bool:
         """Check if a task should be retried."""
-        info = self._retries.get(task_id)
-        if not info:
-            return True
-        return info["attempts"] < max_retries
+        with self._lock:
+            info = self._retries.get(task_id)
+            if not info:
+                return True
+            return info["attempts"] < max_retries
 
     def get_retry_count(self, task_id: str) -> int:
-        info = self._retries.get(task_id)
-        return info["attempts"] if info else 0
+        with self._lock:
+            info = self._retries.get(task_id)
+            return info["attempts"] if info else 0
 
     def get_stats(self) -> Dict[str, Any]:
         return {
