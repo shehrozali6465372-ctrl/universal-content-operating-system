@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from io import StringIO
 from datetime import datetime, timezone
-from threading import Lock
+from threading import Lock, RLock
 
 from layers.layer01_core.modules.file_manager.hash_utils import calculate_hash, save_hash, verify_hash
 from layers.layer01_core.modules.file_manager.file_cache import FileCache
@@ -38,7 +38,7 @@ class FileManager:
         self._base = Path(base_path).resolve()
         self._cache = FileCache(cache_size)
         self._locks: Dict[str, Lock] = {}
-        self._global_lock = Lock()
+        self._global_lock = RLock()
 
     # ── Safe Read ───────────────────────────
 
@@ -92,29 +92,41 @@ class FileManager:
         return True
 
     def append(self, filepath: str, content: str) -> bool:
+        """Atomically append content while serializing concurrent writers."""
         full = self._resolve(filepath)
-        full.parent.mkdir(parents=True, exist_ok=True)
-        with open(full, "a", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        self._cache.invalidate(str(full))
-        return True
+        with self._global_lock:
+            existing = full.read_text(encoding="utf-8") if full.exists() else ""
+            return self.write(filepath, existing + content, create_backup=False)
 
     # ── File Operations ─────────────────────
 
     def copy(self, src: str, dst: str) -> bool:
-        s, d = self._resolve(src), self._resolve(dst)
-        d.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(s), str(d))
-        return True
+        with self._global_lock:
+            s, d = self._resolve(src), self._resolve(dst)
+            d.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(s), str(d))
+            src_hash = Path(str(s) + ".sha256")
+            dst_hash = Path(str(d) + ".sha256")
+            if src_hash.exists():
+                shutil.copy2(str(src_hash), str(dst_hash))
+            elif dst_hash.exists():
+                dst_hash.unlink()
+            self._cache.invalidate(str(d))
+            return True
 
     def move(self, src: str, dst: str) -> bool:
-        s, d = self._resolve(src), self._resolve(dst)
-        d.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(s), str(d))
-        self._cache.invalidate(str(s))
-        return True
+        with self._global_lock:
+            s, d = self._resolve(src), self._resolve(dst)
+            d.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(s), str(d))
+            src_hash, dst_hash = Path(str(s) + ".sha256"), Path(str(d) + ".sha256")
+            if src_hash.exists():
+                shutil.move(str(src_hash), str(dst_hash))
+            elif dst_hash.exists():
+                dst_hash.unlink()
+            self._cache.invalidate(str(s))
+            self._cache.invalidate(str(d))
+            return True
 
     def delete(self, filepath: str) -> bool:
         full = self._resolve(filepath)
