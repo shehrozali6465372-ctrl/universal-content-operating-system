@@ -75,6 +75,14 @@ class TestFileOps:
         fm.copy("src.txt", "dst.txt")
         assert fm.read("dst.txt") == "copy me"
 
+    def test_copy_preserves_hash_sidecar_and_invalidates_cache(self, fm):
+        fm.save_and_verify("src.txt", "copy me")
+        assert fm.read("src.txt") == "copy me"
+        fm.copy("src.txt", "dst.txt")
+        assert fm.read("dst.txt") == "copy me"
+        match, _ = fm.verify_hash("dst.txt")
+        assert match is True
+
     def test_move(self, fm):
         fm.write("before.txt", "moving")
         fm.move("before.txt", "after.txt")
@@ -117,6 +125,15 @@ class TestBackupRestore:
         fm.write("restoreme.txt", "overwritten")
         fm.restore(backup_path, "restoreme.txt")
         assert fm.read("restoreme.txt") == "original"
+
+    def test_restore_rejects_tampered_backup(self, fm):
+        fm.write("protected.txt", "original")
+        backup_path = fm.backup("protected.txt")
+        backup = fm._base / backup_path
+        backup.write_text("tampered")
+        with pytest.raises(ValueError, match="integrity"):
+            fm.restore(backup_path, "protected.txt")
+        assert fm.read("protected.txt", use_cache=False) == "original"
 
 
 # ── Test 5: Hash Verification ──────────────
