@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+from threading import Lock
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -41,6 +42,7 @@ class AuditLogger:
     def __init__(self, log_path: str = "logs/audit.log"):
         self._log_path = Path(log_path)
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = Lock()
 
     def log(
         self,
@@ -57,10 +59,12 @@ class AuditLogger:
             "status": status,
         }
         if details:
-            entry["details"] = details
+            entry["details"] = " ".join(str(details).split())[:500]
 
-        with open(self._log_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        with self._lock:
+            with open(self._log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+                f.flush()
 
         return entry
 
