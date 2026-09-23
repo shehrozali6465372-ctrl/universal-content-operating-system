@@ -6,6 +6,8 @@ SHA-256 hash calculation and verification for file integrity.
 """
 
 import hashlib
+import os
+import tempfile
 from pathlib import Path
 
 
@@ -28,7 +30,20 @@ def save_hash(filepath: str) -> str:
     h = calculate_hash(filepath)
     # If file is "data.json", hash file is "data.json.sha256"
     hash_file = filepath + ".sha256"
-    Path(hash_file).write_text(h)
+    target = Path(hash_file)
+    fd, tmp_name = tempfile.mkstemp(dir=str(target.parent), suffix=".sha256.tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(h + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, hash_file)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
     return h
 
 
