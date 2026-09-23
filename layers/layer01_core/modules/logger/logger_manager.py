@@ -77,6 +77,13 @@ class LoggerManager:
         enable_file: bool = True,
     ):
         if hasattr(self, "_initialized"):
+            # The singleton is process-wide, but the runtime may rebind its
+            # output directory between isolated application contexts/tests.
+            self._log_dir = Path(log_dir)
+            self._log_dir.mkdir(parents=True, exist_ok=True)
+            self._min_level = LogLevel(min_level.upper())
+            self._enable_console = enable_console
+            self._enable_file = enable_file
             return
         self._initialized = True
 
