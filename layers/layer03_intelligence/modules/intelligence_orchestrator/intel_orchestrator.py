@@ -1,5 +1,6 @@
 """Intelligence Orchestrator — coordinates all Layer 3 modules with events, metrics, health monitoring."""
 from __future__ import annotations
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -164,7 +165,9 @@ class IntelligenceOrchestrator:
             cached.metadata["cached"] = True
             return cached
 
-        history = trend_history or [50.0]
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        observed_trend_history = trend_history is not None and len(trend_history) > 0
+        history = trend_history if observed_trend_history else None
 
         # 1. Content Understanding
         if text:
@@ -173,15 +176,18 @@ class IntelligenceOrchestrator:
             )
 
         # 2. Trend Intelligence
-        result.trend_prediction = self._run_module(
-            "trend_prediction", lambda: self.trend_predictor.predict(topic, history)
-        )
-        result.momentum = self._run_module(
-            "momentum", lambda: self.momentum_analyzer.analyze(history)
-        )
-        result.lifecycle = self._run_module(
-            "lifecycle", lambda: self.lifecycle_detector.detect(history)
-        )
+        # Production intelligence must never manufacture a baseline history.
+        # Trend modules run only when an observed history is supplied.
+        if history is not None:
+            result.trend_prediction = self._run_module(
+                "trend_prediction", lambda: self.trend_predictor.predict(topic, history)
+            )
+            result.momentum = self._run_module(
+                "momentum", lambda: self.momentum_analyzer.analyze(history)
+            )
+            result.lifecycle = self._run_module(
+                "lifecycle", lambda: self.lifecycle_detector.detect(history)
+            )
 
         # 3. Quality & Virality
         if text:
@@ -219,7 +225,7 @@ class IntelligenceOrchestrator:
         elapsed = (time.time() - start) * 1000
         result.processing_time_ms = elapsed
         result.events = list(self._last_events)
-        result.metadata = {"cached": False, "domain": domain}
+        result.metadata = {"cached": False, "domain": domain, "trend_observed": observed_trend_history, "production": production}
 
         # Cache
         self.cache.store(cache_key, result)
@@ -234,7 +240,7 @@ class IntelligenceOrchestrator:
         for t in topics:
             name = t.get("topic", t.get("title", ""))
             text = t.get("text", "")
-            history = t.get("history", [50.0])
+            history = t.get("history")
             results.append(self.analyze(name, text, history, domain))
         return results
 
