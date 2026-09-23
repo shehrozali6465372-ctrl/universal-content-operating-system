@@ -31,6 +31,8 @@ class Layer1Runtime:
         master_key: Optional[str] = None,
         env_file: str = ".env",
         strict_config: bool = False,
+        database_backend: Optional[Any] = None,
+        memory_backend: Optional[Any] = None,
     ) -> "Layer1Runtime":
         from layers.layer01_core.modules.environment_loader import EnvironmentLoader
         from layers.layer01_core.modules.config_manager import ConfigManager
@@ -66,15 +68,27 @@ class Layer1Runtime:
             )
             self.secrets.setup(master_key=master_key)
 
-            self.database = DatabaseManager(
-                db_path=self.config.get("DATABASE_PATH", "data/agent.db"),
-                project_root=self.project_root,
-            ).initialize()
+            production = profile.lower() in {"production", "prod"} or __import__("os").environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+            if production:
+                if database_backend is None or memory_backend is None:
+                    raise RuntimeError(
+                        "Production Layer 1 requires explicit Layer 13 PostgreSQL database and memory backends"
+                    )
+                for name, backend in (("database_backend", database_backend), ("memory_backend", memory_backend)):
+                    if not callable(getattr(backend, "health_check", None)) or not callable(getattr(backend, "close", None)):
+                        raise TypeError(f"{name} must expose health_check() and close()")
+                self.database = database_backend
+                self.memory = memory_backend
+            else:
+                self.database = DatabaseManager(
+                    db_path=self.config.get("DATABASE_PATH", "data/agent.db"),
+                    project_root=self.project_root,
+                ).initialize()
 
-            self.memory = MemoryManager(
-                db_path="data/agent_memory.db",
-                project_root=self.project_root,
-            ).initialize()
+                self.memory = MemoryManager(
+                    db_path="data/agent_memory.db",
+                    project_root=self.project_root,
+                ).initialize()
             self.file_manager = FileManager(base_path=self.project_root or ".")
             self.logger = LoggerManager(
                 log_dir=str((self.file_manager._base / "logs").resolve())
