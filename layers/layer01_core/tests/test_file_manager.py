@@ -263,3 +263,15 @@ def test_path_escape_is_rejected(tmp_path):
     manager.write("inside.txt", "ok", create_backup=False)
     with pytest.raises(ValueError, match="escapes FileManager base directory"):
         manager.write("../outside.txt", "blocked", create_backup=False)
+
+
+def test_import_csv_handles_quoted_commas_and_newlines(fm):
+    fm.write("quoted.csv", 'name,notes\n"Ali, Jr.","hello, world"\n"Sara","line1\\nline2"\n', create_backup=False)
+    rows = fm.import_csv("quoted.csv")
+    assert rows[0]["name"] == "Ali, Jr."
+    assert rows[0]["notes"] == "hello, world"
+
+
+def test_list_files_rejects_nested_glob(fm):
+    with pytest.raises(ValueError):
+        fm.list_files(".", "../*")
