@@ -336,25 +336,52 @@ class MemoryManager:
         return save_path
 
     def restore(self, filepath: str) -> int:
-        """Restore memory from a snapshot."""
+        """Atomically replace persistent memory from a validated snapshot."""
         self._ensure_init()
-        snap_path = self._project_root / filepath
-        with open(snap_path) as f:
+        snap_path = (self._project_root / filepath).resolve()
+        try:
+            snap_path.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Memory snapshot path escapes project root: {filepath}") from exc
+        with open(snap_path, encoding="utf-8") as f:
             snapshot = json.load(f)
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("levels", {}), dict):
+            raise ValueError("Invalid memory snapshot format")
 
-        count = 0
-        for level_name, level_data in snapshot.get("levels", {}).items():
+        rows = []
+        allowed_levels = {level.value for level in get_persistent_levels()}
+        for level_name, level_data in snapshot["levels"].items():
+            if level_name not in allowed_levels or not isinstance(level_data, dict):
+                raise ValueError(f"Invalid memory level in snapshot: {level_name}")
             for entry in level_data.get("entries", []):
-                self.save(
-                    level=entry.get("level", level_name),
-                    category=entry.get("category", "general"),
-                    key=entry.get("key", ""),
-                    value=entry.get("value", ""),
-                    tags=entry.get("tags", ""),
-                    importance=entry.get("importance", 0.5),
-                )
-                count += 1
-        return count
+                if not isinstance(entry, dict):
+                    raise ValueError("Invalid memory entry in snapshot")
+                rows.append((
+                    entry.get("level", level_name),
+                    entry.get("category", "general"),
+                    entry.get("key", ""),
+                    entry.get("value", ""),
+                    entry.get("tags", ""),
+                    entry.get("importance", 0.5),
+                ))
+
+        with self._lock:
+            try:
+                with self._conn:
+                    for level in allowed_levels:
+                        self._conn.execute(
+                            "DELETE FROM memory_entries WHERE level = ?", (level,)
+                        )
+                    if rows:
+                        self._conn.executemany(
+                            "INSERT INTO memory_entries "
+                            "(level, category, key, value, tags, importance) "
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            rows,
+                        )
+            except Exception:
+                raise
+        return len(rows)
 
     # ── Health Check ────────────────────────
 
@@ -366,23 +393,24 @@ class MemoryManager:
             "overall": "PASS",
         }
 
-        # Check 1: Connection
+        # Check 1: Connection and entry counts under one connection lock.
         try:
-            self._conn.execute("SELECT 1")
-            report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
+            with self._lock:
+                self._conn.execute("SELECT 1")
+                report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
+                counts = {}
+                for level in MemoryLevel:
+                    if level == MemoryLevel.STM:
+                        counts[level.value] = len(self._stm_buffer)
+                    else:
+                        cursor = self._conn.execute(
+                            "SELECT COUNT(*) as c FROM memory_entries WHERE level = ?", (level.value,)
+                        )
+                        counts[level.value] = cursor.fetchone()["c"]
         except Exception as e:
             report["checks"]["connection"] = {"status": "FAIL", "message": str(e)}
-
-        # Check 2: Entry counts per level
-        counts = {}
-        for level in MemoryLevel:
-            if level == MemoryLevel.STM:
-                counts[level.value] = len(self._stm_buffer)
-            else:
-                cursor = self._conn.execute(
-                    "SELECT COUNT(*) as c FROM memory_entries WHERE level = ?", (level.value,)
-                )
-                counts[level.value] = cursor.fetchone()["c"]
+            report["overall"] = "FAIL"
+            return report
         report["checks"]["entry_counts"] = {"status": "PASS", "message": str(counts)}
 
         # Check 3: STM overflow warning
@@ -411,25 +439,24 @@ class MemoryManager:
 
     def get_stats(self) -> Dict[str, Any]:
         self._ensure_init()
-        stats = {"levels": {}, "total_persistent": 0, "stm_buffer": len(self._stm_buffer)}
-
-        for level in MemoryLevel:
-            if level == MemoryLevel.STM:
-                count = len(self._stm_buffer)
-            else:
-                cursor = self._conn.execute(
-                    "SELECT COUNT(*) as c FROM memory_entries WHERE level = ?", (level.value,)
-                )
-                count = cursor.fetchone()["c"]
-            config = get_level_config(level)
-            stats["levels"][level.value] = {
-                "count": count,
-                "max": config.max_entries,
-                "utilization": f"{(count / config.max_entries * 100):.1f}%",
-            }
-            stats["total_persistent"] += count
-
-        return stats
+        with self._lock:
+            stats = {"levels": {}, "total_persistent": 0, "stm_buffer": len(self._stm_buffer)}
+            for level in MemoryLevel:
+                if level == MemoryLevel.STM:
+                    count = len(self._stm_buffer)
+                else:
+                    cursor = self._conn.execute(
+                        "SELECT COUNT(*) as c FROM memory_entries WHERE level = ?", (level.value,)
+                    )
+                    count = cursor.fetchone()["c"]
+                config = get_level_config(level)
+                stats["levels"][level.value] = {
+                    "count": count,
+                    "max": config.max_entries,
+                    "utilization": f"{(count / config.max_entries * 100):.1f}%",
+                }
+                stats["total_persistent"] += count
+            return stats
 
     # ── Internal ────────────────────────────
 
