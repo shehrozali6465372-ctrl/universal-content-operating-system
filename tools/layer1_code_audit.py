@@ -23,7 +23,7 @@ def norm_source(node: ast.AST) -> str:
     return ast.dump(node, annotate_fields=True, include_attributes=False)
 
 def audit():
-    files = sorted(list((LAYER / "modules").rglob("*.py")) + list((LAYER / "tests").rglob("*.py")))
+    files = sorted([LAYER / "__init__.py"] + list((LAYER / "modules").rglob("*.py")) + list((LAYER / "tests").rglob("*.py")))
     modules = {}
     symbols = {}
     calls = []
@@ -93,7 +93,7 @@ def audit():
             orphan_candidates.append(q)
 
     report = {
-        "scope": ["layers/layer01_core/modules", "layers/layer01_core/tests"],
+        "scope": ["layers/layer01_core/__init__.py", "layers/layer01_core/modules", "layers/layer01_core/tests"],
         "modules": modules,
         "symbols": symbols,
         "imports": imports,
