@@ -10,6 +10,7 @@ from enum import Enum
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 import uuid
+from threading import RLock
 
 
 class TaskPriority(str, Enum):
@@ -62,20 +63,31 @@ class TaskQueue:
 
     def __init__(self):
         self._tasks: Dict[str, Task] = {}
+        self._lock = RLock()
 
     def add(self, task: Task) -> str:
-        self._tasks[task.task_id] = task
-        return task.task_id
+        with self._lock:
+            # Task name + job type is the idempotency key while an equivalent
+            # task is active. Callers can use a unique name to enqueue a new run.
+            for existing in self._tasks.values():
+                if existing.name == task.name and existing.job_type == task.job_type and existing.status in (
+                    TaskStatus.PENDING, TaskStatus.WAITING, TaskStatus.RUNNING
+                ):
+                    return existing.task_id
+            self._tasks[task.task_id] = task
+            return task.task_id
 
     def get(self, task_id: str) -> Optional[Task]:
-        return self._tasks.get(task_id)
+        with self._lock:
+            return self._tasks.get(task_id)
 
     def next_task(self) -> Optional[Task]:
         """Get the highest priority task that's ready to run."""
-        ready = [
-            t for t in self._tasks.values()
-            if t.status == TaskStatus.PENDING and self._dependencies_met(t)
-        ]
+        with self._lock:
+            ready = [
+                t for t in self._tasks.values()
+                if t.status == TaskStatus.PENDING and self._dependencies_met(t)
+            ]
         if not ready:
             return None
         ready.sort()
@@ -88,29 +100,34 @@ class TaskQueue:
         )
 
     def update_status(self, task_id: str, status: TaskStatus) -> None:
-        if task_id in self._tasks:
-            self._tasks[task_id].status = status
+        with self._lock:
+            if task_id in self._tasks:
+                self._tasks[task_id].status = status
 
     def get_by_status(self, status: TaskStatus) -> List[Task]:
-        return [t for t in self._tasks.values() if t.status == status]
+        with self._lock:
+            return [t for t in self._tasks.values() if t.status == status]
 
     def get_by_name(self, name: str) -> Optional[Task]:
-        for t in self._tasks.values():
-            if t.name == name:
-                return t
-        return None
+        with self._lock:
+            for t in self._tasks.values():
+                if t.name == name:
+                    return t
+            return None
 
     def cancel(self, task_id: str) -> bool:
-        if task_id in self._tasks:
-            self._tasks[task_id].status = TaskStatus.CANCELLED
-            return True
+        with self._lock:
+            if task_id in self._tasks:
+                self._tasks[task_id].status = TaskStatus.CANCELLED
+                return True
         return False
 
     def clear_completed(self) -> None:
-        self._tasks = {
-            tid: t for tid, t in self._tasks.items()
-            if t.status not in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
-        }
+        with self._lock:
+            self._tasks = {
+                tid: t for tid, t in self._tasks.items()
+                if t.status not in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
+            }
 
     @property
     def pending_count(self) -> int:
@@ -118,4 +135,5 @@ class TaskQueue:
 
     @property
     def total_count(self) -> int:
-        return len(self._tasks)
+        with self._lock:
+            return len(self._tasks)
