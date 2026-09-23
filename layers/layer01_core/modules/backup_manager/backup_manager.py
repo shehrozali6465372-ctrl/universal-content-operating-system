@@ -277,13 +277,19 @@ class BackupManager:
             temp_dir = Path(tempfile.mkdtemp(dir=str(self._backup_dir), prefix=".verify-"))
             try:
                 temp_file = temp_dir / "payload"
-                with gzip.open(str(backup_file), "rb") as src, open(str(temp_file), "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+                try:
+                    with gzip.open(str(backup_file), "rb") as src, open(str(temp_file), "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                except (OSError, EOFError, gzip.BadGzipFile):
+                    return False
                 current_hash = self._calculate_hash(temp_file)
             finally:
                 shutil.rmtree(str(temp_dir), ignore_errors=True)
         else:
-            current_hash = self._calculate_hash(backup_file)
+            try:
+                current_hash = self._calculate_hash(backup_file)
+            except OSError:
+                return False
         return current_hash == entry.hash_sha256
 
     def verify_all(self) -> Dict[str, bool]:
