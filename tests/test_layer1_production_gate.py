@@ -64,6 +64,18 @@ def test_backup_compressed_restore_verifies_payload(tmp_path):
     assert bm.restore(entry.backup_id, str(target))
     assert target.read_text() == "production payload"
 
+def test_backup_restore_rejects_tampered_artifact(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("protected payload")
+    bm = BackupManager(str(tmp_path / "backups"))
+    entry = bm.backup("test", str(source), compress=True)
+    backup = tmp_path / "backups" / entry.filepath
+    with backup.open("ab") as fh:
+        fh.write(b"tamper")
+    assert bm.verify_integrity(entry.backup_id) is False
+    with pytest.raises(Exception, match="Integrity"):
+        bm.restore(entry.backup_id, str(tmp_path / "restore.txt"))
+
 
 def test_scheduler_deduplicates_and_times_out():
     scheduler = SchedulerManager()
