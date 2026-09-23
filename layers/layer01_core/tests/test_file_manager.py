@@ -256,3 +256,10 @@ class TestHealthCheck:
         fm.backup("bk.txt")
         report = fm.health_check()
         assert "backups" in report["checks"]
+
+
+def test_path_escape_is_rejected(tmp_path):
+    manager = FileManager(base_path=str(tmp_path / "files"))
+    manager.write("inside.txt", "ok", create_backup=False)
+    with pytest.raises(ValueError, match="escapes FileManager base directory"):
+        manager.write("../outside.txt", "blocked", create_backup=False)
