@@ -201,3 +201,24 @@ class TestHealthCheck:
         report = sm.health_check()
         assert report["checks"]["master_key"]["status"] == "FAIL"
         assert report["overall"] == "FAIL"
+
+
+@pytest.mark.skipif(not FERNET_AVAILABLE, reason="cryptography not installed")
+def test_corrupt_existing_secret_fails_closed(sm):
+    from layers.layer01_core.modules.exceptions import SecretAccessError
+    sm.store("CORRUPT_KEY", "secret-value")
+    raw = sm._key_store.load()
+    raw["CORRUPT_KEY"] = "not-a-valid-fernet-token"
+    sm._key_store.save(raw)
+    with pytest.raises(SecretAccessError):
+        sm.retrieve("CORRUPT_KEY")
+    logs = sm.get_audit_for_secret("CORRUPT_KEY")
+    assert logs[-1]["action"] == "FAILED_ACCESS"
+    assert logs[-1]["details"] == "Decryption failed"
+
+@pytest.mark.skipif(not FERNET_AVAILABLE, reason="cryptography not installed")
+def test_rotate_does_not_create_delete_gap(sm):
+    sm.store("ROTATE_KEY", "old")
+    assert sm.rotate("ROTATE_KEY", "new") is True
+    assert sm.retrieve("ROTATE_KEY") == "new"
+    assert sm.count() == 1
