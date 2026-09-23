@@ -7,6 +7,7 @@ import sqlite3
 import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
@@ -20,12 +21,21 @@ from layers.layer01_core.modules.migrations import MigrationManager
 class DatabaseManager:
     def __init__(self, db_path: str = "data/agent.db", project_root: Optional[str] = None):
         self._project_root = Path(project_root) if project_root else Path.cwd()
-        self._db_path = self._project_root / db_path
+        self._db_path = self._safe_path(db_path, "database path")
         self._conn: Optional[sqlite3.Connection] = None
         self._migration_manager: Optional[MigrationManager] = None
         self._initialized = False
         self._in_transaction = False
         self._lock = RLock()
+
+    def _safe_path(self, path: str, label: str) -> Path:
+        raw = Path(path)
+        candidate = raw.resolve() if raw.is_absolute() else (self._project_root / raw).resolve()
+        try:
+            candidate.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"{label} escapes project root: {path}") from exc
+        return candidate
 
     @property
     def db_path(self) -> Path:
@@ -51,10 +61,11 @@ class DatabaseManager:
         return self
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
-            self._initialized = False
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
+                self._initialized = False
 
     @contextmanager
     def transaction(self):
@@ -148,34 +159,81 @@ class DatabaseManager:
     def count(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
-        return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {self._where_clause(where)}", params).fetchone()["c"]
+        with self._lock:
+            return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {self._where_clause(where)}", params).fetchone()["c"]
 
     def table_exists(self, name: str) -> bool:
         self._ensure_init()
         name = self._identifier(name)
-        return self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+        with self._lock:
+            return self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
     def get_tables(self) -> List[str]:
         self._ensure_init()
-        return [r["name"] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'schema_version'").fetchall()]
+        with self._lock:
+            return [r["name"] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'schema_version'").fetchall()]
 
     # ── Backup & Restore ────────────────────
 
     def backup(self, backup_path: str) -> Path:
         self._ensure_init()
-        dest = self._project_root / backup_path
+        dest = self._safe_path(backup_path, "backup path")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(dest)) as bc:
-            self._conn.backup(bc)
+        with self._lock:
+            with sqlite3.connect(str(dest)) as bc:
+                self._conn.backup(bc)
         return dest
 
     def restore(self, backup_path: str) -> None:
-        bf = Path(backup_path) if Path(backup_path).is_absolute() else self._project_root / backup_path
-        if not bf.exists():
+        """Atomically replace the live DB after validating the backup."""
+        bf = self._safe_path(backup_path, "backup path")
+        if not bf.exists() or not bf.is_file():
             raise FileNotFoundError(f"Backup not found: {backup_path}")
-        self.close()
-        shutil.copy2(str(bf), str(self._db_path))
-        self.initialize()
+        with sqlite3.connect(str(bf)) as check_conn:
+            if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError("Backup integrity check failed")
+        with self._lock:
+            was_initialized = self._initialized
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+                self._initialized = False
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, staged_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".restore.tmp")
+            os.close(fd)
+            staged = Path(staged_name)
+            old_name = None
+            try:
+                shutil.copy2(str(bf), str(staged))
+                with sqlite3.connect(str(staged)) as check_conn:
+                    if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                        raise RuntimeError("Staged backup integrity check failed")
+                if self._db_path.exists():
+                    fd, old_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".pre_restore.tmp")
+                    os.close(fd)
+                    os.replace(str(self._db_path), old_name)
+                os.replace(str(staged), str(self._db_path))
+                staged = None
+                if was_initialized:
+                    try:
+                        self.initialize()
+                    except Exception:
+                        if self._db_path.exists():
+                            os.unlink(self._db_path)
+                        if old_name and os.path.exists(old_name):
+                            os.replace(old_name, str(self._db_path))
+                        self.initialize()
+                        raise
+                if old_name and os.path.exists(old_name):
+                    os.unlink(old_name)
+            except Exception:
+                if staged and staged.exists():
+                    staged.unlink()
+                if old_name and os.path.exists(old_name) and not self._db_path.exists():
+                    os.replace(old_name, str(self._db_path))
+                if was_initialized and not self._initialized:
+                    self.initialize()
+                raise
 
     # ── Health Check ────────────────────────
 
