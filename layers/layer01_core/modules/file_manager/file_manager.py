@@ -21,6 +21,7 @@ import tempfile
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from io import StringIO
 from datetime import datetime, timezone
 from threading import Lock
 
@@ -127,6 +128,8 @@ class FileManager:
         return self._resolve(filepath).exists()
 
     def list_files(self, dir_path: str = ".", pattern: str = "*") -> List[str]:
+        if not isinstance(pattern, str) or not pattern or any(sep in pattern for sep in ("/", "\\")):
+            raise ValueError("file glob pattern must not contain path separators")
         d = self._resolve(dir_path)
         if not d.exists():
             return []
@@ -194,9 +197,19 @@ class FileManager:
         if not full.exists():
             return None
         gz_path = full.with_suffix(full.suffix + ".gz")
-        with open(full, "rb") as f_in:
-            with gzip.open(str(gz_path), "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        fd, tmp_name = tempfile.mkstemp(dir=str(gz_path.parent), suffix=".gz.tmp")
+        os.close(fd)
+        try:
+            with open(full, "rb") as f_in:
+                with gzip.open(tmp_name, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            os.replace(tmp_name, str(gz_path))
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         return str(gz_path.relative_to(self._base))
 
     def decompress(self, gz_path: str) -> Optional[str]:
@@ -204,10 +217,23 @@ class FileManager:
         full = self._resolve(gz_path)
         if not full.exists():
             return None
-        out_path = full.with_suffix("")  # Remove .gz
-        with gzip.open(str(full), "rb") as f_in:
-            with open(str(out_path), "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        out_path = full.with_suffix("")
+        fd, tmp_name = tempfile.mkstemp(dir=str(out_path.parent), suffix=".decompress.tmp")
+        os.close(fd)
+        try:
+            with gzip.open(str(full), "rb") as f_in:
+                with open(tmp_name, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                    f_out.flush()
+                    os.fsync(f_out.fileno())
+            os.replace(tmp_name, str(out_path))
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+        self._cache.invalidate(str(out_path))
         return str(out_path.relative_to(self._base))
 
     # ── File Lock ───────────────────────────
@@ -231,22 +257,19 @@ class FileManager:
 
     def export_csv(self, filepath: str, headers: List[str], rows: List[List]) -> bool:
         full = self._resolve(filepath)
-        full.parent.mkdir(parents=True, exist_ok=True)
-        with open(full, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            writer.writerows(rows)
-        return True
+        output = StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        return self.write(filepath, output.getvalue(), create_backup=False)
 
     def import_csv(self, filepath: str) -> Optional[List[Dict]]:
         content = self.read(filepath)
         if content is None:
             return None
-        lines = content.strip().split("\n")
-        if len(lines) < 2:
+        if not content.strip():
             return []
-        headers = lines[0].split(",")
-        return [dict(row) for row in csv.DictReader(content.splitlines())]
+        return [dict(row) for row in csv.DictReader(StringIO(content))]
 
     # ── Cache Stats ─────────────────────────
 
