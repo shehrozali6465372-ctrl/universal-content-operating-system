@@ -199,9 +199,9 @@ class DatabaseManager:
         if not bf.exists() or not bf.is_file():
             raise FileNotFoundError(f"Backup not found: {backup_path}")
         try:
-        with sqlite3.connect(str(bf)) as check_conn:
-            if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise RuntimeError("Backup integrity check failed")
+            with sqlite3.connect(str(bf)) as check_conn:
+                if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise RuntimeError("Backup integrity check failed")
         except sqlite3.DatabaseError as exc:
             raise RuntimeError("Backup integrity check failed") from exc
         with self._lock:
