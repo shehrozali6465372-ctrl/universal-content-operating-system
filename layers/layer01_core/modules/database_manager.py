@@ -4,6 +4,7 @@ Layer 1: Core System — Module 4
 """
 
 import sqlite3
+import os
 import re
 import shutil
 from pathlib import Path
@@ -35,6 +36,10 @@ class DatabaseManager:
         return self._initialized
 
     def initialize(self) -> "DatabaseManager":
+        if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+            raise RuntimeError(
+                "Layer 1 local SQLite is development/test-only; production persistence is owned by Layer 13 PostgreSQL"
+            )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
