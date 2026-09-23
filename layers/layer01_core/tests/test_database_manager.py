@@ -255,3 +255,10 @@ def test_restore_rejects_corrupt_backup_without_touching_live_db(db, tmp_path):
         db.restore(str(corrupt))
     row = db.query_one("SELECT value FROM agent_config WHERE key = ?", ("keep",))
     assert row["value"] == "live"
+
+def test_where_clause_rejects_injection(db):
+    db.insert("agent_config", {"key": "safe", "value": "x"})
+    with pytest.raises(ValueError):
+        db.count("agent_config", "key = ? OR 1=1 --", ("safe",))
+    with pytest.raises(ValueError):
+        db.delete("agent_config", "key = ?; DELETE FROM agent_config", ("safe",))
