@@ -94,7 +94,7 @@ class SchedulerManager:
 
     # ── Execution ───────────────────────────
 
-    def run_task(self, task: Task) -> Dict[str, Any]:
+    def run_task(self, task: Task, _claimed: bool = False) -> Dict[str, Any]:
         """Execute a single task. Returns result dict."""
         result = {
             "task_id": task.task_id,
@@ -105,6 +105,11 @@ class SchedulerManager:
             "duration_ms": 0,
             "started_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        if not _claimed and not self._queue.claim(task.task_id):
+            result["status"] = "SKIPPED"
+            result["error"] = "Task is not pending or has already been claimed"
+            return result
 
         # Check conditions
         if task.conditions and not self._check_conditions(task.conditions):
@@ -184,7 +189,7 @@ class SchedulerManager:
         task = self._queue.next_task()
         if task is None:
             return None
-        return self.run_task(task)
+        return self.run_task(task, _claimed=True)
 
     def run_all(self) -> List[Dict[str, Any]]:
         """Run all pending tasks."""
@@ -231,17 +236,20 @@ class SchedulerManager:
             # Check if we're within 1 minute of the next run
             time_diff = abs((now - next_run).total_seconds())
             if time_diff < 60 and (last_run is None or next_run > last_run):
-                task = Task(
-                    name=job["name"],
-                    job_type=job["job_type"],
+                scheduled_name = f"{job['name']}@{next_run.isoformat()}"
+                task_id = self.add_task(
+                    scheduled_name,
+                    job["job_type"],
                     params=job["params"],
                 )
-                result = self.run_task(task)
+                task = self._queue.get(task_id)
+                if task is not None:
+                    result = self.run_task(task)
+                    results.append(result)
                 with self._lock:
                     current = self._cron_jobs.get(job_id)
                     if current is not None:
-                        current["last_run"] = now
-                results.append(result)
+                        current["last_run"] = next_run
 
         return results
 
