@@ -168,6 +168,8 @@ class DatabaseManager:
             report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
         except Exception as e:
             report["checks"]["connection"] = {"status": "FAIL", "message": str(e)}
+            report["overall"] = "FAIL"
+            return report
 
         expected = set(get_all_table_names())
         missing = expected - set(self.get_tables())
