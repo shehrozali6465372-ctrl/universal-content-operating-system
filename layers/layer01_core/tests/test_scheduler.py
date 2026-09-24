@@ -105,6 +105,24 @@ class TestTaskQueue:
         assert second is None
         assert q.get(tid).status == TaskStatus.RUNNING
 
+    def test_claim_rejects_unmet_dependency(self):
+        q = TaskQueue()
+        dep_id = q.add(Task(name="dependency", job_type="d"))
+        task_id = q.add(Task(name="dependent", job_type="d", dependencies=[dep_id]))
+        assert q.claim(task_id) is False
+        assert q.get(task_id).status == TaskStatus.PENDING
+
+    def test_claim_rejects_future_retry(self):
+        q = TaskQueue()
+        future = datetime.now().astimezone().replace(microsecond=0)
+        from datetime import timedelta
+        task_id = q.add(Task(
+            name="future", job_type="d",
+            not_before=(future + timedelta(minutes=5)).isoformat(),
+        ))
+        assert q.claim(task_id) is False
+        assert q.get(task_id).status == TaskStatus.PENDING
+
 
 # ── Test 3: Retry Manager ──────────────────
 
