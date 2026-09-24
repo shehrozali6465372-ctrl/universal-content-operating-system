@@ -345,9 +345,10 @@ class MemoryManager:
         """Search across all memory levels."""
         if not isinstance(limit, int) or not 1 <= limit <= 1000:
             raise ValueError("search limit must be between 1 and 1000")
+        normalized_levels = [self._normalize_level(level) for level in (levels or [])]
         query = SearchQuery(
             keyword=keyword,
-            levels=levels or [],
+            levels=normalized_levels,
             tags=tags or [],
             category=category,
             limit=limit,
@@ -365,8 +366,9 @@ class MemoryManager:
     def compress_level(self, level: str) -> int:
         """Compress a memory level by removing low-importance duplicates."""
         self._ensure_init()
-        config = get_level_config(MemoryLevel(level))
-        entries = self.load(level)
+        normalized_level = self._normalize_level(level)
+        config = get_level_config(MemoryLevel(normalized_level))
+        entries = self.load(normalized_level)
         if len(entries) <= config.max_entries:
             return 0
 
