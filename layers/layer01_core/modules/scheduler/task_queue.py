@@ -251,6 +251,21 @@ class TaskQueue:
             task.status = status
             self._save()
 
+    def replay(self, task_id: str) -> bool:
+        """Explicitly requeue a terminal task for deterministic replay."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise KeyError(f"Unknown task: {task_id}")
+            if task.status not in (TaskStatus.FAILED, TaskStatus.CANCELLED):
+                raise ValueError(
+                    f"Only FAILED or CANCELLED tasks can be explicitly replayed: {task.status.value}"
+                )
+            task.status = TaskStatus.PENDING
+            task.not_before = None
+            self._save()
+            return True
+
     def get_by_status(self, status: TaskStatus) -> List[Task]:
         with self._lock:
             return [t for t in self._tasks.values() if t.status == status]
