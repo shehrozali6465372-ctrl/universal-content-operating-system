@@ -115,3 +115,19 @@ class TestEventBus:
         self.bus.reset()
         assert self.bus.get_handler_count() == 0
         assert self.bus.get_stats()["total_publishes"] == 0
+
+
+def test_global_subscription_can_be_removed(event_bus):
+    def handler(_event):
+        pass
+    event_bus.subscribe_all(handler)
+    assert event_bus.unsubscribe_all(handler) is True
+    assert event_bus.unsubscribe_all(handler) is False
+
+
+def test_duplicate_subscriptions_are_ignored(event_bus):
+    def handler(_event):
+        pass
+    event_bus.subscribe_all(handler)
+    event_bus.subscribe_all(handler)
+    assert event_bus.subscriber_count() == 1
