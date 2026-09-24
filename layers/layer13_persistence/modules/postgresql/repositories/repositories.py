@@ -64,21 +64,39 @@ class MemoryRepository(BaseRepository):
         super().__init__(pool, "agent_memory")
 
     def save(self, level: str, category: str, key: str, value: str, tags: str = "", importance: float = 0.5) -> int:
-        existing = self._pool.query_one(
-            "SELECT id FROM agent_memory WHERE level = %s AND category = %s AND key = %s",
-            (level, category, key)
-        )
-        if existing:
-            self._pool.update("agent_memory", {
-                "value": value, "tags": tags, "importance": importance,
-                "updated_at": datetime.now(timezone.utc)
-            }, "id = %s", (existing["id"],))
-            return existing["id"]
-        else:
-            return self._pool.insert("agent_memory", {
-                "level": level, "category": category, "key": key,
-                "value": value, "tags": tags, "importance": importance,
-            })
+        """Upsert memory atomically on one Layer 13-owned connection."""
+        placeholder = "%s" if self._pool._pg_available else "?"
+        with self._pool.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT id FROM agent_memory WHERE level = {placeholder} "
+                f"AND category = {placeholder} AND key = {placeholder}",
+                (level, category, key),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                entry_id = existing[0] if not isinstance(existing, dict) else existing["id"]
+                cursor.execute(
+                    f"UPDATE agent_memory SET value = {placeholder}, tags = {placeholder}, "
+                    f"importance = {placeholder}, updated_at = {placeholder} WHERE id = {placeholder}",
+                    (value, tags, importance, datetime.now(timezone.utc), entry_id),
+                )
+                return entry_id
+            if self._pool._pg_available:
+                cursor.execute(
+                    "INSERT INTO agent_memory "
+                    "(level, category, key, value, tags, importance) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                    (level, category, key, value, tags, importance),
+                )
+                return cursor.fetchone()[0]
+            cursor.execute(
+                "INSERT INTO agent_memory "
+                "(level, category, key, value, tags, importance) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (level, category, key, value, tags, importance),
+            )
+            return cursor.lastrowid
 
     def load(self, level: str, category: str, key: str) -> Optional[str]:
         row = self._pool.query_one(
