@@ -308,3 +308,12 @@ class TestHealthCheck:
         report = scheduler.health_check()
         assert "checks" in report
         assert "overall" in report
+
+
+def test_cron_rejects_invalid_step_and_range():
+    with pytest.raises(ValueError):
+        CronParser("*/0 * * * *")
+    with pytest.raises(ValueError):
+        CronParser("61 * * * *")
+    with pytest.raises(ValueError):
+        CronParser("5-2 * * * *")
