@@ -101,8 +101,15 @@ class TaskQueue:
             # Task name + job type is the idempotency key while an equivalent
             # task is active. Callers can use a unique name to enqueue a new run.
             for existing in self._tasks.values():
-                if existing.name == task.name and existing.job_type == task.job_type and existing.status in (
-                    TaskStatus.PENDING, TaskStatus.WAITING, TaskStatus.RUNNING
+                if (
+                    existing.name == task.name
+                    and existing.job_type == task.job_type
+                    and existing.params == task.params
+                    and existing.dependencies == task.dependencies
+                    and existing.conditions == task.conditions
+                    and existing.status in (
+                        TaskStatus.PENDING, TaskStatus.WAITING, TaskStatus.RUNNING
+                    )
                 ):
                     return existing.task_id
             self._tasks[task.task_id] = task
