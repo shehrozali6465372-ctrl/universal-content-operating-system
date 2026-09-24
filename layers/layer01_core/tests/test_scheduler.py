@@ -89,6 +89,23 @@ class TestTaskQueue:
         q.cancel(tid)
         assert q.get(tid).status == TaskStatus.CANCELLED
 
+    def test_invalid_status_transition_is_rejected(self):
+        q = TaskQueue()
+        tid = q.add(Task(name="terminal", job_type="d"))
+        q.update_status(tid, TaskStatus.CANCELLED)
+        with pytest.raises(ValueError, match="Invalid task status transition"):
+            q.update_status(tid, TaskStatus.RUNNING)
+
+    def test_running_task_is_terminalized_after_restart(self, tmp_path):
+        path = tmp_path / "queue.json"
+        q = TaskQueue(persist_path=str(path))
+        tid = q.add(Task(name="crash-safe", job_type="d"))
+        assert q.next_task().task_id == tid
+
+        restarted = TaskQueue(persist_path=str(path))
+        assert restarted.get(tid).status == TaskStatus.FAILED
+        assert restarted.next_task() is None
+
     def test_stats(self):
         q = TaskQueue()
         q.add(Task(name="a", job_type="d"))
