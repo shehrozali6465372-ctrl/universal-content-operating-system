@@ -34,6 +34,30 @@ class ConnectionConfig:
     max_retries: int = 3
     retry_delays: tuple = (0.5, 1.0, 2.0)
 
+    def __post_init__(self) -> None:
+        integer_fields = {
+            "port": self.port,
+            "min_connections": self.min_connections,
+            "max_connections": self.max_connections,
+            "connection_timeout": self.connection_timeout,
+            "idle_timeout": self.idle_timeout,
+            "max_retries": self.max_retries,
+        }
+        for name, value in integer_fields.items():
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.min_connections > self.max_connections:
+            raise ValueError("min_connections must not exceed max_connections")
+        if not isinstance(self.retry_delays, tuple) or not self.retry_delays:
+            raise ValueError("retry_delays must be a non-empty tuple")
+        if any(
+            not isinstance(delay, (int, float))
+            or isinstance(delay, bool)
+            or delay < 0
+            for delay in self.retry_delays
+        ):
+            raise ValueError("retry_delays must contain non-negative numbers")
+
     @classmethod
     def from_env(cls) -> "ConnectionConfig":
         return cls(
@@ -263,6 +287,8 @@ class ConnectionPool:
 
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         """Insert a row and return the inserted ID (with retry)."""
+        if not isinstance(data, dict) or not data:
+            raise ValueError("insert data must be a non-empty dictionary")
         def _do():
             table_name = self._identifier(table)
             cols = ", ".join(self._identifier(k) for k in data.keys())
@@ -286,9 +312,14 @@ class ConnectionPool:
         """Insert multiple rows (with retry)."""
         if not rows:
             return 0
+        if not all(isinstance(row, dict) and row for row in rows):
+            raise ValueError("insert_many rows must be non-empty dictionaries")
+        columns = tuple(rows[0].keys())
+        if any(tuple(row.keys()) != columns for row in rows[1:]):
+            raise ValueError("insert_many rows must have identical columns")
         def _do():
             table = self._identifier(table)
-            cols = ", ".join(self._identifier(k) for k in rows[0].keys())
+            cols = ", ".join(self._identifier(k) for k in columns)
             ph = self._placeholder()
             phs = ", ".join([ph for _ in rows[0]])
             sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
