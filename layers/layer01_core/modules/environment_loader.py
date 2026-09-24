@@ -29,7 +29,12 @@ class EnvironmentLoader:
 
     def __init__(self, project_root: Optional[str] = None, audit_log_path: str = "logs/audit.log"):
         self._project_root = (Path(project_root) if project_root else Path.cwd()).resolve()
-        self._audit = AuditLogger(str(self._project_root / audit_log_path))
+        audit_path = (self._project_root / audit_log_path).resolve()
+        try:
+            audit_path.relative_to(self._project_root)
+        except ValueError as exc:
+            raise ValueError("Environment audit path escapes project root") from exc
+        self._audit = AuditLogger(str(audit_path))
         self._current_profile: Optional[str] = None
         self._env: Dict[str, str] = {}
         self._loaded = False
