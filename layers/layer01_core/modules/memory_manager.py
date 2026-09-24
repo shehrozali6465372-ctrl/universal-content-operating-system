@@ -14,6 +14,7 @@ Designed with swappable backend (SQLite → Vector DB later).
 import sqlite3
 import os
 import json
+import math
 import time
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -106,8 +107,31 @@ class MemoryManager:
     ) -> int:
         """Save a memory entry. Returns entry ID."""
         self._ensure_init()
+        self._validate_entry(level, category, key, value, importance)
         with self._lock:
             return self._save_locked(level, category, key, value, tags, importance)
+
+    @staticmethod
+    def _validate_entry(
+        level: str,
+        category: str,
+        key: str,
+        value: str,
+        importance: float,
+    ) -> None:
+        allowed_levels = {member.value for member in MemoryLevel}
+        if level not in allowed_levels:
+            raise ValueError(f"Invalid memory level: {level}")
+        if not isinstance(category, str) or not category.strip():
+            raise ValueError("Memory category cannot be empty")
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("Memory key cannot be empty")
+        if not isinstance(value, str):
+            raise TypeError("Memory value must be a string")
+        if not isinstance(importance, (int, float)) or isinstance(importance, bool):
+            raise TypeError("Memory importance must be numeric")
+        if not math.isfinite(float(importance)) or not 0.0 <= float(importance) <= 1.0:
+            raise ValueError("Memory importance must be between 0 and 1")
 
     def _save_locked(self, level: str, category: str, key: str, value: str, tags: str, importance: float) -> int:
         # STM goes to RAM buffer
