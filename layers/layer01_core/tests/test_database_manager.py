@@ -73,6 +73,12 @@ class TestMigrations:
         pending_after_v1 = registry.get_pending(1)
         assert len(pending_after_v1) == 1
 
+    def test_migration_registry_rejects_duplicate_versions(self):
+        registry = MigrationRegistry()
+        registry.register(1, "First", "CREATE TABLE t1 (id INTEGER PRIMARY KEY);")
+        with pytest.raises(ValueError, match="duplicate migration version"):
+            registry.register(1, "Duplicate", "CREATE TABLE t2 (id INTEGER PRIMARY KEY);")
+
 
 # ── Test 3: Insert ─────────────────────────
 
