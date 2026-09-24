@@ -11,9 +11,11 @@ from threading import RLock
 
 
 class FileCache:
-    """LRU cache for file content with TTL support."""
+    """LRU cache for file content."""
 
     def __init__(self, max_size: int = 100):
+        if not isinstance(max_size, int) or isinstance(max_size, bool) or max_size < 1:
+            raise ValueError("max_size must be a positive integer")
         self._cache: OrderedDict[str, dict] = OrderedDict()
         self._max_size = max_size
         self._hits = 0
