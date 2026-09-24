@@ -268,3 +268,15 @@ def test_where_clause_rejects_injection(db):
         db.count("agent_config", "key = ? OR 1=1 --", ("safe",))
     with pytest.raises(ValueError):
         db.delete("agent_config", "key = ?; DELETE FROM agent_config", ("safe",))
+
+
+def test_failed_initialization_closes_connection(tmp_path, monkeypatch):
+    from layers.layer01_core.modules.database_manager import DatabaseManager
+    manager = DatabaseManager(str(tmp_path / "db.sqlite"))
+    def fail_migrate(self):
+        raise RuntimeError("migration failure")
+    monkeypatch.setattr("layers.layer01_core.modules.migrations.MigrationManager.migrate", fail_migrate)
+    with pytest.raises(RuntimeError, match="migration failure"):
+        manager.initialize()
+    assert manager._conn is None
+    assert manager.is_initialized is False
