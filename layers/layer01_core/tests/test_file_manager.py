@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 """
 Tests for File Manager Module
 Layer 1: Core System — Module 8
@@ -307,3 +308,13 @@ def test_import_csv_handles_quoted_commas_and_newlines(fm):
 def test_list_files_rejects_nested_glob(fm):
     with pytest.raises(ValueError):
         fm.list_files(".", "../*")
+
+
+    def test_concurrent_writes_are_serialized(self, fm):
+        def do_write(i):
+            fm.write("concurrent.txt", f"payload-{i}", create_backup=False)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(do_write, range(32)))
+        value = fm.read("concurrent.txt", use_cache=False)
+        assert value is not None
+        assert value.startswith("payload-")
