@@ -19,6 +19,7 @@ import tempfile
 import os
 import hashlib
 import uuid
+import copy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -297,7 +298,7 @@ class BackupManager:
                 return False
             entry = self._entries[backup_id]
 
-        backup_file = self._backup_dir / entry.filepath
+        backup_file = self._safe_backup_path(entry.filepath)
         if not backup_file.exists():
             return False
 
@@ -386,7 +387,7 @@ class BackupManager:
         with self._lock:
             if backup_id not in self._entries:
                 raise BackupNotFoundError(f"Backup '{backup_id}' not found")
-            return self._entries[backup_id]
+            return copy.deepcopy(self._entries[backup_id])
 
     def delete_backup(self, backup_id: str) -> bool:
         with self._lock:
@@ -431,7 +432,9 @@ class BackupManager:
             except Exception:
                 results[bid] = False
 
-        self._audit("DISASTER_RECOVERY", "*", f"target={target_dir}")
+        with self._lock:
+            self._audit("DISASTER_RECOVERY", "*", f"target={target_dir}")
+            self._save_registry()
         return results
 
     # ── Audit Trail ─────────────────────────
