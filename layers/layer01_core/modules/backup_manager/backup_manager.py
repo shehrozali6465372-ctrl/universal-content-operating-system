@@ -170,7 +170,14 @@ class BackupManager:
             raise
 
         # Calculate the hash of the exact uncompressed backup payload.
-        file_hash = self._calculate_hash(backup_path)
+        try:
+            file_hash = self._calculate_hash(backup_path)
+        except Exception:
+            if backup_path.is_dir():
+                shutil.rmtree(str(backup_path), ignore_errors=True)
+            else:
+                backup_path.unlink(missing_ok=True)
+            raise
 
         # Compress if requested, using a staged container so a failed
         # compression never destroys the valid uncompressed backup.
@@ -190,6 +197,7 @@ class BackupManager:
                     os.unlink(tmp_gz)
                 except OSError:
                     pass
+                backup_path.unlink(missing_ok=True)
                 raise
             backup_path.unlink()
             final_path = gz_path
@@ -208,9 +216,19 @@ class BackupManager:
         )
 
         with self._lock:
+            previous_audit_len = len(self._audit_log)
             self._entries[backup_id] = entry
             self._audit("CREATE", backup_id, f"source={source}, size={size}")
-            self._save_registry()
+            try:
+                self._save_registry()
+            except Exception:
+                self._entries.pop(backup_id, None)
+                del self._audit_log[previous_audit_len:]
+                if final_path.is_dir():
+                    shutil.rmtree(str(final_path), ignore_errors=True)
+                else:
+                    final_path.unlink(missing_ok=True)
+                raise
         return entry
 
     def backup_json(self, source: str, data: Any,
