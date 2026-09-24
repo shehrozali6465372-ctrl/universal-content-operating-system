@@ -155,6 +155,30 @@ class TestRetryManager:
         assert rm.get_retry_count("t1") == 0
 
 
+    def test_validation_rejects_invalid_delays(self):
+        with pytest.raises(ValueError):
+            RetryManager(base_delay=-1)
+        with pytest.raises(ValueError):
+            RetryManager(base_delay=10, max_delay=1)
+
+    def test_validation_rejects_invalid_retry_limit(self):
+        rm = RetryManager()
+        with pytest.raises(ValueError):
+            rm.should_retry("t1", max_retries=-1)
+
+    def test_corrupt_persistence_fails_closed(self, tmp_path):
+        path = tmp_path / "retries.json"
+        path.write_text("{not-json", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="Retry persistence is unreadable"):
+            RetryManager(persist_path=str(path))
+
+    def test_clear_is_safe_with_stats(self, tmp_path):
+        rm = RetryManager(persist_path=str(tmp_path / "retries.json"))
+        rm.record_failure("t1")
+        rm.clear()
+        assert rm.get_stats() == {"tasks_with_retries": 0, "total_retry_count": 0}
+
+
 # ── Test 4: Scheduler Manager ──────────────
 
 class TestSchedulerManager:
