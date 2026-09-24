@@ -226,21 +226,25 @@ class FileManager:
     # ── Hash Verification ───────────────────
 
     def calculate_hash(self, filepath: str) -> Optional[str]:
-        full = self._resolve(filepath)
-        if not full.exists():
-            return None
-        return calculate_hash(str(full))
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if not full.exists():
+                return None
+            return calculate_hash(str(full))
 
     def verify_hash(self, filepath: str) -> tuple:
-        """Returns (match, current_hash)"""
-        full = self._resolve(filepath)
-        return verify_hash(str(full))
+        """Returns (match, current_hash)."""
+        with self._global_lock:
+            full = self._resolve(filepath)
+            return verify_hash(str(full))
 
     def save_and_verify(self, filepath: str, content: str) -> bool:
-        """Write file with automatic hash save."""
-        self.write(filepath, content, create_backup=False)
-        save_hash(str(self._resolve(filepath)))
-        return True
+        """Write file with automatic hash save as one serialized operation."""
+        with self._global_lock:
+            full = self._resolve(filepath)
+            self.write(filepath, content, create_backup=False)
+            save_hash(str(full))
+            return True
 
     # ── Compression ─────────────────────────
 
