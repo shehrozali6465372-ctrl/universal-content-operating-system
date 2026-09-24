@@ -275,8 +275,13 @@ class SchedulerManager:
                 # Reserve this schedule occurrence while holding the same lock
                 # used by all cron writers, preventing concurrent schedulers from
                 # enqueueing/executing the same occurrence twice.
+                previous_last_run = current.get("last_run")
                 current["last_run"] = next_run.isoformat()
-                self._save_cron_jobs()
+                try:
+                    self._save_cron_jobs()
+                except Exception:
+                    current["last_run"] = previous_last_run
+                    raise
                 scheduled_name = f"{current['name']}@{next_run.isoformat()}"
                 job_type = current["job_type"]
                 params = dict(current["params"])
