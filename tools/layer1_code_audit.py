@@ -130,5 +130,7 @@ if __name__ == "__main__":
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(report["summary"], sort_keys=True))
+    print("DUPLICATE_BODY_GROUPS=" + json.dumps(report["duplicate_body_groups"], sort_keys=True))
+    print("ORPHAN_CANDIDATES=" + json.dumps(report["orphan_candidates"], sort_keys=True))
     if report["syntax_errors"]:
         raise SystemExit(2)
