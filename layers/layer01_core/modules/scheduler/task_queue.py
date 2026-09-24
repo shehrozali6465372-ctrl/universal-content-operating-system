@@ -64,6 +64,16 @@ class Task:
             raise ValueError("task name must be a non-empty string")
         if not isinstance(self.job_type, str) or not self.job_type.strip():
             raise ValueError("job_type must be a non-empty string")
+        if not isinstance(self.task_id, str) or not self.task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
+        if not isinstance(self.created_at, str):
+            raise TypeError("created_at must be an ISO-8601 string")
+        try:
+            created = datetime.fromisoformat(self.created_at)
+        except ValueError as exc:
+            raise ValueError("created_at must be a valid ISO-8601 timestamp") from exc
+        if created.tzinfo is None or created.utcoffset() is None:
+            raise ValueError("created_at must include a timezone offset")
         if not isinstance(self.params, dict):
             raise TypeError("task params must be a dictionary")
         try:
