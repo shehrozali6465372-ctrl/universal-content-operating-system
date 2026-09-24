@@ -69,6 +69,12 @@ def test_production_runtime_contracts_with_real_layer13_postgresql(tmp_path, mon
             memory_backend=Layer1PostgreSQLMemoryBackend(pg),
         )
         assert runtime.health_check()["ready"] is True
+        entry_id = runtime.memory.save(
+            "long_term", "contract", "layer1-production", "verified", importance=0.9
+        )
+        rows = runtime.memory.load("long_term", "contract", "layer1-production")
+        assert any(row["id"] == entry_id and row["value"] == "verified" for row in rows)
+        assert runtime.memory.delete_by_level("long_term") >= 1
     finally:
         runtime.shutdown()
 
