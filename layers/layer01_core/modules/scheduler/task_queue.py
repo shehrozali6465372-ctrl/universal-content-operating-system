@@ -302,8 +302,13 @@ class TaskQueue:
             task = self._tasks.get(task_id)
             if task is None or task.status not in (TaskStatus.PENDING, TaskStatus.WAITING):
                 return False
+            previous_status = task.status
             task.status = TaskStatus.CANCELLED
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                task.status = previous_status
+                raise
             return True
 
     def clear_completed(self) -> None:
