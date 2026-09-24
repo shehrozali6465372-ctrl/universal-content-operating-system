@@ -118,3 +118,30 @@ def test_production_start_fails_closed_on_unhealthy_persistence(tmp_path, monkey
             memory_backend=_FailingBackend(),
         )
     assert runtime.is_ready is False
+
+
+class _CountingBackend:
+    def __init__(self):
+        self.closed = 0
+
+    def health_check(self):
+        return {"overall": "PASS", "checks": {}}
+
+    def close(self):
+        self.closed += 1
+
+
+def test_production_shutdown_closes_shared_persistence_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "test-page")
+    monkeypatch.setenv("FACEBOOK_ACCESS_TOKEN", "test-token")
+    runtime = Layer1Runtime(project_root=str(tmp_path))
+    backend = _CountingBackend()
+    runtime.start(
+        profile="production",
+        master_key="runtime-test-master-key",
+        database_backend=backend,
+        memory_backend=backend,
+    )
+    runtime.shutdown()
+    assert backend.closed == 1
