@@ -291,6 +291,8 @@ class SettingsManager:
 
     def rollback(self, key: str, steps: int = 1) -> bool:
         """Rollback a setting to a previous value."""
+        if not isinstance(steps, int) or isinstance(steps, bool) or steps < 1:
+            raise ValueError("rollback steps must be a positive integer")
         with self._lock:
             history_for_key = [h for h in self._history if h["key"] == key]
             if len(history_for_key) < steps:
@@ -315,6 +317,8 @@ class SettingsManager:
         return True
 
     def get_history(self, key: Optional[str] = None, limit: int = 20) -> List[dict]:
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("history limit must be a positive integer")
         with self._lock:
             history = list(self._history)
         if key:
@@ -398,11 +402,17 @@ class SettingsManager:
             return False
         try:
             data = json.loads(path.read_text())
-            for key, entry_data in data.get("settings", {}).items():
+            if not isinstance(data, dict):
+                raise SettingsLoadError("Settings persistence must contain a JSON object")
+            settings_data = data.get("settings", {})
+            flags_data = data.get("flags", {})
+            if not isinstance(settings_data, dict) or not isinstance(flags_data, dict):
+                raise SettingsLoadError("Settings persistence has invalid structure")
+            for key, entry_data in settings_data.items():
                 entry = SettingEntry.from_dict(entry_data)
                 with self._lock:
                     self._settings[key] = entry
-            for name, flag_data in data.get("flags", {}).items():
+            for name, flag_data in flags_data.items():
                 flag = FeatureFlag(
                     name=name,
                     enabled=flag_data.get("enabled", True),
