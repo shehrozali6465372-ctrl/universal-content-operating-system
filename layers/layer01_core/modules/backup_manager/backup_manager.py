@@ -389,10 +389,8 @@ class BackupManager:
     # ── Rotation & Cleanup ───────────────────
 
     def rotate(self) -> int:
-        """Remove expired backups based on retention policy. Returns count removed."""
-        removed = 0
+        """Remove expired/overflow backups with registry-safe staging."""
         now = datetime.now(timezone.utc)
-
         with self._lock:
             ids_to_remove = []
             for bid, entry in self._entries.items():
@@ -401,33 +399,58 @@ class BackupManager:
                 if age_days >= entry.retention_days:
                     ids_to_remove.append(bid)
 
-            for bid in ids_to_remove:
-                entry = self._entries.pop(bid)
-                backup_file = self._safe_backup_path(entry.filepath)
-                if backup_file.exists():
-                    if backup_file.is_dir():
-                        shutil.rmtree(str(backup_file))
-                    else:
-                        backup_file.unlink()
-                removed += 1
-                self._audit("ROTATE", bid, "expired")
+            remaining_ids = set(self._entries) - set(ids_to_remove)
+            while len(remaining_ids) > self._max_backups:
+                candidates = [
+                    (bid, entry)
+                    for bid, entry in self._entries.items()
+                    if bid in remaining_ids
+                ]
+                bid, _ = min(candidates, key=lambda item: item[1].created_at)
+                remaining_ids.remove(bid)
+                ids_to_remove.append(bid)
 
-            # Enforce max_backups limit
-            while len(self._entries) > self._max_backups:
-                oldest = min(self._entries.items(), key=lambda x: x[1].created_at)
-                bid, entry = oldest
-                del self._entries[bid]
-                backup_file = self._safe_backup_path(entry.filepath)
-                if backup_file.exists():
-                    if backup_file.is_dir():
-                        shutil.rmtree(str(backup_file))
-                    else:
-                        backup_file.unlink()
-                removed += 1
-                self._audit("ROTATE", bid, "max_limit")
+            if not ids_to_remove:
+                return 0
 
-            self._save_registry()
-        return removed
+            staged = []
+            removed_entries = {}
+            removed_audit_len = len(self._audit_log)
+            try:
+                for bid in ids_to_remove:
+                    entry = self._entries.pop(bid)
+                    removed_entries[bid] = entry
+                    artifact = self._safe_backup_path(entry.filepath)
+                    if artifact.exists():
+                        staged_path = self._backup_dir / f".rotate-{uuid.uuid4().hex}"
+                        artifact.replace(staged_path)
+                        staged.append((artifact, staged_path))
+                    reason = "expired" if (
+                        now - datetime.fromisoformat(entry.created_at)
+                    ).days >= entry.retention_days else "max_limit"
+                    self._audit("ROTATE", bid, reason)
+
+                self._save_registry()
+            except Exception:
+                for artifact, staged_path in reversed(staged):
+                    if staged_path.exists() and not artifact.exists():
+                        staged_path.replace(artifact)
+                self._entries.update(removed_entries)
+                del self._audit_log[removed_audit_len:]
+                raise
+
+        cleanup_error = None
+        for _, staged_path in staged:
+            try:
+                if staged_path.is_dir():
+                    shutil.rmtree(str(staged_path))
+                else:
+                    staged_path.unlink(missing_ok=True)
+            except Exception as exc:
+                cleanup_error = exc
+        if cleanup_error is not None:
+            raise RuntimeError("Backup rotation registry committed but artifact cleanup failed") from cleanup_error
+        return len(ids_to_remove)
 
     # ── Listing & Queries ────────────────────
 
