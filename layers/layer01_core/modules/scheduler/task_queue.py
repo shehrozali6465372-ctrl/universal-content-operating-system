@@ -257,7 +257,11 @@ class TaskQueue:
             if status not in transitions[current]:
                 raise ValueError(f"Invalid task status transition: {current.value} -> {status.value}")
             task.status = status
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                task.status = current
+                raise
 
     def replay(self, task_id: str) -> bool:
         """Explicitly requeue a terminal task for deterministic replay."""
@@ -270,8 +274,14 @@ class TaskQueue:
                     f"Only FAILED or CANCELLED tasks can be explicitly replayed: {task.status.value}"
                 )
             task.status = TaskStatus.PENDING
+            old_not_before = task.not_before
             task.not_before = None
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                task.status = TaskStatus.FAILED if task.status == TaskStatus.PENDING else task.status
+                task.not_before = old_not_before
+                raise
             return True
 
     def get_by_status(self, status: TaskStatus) -> List[Task]:
