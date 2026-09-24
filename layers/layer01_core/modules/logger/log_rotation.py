@@ -7,6 +7,8 @@ Handles log file rotation, compression, and cleanup.
 
 import gzip
 import shutil
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
@@ -20,13 +22,21 @@ class LogRotation:
         self._max_size_bytes = max_size_mb * 1024 * 1024
         self._max_backups = max_backups
 
+    def _safe_log_path(self, log_file: str) -> Path:
+        candidate = (self._log_dir / log_file).resolve()
+        try:
+            candidate.relative_to(self._log_dir.resolve())
+        except ValueError as exc:
+            raise ValueError(f"log path escapes log directory: {log_file}") from exc
+        return candidate
+
     @property
     def log_dir(self) -> Path:
         return self._log_dir
 
     def needs_rotation(self, log_file: str) -> bool:
         """Check if a log file needs rotation."""
-        path = self._log_dir / log_file
+        path = self._safe_log_path(log_file)
         if not path.exists():
             return False
         return path.stat().st_size >= self._max_size_bytes
@@ -41,12 +51,23 @@ class LogRotation:
         backup_name = f"{log_file}.{timestamp}.gz"
         backup_path = self._log_dir / backup_name
 
-        # Compress and move
-        with open(path, "rb") as f_in:
-            with gzip.open(backup_path, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        # Compress to a staging file first so a failed rotation cannot
+        # leave a partial archive that looks valid.
+        fd, tmp_name = tempfile.mkstemp(dir=str(self._log_dir), suffix=".gz.tmp")
+        os.close(fd)
+        try:
+            with open(path, "rb") as f_in:
+                with gzip.open(tmp_name, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            os.replace(tmp_name, backup_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
-        # Truncate original
+        # Truncate original only after the archive is durable.
         path.write_text("")
 
         # Clean old backups
