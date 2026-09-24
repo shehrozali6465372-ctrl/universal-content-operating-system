@@ -295,3 +295,8 @@ class TestHealthCheck:
                   retention_days=0)
         report = bm.health_check()
         assert report["overall"] == "WARN"
+
+
+def test_backup_entry_rejects_invalid_retention():
+    with pytest.raises(ValueError, match="retention_days"):
+        BackupEntry("id", "logs", "file.bak", retention_days=-1)
