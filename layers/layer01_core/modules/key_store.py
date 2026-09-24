@@ -106,21 +106,25 @@ class KeyStore:
 
     def get(self, name: str) -> Optional[str]:
         """Get encrypted value by name."""
-        secrets = self.load()
-        return secrets.get(name)
+        with self._lock:
+            return self.load().get(name)
 
     def has(self, name: str) -> bool:
         """Check if secret exists."""
-        return name in self.load()
+        with self._lock:
+            return name in self.load()
 
     def names(self) -> list:
         """Return list of secret names (no values)."""
-        return list(self.load().keys())
+        with self._lock:
+            return list(self.load().keys())
 
     def count(self) -> int:
         """Return total number of stored secrets."""
-        return len(self.load())
+        with self._lock:
+            return len(self.load())
 
     def clear(self) -> None:
         """Remove all secrets from file."""
-        self.save({})
+        with self._lock:
+            self.save({})
