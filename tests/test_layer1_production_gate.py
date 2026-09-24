@@ -388,3 +388,35 @@ def test_backup_entry_rejects_invalid_hash():
     from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
     with pytest.raises(ValueError, match="SHA-256"):
         BackupEntry("id", "test", "x.bak", hash_sha256="not-a-hash")
+
+
+def test_memory_concurrent_initialization_is_serialized(tmp_path):
+    from layers.layer01_core.modules.memory_manager import MemoryManager
+
+    results = []
+    errors = []
+    lock = threading.Lock()
+
+    def initialize():
+        manager = MemoryManager("shared-memory.db", project_root=str(tmp_path))
+        try:
+            manager.initialize()
+            with lock:
+                results.append(manager)
+        except Exception as exc:
+            with lock:
+                errors.append(exc)
+
+    threads = [threading.Thread(target=initialize) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    try:
+        assert not errors
+        assert len(results) == 4
+        assert all(manager.health_check()["overall"] == "PASS" for manager in results)
+    finally:
+        for manager in results:
+            manager.close()
