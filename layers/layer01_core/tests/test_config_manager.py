@@ -210,3 +210,13 @@ class TestSave:
         config.save("config/agent_config.json")
         saved = json.loads((tmp_path / "config" / "agent_config.json").read_text())
         assert saved["MY_KEY"] == "second"
+
+
+def test_save_redacts_unlisted_credential_shaped_keys(tmp_path):
+    ConfigManager.reset()
+    cm = ConfigManager(project_root=str(tmp_path))
+    cm.set("STRIPE_API_KEY", "synthetic-secret")
+    cm.save("config/safe.json")
+    raw = (tmp_path / "config" / "safe.json").read_text()
+    assert "synthetic-secret" not in raw
+    assert "***SECRET***" in raw
