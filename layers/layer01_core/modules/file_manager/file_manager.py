@@ -168,28 +168,49 @@ class FileManager:
         return str(backup_path.relative_to(self._base))
 
     def restore(self, backup_path: str, target_path: str) -> bool:
-        bp = self._resolve(backup_path)
-        if not bp.exists():
-            return False
-        tp = self._resolve(target_path)
-        ok, current_hash = verify_hash(str(bp))
-        if not ok or current_hash is None:
-            raise ValueError("Backup integrity verification failed")
-        tp.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
-        try:
+        """Restore only after verifying the staged payload, with rollback safety."""
+        with self._global_lock:
+            bp = self._resolve(backup_path)
+            if not bp.exists():
+                return False
+            tp = self._resolve(target_path)
+            ok, expected_hash = verify_hash(str(bp))
+            if not ok or expected_hash is None:
+                raise ValueError("Backup integrity verification failed")
+
+            tp.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
             os.close(fd)
-            shutil.copy2(str(bp), tmp_name)
-            os.replace(tmp_name, str(tp))
-            save_hash(str(tp))
-        except Exception:
+            displaced = None
             try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-        self._cache.invalidate(str(tp))
-        return True
+                shutil.copy2(str(bp), tmp_name)
+                if calculate_hash(tmp_name) != expected_hash:
+                    raise ValueError("Backup integrity verification failed during restore")
+                if tp.exists():
+                    displaced = tp.parent / f".{tp.name}.pre-restore.tmp"
+                    os.replace(str(tp), str(displaced))
+                os.replace(tmp_name, str(tp))
+                tmp_name = None
+                save_hash(str(tp))
+                if displaced is not None and displaced.exists():
+                    displaced.unlink()
+            except Exception:
+                if os.path.exists(tmp_name):
+                    try:
+                        os.unlink(tmp_name)
+                    except OSError:
+                        pass
+                if displaced is not None and displaced.exists() and not tp.exists():
+                    os.replace(str(displaced), str(tp))
+                raise
+            finally:
+                if displaced is not None and displaced.exists():
+                    try:
+                        displaced.unlink()
+                    except OSError:
+                        pass
+            self._cache.invalidate(str(tp))
+            return True
 
     # ── Hash Verification ───────────────────
 
