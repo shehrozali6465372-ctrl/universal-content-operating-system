@@ -31,11 +31,17 @@ from layers.layer01_core.modules.memory_search import (
 
 
 class MemoryManager:
+    _path_locks: Dict[str, RLock] = {}
+    _path_locks_guard = RLock()
     """4-level memory system with search, compression, and snapshots."""
 
     def __init__(self, db_path: str = "data/agent_memory.db", project_root: Optional[str] = None):
         self._project_root = Path(project_root) if project_root else Path.cwd()
         self._db_path = (self._project_root / db_path).resolve()
+        with self._path_locks_guard:
+            self._lifecycle_lock = self._path_locks.setdefault(
+                str(self._db_path), RLock()
+            )
         try:
             self._db_path.relative_to(self._project_root.resolve())
         except ValueError as exc:
@@ -55,26 +61,30 @@ class MemoryManager:
 
     def initialize(self) -> "MemoryManager":
         """Create the development/test local store; production memory belongs to Layer 13."""
-        with self._lock:
-            if self._initialized and self._conn is not None:
-                return self
-            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-                raise RuntimeError(
-                    "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
+        with self._lifecycle_lock:
+            with self._lock:
+                if self._initialized and self._conn is not None:
+                    return self
+                if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                    raise RuntimeError(
+                        "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
+                    )
+                self._db_path.parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(
+                    str(self._db_path), check_same_thread=False, timeout=30.0
                 )
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
-            try:
-                conn.row_factory = sqlite3.Row
-                self._conn = conn
-                self._create_tables()
-            except Exception:
-                conn.close()
-                self._conn = None
-                self._initialized = False
-                raise
-            self._initialized = True
-            return self
+                try:
+                    conn.row_factory = sqlite3.Row
+                    conn.execute("PRAGMA busy_timeout=30000")
+                    self._conn = conn
+                    self._create_tables()
+                except Exception:
+                    conn.close()
+                    self._conn = None
+                    self._initialized = False
+                    raise
+                self._initialized = True
+                return self
 
     def _create_tables(self) -> None:
         self._conn.executescript("""
@@ -98,11 +108,12 @@ class MemoryManager:
         self._conn.commit()
 
     def close(self) -> None:
-        with self._lock:
-            if self._conn:
-                self._conn.close()
-                self._conn = None
-                self._initialized = False
+        with self._lifecycle_lock:
+            with self._lock:
+                if self._conn:
+                    self._conn.close()
+                    self._conn = None
+                    self._initialized = False
 
     # ── Save (CRUD) ────────────────────────
 
