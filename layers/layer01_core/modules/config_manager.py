@@ -161,9 +161,13 @@ class ConfigManager:
 
     def all(self) -> Dict[str, Any]:
         """Return a redacted configuration snapshot; raw credentials require explicit get()."""
+        # Credentials belong exclusively to SecretsManager. Omitting them
+        # entirely avoids persisting a redaction sentinel that could later be
+        # mistaken for a real credential during config reload.
         return {
-            key: ("***SECRET***" if self._is_secret_key(key) else value)
+            key: value
             for key, value in self._config.items()
+            if not self._is_secret_key(key)
         }
 
     @staticmethod
