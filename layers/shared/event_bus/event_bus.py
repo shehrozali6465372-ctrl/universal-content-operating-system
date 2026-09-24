@@ -156,15 +156,16 @@ class EventBus:
         callback: Optional[Callable[[Event], Any]] = None,
         priority: int = 0,
         name: str = "",
+        once: bool = False,
     ) -> bool:
         """Subscribe to multiple event types or all events."""
         if callable(event_types) and callback is None:
-            return bool(self.subscribe("*", event_types, priority, name))
+            return bool(self.subscribe("*", event_types, priority, name, once))
         if callback is None:
             raise TypeError("callback is required")
         changed = False
         for event_type in event_types:
-            changed = bool(self.subscribe(event_type, callback, priority, name)) or changed
+            changed = bool(self.subscribe(event_type, callback, priority, name, once)) or changed
         return changed
 
     def get_history(self, event_type: Optional[EventType] = None, limit: int = 50) -> List[Event]:
