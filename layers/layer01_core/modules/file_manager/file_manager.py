@@ -203,14 +203,16 @@ class FileManager:
                 raise ValueError("Backup integrity verification failed")
 
             raw_target = Path(target_path)
-            if raw_target.is_symlink():
-                raise ValueError("restore target must not be a symlink")
-            parent = raw_target.parent
-            while parent != parent.parent:
-                if parent.exists() and parent.is_symlink():
-                    raise ValueError("restore target parent must not be a symlink")
-                parent = parent.parent
-
+            lexical_target = raw_target if raw_target.is_absolute() else self._base / raw_target
+            try:
+                lexical_target.relative_to(self._base)
+            except ValueError as exc:
+                raise ValueError("restore target escapes FileManager base directory") from exc
+            cursor = self._base
+            for part in lexical_target.relative_to(self._base).parts:
+                cursor = cursor / part
+                if cursor.is_symlink():
+                    raise ValueError("restore target must not be a symlink")
             tp.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
             os.close(fd)
@@ -230,7 +232,7 @@ class FileManager:
                 if displaced is not None and displaced.exists():
                     displaced.unlink()
             except Exception:
-                if os.path.exists(tmp_name):
+                if tmp_name is not None and os.path.exists(tmp_name):
                     try:
                         os.unlink(tmp_name)
                     except OSError:
