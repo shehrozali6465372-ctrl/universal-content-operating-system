@@ -324,3 +324,14 @@ def test_layer13_manager_concurrent_initialize_is_single_owner(monkeypatch):
         assert manager.health_check()["overall"] == "PASS"
     finally:
         manager.close()
+
+
+def test_secret_empty_value_is_rejected(tmp_path):
+    from layers.layer01_core.modules.secrets_manager import SecretsManager
+    manager = SecretsManager(
+        secrets_path=".secrets",
+        audit_log_path="logs/audit.log",
+        project_root=str(tmp_path),
+    ).setup(master_key="test-master-key")
+    with pytest.raises(ValueError, match="non-empty"):
+        manager.store("EMPTY_SECRET", "")
