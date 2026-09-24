@@ -13,9 +13,11 @@ Central manager that orchestrates all competitor analysis:
 """
 
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 from typing import Dict, List, Optional
 
 from layers.layer02_research.modules.competitor_analysis.competitor_profile import CompetitorProfile
@@ -322,7 +324,22 @@ class CompetitorIntelManager:
             "competitors": [c.to_dict() for c in self._competitors.values()],
             "history": self._history[-50:],
         }
-        self._storage_path.write_text(json.dumps(data, indent=2))
+        payload = json.dumps(data, indent=2)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{self._storage_path.name}.",
+            suffix=".tmp",
+            dir=str(self._storage_path.parent),
+            text=True,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, self._storage_path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
     def _load(self):
         if self._storage_path is None or not self._storage_path.exists():
