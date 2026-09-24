@@ -111,6 +111,36 @@ def test_backup_restore_rejects_tampered_artifact(tmp_path):
         bm.restore(entry.backup_id, str(tmp_path / "restore.txt"))
 
 
+def test_scheduler_cron_persistence_survives_restart(tmp_path):
+    from layers.layer01_core.modules.scheduler.scheduler_manager import SchedulerManager
+
+    queue_path = tmp_path / "queue.json"
+    retry_path = tmp_path / "retry.json"
+    cron_path = tmp_path / "cron.json"
+    first = SchedulerManager(
+        queue_persist_path=str(queue_path),
+        retry_persist_path=str(retry_path),
+        cron_persist_path=str(cron_path),
+    )
+    first.register_handler("noop", lambda _: None)
+    first.add_cron_job("persisted", "*/5 * * * *", "noop", params={"x": 1})
+    first.shutdown()
+
+    second = SchedulerManager(
+        queue_persist_path=str(queue_path),
+        retry_persist_path=str(retry_path),
+        cron_persist_path=str(cron_path),
+    )
+    try:
+        assert len(second._cron_jobs) == 1
+        job = next(iter(second._cron_jobs.values()))
+        assert job["name"] == "persisted"
+        assert job["cron_expr"] == "*/5 * * * *"
+        assert job["params"] == {"x": 1}
+    finally:
+        second.shutdown()
+
+
 def test_scheduler_deduplicates_and_times_out():
     scheduler = SchedulerManager()
     scheduler.register_handler("slow", lambda _: time.sleep(2))
