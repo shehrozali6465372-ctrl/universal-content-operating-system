@@ -17,7 +17,11 @@ class MigrationRegistry:
         self._migrations: List[Dict] = []
 
     def register(self, version: int, description: str, up_sql: str) -> None:
-        """Register a new migration."""
+        """Register a migration exactly once; duplicate versions are invalid."""
+        if not isinstance(version, int) or version < 1:
+            raise ValueError("migration version must be a positive integer")
+        if any(m["version"] == version for m in self._migrations):
+            raise ValueError(f"duplicate migration version: {version}")
         self._migrations.append({
             "version": version,
             "description": description,
@@ -164,7 +168,7 @@ class MigrationManager:
                     f"Migration ordering gap: expected v{expected}, got v{version}"
                 )
             try:
-                self._conn.execute("BEGIN")
+                self._conn.execute("BEGIN IMMEDIATE")
                 statement = ""
                 for line in migration["up_sql"].splitlines():
                     statement += line + "\n"
