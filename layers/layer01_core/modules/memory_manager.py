@@ -280,7 +280,7 @@ class MemoryManager:
             return False
         with self._lock:
             current = self._conn.execute(
-                "SELECT category, key, value, importance FROM memory_entries WHERE id = ?",
+                "SELECT level, category, key, value, importance FROM memory_entries WHERE id = ?",
                 (entry_id,),
             ).fetchone()
         if current is None:
@@ -292,7 +292,7 @@ class MemoryManager:
             "importance": updates.get("importance", current["importance"]),
         }
         self._validate_entry(
-            MemoryLevel.LTM.value,
+            current["level"],
             candidate["category"],
             candidate["key"],
             candidate["value"],
