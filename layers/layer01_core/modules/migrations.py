@@ -6,6 +6,7 @@ Handles schema versioning and migrations.
 Ensures old data is never lost when schema changes.
 """
 
+import os
 import sqlite3
 from typing import List, Dict
 from threading import RLock
@@ -45,11 +46,24 @@ class MigrationRegistry:
 class MigrationManager:
     """Manages database schema migrations."""
 
+    _path_locks: Dict[str, RLock] = {}
+    _path_locks_guard = RLock()
+
+    @staticmethod
+    def _database_path(db_connection: sqlite3.Connection) -> str:
+        row = db_connection.execute("PRAGMA database_list").fetchone()
+        path = row[2] if row and len(row) > 2 else ""
+        return os.path.abspath(path) if path else ":memory:"
+
     def __init__(self, db_connection: sqlite3.Connection):
         self._conn = db_connection
         self._registry = MigrationRegistry()
         self._lock = RLock()
-        self._ensure_version_table()
+        key = self._database_path(db_connection)
+        with self._path_locks_guard:
+            self._migration_lock = self._path_locks.setdefault(key, RLock())
+        with self._migration_lock:
+            self._ensure_version_table()
         self._register_migrations()
 
     def _ensure_version_table(self) -> None:
@@ -187,6 +201,10 @@ class MigrationManager:
 
     def migrate(self) -> List[int]:
         """Apply pending migrations transactionally and in strict version order."""
+        with self._migration_lock:
+            return self._migrate_locked()
+
+    def _migrate_locked(self) -> List[int]:
         with self._lock:
             applied = []
             pending = self.get_pending_migrations()
