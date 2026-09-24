@@ -3,7 +3,7 @@
 **Status:** Architecture target for Layer 1 completion  
 **Implementation boundary:** `layers/layer01_core`  
 **Baseline:** `39b6fd682f18589fd8d104a5766bef50a10c0e75`  
-**Current source inventory:** 51 Python modules, 165 classes, 743 functions/methods  
+**Current source inventory:** 51 Python modules, 167 classes, 792 functions/methods  
 **Rule:** This document defines the Layer 1 production completion target. It does not claim that every target is already implemented or runtime-verified.
 
 ---
@@ -911,6 +911,26 @@ Layer 1 is **NOT COMPLETE** until all applicable gates below are evidenced:
 Only after every applicable gate has evidence may work move to Layer 2.
 
 ---
+
+## 24A. Latest static-audit reconciliation
+
+The final Layer 1 audit on CI run **#627** reports:
+
+- Python modules: **51**
+- Classes: **167**
+- Functions/methods: **792**
+- Syntax errors: **0**
+- Duplicate body groups: **3**
+- Conservative orphan candidates: **50**
+
+The three duplicate-body groups are intentional interface symmetry between:
+- ConfigManager / EnvironmentLoader `is_loaded`
+- DatabaseManager / MemoryManager `is_initialized`
+- DatabaseManager / MemoryManager `close`
+
+The orphan list is explicitly conservative: it includes public entrypoints, properties, validators, exception types and framework/external-caller APIs that cannot be proven dead by local AST call resolution. The audit does not auto-delete these candidates.
+
+CI run #627 also executed the integration contract tests and full suite successfully: **10,207 passed, 87 warnings, 0 failures**. The runtime boot check loaded **23/23 layers** with zero boot errors. The CI job used a PostgreSQL 16 service container for the production persistence path.
 
 ## 25. Definition of Done
 
