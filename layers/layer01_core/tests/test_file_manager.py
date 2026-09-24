@@ -59,6 +59,15 @@ class TestAtomicWrite:
         fm.write("verified.txt", "data", verify=True)
         assert (fm._base / "verified.txt.sha256").exists()
 
+    def test_write_invalidates_stale_hash_metadata(self, fm):
+        fm.save_and_verify("verified.txt", "version1")
+        assert (fm._base / "verified.txt.sha256").exists()
+        fm.write("verified.txt", "version2", create_backup=False)
+        assert not (fm._base / "verified.txt.sha256").exists()
+        match, current = fm.verify_hash("verified.txt")
+        assert match is False
+        assert current is None
+
     def test_append(self, fm):
         fm.write("log.txt", "line1\n")
         fm.append("log.txt", "line2\n")
