@@ -8,6 +8,7 @@ Ensures old data is never lost when schema changes.
 
 import sqlite3
 from typing import List, Dict
+from threading import RLock
 
 
 class MigrationRegistry:
@@ -18,8 +19,12 @@ class MigrationRegistry:
 
     def register(self, version: int, description: str, up_sql: str) -> None:
         """Register a migration exactly once; duplicate versions are invalid."""
-        if not isinstance(version, int) or version < 1:
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
             raise ValueError("migration version must be a positive integer")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError("migration description must be non-empty")
+        if not isinstance(up_sql, str) or not up_sql.strip():
+            raise ValueError("migration SQL must be non-empty")
         if any(m["version"] == version for m in self._migrations):
             raise ValueError(f"duplicate migration version: {version}")
         self._migrations.append({
@@ -43,6 +48,7 @@ class MigrationManager:
     def __init__(self, db_connection: sqlite3.Connection):
         self._conn = db_connection
         self._registry = MigrationRegistry()
+        self._lock = RLock()
         self._ensure_version_table()
         self._register_migrations()
 
@@ -159,8 +165,9 @@ class MigrationManager:
     def migrate(self) -> List[int]:
         """Apply pending migrations transactionally and in strict version order."""
         applied = []
-        pending = self.get_pending_migrations()
-        expected = self.get_current_version() + 1
+        with self._lock:
+            pending = self.get_pending_migrations()
+            expected = self.get_current_version() + 1
         for migration in pending:
             version = migration["version"]
             if version != expected:
