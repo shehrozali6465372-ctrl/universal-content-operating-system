@@ -208,6 +208,8 @@ class MemoryManager:
     def load(self, level: str, category: str = "", key: str = "") -> List[Dict]:
         """Load memory entries with optional filters."""
         self._ensure_init()
+        if level not in {member.value for member in MemoryLevel}:
+            raise ValueError(f"Invalid memory level: {level}")
 
         with self._lock:
             if level == MemoryLevel.STM.value:
@@ -301,6 +303,8 @@ class MemoryManager:
     def clear_level(self, level: str) -> int:
         """Clear all entries for a memory level."""
         self._ensure_init()
+        if level not in {member.value for member in MemoryLevel}:
+            raise ValueError(f"Invalid memory level: {level}")
         with self._lock:
             if level == MemoryLevel.STM.value:
                 count = len(self._stm_buffer)
