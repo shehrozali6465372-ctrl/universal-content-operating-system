@@ -76,19 +76,21 @@ class AuditLogger:
 
     def get_logs(self, limit: int = 50) -> list:
         """Read last N audit entries."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 0:
+            raise ValueError("limit must be a non-negative integer")
         with self._lock:
             if not self._log_path.exists():
                 return []
             entries = []
-        with open(self._log_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        entries.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-            return entries[-limit:]
+            with open(self._log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+            return entries[-limit:] if limit else []
 
     def get_logs_for_secret(self, secret_name: str) -> list:
         """Get audit entries for a specific secret."""
