@@ -10,6 +10,8 @@ Manages retry logic for failed modules:
 """
 
 from datetime import datetime, timezone
+import random
+import time
 from typing import Callable, Dict, List, Optional, Any
 
 from layers.layer02_research.modules.research_orchestrator.exceptions import RetryExhaustedError
@@ -31,6 +33,14 @@ class RetryPolicy:
         backoff_multiplier: float = 2.0,
         jitter: bool = True,
     ):
+        if max_retries < 1:
+            raise ValueError("max_retries must be >= 1")
+        if base_delay_sec < 0 or max_delay_sec < 0:
+            raise ValueError("retry delays must be >= 0")
+        if max_delay_sec < base_delay_sec:
+            raise ValueError("max_delay_sec must be >= base_delay_sec")
+        if backoff_multiplier < 1:
+            raise ValueError("backoff_multiplier must be >= 1")
         self.max_retries = max_retries
         self.base_delay_sec = base_delay_sec
         self.max_delay_sec = max_delay_sec
@@ -133,8 +143,7 @@ class RetryCoordinator:
                 if not self.should_retry(module):
                     break
 
-                # In production, we'd sleep here, but for tests we skip actual sleep
-                # time.sleep(attempt.delay_sec)
+                time.sleep(attempt.delay_sec)
 
         raise RetryExhaustedError(
             f"Retry exhausted for '{module}' after "
@@ -143,8 +152,6 @@ class RetryCoordinator:
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay using exponential backoff."""
-        import random
-
         delay = self.policy.base_delay_sec * (
             self.policy.backoff_multiplier ** (attempt - 1)
         )
