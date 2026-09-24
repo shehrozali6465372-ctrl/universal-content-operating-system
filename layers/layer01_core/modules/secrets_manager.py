@@ -143,10 +143,18 @@ class SecretsManager:
         except Exception:
             return False
 
+    @staticmethod
+    def _validate_secret_input(name: str, value: str) -> None:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("secret name must be a non-empty string")
+        if not isinstance(value, str):
+            raise TypeError("secret value must be a string")
+
     # ── Store Operations ────────────────────
 
     def store(self, name: str, value: str) -> None:
         """Store a secret (encrypts if plaintext)."""
+        self._validate_secret_input(name, value)
         with self._lock:
             self._ensure_setup()
             encrypted = self.encrypt(value)
@@ -185,6 +193,7 @@ class SecretsManager:
 
     def rotate(self, name: str, new_value: str) -> bool:
         """Replace a secret without a delete-then-create gap."""
+        self._validate_secret_input(name, new_value)
         with self._lock:
             self._ensure_setup()
             encrypted = self.encrypt(new_value)
