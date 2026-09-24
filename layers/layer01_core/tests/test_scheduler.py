@@ -194,6 +194,10 @@ class TestRetryManager:
     def test_should_retry(self):
         rm = RetryManager()
         assert rm.should_retry("t1", max_retries=3) is True
+
+    def test_zero_retry_limit_rejects_retry_before_first_failure(self):
+        rm = RetryManager()
+        assert rm.should_retry("t1", max_retries=0) is False
         rm.record_failure("t1")
         rm.record_failure("t1")
         rm.record_failure("t1")
