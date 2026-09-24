@@ -166,6 +166,11 @@ class MemoryManager:
             try:
                 for entry in entries:
                     level = entry.get("level", "long_term")
+                    category = entry.get("category", "general")
+                    key = entry.get("key", "")
+                    value = entry.get("value", "")
+                    importance = entry.get("importance", 0.5)
+                    self._validate_entry(level, category, key, value, importance)
                     if level == MemoryLevel.STM.value:
                         self._save_locked(
                             level, entry.get("category", "general"),
