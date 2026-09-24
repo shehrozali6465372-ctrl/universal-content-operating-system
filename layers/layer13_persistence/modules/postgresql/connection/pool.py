@@ -190,6 +190,13 @@ class ConnectionPool:
                     conn.close()
                     self._active_conns = max(0, self._active_conns - 1)
 
+    def _record_latency(self, latency_ms: float) -> None:
+        with self._lock:
+            if len(self._query_latencies) >= self._MAX_LATENCY_SAMPLES:
+                self._total_latency_ms -= self._query_latencies.pop(0)
+            self._query_latencies.append(latency_ms)
+            self._total_latency_ms += latency_ms
+
     def _execute_with_retry(self, fn, *args, **kwargs):
         """Execute a function with bounded retry attempts."""
         max_attempts = self._config.max_retries
@@ -248,11 +255,7 @@ class ConnectionPool:
                 start = time.time()
                 cursor.execute(exec_sql, params)
                 latency = (time.time() - start) * 1000
-                with self._lock:
-                    self._query_latencies.append(latency)
-                    self._total_latency_ms += latency
-                    if len(self._query_latencies) > self._MAX_LATENCY_SAMPLES:
-                        del self._query_latencies[:-self._MAX_LATENCY_SAMPLES]
+                self._record_latency(latency)
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
                 rows = cursor.fetchall()
                 return [dict(zip(columns, row)) for row in rows]
@@ -271,7 +274,7 @@ class ConnectionPool:
                 start = time.time()
                 cursor.execute(exec_sql, params)
                 latency = (time.time() - start) * 1000
-                self._query_latencies.append(latency)
+                self._record_latency(latency)
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
                 row = cursor.fetchone()
                 return dict(zip(columns, row)) if row else None
