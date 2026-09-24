@@ -420,3 +420,14 @@ def test_memory_concurrent_initialization_is_serialized(tmp_path):
     finally:
         for manager in results:
             manager.close()
+
+
+def test_backup_orphan_detection(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("safe")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+    bm.backup("test", str(source), compress=False)
+    orphan = backup_dir / "unregistered.bak"
+    orphan.write_text("orphan")
+    assert bm.find_orphans() == ["unregistered.bak"]
