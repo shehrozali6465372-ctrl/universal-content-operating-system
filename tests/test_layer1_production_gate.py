@@ -163,6 +163,21 @@ def test_logger_redacts_sensitive_details(tmp_path):
     LoggerManager.reset()
 
 
+def test_memory_mutation_rejects_invalid_contract_values(tmp_path):
+    from layers.layer01_core.modules.memory_manager import MemoryManager
+
+    manager = MemoryManager(db_path="memory.db", project_root=str(tmp_path)).initialize()
+    try:
+        entry_id = manager.save("long_term", "category", "key", "value")
+        with pytest.raises(ValueError, match="between 0 and 1"):
+            manager.update(entry_id, importance=2.0)
+        with pytest.raises(ValueError, match="Invalid memory level"):
+            manager.load("invalid-level")
+        assert manager.get(entry_id)["value"] == "value"
+    finally:
+        manager.close()
+
+
 def test_memory_snapshot_rejects_count_mismatch(tmp_path):
     from layers.layer01_core.modules.memory_manager import MemoryManager
     manager = MemoryManager(db_path="memory.db", project_root=str(tmp_path)).initialize()
