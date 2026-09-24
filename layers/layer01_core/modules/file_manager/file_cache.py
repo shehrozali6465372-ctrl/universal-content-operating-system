@@ -65,10 +65,12 @@ class FileCache:
             return self._hits / total if total > 0 else 0.0
 
     def stats(self) -> dict:
-        return {
-            "size": self.size,
-            "max_size": self._max_size,
-            "hits": self._hits,
-            "misses": self._misses,
-            "hit_rate": f"{self.hit_rate:.1%}",
-        }
+        with self._lock:
+            total = self._hits + self._misses
+            return {
+                "size": len(self._cache),
+                "max_size": self._max_size,
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": self._hits / total if total else 0.0,
+            }
