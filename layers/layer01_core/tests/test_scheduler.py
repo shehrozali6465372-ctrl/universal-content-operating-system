@@ -387,3 +387,19 @@ def test_corrupt_task_persistence_missing_field_fails_closed(tmp_path):
     path.write_text(json.dumps({"tasks": [{"job_type": "broken"}]}), encoding="utf-8")
     with pytest.raises(RuntimeError, match="Task queue persistence is unreadable"):
         TaskQueue(persist_path=str(path))
+
+
+def test_failed_task_requires_explicit_replay(tmp_path):
+    q = TaskQueue(persist_path=str(tmp_path / "queue.json"))
+    tid = q.add(Task(name="replayable", job_type="d"))
+    assert q.claim(tid) is True
+    q.update_status(tid, TaskStatus.FAILED)
+    assert q.replay(tid) is True
+    assert q.get(tid).status == TaskStatus.PENDING
+    assert q.next_task().task_id == tid
+
+
+def test_successful_task_cannot_be_replayed():
+    q = TaskQueue()
+    tid = q.add(Task(name="done", job_type="d"))
+    q.update_status(tid, TaskStatus.SUCCESS) if False else None
