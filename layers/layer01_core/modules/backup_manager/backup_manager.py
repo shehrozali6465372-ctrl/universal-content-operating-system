@@ -318,8 +318,31 @@ class BackupManager:
             shutil.rmtree(str(temp_dir), ignore_errors=True)
 
         with self._lock:
+            audit_len = len(self._audit_log)
             self._audit("RESTORE", backup_id, f"target={target_path}")
-            self._save_registry()
+            try:
+                self._save_registry()
+            except Exception:
+                del self._audit_log[audit_len:]
+                if target.exists():
+                    if target.is_dir():
+                        shutil.rmtree(str(target), ignore_errors=True)
+                    else:
+                        target.unlink(missing_ok=True)
+                if displaced is not None and displaced.exists():
+                    displaced.replace(target)
+                raise
+
+        if displaced is not None and displaced.exists():
+            try:
+                if displaced.is_dir():
+                    shutil.rmtree(str(displaced))
+                else:
+                    displaced.unlink()
+            except Exception as exc:
+                raise RuntimeError(
+                    "Backup restore committed but previous target cleanup failed"
+                ) from exc
         return True
 
     # ── Integrity ────────────────────────────
