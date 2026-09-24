@@ -60,9 +60,16 @@ class MemoryManager:
                 "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
             )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
-        self._conn.row_factory = sqlite3.Row
-        self._create_tables()
+        conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
+        try:
+            conn.row_factory = sqlite3.Row
+            self._conn = conn
+            self._create_tables()
+        except Exception:
+            conn.close()
+            self._conn = None
+            self._initialized = False
+            raise
         self._initialized = True
         return self
 
@@ -250,6 +257,28 @@ class MemoryManager:
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
+        with self._lock:
+            current = self._conn.execute(
+                "SELECT category, key, value, importance FROM memory_entries WHERE id = ?",
+                (entry_id,),
+            ).fetchone()
+        if current is None:
+            return False
+        candidate = {
+            "category": updates.get("category", current["category"]),
+            "key": updates.get("key", current["key"]),
+            "value": updates.get("value", current["value"]),
+            "importance": updates.get("importance", current["importance"]),
+        }
+        self._validate_entry(
+            MemoryLevel.LTM.value,
+            candidate["category"],
+            candidate["key"],
+            candidate["value"],
+            candidate["importance"],
+        )
+        if "tags" in updates and not isinstance(updates["tags"], str):
+            raise TypeError("Memory tags must be a string")
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         with self._lock:
@@ -402,13 +431,16 @@ class MemoryManager:
                 entry_level = entry.get("level", level_name)
                 if entry_level != level_name or entry_level not in allowed_levels:
                     raise ValueError("Memory snapshot entry level mismatch")
+                category = entry.get("category", "general")
+                key = entry.get("key", "")
+                value = entry.get("value", "")
+                tags = entry.get("tags", "")
+                importance = entry.get("importance", 0.5)
+                self._validate_entry(entry_level, category, key, value, importance)
+                if not isinstance(tags, str):
+                    raise TypeError("Memory snapshot tags must be a string")
                 rows.append((
-                    entry_level,
-                    entry.get("category", "general"),
-                    entry.get("key", ""),
-                    entry.get("value", ""),
-                    entry.get("tags", ""),
-                    entry.get("importance", 0.5),
+                    entry_level, category, key, value, tags, importance,
                 ))
 
         with self._lock:
