@@ -208,9 +208,8 @@ class TestFeatureFlags:
     def test_flag_rollout_requires_stable_key(self, sm):
         sm.register_flag("partial", rollout_pct=50)
         assert sm.is_flag_active("partial") is False
-        assert sm.is_flag_active("partial", {"rollout_key": "user-1"}) == sm.is_flag_active(
-            "partial", {"rollout_key": "user-1"}
-        )
+        assert sm.is_flag_active("partial", {"rollout_key": "user-1"}) is False
+        assert sm.is_flag_active("partial", {"rollout_key": "user-2"}) is True
 
     def test_flag_rollout_rejects_invalid_percentage(self, sm):
         with pytest.raises(ValueError):
