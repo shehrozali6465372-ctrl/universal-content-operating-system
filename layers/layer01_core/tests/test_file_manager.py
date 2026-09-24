@@ -318,3 +318,8 @@ def test_concurrent_writes_are_serialized(fm):
     value = fm.read("concurrent.txt", use_cache=False)
     assert value is not None
     assert value.startswith("payload-")
+
+
+def test_file_cache_rejects_invalid_capacity():
+    with pytest.raises(ValueError, match="positive integer"):
+        FileCache(max_size=0)
