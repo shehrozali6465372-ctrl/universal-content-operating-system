@@ -408,23 +408,31 @@ class SettingsManager:
             flags_data = data.get("flags", {})
             if not isinstance(settings_data, dict) or not isinstance(flags_data, dict):
                 raise SettingsLoadError("Settings persistence has invalid structure")
-            for key, entry_data in settings_data.items():
-                entry = SettingEntry.from_dict(entry_data)
-                with self._lock:
-                    self._settings[key] = entry
+
+            # Parse the complete document before mutating live state. A malformed
+            # later entry must not leave a partially loaded configuration.
+            parsed_settings = {
+                key: SettingEntry.from_dict(entry_data)
+                for key, entry_data in settings_data.items()
+            }
+            parsed_flags = {}
             for name, flag_data in flags_data.items():
-                flag = FeatureFlag(
+                if not isinstance(name, str) or not isinstance(flag_data, dict):
+                    raise SettingsLoadError("Settings persistence has invalid flag entry")
+                parsed_flags[name] = FeatureFlag(
                     name=name,
                     enabled=flag_data.get("enabled", True),
                     rollout_pct=flag_data.get("rollout_pct", 100.0),
                     conditions=flag_data.get("conditions", {}),
                     description=flag_data.get("description", ""),
                 )
-                with self._lock:
-                    self._feature_flags[name] = flag
+
+            with self._lock:
+                self._settings.update(parsed_settings)
+                self._feature_flags.update(parsed_flags)
             return True
-        except (json.JSONDecodeError, KeyError) as e:
-            raise SettingsLoadError(f"Failed to load settings: {e}")
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            raise SettingsLoadError(f"Failed to load settings: {e}") from e
 
     # ── Event Bus ────────────────────────────
 
