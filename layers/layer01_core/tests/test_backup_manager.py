@@ -315,3 +315,21 @@ def test_delete_backup_rolls_back_on_registry_failure(bm, sample_files):
     assert bm.count() == 1
     assert backup_file.exists()
     assert bm.get_entry(entry.backup_id).backup_id == entry.backup_id
+
+def test_restore_rolls_back_target_when_registry_persistence_fails(bm, sample_files, tmp_path):
+    entry = bm.backup("database", str(sample_files / "data.json"), compress=False)
+    target = tmp_path / "existing.json"
+    target.write_text("original")
+    original_audit_len = len(bm.get_audit_log())
+
+    original_save = bm._save_registry
+    bm._save_registry = lambda: (_ for _ in ()).throw(OSError("registry unavailable"))
+    try:
+        with pytest.raises(OSError, match="registry unavailable"):
+            bm.restore(entry.backup_id, str(target))
+    finally:
+        bm._save_registry = original_save
+
+    assert target.read_text() == "original"
+    assert len(bm.get_audit_log()) == original_audit_len
+    assert list(tmp_path.glob(".restore-*")) == []
