@@ -29,30 +29,69 @@ class CronParser:
         self._weekday = self._parse_field(parts[4], 0, 6)
 
     def _parse_field(self, field: str, min_val: int, max_val: int) -> List[int]:
-        """Parse a single cron field (supports numbers, ranges, steps, wildcards)."""
+        """Parse one cron field with strict range and step validation."""
         values = set()
         for part in field.split(","):
             part = part.strip()
+            if not part:
+                raise ValueError("Invalid empty cron field")
+
             if part == "*":
-                return list(range(min_val, max_val + 1))
+                values.update(range(min_val, max_val + 1))
+                continue
+
             if "/" in part:
-                base, step = part.split("/")
-                step = int(step)
+                if part.count("/") != 1:
+                    raise ValueError(f"Invalid cron step: {part}")
+                base, step_text = part.split("/", 1)
+                try:
+                    step = int(step_text)
+                except ValueError as exc:
+                    raise ValueError(f"Invalid cron step: {part}") from exc
+                if step <= 0:
+                    raise ValueError(f"Cron step must be positive: {part}")
                 if base == "*":
-                    base_range = range(min_val, max_val + 1)
+                    start = min_val
+                    stop = max_val
                 elif "-" in base:
-                    s, e = map(int, base.split("-"))
-                    base_range = range(s, e + 1)
+                    pieces = base.split("-", 1)
+                    try:
+                        start, stop = int(pieces[0]), int(pieces[1])
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid cron range: {part}") from exc
                 else:
-                    base_range = range(int(base), max_val + 1)
-                values.update(base_range[::step])
-            elif "-" in part:
-                s, e = map(int, part.split("-"))
-                values.update(range(s, e + 1))
-            else:
-                values.add(int(part))
-        # Filter valid range
-        return [v for v in values if min_val <= v <= max_val]
+                    try:
+                        start = int(base)
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid cron value: {part}") from exc
+                    stop = max_val
+                if start < min_val or stop > max_val or start > stop:
+                    raise ValueError(f"Cron range out of bounds: {part}")
+                values.update(range(start, stop + 1, step))
+                continue
+
+            if "-" in part:
+                pieces = part.split("-", 1)
+                try:
+                    start, stop = int(pieces[0]), int(pieces[1])
+                except ValueError as exc:
+                    raise ValueError(f"Invalid cron range: {part}") from exc
+                if start < min_val or stop > max_val or start > stop:
+                    raise ValueError(f"Cron range out of bounds: {part}")
+                values.update(range(start, stop + 1))
+                continue
+
+            try:
+                value = int(part)
+            except ValueError as exc:
+                raise ValueError(f"Invalid cron value: {part}") from exc
+            if value < min_val or value > max_val:
+                raise ValueError(f"Cron value out of bounds: {part}")
+            values.add(value)
+
+        if not values:
+            raise ValueError(f"Cron field produced no valid values: {field}")
+        return sorted(values)
 
     def is_match(self, dt: datetime) -> bool:
         """Check if a datetime matches the cron expression."""
