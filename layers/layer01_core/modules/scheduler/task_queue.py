@@ -194,7 +194,11 @@ class TaskQueue:
             ready.sort()
             task = ready[0]
             task.status = TaskStatus.RUNNING
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                task.status = TaskStatus.PENDING
+                raise
             return task
 
     def claim(self, task_id: str) -> bool:
@@ -212,7 +216,11 @@ class TaskQueue:
                 except (TypeError, ValueError):
                     return False
             task.status = TaskStatus.RUNNING
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                task.status = TaskStatus.PENDING
+                raise
             return True
 
     def _dependencies_met(self, task: Task) -> bool:
