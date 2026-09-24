@@ -431,6 +431,21 @@ class BackupManager:
 
     # ── Listing & Queries ────────────────────
 
+    def find_orphans(self) -> List[str]:
+        """Return backup artifacts that are not referenced by the registry."""
+        with self._lock:
+            referenced = {Path(entry.filepath).name for entry in self._entries.values()}
+            artifacts = []
+            for path in self._backup_dir.iterdir():
+                if path.name == self._registry_path.name or path.name.startswith("._registry."):
+                    continue
+                if path.name.startswith("."):
+                    continue
+                if path.is_file() or path.is_dir():
+                    if path.name not in referenced:
+                        artifacts.append(path.name)
+            return sorted(artifacts)
+
     def list_backups(self, source: Optional[str] = None) -> List[dict]:
         """List all backups, optionally filtered by source."""
         with self._lock:
