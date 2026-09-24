@@ -335,3 +335,33 @@ def test_secret_empty_value_is_rejected(tmp_path):
     ).setup(master_key="test-master-key")
     with pytest.raises(ValueError, match="non-empty"):
         manager.store("EMPTY_SECRET", "")
+
+
+def test_database_concurrent_initialization_is_serialized(tmp_path):
+    results = []
+    errors = []
+    lock = threading.Lock()
+
+    def initialize():
+        db = DatabaseManager("concurrent.db", project_root=str(tmp_path))
+        try:
+            db.initialize()
+            with lock:
+                results.append(db)
+        except Exception as exc:
+            with lock:
+                errors.append(exc)
+
+    threads = [threading.Thread(target=initialize) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    try:
+        assert not errors
+        assert len(results) == 4
+        assert all(db.health_check()["overall"] == "PASS" for db in results)
+    finally:
+        for db in results:
+            db.close()
