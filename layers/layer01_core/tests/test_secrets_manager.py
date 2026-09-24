@@ -65,6 +65,17 @@ class TestEncryption:
         assert sm.is_encrypted("just-plain-text") is False
 
 
+    def test_encrypt_uses_v2_format(self, sm):
+        encrypted = sm.encrypt("value")
+        assert encrypted.startswith("v2:")
+        assert sm.decrypt(encrypted) == "value"
+
+    def test_legacy_ciphertext_remains_readable(self, sm):
+        legacy = sm._legacy_fernet.encrypt(b"legacy-value").decode()
+        assert sm.decrypt(legacy) == "legacy-value"
+        assert sm.is_encrypted(legacy) is True
+
+
 # ── Test 3: Store / Retrieve ───────────────
 
 class TestStoreRetrieve:
