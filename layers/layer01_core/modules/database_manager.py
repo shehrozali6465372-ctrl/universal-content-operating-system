@@ -93,15 +93,13 @@ class DatabaseManager:
 
     @contextmanager
     def transaction(self):
-        if not self._initialized:
-            raise RuntimeError("Database not initialized.")
-        # Nested callers must share the outer transaction. Committing here
-        # would violate atomicity and could persist only part of the workflow.
-        if self._in_transaction:
-            yield self._conn
-            return
-        self._in_transaction = True
         with self._lock:
+            if not self._initialized or self._conn is None:
+                raise RuntimeError("Database not initialized.")
+            if self._in_transaction:
+                yield self._conn
+                return
+            self._in_transaction = True
             try:
                 yield self._conn
                 self._conn.commit()
@@ -171,13 +169,13 @@ class DatabaseManager:
         return len(rows)
 
     def query(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
-        self._ensure_init()
         with self._lock:
+            self._ensure_init()
             return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
 
     def query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
-        self._ensure_init()
         with self._lock:
+            self._ensure_init()
             row = self._conn.execute(sql, params).fetchone()
             return dict(row) if row else None
 
