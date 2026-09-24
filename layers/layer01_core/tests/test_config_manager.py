@@ -197,6 +197,7 @@ class TestSave:
         config.save("config/agent_config.json")
         saved = json.loads((tmp_path / "config" / "agent_config.json").read_text())
         assert saved["MY_KEY"] == "my_value"
+        assert "***SECRET***" not in saved["MY_KEY"]
         assert saved["CONFIG_VERSION"] == CONFIG_VERSION
         assert saved["OPENAI_API_KEY"] == "***SECRET***"
         assert saved["FACEBOOK_ACCESS_TOKEN"] == "***SECRET***"
