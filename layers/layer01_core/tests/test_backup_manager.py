@@ -269,6 +269,16 @@ class TestAudit:
         log = bm.get_audit_log(limit=5)
         assert len(log) == 5
 
+    def test_get_entry_returns_isolated_metadata(self, tmp_path):
+        source = tmp_path / "source.txt"
+        source.write_text("safe")
+        manager = BackupManager(str(tmp_path / "backups"))
+        entry = manager.backup("database", str(source))
+        exposed = manager.get_entry(entry.backup_id)
+        exposed.filepath = "../../outside"
+        assert manager.get_entry(entry.backup_id).filepath != "../../outside"
+
+
 
 # ── Test 9: Health Check ────────────────────
 
