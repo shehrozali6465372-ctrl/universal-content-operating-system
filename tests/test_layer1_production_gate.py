@@ -97,3 +97,28 @@ def test_logger_redacts_sensitive_details(tmp_path):
     raw = (tmp_path / "agent.log").read_text()
     assert "secret-value" not in raw
     LoggerManager.reset()
+
+
+def test_memory_snapshot_rejects_count_mismatch(tmp_path):
+    from layers.layer01_core.modules.memory_manager import MemoryManager
+    manager = MemoryManager(db_path="memory.db", project_root=str(tmp_path)).initialize()
+    snapshot = tmp_path / "bad-memory.json"
+    snapshot.write_text(json.dumps({
+        "timestamp": "2026-01-01T00:00:00+00:00",
+        "levels": {
+            "long_term": {
+                "count": 2,
+                "entries": [{
+                    "level": "long_term",
+                    "category": "test",
+                    "key": "k",
+                    "value": "v",
+                    "tags": "",
+                    "importance": 0.5,
+                }],
+            }
+        },
+    }))
+    with pytest.raises(ValueError, match="count mismatch"):
+        manager.restore(str(snapshot))
+    manager.close()
