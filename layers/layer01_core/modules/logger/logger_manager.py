@@ -156,6 +156,14 @@ class LoggerManager:
     def audit(self, module: str, message: str, **kwargs):
         return self.log("AUDIT", module, message, kwargs or None)
 
+    def _safe_output_path(self, filepath: str) -> Path:
+        candidate = (self._log_dir / filepath).resolve()
+        try:
+            candidate.relative_to(self._log_dir.resolve())
+        except ValueError as exc:
+            raise ValueError(f"log output path escapes log directory: {filepath}") from exc
+        return candidate
+
     # ── File Output ─────────────────────────
 
     def _write_to_file(self, entry: Dict) -> None:
@@ -226,8 +234,9 @@ class LoggerManager:
 
     def export_json(self, filepath: str) -> Path:
         """Export all entries to JSON file."""
-        path = self._log_dir / filepath
-        with open(path, "w") as f:
+        path = self._safe_output_path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self._entries, f, indent=2, default=str)
         return path
 
