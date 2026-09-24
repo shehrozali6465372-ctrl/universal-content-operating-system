@@ -43,6 +43,25 @@ def test_file_cache_is_thread_safe():
     assert cache.size <= 4
 
 
+def test_database_nested_transactions_remain_atomic(tmp_path):
+    db = DatabaseManager("test.db", project_root=str(tmp_path)).initialize()
+    try:
+        with pytest.raises(RuntimeError, match="force rollback"):
+            with db.transaction():
+                db.insert("agent_config", {"key": "atomic", "value": "outer"})
+                with db.transaction():
+                    db.insert("agent_config", {"key": "nested", "value": "inner"})
+                raise RuntimeError("force rollback")
+        assert db.query_one(
+            "SELECT key FROM agent_config WHERE key = ?", ("atomic",)
+        ) is None
+        assert db.query_one(
+            "SELECT key FROM agent_config WHERE key = ?", ("nested",)
+        ) is None
+    finally:
+        db.close()
+
+
 def test_migration_partial_failure_rolls_back(tmp_path):
     db = DatabaseManager("test.db", project_root=str(tmp_path)).initialize()
     manager = db._migration_manager
