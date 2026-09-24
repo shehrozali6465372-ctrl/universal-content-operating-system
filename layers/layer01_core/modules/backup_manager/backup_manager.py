@@ -113,9 +113,11 @@ class BackupManager:
         if source not in self.BACKUP_SOURCES:
             source = "all"
 
-        self._counter += 1
+        with self._lock:
+            self._counter += 1
+            counter = self._counter
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-        backup_id = f"{source}_{ts}_{self._counter}"
+        backup_id = f"{source}_{ts}_{counter}"
         backup_filename = f"{backup_id}.bak"
         backup_path = self._backup_dir / backup_filename
 
@@ -249,17 +251,26 @@ class BackupManager:
     # ── Integrity ────────────────────────────
 
     def _calculate_hash(self, filepath: Path) -> str:
+        """Hash files or directories deterministically, including file boundaries."""
         sha256 = hashlib.sha256()
         if filepath.is_file():
             with open(filepath, "rb") as f:
                 while chunk := f.read(8192):
                     sha256.update(chunk)
-        else:
-            for f in sorted(filepath.rglob("*")):
-                if f.is_file():
-                    with open(f, "rb") as fh:
-                        while chunk := fh.read(8192):
-                            sha256.update(chunk)
+            return sha256.hexdigest()
+
+        root = filepath.resolve()
+        for f in sorted(root.rglob("*")):
+            if not f.is_file():
+                continue
+            relative = f.relative_to(root).as_posix().encode("utf-8")
+            sha256.update(len(relative).to_bytes(8, "big"))
+            sha256.update(relative)
+            size = f.stat().st_size
+            sha256.update(size.to_bytes(8, "big"))
+            with open(f, "rb") as fh:
+                while chunk := fh.read(8192):
+                    sha256.update(chunk)
         return sha256.hexdigest()
 
     def verify_integrity(self, backup_id: str) -> bool:
