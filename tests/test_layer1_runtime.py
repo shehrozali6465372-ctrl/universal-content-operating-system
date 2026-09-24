@@ -128,3 +128,12 @@ def test_production_shutdown_closes_shared_persistence_once(tmp_path, monkeypatc
     )
     runtime.shutdown()
     assert backend.closed == 1
+
+
+def test_runtime_shutdown_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    runtime = Layer1Runtime(project_root=str(tmp_path))
+    runtime.start(profile="development", master_key="runtime-test-master-key")
+    runtime.shutdown()
+    runtime.shutdown()
+    assert runtime.is_ready is False
