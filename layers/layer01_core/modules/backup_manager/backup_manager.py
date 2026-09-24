@@ -447,15 +447,20 @@ class BackupManager:
     def disaster_recovery(self, target_dir: str) -> Dict[str, bool]:
         """Restore ALL backups to target directory. Returns {backup_id: success}."""
         results = {}
+        target_root = Path(target_dir).resolve()
+        target_root.mkdir(parents=True, exist_ok=True)
         with self._lock:
             ids = list(self._entries.keys())
 
         for bid in ids:
             try:
                 entry = self.get_entry(bid)
-                sub_dir = Path(target_dir) / entry.source
+                sub_dir = (target_root / entry.source).resolve()
+                sub_dir.relative_to(target_root)
                 sub_dir.mkdir(parents=True, exist_ok=True)
-                self.restore(bid, str(sub_dir / entry.filepath))
+                destination = (sub_dir / entry.filepath).resolve()
+                destination.relative_to(target_root)
+                self.restore(bid, str(destination))
                 results[bid] = True
             except Exception:
                 results[bid] = False
