@@ -431,3 +431,20 @@ def test_backup_orphan_detection(tmp_path):
     orphan = backup_dir / "unregistered.bak"
     orphan.write_text("orphan")
     assert bm.find_orphans() == ["unregistered.bak"]
+
+
+def test_backup_rotation_registry_failure_restores_artifacts(tmp_path, monkeypatch):
+    source = tmp_path / "source.txt"
+    source.write_text("safe")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir), default_retention_days=0)
+    entry = bm.backup("test", str(source), compress=False)
+
+    def fail_registry():
+        raise OSError("registry write failed")
+
+    monkeypatch.setattr(bm, "_save_registry", fail_registry)
+    with pytest.raises(OSError, match="registry write failed"):
+        bm.rotate()
+    assert bm.get_entry(entry.backup_id).backup_id == entry.backup_id
+    assert (backup_dir / entry.filepath).exists()
