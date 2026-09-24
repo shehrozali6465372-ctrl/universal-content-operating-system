@@ -16,6 +16,21 @@ from layers.layer01_core.modules.scheduler.task_queue import Task
 from layers.layer01_core.modules.logger.logger_manager import LoggerManager
 
 
+def test_config_persistence_excludes_credentials(tmp_path):
+    from layers.layer01_core.modules.config_manager import ConfigManager
+
+    ConfigManager.reset()
+    cm = ConfigManager(project_root=str(tmp_path))
+    cm.set("OPENAI_API_KEY", "secret-value")
+    cm.set("NORMAL_SETTING", "safe-value")
+    path = tmp_path / "config.json"
+    cm.save(str(path))
+    payload = json.loads(path.read_text())
+    assert "OPENAI_API_KEY" not in payload
+    assert payload["NORMAL_SETTING"] == "safe-value"
+    ConfigManager.reset()
+
+
 def test_credentials_are_provider_neutral():
     validate_api_key("DEEPSEEK_API_KEY", "deepseek-example-token")
 
