@@ -467,3 +467,14 @@ class TestSettingEntry:
         snap = entry.snapshot()
         assert snap["value"] == "V"
         assert "timestamp" in snap
+
+
+def test_setting_persistence_preserves_version_metadata():
+    entry = SettingEntry("K", "V")
+    entry.version = 7
+    entry.changed_by = "operator"
+    entry.last_changed = "2026-01-01T00:00:00+00:00"
+    restored = SettingEntry.from_dict(entry.to_dict())
+    assert restored.version == 7
+    assert restored.changed_by == "operator"
+    assert restored.last_changed == "2026-01-01T00:00:00+00:00"
