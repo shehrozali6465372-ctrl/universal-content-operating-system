@@ -309,30 +309,36 @@ class MemoryManager:
         save_path = self._project_root / filepath
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
-        snapshot = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "levels": {},
-        }
-        for level in get_persistent_levels():
-            entries = self.load(level.value)
-            snapshot["levels"][level.value] = {
-                "count": len(entries),
-                "entries": entries,
+        with self._lock:
+            snapshot = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "levels": {},
             }
+            for level in get_persistent_levels():
+                rows = self._conn.execute(
+                    "SELECT * FROM memory_entries WHERE level = ? "
+                    "ORDER BY importance DESC, updated_at DESC",
+                    (level.value,),
+                ).fetchall()
+                entries = [dict(row) for row in rows]
+                snapshot["levels"][level.value] = {
+                    "count": len(entries),
+                    "entries": entries,
+                }
 
-        fd, tmp_name = tempfile.mkstemp(dir=str(save_path.parent), suffix=".snapshot.tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(snapshot, f, indent=2, default=str)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_name, save_path)
-        except Exception:
+            fd, tmp_name = tempfile.mkstemp(dir=str(save_path.parent), suffix=".snapshot.tmp")
             try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(snapshot, f, indent=2, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_name, save_path)
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
         return save_path
 
     def restore(self, filepath: str) -> int:
@@ -353,7 +359,11 @@ class MemoryManager:
         for level_name, level_data in snapshot["levels"].items():
             if level_name not in allowed_levels or not isinstance(level_data, dict):
                 raise ValueError(f"Invalid memory level in snapshot: {level_name}")
-            for entry in level_data.get("entries", []):
+            entries = level_data.get("entries", [])
+            declared_count = level_data.get("count")
+            if not isinstance(entries, list) or not isinstance(declared_count, int) or declared_count != len(entries):
+                raise ValueError("Memory snapshot count mismatch")
+            for entry in entries:
                 if not isinstance(entry, dict):
                     raise ValueError("Invalid memory entry in snapshot")
                 entry_level = entry.get("level", level_name)
