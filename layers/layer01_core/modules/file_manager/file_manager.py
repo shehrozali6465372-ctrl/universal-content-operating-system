@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional
 from io import StringIO
 from datetime import datetime, timezone
 from threading import Lock, RLock
-from weakref import WeakValueDictionary
 
 from layers.layer01_core.modules.file_manager.hash_utils import calculate_hash, save_hash, verify_hash
 from layers.layer01_core.modules.file_manager.file_cache import FileCache
@@ -38,7 +37,8 @@ class FileManager:
     def __init__(self, base_path: str = ".", cache_size: int = 100):
         self._base = Path(base_path).resolve()
         self._cache = FileCache(cache_size)
-        self._locks = WeakValueDictionary()
+        # Strong references are required: a returned lock may outlive this lookup.
+        self._locks: Dict[str, Lock] = {}
         self._global_lock = RLock()
 
     # ── Safe Read ───────────────────────────
@@ -287,10 +287,22 @@ class FileManager:
     # ── File Lock ───────────────────────────
 
     def acquire_lock(self, filepath: str) -> Lock:
+        """Return a stable per-path lock for the lifetime of this manager."""
+        full = self._resolve(filepath)
+        key = str(full)
         with self._global_lock:
-            if filepath not in self._locks:
-                self._locks[filepath] = Lock()
-            return self._locks[filepath]
+            if key not in self._locks:
+                self._locks[key] = Lock()
+            return self._locks[key]
+
+    def release_lock(self, filepath: str) -> None:
+        """Drop an unused per-path lock from the lock registry."""
+        full = self._resolve(filepath)
+        key = str(full)
+        with self._global_lock:
+            lock = self._locks.get(key)
+            if lock is not None and not lock.locked():
+                self._locks.pop(key, None)
 
     # ── Import / Export ─────────────────────
 
