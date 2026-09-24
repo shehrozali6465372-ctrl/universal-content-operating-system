@@ -3,7 +3,7 @@
 **Status:** Architecture target for Layer 1 completion  
 **Implementation boundary:** `layers/layer01_core`  
 **Baseline:** `39b6fd682f18589fd8d104a5766bef50a10c0e75`  
-**Current source inventory:** 51 Python modules, 167 classes, 792 functions/methods  
+**Current source inventory:** 51 Python modules, 167 classes, 793 functions/methods  
 **Rule:** This document defines the Layer 1 production completion target. It does not claim that every target is already implemented or runtime-verified.
 
 ---
