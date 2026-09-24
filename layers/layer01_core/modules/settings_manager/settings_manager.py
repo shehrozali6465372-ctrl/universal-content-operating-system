@@ -10,6 +10,7 @@ Intelligent settings management with:
 - Settings audit trail
 """
 
+import hashlib
 import json
 import os
 import tempfile
@@ -63,21 +64,29 @@ class FeatureFlag:
     def __init__(self, name: str, enabled: bool = True,
                  rollout_pct: float = 100.0, conditions: Optional[Dict] = None,
                  description: str = ""):
+        if not 0.0 <= rollout_pct <= 100.0:
+            raise ValueError("rollout_pct must be between 0 and 100")
         self.name = name
         self.enabled = enabled
-        self.rollout_pct = rollout_pct
+        self.rollout_pct = float(rollout_pct)
         self.conditions = conditions or {}
         self.description = description
 
     def is_active(self, context: Optional[Dict] = None) -> bool:
-        if not self.enabled:
-            return False
-        if self.rollout_pct <= 0:
+        if not self.enabled or self.rollout_pct <= 0:
             return False
         for key, expected in self.conditions.items():
             if context is None or context.get(key) != expected:
                 return False
-        return True
+        if self.rollout_pct >= 100:
+            return True
+        if not context or context.get("rollout_key") is None:
+            return False
+        bucket = int(
+            hashlib.sha256(str(context["rollout_key"]).encode("utf-8")).hexdigest()[:8],
+            16,
+        ) % 100
+        return bucket < self.rollout_pct
 
     def to_dict(self) -> dict:
         return {
