@@ -148,13 +148,21 @@ class Layer1Runtime:
         }
 
     def shutdown(self) -> None:
-        """Drain scheduling first, then close persistence resources."""
+        """Drain scheduling first, then close each owned resource exactly once."""
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=True)
-        if self.memory is not None:
-            self.memory.close()
-        if self.database is not None:
-            self.database.close()
+
+        # Database and memory may be two views over one Layer 13 persistence
+        # owner. Close by object identity so shared backends are not torn down
+        # twice during normal shutdown or fail-closed startup rollback.
+        closed = set()
+        for resource in (self.memory, self.database):
+            if resource is None or id(resource) in closed:
+                continue
+            close = getattr(resource, "close", None)
+            if callable(close):
+                close()
+            closed.add(id(resource))
         self._started = False
 
     @property
