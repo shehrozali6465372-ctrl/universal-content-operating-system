@@ -13,13 +13,19 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional
+from threading import RLock
 
 
 class KeyStore:
     """Manages .secrets file for encrypted secret storage."""
 
+    _locks = {}
+    _locks_guard = RLock()
+
     def __init__(self, secrets_path: str = ".secrets"):
         self._path = Path(secrets_path)
+        with self._locks_guard:
+            self._lock = self._locks.setdefault(str(self._path.resolve()), RLock())
 
     @property
     def path(self) -> Path:
@@ -82,19 +88,21 @@ class KeyStore:
             raise
 
     def add(self, name: str, encrypted_value: str) -> None:
-        """Add or update a single secret."""
-        secrets = self.load()
-        secrets[name] = encrypted_value
-        self.save(secrets)
+        """Add or update a single secret atomically within this process."""
+        with self._lock:
+            secrets = self.load()
+            secrets[name] = encrypted_value
+            self.save(secrets)
 
     def remove(self, name: str) -> bool:
-        """Remove a secret. Returns True if found and removed."""
-        secrets = self.load()
-        if name in secrets:
-            del secrets[name]
-            self.save(secrets)
-            return True
-        return False
+        """Remove a secret atomically within this process."""
+        with self._lock:
+            secrets = self.load()
+            if name in secrets:
+                del secrets[name]
+                self.save(secrets)
+                return True
+            return False
 
     def get(self, name: str) -> Optional[str]:
         """Get encrypted value by name."""
