@@ -39,7 +39,6 @@ def audit():
             syntax_errors.append({"module": mod, "error": str(exc)})
             continue
         classes, functions = [], []
-        class_methods = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 q = f"{mod}:{node.name}"
@@ -48,7 +47,6 @@ def audit():
                               "line": node.lineno}
                 for child in node.body:
                     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        class_methods.add(id(child))
                         mq = f"{mod}:{node.name}.{child.name}"
                         functions.append(f"{node.name}.{child.name}")
                         symbols[mq] = {"kind": "method", "module": mod,
@@ -57,16 +55,18 @@ def audit():
                         body = ast.Module(body=child.body, type_ignores=[])
                         duplicate_hashes[hashlib.sha256(norm_source(body).encode()).hexdigest()].append(mq)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Only direct module-level functions belong in the module
-                # inventory. Nested local functions are implementation details
-                # and must not be reported as module-level symbols.
-                if id(node) not in class_methods and node.col_offset == 0:
-                    q = f"{mod}:{node.name}"
-                    functions.append(node.name)
-                    symbols[q] = {"kind": "function", "module": mod,
-                                  "name": node.name, "line": node.lineno}
-                    body = ast.Module(body=node.body, type_ignores=[])
-                    duplicate_hashes[hashlib.sha256(norm_source(body).encode()).hexdigest()].append(q)
+                if not any(node in getattr(c, "body", []) for c in []):
+                    # Class methods are already recorded above; this branch records
+                    # module-level functions.
+                    parent_class = next((c.name for c in ast.walk(tree)
+                                         if isinstance(c, ast.ClassDef) and node in c.body), None)
+                    if parent_class is None:
+                        q = f"{mod}:{node.name}"
+                        functions.append(node.name)
+                        symbols[q] = {"kind": "function", "module": mod,
+                                      "name": node.name, "line": node.lineno}
+                        body = ast.Module(body=node.body, type_ignores=[])
+                        duplicate_hashes[hashlib.sha256(norm_source(body).encode()).hexdigest()].append(q)
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 imports.append({"module": mod, "line": node.lineno,
                                 "text": ast.unparse(node)})
