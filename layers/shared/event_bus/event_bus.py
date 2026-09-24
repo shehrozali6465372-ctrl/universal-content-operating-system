@@ -135,10 +135,22 @@ class EventBus:
             "errors": errors,
         }
 
-    def subscribe_all(self, event_types: List[EventType], callback: Callable, priority: int = 0, name: str = ""):
-        """Subscribe to multiple event types at once."""
-        for et in event_types:
-            self.subscribe(et, callback, priority, name)
+    def subscribe_all(
+        self,
+        event_types: Union[List[EventType], Callable[[Event], Any]],
+        callback: Optional[Callable[[Event], Any]] = None,
+        priority: int = 0,
+        name: str = "",
+    ) -> bool:
+        """Subscribe to multiple event types or all events."""
+        if callable(event_types) and callback is None:
+            return bool(self.subscribe("*", event_types, priority, name))
+        if callback is None:
+            raise TypeError("callback is required")
+        changed = False
+        for event_type in event_types:
+            changed = bool(self.subscribe(event_type, callback, priority, name)) or changed
+        return changed
 
     def get_history(self, event_type: Optional[EventType] = None, limit: int = 50) -> List[Event]:
         """Get event history, optionally filtered by type."""
