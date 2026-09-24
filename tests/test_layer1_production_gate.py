@@ -122,3 +122,17 @@ def test_memory_snapshot_rejects_count_mismatch(tmp_path):
     with pytest.raises(ValueError, match="count mismatch"):
         manager.restore(str(snapshot))
     manager.close()
+
+
+def test_backup_registry_rejects_path_escape(tmp_path):
+    from layers.layer01_core.modules.backup_manager.backup_manager import BackupManager
+    source = tmp_path / "source.txt"
+    source.write_text("safe")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+    entry = bm.backup("test", str(source), compress=False)
+    registry = json.loads((backup_dir / "_registry.json").read_text())
+    registry["entries"][entry.backup_id]["filepath"] = "../outside.txt"
+    (backup_dir / "_registry.json").write_text(json.dumps(registry))
+    with pytest.raises(RuntimeError, match="unreadable"):
+        BackupManager(str(backup_dir))
