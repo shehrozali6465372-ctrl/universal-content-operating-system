@@ -275,7 +275,7 @@ class MemoryManager:
     # ── Update ──────────────────────────────
 
     def update(self, entry_id: int, **kwargs) -> bool:
-        """Update fields of a memory entry."""
+        """Update fields atomically against the currently stored memory level."""
         self._ensure_init()
         allowed = {"category", "key", "value", "tags", "importance"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
@@ -286,32 +286,31 @@ class MemoryManager:
                 "SELECT level, category, key, value, importance FROM memory_entries WHERE id = ?",
                 (entry_id,),
             ).fetchone()
-        if current is None:
-            return False
-        candidate = {
-            "category": updates.get("category", current["category"]),
-            "key": updates.get("key", current["key"]),
-            "value": updates.get("value", current["value"]),
-            "importance": updates.get("importance", current["importance"]),
-        }
-        self._validate_entry(
-            current["level"],
-            candidate["category"],
-            candidate["key"],
-            candidate["value"],
-            candidate["importance"],
-        )
-        if "tags" in updates and not isinstance(updates["tags"], str):
-            raise TypeError("Memory tags must be a string")
-        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        with self._lock:
+            if current is None:
+                return False
+            candidate = {
+                "category": updates.get("category", current["category"]),
+                "key": updates.get("key", current["key"]),
+                "value": updates.get("value", current["value"]),
+                "importance": updates.get("importance", current["importance"]),
+            }
+            self._validate_entry(
+                current["level"],
+                candidate["category"],
+                candidate["key"],
+                candidate["value"],
+                candidate["importance"],
+            )
+            if "tags" in updates and not isinstance(updates["tags"], str):
+                raise TypeError("Memory tags must be a string")
+            updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
             with self._conn:
                 self._conn.execute(
                     f"UPDATE memory_entries SET {set_clause} WHERE id = ?",
                     list(updates.values()) + [entry_id],
                 )
-        return True
+            return True
 
     # ── Delete ──────────────────────────────
 
