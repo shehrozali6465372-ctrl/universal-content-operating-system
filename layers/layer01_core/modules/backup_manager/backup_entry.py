@@ -81,5 +81,12 @@ class BackupEntry:
             retention_days=data.get("retention_days", 30),
             description=data.get("description", ""),
         )
-        entry.created_at = data.get("created_at", entry.created_at)
+        created_at = data.get("created_at", entry.created_at)
+        if not isinstance(created_at, str):
+            raise ValueError("backup created_at must be a string")
+        try:
+            datetime.fromisoformat(created_at)
+        except ValueError as exc:
+            raise ValueError("backup created_at must be ISO-8601") from exc
+        entry.created_at = created_at
         return entry
