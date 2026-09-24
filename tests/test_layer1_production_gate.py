@@ -20,7 +20,7 @@ def test_config_persistence_excludes_credentials(tmp_path):
     from layers.layer01_core.modules.config_manager import ConfigManager
 
     ConfigManager.reset()
-    cm = ConfigManager(project_root=str(tmp_path))
+    cm = ConfigManager(project_root=str(tmp_path), admin_mode=True)
     cm.set("OPENAI_API_KEY", "secret-value")
     cm.set("NORMAL_SETTING", "safe-value")
     path = tmp_path / "config.json"
