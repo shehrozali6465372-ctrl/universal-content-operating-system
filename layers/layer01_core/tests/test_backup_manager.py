@@ -52,7 +52,7 @@ class TestBackupEntry:
 
     def test_from_dict(self):
         d = {"backup_id": "id1", "source": "logs", "filepath": "f.bak",
-             "size_bytes": 100, "hash_sha256": "abc", "encrypted": False,
+             "size_bytes": 100, "hash_sha256": "a" * 64, "encrypted": False,
              "compressed": True, "created_at": "2026-01-01T00:00:00",
              "retention_days": 7, "description": "test"}
         e = BackupEntry.from_dict(d)
