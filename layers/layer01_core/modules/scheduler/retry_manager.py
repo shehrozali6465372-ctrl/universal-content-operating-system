@@ -75,7 +75,7 @@ class RetryManager:
         with self._lock:
             info = self._retries.get(task_id)
             if not info:
-                return True
+                return max_retries > 0
             return info["attempts"] < max_retries
 
     def get_retry_count(self, task_id: str) -> int:
