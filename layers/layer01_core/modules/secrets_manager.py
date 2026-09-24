@@ -78,24 +78,22 @@ class SecretsManager:
             raise ImportError(
                 "cryptography library required. Install: pip install cryptography"
             )
-
-        if master_key is None:
-            master_key = os.environ.get("AGENT_MASTER_KEY", "")
-
-        if not isinstance(master_key, str) or not master_key:
-            raise InvalidConfig(
-                "MASTER_KEY",
-                "Master key not provided. Set AGENT_MASTER_KEY env var or pass master_key param."
+        with self._lock:
+            if master_key is None:
+                master_key = os.environ.get("AGENT_MASTER_KEY", "")
+            if not isinstance(master_key, str) or not master_key:
+                raise InvalidConfig(
+                    "MASTER_KEY",
+                    "Master key not provided. Set AGENT_MASTER_KEY env var or pass master_key param.",
+                )
+            legacy_fernet = Fernet(
+                base64.urlsafe_b64encode(master_key.encode().ljust(32, b"\0")[:32])
             )
-
-        self._master_key = master_key
-        self._legacy_fernet = Fernet(
-            base64.urlsafe_b64encode(master_key.encode().ljust(32, b"\0")[:32])
-        )
-        self._fernet = self._legacy_fernet
-
-        self._audit.log("SYSTEM", "HEALTH_CHECK", "SUCCESS", "SecretsManager initialized")
-        return self
+            self._master_key = master_key
+            self._legacy_fernet = legacy_fernet
+            self._fernet = legacy_fernet
+            self._audit.log("SYSTEM", "HEALTH_CHECK", "SUCCESS", "SecretsManager initialized")
+            return self
 
     def _ensure_setup(self) -> None:
         if self._fernet is None:
@@ -119,6 +117,8 @@ class SecretsManager:
         """Encrypt using versioned, salted key derivation."""
         if not isinstance(value, str):
             raise TypeError("secret value must be a string")
+        if not value:
+            raise ValueError("secret value must be non-empty")
         if not value:
             raise ValueError("secret value must be non-empty")
         self._ensure_setup()
