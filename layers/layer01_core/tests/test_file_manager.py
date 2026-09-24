@@ -323,3 +323,56 @@ def test_concurrent_writes_are_serialized(fm):
 def test_file_cache_rejects_invalid_capacity():
     with pytest.raises(ValueError, match="positive integer"):
         FileCache(max_size=0)
+
+
+def test_backup_rolls_back_artifact_when_hash_persistence_fails(fm, monkeypatch):
+    fm.write("source.txt", "important", create_backup=False)
+
+    def fail_hash(_):
+        raise OSError("hash metadata disk full")
+
+    monkeypatch.setattr(
+        "layers.layer01_core.modules.file_manager.file_manager.save_hash",
+        fail_hash,
+    )
+    with pytest.raises(OSError, match="hash metadata disk full"):
+        fm.backup("source.txt")
+
+    backup_dir = fm._base / "backups"
+    assert list(backup_dir.glob("*.bak")) == []
+    assert list(backup_dir.glob(".*.stage")) == []
+
+
+def test_restore_rejects_symlink_target(tmp_path, fm):
+    fm.write("source.txt", "safe", create_backup=False)
+    backup_path = fm.backup("source.txt")
+    real_target = tmp_path / "real-target.txt"
+    real_target.write_text("must remain")
+    symlink = tmp_path / "link.txt"
+    symlink.symlink_to(real_target)
+
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        fm.restore(backup_path, "link.txt")
+
+    assert real_target.read_text() == "must remain"
+
+
+def test_restore_save_hash_failure_rolls_back_payload_and_sidecar(fm, monkeypatch):
+    fm.write("target.txt", "original", create_backup=False, verify=True)
+    backup_path = fm.backup("target.txt")
+
+    fm.write("target.txt", "changed", create_backup=False, verify=True)
+    original_sidecar = (fm._base / "target.txt.sha256").read_bytes()
+
+    def fail_hash(_):
+        raise OSError("hash write failed")
+
+    monkeypatch.setattr(
+        "layers.layer01_core.modules.file_manager.file_manager.save_hash",
+        fail_hash,
+    )
+    with pytest.raises(OSError, match="hash write failed"):
+        fm.restore(backup_path, "target.txt")
+
+    assert (fm._base / "target.txt").read_text() == "changed"
+    assert (fm._base / "target.txt.sha256").read_bytes() == original_sidecar
