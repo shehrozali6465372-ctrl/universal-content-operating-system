@@ -1,5 +1,6 @@
 import json
 import time
+import threading
 from pathlib import Path
 
 import pytest
@@ -286,3 +287,40 @@ def test_layer13_uninitialized_backend_fails_health():
     report = backend.health_check()
     assert report["overall"] == "FAIL"
     assert report["initialized"] is False
+
+
+def test_layer13_manager_concurrent_initialize_is_single_owner(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("POSTGRES_HOST", "localhost")
+    monkeypatch.setenv("POSTGRES_PORT", "5432")
+    monkeypatch.setenv("POSTGRES_DB", "aios")
+    monkeypatch.setenv("POSTGRES_USER", "postgres")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "postgres")
+    from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
+
+    manager = PostgreSQLManager()
+    results = []
+    errors = []
+    lock = threading.Lock()
+
+    def initialize():
+        try:
+            value = manager.initialize()
+            with lock:
+                results.append(value)
+        except Exception as exc:
+            with lock:
+                errors.append(exc)
+
+    threads = [threading.Thread(target=initialize) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    try:
+        assert not errors
+        assert results == [True] * 8
+        assert manager.health_check()["overall"] == "PASS"
+    finally:
+        manager.close()
