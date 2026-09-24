@@ -86,9 +86,11 @@ class Task:
             if not isinstance(self.not_before, str):
                 raise TypeError("not_before must be an ISO-8601 string")
             try:
-                datetime.fromisoformat(self.not_before)
+                parsed = datetime.fromisoformat(self.not_before)
             except ValueError as exc:
                 raise ValueError("not_before must be a valid ISO-8601 timestamp") from exc
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                raise ValueError("not_before must include a timezone offset")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -107,8 +109,8 @@ class Task:
             priority=TaskPriority(data.get("priority", "NORMAL")),
             status=TaskStatus(data.get("status", "PENDING")),
             params=data.get("params", {}), dependencies=data.get("dependencies", []),
-            timeout_seconds=int(data.get("timeout_seconds", 300)),
-            max_retries=int(data.get("max_retries", 3)),
+            timeout_seconds=data.get("timeout_seconds", 300),
+            max_retries=data.get("max_retries", 3),
             task_id=data.get("task_id") or uuid.uuid4().hex[:12],
             created_at=data.get("created_at") or datetime.now(timezone.utc).isoformat(),
             conditions=data.get("conditions"), not_before=data.get("not_before"),
