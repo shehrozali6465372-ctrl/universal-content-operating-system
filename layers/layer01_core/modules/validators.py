@@ -1,3 +1,4 @@
+import math
 from typing import Any
 from pathlib import Path
 
@@ -46,6 +47,8 @@ def validate_number(key: str, value: Any, min_val: float = None, max_val: float 
         num = float(value)
     except (TypeError, ValueError):
         raise InvalidConfig(key, f"Must be a number, got: {type(value).__name__}")
+    if not math.isfinite(num):
+        raise InvalidConfig(key, "Must be a finite number")
     if min_val is not None and num < min_val:
         raise InvalidConfig(key, f"Must be >= {min_val}, got: {num}")
     if max_val is not None and num > max_val:
