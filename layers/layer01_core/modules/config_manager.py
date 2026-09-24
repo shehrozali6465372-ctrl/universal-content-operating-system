@@ -194,7 +194,7 @@ class ConfigManager:
             if field_def.validator:
                 try:
                     validate_config_value(field_def.key, value, field_def.validator)
-                except Exception as e:
+                except InvalidConfig as e:
                     errors.append(str(e))
         return errors
 
