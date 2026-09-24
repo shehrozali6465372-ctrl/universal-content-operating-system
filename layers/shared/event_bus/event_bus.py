@@ -57,9 +57,18 @@ class EventBus:
     ):
         """Subscribe a handler to an event type."""
         key = event_type.value if isinstance(event_type, EventType) else event_type
-        handler = EventHandler(callback, priority, name, once)
-        self._handlers[key].append(handler)
-        self._handlers[key].sort(key=lambda h: -h.priority)
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("event_type must be a non-empty string")
+        if not callable(callback):
+            raise TypeError("callback must be callable")
+        handlers = self._handlers[key]
+        resolved_name = name or getattr(callback, "__name__", callback.__class__.__name__)
+        if any(h.callback is callback and h.name == resolved_name for h in handlers):
+            return False
+        handler = EventHandler(callback, priority, resolved_name, once)
+        handlers.append(handler)
+        handlers.sort(key=lambda h: -h.priority)
+        return True
 
     def unsubscribe(self, event_type: EventType, name: str) -> bool:
         """Unsubscribe a handler by name."""
