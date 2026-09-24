@@ -187,13 +187,16 @@ class BackupManager:
     def backup_json(self, source: str, data: Any,
                     filename: str = "data.json",
                     description: str = "") -> Optional[BackupEntry]:
-        """Backup in-memory data as JSON file."""
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        temp_path = self._backup_dir / f"_temp_{ts}.json"
-        temp_path.write_text(json.dumps(data, indent=2, default=str))
-        result = self.backup(source, str(temp_path), description=description)
-        temp_path.unlink(missing_ok=True)
-        return result
+        """Backup in-memory JSON data using a safe temporary filename."""
+        safe_name = Path(filename).name
+        if safe_name != filename or safe_name in {"", ".", ".."}:
+            raise ValueError("backup JSON filename must be a single path component")
+        temp_path = self._backup_dir / f"._temp_{uuid.uuid4().hex}_{safe_name}"
+        try:
+            temp_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+            return self.backup(source, str(temp_path), description=description)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     # ── Core: Restore ────────────────────────
 
