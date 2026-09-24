@@ -11,7 +11,7 @@ Features:
 """
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from layers.shared.models.event import Event, EventType
 
