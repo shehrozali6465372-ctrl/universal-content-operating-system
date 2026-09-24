@@ -194,7 +194,8 @@ class TaskQueue:
 
     def _dependencies_met(self, task: Task) -> bool:
         return all(
-            self._tasks.get(dep_id, Task("", "")).status == TaskStatus.SUCCESS
+            dep_id in self._tasks
+            and self._tasks[dep_id].status == TaskStatus.SUCCESS
             for dep_id in task.dependencies
         )
 
