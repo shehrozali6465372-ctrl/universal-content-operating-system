@@ -231,6 +231,28 @@ def test_backup_registry_rejects_key_mismatch(tmp_path):
         BackupManager(str(backup_dir))
 
 
+def test_backup_compression_failure_leaves_no_orphan_artifact(tmp_path, monkeypatch):
+    source = tmp_path / "source.txt"
+    source.write_text("payload")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+
+    def fail_copyfileobj(*args, **kwargs):
+        raise OSError("compression failed")
+
+    monkeypatch.setattr(
+        "layers.layer01_core.modules.backup_manager.backup_manager.shutil.copyfileobj",
+        fail_copyfileobj,
+    )
+    with pytest.raises(OSError, match="compression failed"):
+        bm.backup("test", str(source), compress=True)
+
+    assert bm.count() == 0
+    assert not list(backup_dir.glob("*.bak"))
+    assert not list(backup_dir.glob("*.gz"))
+    assert not list(backup_dir.glob("*.stage"))
+
+
 def test_backup_copy_failure_leaves_no_partial_artifact(tmp_path, monkeypatch):
     source = tmp_path / "source.txt"
     source.write_text("payload")
