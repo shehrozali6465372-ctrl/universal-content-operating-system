@@ -1,6 +1,9 @@
 """Tests for ParallelExecutor."""
 
+import pytest
+
 from layers.layer02_research.modules.research_orchestrator.parallel_executor import ParallelExecutor, ExecutionResult
+from layers.layer02_research.modules.research_planner.exceptions import DependencyError
 
 
 class TestExecutionResult:
@@ -40,6 +43,18 @@ class TestParallelExecutor:
         # Without explicit deps, all are independent -> 1 wave
         assert len(waves) == 1
         assert set(waves[0]) == {"a", "b", "c"}
+
+    def test_build_waves_rejects_unknown_dependency(self):
+        with pytest.raises(DependencyError):
+            self.pe.build_waves(["a"], dependencies={"a": ["missing"]})
+
+    def test_build_waves_rejects_cycle(self):
+        with pytest.raises(DependencyError):
+            self.pe.build_waves(["a", "b"], dependencies={"a": ["b"], "b": ["a"]})
+
+    def test_build_waves_rejects_duplicate_modules(self):
+        with pytest.raises(DependencyError):
+            self.pe.build_waves(["a", "a"])
 
     def test_execute_wave(self):
         def func_a():
