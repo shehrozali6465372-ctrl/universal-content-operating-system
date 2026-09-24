@@ -389,7 +389,7 @@ class BackupManager:
                 oldest = min(self._entries.items(), key=lambda x: x[1].created_at)
                 bid, entry = oldest
                 del self._entries[bid]
-                backup_file = self._backup_dir / entry.filepath
+                backup_file = self._safe_backup_path(entry.filepath)
                 if backup_file.exists():
                     if backup_file.is_dir():
                         shutil.rmtree(str(backup_file))
@@ -422,7 +422,7 @@ class BackupManager:
             if backup_id not in self._entries:
                 raise BackupNotFoundError(f"Backup '{backup_id}' not found")
             entry = self._entries.pop(backup_id)
-            backup_file = self._backup_dir / entry.filepath
+            backup_file = self._safe_backup_path(entry.filepath)
             if backup_file.exists():
                 if backup_file.is_dir():
                     shutil.rmtree(str(backup_file))
