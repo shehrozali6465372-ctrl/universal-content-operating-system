@@ -448,3 +448,26 @@ def test_backup_rotation_registry_failure_restores_artifacts(tmp_path, monkeypat
         bm.rotate()
     assert bm.get_entry(entry.backup_id).backup_id == entry.backup_id
     assert (backup_dir / entry.filepath).exists()
+
+
+def test_layer13_manager_concurrent_shutdown_is_idempotent():
+    from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
+
+    manager = PostgreSQLManager()
+    assert manager.initialize() is True
+    errors = []
+
+    def close():
+        try:
+            manager.close()
+        except Exception as exc:
+            with threading.Lock():
+                errors.append(exc)
+
+    threads = [threading.Thread(target=close) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not errors
+    assert manager.health_check()["initialized"] is False
