@@ -144,7 +144,6 @@ class MigrationManager:
                 );
             """,
         )
-        # Example future migration (placeholder):
         self._registry.register(
             version=2,
             description="Add index on agent_memory for faster lookups",
