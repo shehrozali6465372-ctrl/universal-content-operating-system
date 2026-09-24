@@ -317,3 +317,10 @@ def test_cron_rejects_invalid_step_and_range():
         CronParser("61 * * * *")
     with pytest.raises(ValueError):
         CronParser("5-2 * * * *")
+
+
+def test_queue_does_not_dedupe_different_payloads():
+    q = TaskQueue()
+    first = q.add(Task(name="publish", job_type="post", params={"account": "a"}))
+    second = q.add(Task(name="publish", job_type="post", params={"account": "b"}))
+    assert second != first
