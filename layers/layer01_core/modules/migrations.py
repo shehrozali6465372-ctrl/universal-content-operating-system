@@ -200,23 +200,31 @@ class MigrationManager:
             return applied
 
     def rollback(self, target_version: int, allow_data_loss: bool = False) -> None:
-        """Rollback only reversible migrations; never fake a rollback by editing metadata."""
-        current = self.get_current_version()
-        if target_version >= current:
-            return
-        if target_version < 1:
-            if not allow_data_loss:
-                raise RuntimeError("Rollback below v1 requires explicit allow_data_loss=True")
-            raise RuntimeError("Initial schema rollback is not implemented safely")
-        # v2 is index-only and therefore safely reversible.
-        if current >= 2 and target_version == 1:
-            self._conn.execute("DROP INDEX IF EXISTS idx_memory_category")
-            self._conn.execute("DELETE FROM schema_version WHERE version = 2")
-            self._conn.commit()
-            return
-        raise RuntimeError(
-            f"Rollback from v{current} to v{target_version} is not safely reversible"
-        )
+        """Rollback only reversible migrations under the migration lock."""
+        if not isinstance(target_version, int) or isinstance(target_version, bool) or target_version < 0:
+            raise ValueError("target_version must be a non-negative integer")
+        with self._lock:
+            current = self.get_current_version()
+            if target_version >= current:
+                return
+            if target_version < 1:
+                if not allow_data_loss:
+                    raise RuntimeError("Rollback below v1 requires explicit allow_data_loss=True")
+                raise RuntimeError("Initial schema rollback is not implemented safely")
+            # v2 is index-only and therefore safely reversible.
+            if current >= 2 and target_version == 1:
+                try:
+                    self._conn.execute("BEGIN IMMEDIATE")
+                    self._conn.execute("DROP INDEX IF EXISTS idx_memory_category")
+                    self._conn.execute("DELETE FROM schema_version WHERE version = 2")
+                    self._conn.commit()
+                except Exception as exc:
+                    self._conn.rollback()
+                    raise RuntimeError("Migration rollback failed; transaction rolled back") from exc
+                return
+            raise RuntimeError(
+                f"Rollback from v{current} to v{target_version} is not safely reversible"
+            )
 
     def migration_history(self) -> List[Dict]:
         """Get history of applied migrations."""
