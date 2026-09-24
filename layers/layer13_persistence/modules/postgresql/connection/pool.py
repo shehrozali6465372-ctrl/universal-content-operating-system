@@ -443,6 +443,8 @@ class ConnectionPool:
     def get_pool_metrics(self) -> Dict[str, Any]:
         """Get comprehensive pool metrics."""
         with self._lock:
+            if len(self._query_latencies) > self._MAX_LATENCY_SAMPLES:
+                del self._query_latencies[:-self._MAX_LATENCY_SAMPLES]
             lats = list(self._query_latencies)
             active_conns = self._active_conns
             idle_conns = self._idle_conns
