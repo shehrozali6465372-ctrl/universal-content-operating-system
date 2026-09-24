@@ -33,7 +33,7 @@ class TopicIntelManager:
 
     def __init__(self, storage_path: Optional[str] = None):
         self._topics: Dict[str, TopicEntry] = {}
-        self._lock = Lock()
+        self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
         self._scorer = TopicScorer()
         self._categorizer = TopicCategorizer()
