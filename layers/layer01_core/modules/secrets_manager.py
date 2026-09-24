@@ -82,7 +82,7 @@ class SecretsManager:
         if master_key is None:
             master_key = os.environ.get("AGENT_MASTER_KEY", "")
 
-        if not master_key:
+        if not isinstance(master_key, str) or not master_key:
             raise InvalidConfig(
                 "MASTER_KEY",
                 "Master key not provided. Set AGENT_MASTER_KEY env var or pass master_key param."
@@ -117,6 +117,8 @@ class SecretsManager:
 
     def encrypt(self, value: str) -> str:
         """Encrypt using versioned, salted key derivation."""
+        if not isinstance(value, str):
+            raise TypeError("secret value must be a string")
         self._ensure_setup()
         salt = os.urandom(16)
         encrypted = self._derive_v2_fernet(salt).encrypt(value.encode("utf-8"))
@@ -124,6 +126,8 @@ class SecretsManager:
 
     def decrypt(self, encrypted_value: str) -> str:
         """Decrypt v2 values and legacy pre-v2 Fernet values."""
+        if not isinstance(encrypted_value, str) or not encrypted_value:
+            raise ValueError("encrypted secret must be a non-empty string")
         self._ensure_setup()
         if encrypted_value.startswith("v2:"):
             parts = encrypted_value.split(":", 2)
@@ -264,8 +268,11 @@ class SecretsManager:
                 "status": "PASS" if enc_ok else "FAIL",
                 "message": "Fernet encrypt/decrypt working" if enc_ok else "Encryption broken",
             }
-        except Exception as e:
-            report["checks"]["encryption"] = {"status": "FAIL", "message": str(e)}
+        except Exception:
+            report["checks"]["encryption"] = {
+                "status": "FAIL",
+                "message": "Encryption self-test failed",
+            }
 
         # Check 4: File permissions
         if self._key_store.exists:
