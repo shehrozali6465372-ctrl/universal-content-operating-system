@@ -366,17 +366,28 @@ class ConnectionPool:
             rows = self.query(sql)
             return [r["name"] for r in rows]
 
+    @contextmanager
+    def transaction(self):
+        """Own one connection for an atomic transaction."""
+        with self.connection() as conn:
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
     def begin_transaction(self):
-        """Begin a transaction."""
-        pass
+        """Reject unscoped transactions; use transaction() for ownership."""
+        raise RuntimeError("Use ConnectionPool.transaction() to establish transaction ownership")
 
     def commit(self):
-        """Commit current transaction."""
-        pass
+        """Reject unscoped commits; transaction() owns commit semantics."""
+        raise RuntimeError("Use ConnectionPool.transaction() to establish transaction ownership")
 
     def rollback(self):
-        """Rollback current transaction."""
-        pass
+        """Reject unscoped rollbacks; transaction() owns rollback semantics."""
+        raise RuntimeError("Use ConnectionPool.transaction() to establish transaction ownership")
 
     def is_healthy(self) -> bool:
         """Lightweight health ping — SELECT 1."""
