@@ -223,10 +223,33 @@ class TaskQueue:
         )
 
     def update_status(self, task_id: str, status: TaskStatus) -> None:
+        if not isinstance(status, TaskStatus):
+            raise TypeError("status must be a TaskStatus")
+        transitions = {
+            TaskStatus.PENDING: {
+                TaskStatus.RUNNING, TaskStatus.CANCELLED, TaskStatus.WAITING
+            },
+            TaskStatus.WAITING: {
+                TaskStatus.PENDING, TaskStatus.CANCELLED
+            },
+            TaskStatus.RUNNING: {
+                TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.PENDING, TaskStatus.WAITING
+            },
+            TaskStatus.SUCCESS: set(),
+            TaskStatus.FAILED: set(),
+            TaskStatus.CANCELLED: set(),
+        }
         with self._lock:
-            if task_id in self._tasks:
-                self._tasks[task_id].status = status
-                self._save()
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise KeyError(f"Unknown task: {task_id}")
+            current = task.status
+            if status == current:
+                return
+            if status not in transitions[current]:
+                raise ValueError(f"Invalid task status transition: {current.value} -> {status.value}")
+            task.status = status
+            self._save()
 
     def get_by_status(self, status: TaskStatus) -> List[Task]:
         with self._lock:
