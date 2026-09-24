@@ -70,13 +70,16 @@ jobs:
       - name: Layer 1 Secret Pattern Scan
         shell: bash
         run: |
-          if git grep -nE 'sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----' -- layers/layer01_core docs/architecture; then
+          if git grep -nE 'sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----' -- layers/layer01_core docs/architecture tests; then
             echo "Potential high-confidence secret material found in Layer 1 source/docs."
             exit 1
           fi
 
       - name: Run Integration Contract Tests
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+
+      - name: Run Layer 1 Production Gate Tests
+        run: python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py -q --tb=short
 
       - name: Run Full Test Suite
         run: python -m pytest -q --tb=short
