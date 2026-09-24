@@ -14,6 +14,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 import uuid
+import copy
 from threading import RLock
 
 
@@ -111,7 +112,8 @@ class TaskQueue:
 
     def get(self, task_id: str) -> Optional[Task]:
         with self._lock:
-            return self._tasks.get(task_id)
+            task = self._tasks.get(task_id)
+            return copy.deepcopy(task) if task is not None else None
 
     def next_task(self) -> Optional[Task]:
         """Atomically claim and return the highest-priority ready task."""
@@ -168,13 +170,13 @@ class TaskQueue:
 
     def get_by_status(self, status: TaskStatus) -> List[Task]:
         with self._lock:
-            return [t for t in self._tasks.values() if t.status == status]
+            return [copy.deepcopy(t) for t in self._tasks.values() if t.status == status]
 
     def get_by_name(self, name: str) -> Optional[Task]:
         with self._lock:
             for t in self._tasks.values():
                 if t.name == name:
-                    return t
+                    return copy.deepcopy(t)
             return None
 
     def cancel(self, task_id: str) -> bool:
