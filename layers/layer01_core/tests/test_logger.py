@@ -282,3 +282,9 @@ class TestHealthCheck:
 def test_log_rotation_path_escape_is_rejected(rotator):
     with pytest.raises(ValueError, match="escapes log directory"):
         rotator.needs_rotation("../outside.log")
+
+
+def test_logger_export_path_escape_is_rejected(logger):
+    logger.info("test", "export")
+    with pytest.raises(ValueError, match="escapes log directory"):
+        logger.export_json("../outside.json")
