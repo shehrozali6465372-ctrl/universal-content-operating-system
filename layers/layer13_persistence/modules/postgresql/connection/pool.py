@@ -76,39 +76,37 @@ class ConnectionPool:
             if self._initialized:
                 return self._pg_available or False
             try:
-            import psycopg2
-            import psycopg2.pool
+                import psycopg2
+                import psycopg2.pool
 
-            self._pg_conn_pool = psycopg2.pool.ThreadedConnectionPool(
-                self._config.min_connections,
-                self._config.max_connections,
-                host=self._config.host,
-                port=self._config.port,
-                database=self._config.database,
-                user=self._config.user,
-                password=self._config.password,
-                connect_timeout=self._config.connection_timeout,
-            )
-            self._pg_available = True
-            self._initialized = True
-            self._last_success_time = time.time()
-            return True
-
+                self._pg_conn_pool = psycopg2.pool.ThreadedConnectionPool(
+                    self._config.min_connections,
+                    self._config.max_connections,
+                    host=self._config.host,
+                    port=self._config.port,
+                    database=self._config.database,
+                    user=self._config.user,
+                    password=self._config.password,
+                    connect_timeout=self._config.connection_timeout,
+                )
+                self._pg_available = True
+                self._initialized = True
+                self._last_success_time = time.time()
+                return True
             except ImportError as exc:
                 self._pg_available = False
-            self._initialized = True
-            self._last_error = f"PostgreSQL driver unavailable: {exc}"
-            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-                raise RuntimeError("PostgreSQL driver is unavailable in production") from exc
-            return False
-
+                self._initialized = True
+                self._last_error = f"PostgreSQL driver unavailable: {exc}"
+                if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                    raise RuntimeError("PostgreSQL driver is unavailable in production") from exc
+                return False
             except Exception as exc:
                 self._pg_available = False
-            self._initialized = True
-            self._last_error = str(exc)
-            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-                raise RuntimeError("PostgreSQL initialization failed in production") from exc
-            return False
+                self._initialized = True
+                self._last_error = str(exc)
+                if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                    raise RuntimeError("PostgreSQL initialization failed in production") from exc
+                return False
 
     def _auto_reconnect(self) -> bool:
         """Close and re-initialize pool after consecutive failures."""
