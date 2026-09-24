@@ -292,31 +292,56 @@ class DatabaseManager:
     # ── Health Check ────────────────────────
 
     def health_check(self) -> Dict[str, Any]:
-        report = {"timestamp": datetime.now(timezone.utc).isoformat(), "checks": {}, "overall": "PASS"}
-        try:
-            self._ensure_init()
-            with self._lock:
-                self._conn.execute("SELECT 1")
-            report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
-        except Exception as e:
-            report["checks"]["connection"] = {"status": "FAIL", "message": str(e)}
-            report["overall"] = "FAIL"
-            return report
-
-        expected = set(get_all_table_names())
-        missing = expected - set(self.get_tables())
-        report["checks"]["tables"] = {
-            "status": "PASS" if not missing else "FAIL",
-            "message": f"All {len(expected)} tables exist" if not missing else f"Missing: {', '.join(missing)}",
+        report = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "checks": {},
+            "overall": "PASS",
         }
+        with self._lock:
+            try:
+                self._ensure_init()
+                self._conn.execute("SELECT 1")
+                report["checks"]["connection"] = {
+                    "status": "PASS",
+                    "message": "Connected",
+                }
+                expected = set(get_all_table_names())
+                existing = {
+                    row["name"]
+                    for row in self._conn.execute(
+                        "SELECT name FROM sqlite_master "
+                        "WHERE type='table' AND name != 'schema_version'"
+                    ).fetchall()
+                }
+                missing = expected - existing
+                report["checks"]["tables"] = {
+                    "status": "PASS" if not missing else "FAIL",
+                    "message": (
+                        f"All {len(expected)} tables exist"
+                        if not missing
+                        else f"Missing: {', '.join(sorted(missing))}"
+                    ),
+                }
+                mode = self._conn.execute("PRAGMA journal_mode").fetchone()[0]
+                report["checks"]["wal_mode"] = {
+                    "status": "PASS" if mode == "wal" else "WARN",
+                    "message": f"Journal mode: {mode}",
+                }
+            except Exception as exc:
+                report["checks"]["connection"] = {
+                    "status": "FAIL",
+                    "message": str(exc)[:300],
+                }
+                report["overall"] = "FAIL"
+                return report
 
-        mode = self._conn.execute("PRAGMA journal_mode").fetchone()[0]
-        report["checks"]["wal_mode"] = {"status": "PASS" if mode == "wal" else "WARN", "message": f"Journal mode: {mode}"}
+            sz = self._db_path.stat().st_size if self._db_path.exists() else 0
+            report["checks"]["file_size"] = {
+                "status": "PASS",
+                "message": f"{sz / 1024:.1f} KB",
+            }
 
-        sz = self._db_path.stat().st_size if self._db_path.exists() else 0
-        report["checks"]["file_size"] = {"status": "PASS", "message": f"{sz / 1024:.1f} KB"}
-
-        statuses = [c["status"] for c in report["checks"].values()]
+        statuses = [check["status"] for check in report["checks"].values()]
         if "FAIL" in statuses:
             report["overall"] = "FAIL"
         elif "WARN" in statuses:
