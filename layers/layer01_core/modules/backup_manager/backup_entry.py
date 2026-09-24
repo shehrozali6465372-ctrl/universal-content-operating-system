@@ -29,6 +29,20 @@ class BackupEntry:
         retention_days: int = 30,
         description: str = "",
     ):
+        if not isinstance(backup_id, str) or not backup_id:
+            raise ValueError("backup_id must be a non-empty string")
+        if not isinstance(source, str) or not source:
+            raise ValueError("backup source must be a non-empty string")
+        if not isinstance(filepath, str) or not filepath:
+            raise ValueError("backup filepath must be a non-empty string")
+        if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes < 0:
+            raise ValueError("backup size_bytes must be a non-negative integer")
+        if not isinstance(hash_sha256, str):
+            raise TypeError("backup hash must be a string")
+        if not isinstance(encrypted, bool) or not isinstance(compressed, bool):
+            raise TypeError("backup flags must be boolean")
+        if not isinstance(retention_days, int) or isinstance(retention_days, bool) or retention_days < 0:
+            raise ValueError("retention_days must be a non-negative integer")
         self.backup_id = backup_id
         self.source = source
         self.filepath = filepath
