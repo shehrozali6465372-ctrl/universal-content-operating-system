@@ -80,6 +80,21 @@ class EventBus:
                 return True
         return False
 
+    def remove_callback(self, callback: Callable[[Event], Any]) -> bool:
+        removed = False
+        for key in list(self._handlers):
+            handlers = self._handlers[key]
+            remaining = [h for h in handlers if h.callback is not callback]
+            if len(remaining) != len(handlers):
+                removed = True
+                self._handlers[key] = remaining
+            if not self._handlers[key]:
+                self._handlers.pop(key, None)
+        return removed
+
+    def subscriber_count(self) -> int:
+        return sum(len(handlers) for handlers in self._handlers.values())
+
     def publish(self, event: Event) -> Dict[str, Any]:
         """Publish an event to all subscribed handlers."""
         key = event.event_type.value if isinstance(event.event_type, EventType) else event.event_type
