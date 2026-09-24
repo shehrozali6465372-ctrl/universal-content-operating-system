@@ -168,9 +168,9 @@ class FileManager:
             if not full.exists():
                 return None
             backup_dir = self._base / "backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-        backup_name = f"{full.name}.{ts}.bak"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+            backup_name = f"{full.name}.{ts}.bak"
             backup_path = backup_dir / backup_name
             shutil.copy2(str(full), str(backup_path))
             save_hash(str(backup_path))
