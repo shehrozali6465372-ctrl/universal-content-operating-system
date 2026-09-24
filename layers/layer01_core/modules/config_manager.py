@@ -171,7 +171,7 @@ class ConfigManager:
         terminal = key.upper().rsplit(".", 1)[-1]
         return (
             terminal in SECRET_KEYS
-            or terminal.endswith("_KEY")
+            or terminal.endswith("_API_KEY")
             or terminal.endswith("_TOKEN")
             or terminal.endswith("_SECRET")
             or terminal.endswith("_PASSWORD")
