@@ -78,3 +78,35 @@ def test_migration_failure_rolls_back_schema_and_history(tmp_path):
         "SELECT version FROM schema_version ORDER BY version"
     ).fetchall() == [(1,), (2,)]
     conn.close()
+
+
+def test_concurrent_migration_managers_do_not_corrupt_history(tmp_path):
+    import threading
+
+    path = tmp_path / "shared.sqlite"
+    errors = []
+
+    def migrate():
+        conn = sqlite3.connect(str(path), timeout=10)
+        try:
+            MigrationManager(conn).migrate()
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=migrate) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors
+    conn = sqlite3.connect(str(path))
+    try:
+        versions = [row[0] for row in conn.execute(
+            "SELECT version FROM schema_version ORDER BY version"
+        )]
+        assert versions == [1, 2]
+    finally:
+        conn.close()
