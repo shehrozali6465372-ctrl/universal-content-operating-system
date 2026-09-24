@@ -6,6 +6,7 @@ Metadata model for each backup.
 """
 
 from datetime import datetime, timezone
+import re
 
 
 class BackupEntry:
@@ -39,6 +40,8 @@ class BackupEntry:
             raise ValueError("backup size_bytes must be a non-negative integer")
         if not isinstance(hash_sha256, str):
             raise TypeError("backup hash must be a string")
+        if hash_sha256 and not re.fullmatch(r"[0-9a-fA-F]{64}", hash_sha256):
+            raise ValueError("backup hash must be a SHA-256 hex digest")
         if not isinstance(encrypted, bool) or not isinstance(compressed, bool):
             raise TypeError("backup flags must be boolean")
         if not isinstance(retention_days, int) or isinstance(retention_days, bool) or retention_days < 0:
