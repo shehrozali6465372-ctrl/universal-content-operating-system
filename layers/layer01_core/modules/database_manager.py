@@ -351,14 +351,27 @@ class DatabaseManager:
     # ── Stats ───────────────────────────────
 
     def get_stats(self) -> Dict[str, Any]:
-        self._ensure_init()
-        tables = self.get_tables()
-        stats = {"tables": len(tables), "row_counts": {}, "total_rows": 0}
-        for t in tables:
-            stats["row_counts"][t] = self.count(t)
-        stats["total_rows"] = sum(stats["row_counts"].values())
-        stats["db_size_kb"] = self._db_path.stat().st_size / 1024 if self._db_path.exists() else 0
-        return stats
+        with self._lock:
+            self._ensure_init()
+            tables = [
+                row["name"]
+                for row in self._conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name != 'schema_version'"
+                ).fetchall()
+            ]
+            stats = {"tables": len(tables), "row_counts": {}, "total_rows": 0}
+            for table in tables:
+                stats["row_counts"][table] = self._conn.execute(
+                    f"SELECT COUNT(*) AS c FROM {self._identifier(table)}"
+                ).fetchone()["c"]
+            stats["total_rows"] = sum(stats["row_counts"].values())
+            stats["db_size_kb"] = (
+                self._db_path.stat().st_size / 1024
+                if self._db_path.exists()
+                else 0
+            )
+            return stats
 
     def _ensure_init(self):
         if not self._initialized:
