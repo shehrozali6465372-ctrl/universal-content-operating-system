@@ -15,7 +15,7 @@ Usage:
 
 import json
 import os
-from threading import Lock
+from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -40,10 +40,14 @@ class AuditStatus(str, Enum):
 class AuditLogger:
     """Writes audit logs for secret operations. Never stores values."""
 
+    _locks = {}
+    _locks_guard = RLock()
+
     def __init__(self, log_path: str = "logs/audit.log"):
-        self._log_path = Path(log_path)
+        self._log_path = Path(log_path).resolve()
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = Lock()
+        with self._locks_guard:
+            self._lock = self._locks.setdefault(str(self._log_path), RLock())
 
     def log(
         self,
@@ -72,9 +76,10 @@ class AuditLogger:
 
     def get_logs(self, limit: int = 50) -> list:
         """Read last N audit entries."""
-        if not self._log_path.exists():
-            return []
-        entries = []
+        with self._lock:
+            if not self._log_path.exists():
+                return []
+            entries = []
         with open(self._log_path, "r") as f:
             for line in f:
                 line = line.strip()
@@ -83,7 +88,7 @@ class AuditLogger:
                         entries.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
-        return entries[-limit:]
+            return entries[-limit:]
 
     def get_logs_for_secret(self, secret_name: str) -> list:
         """Get audit entries for a specific secret."""
@@ -104,4 +109,6 @@ class AuditLogger:
         """Clear audit log (use carefully)."""
         with self._lock:
             if self._log_path.exists():
-                self._log_path.write_text("")
+                with open(self._log_path, "w", encoding="utf-8") as f:
+                    f.flush()
+                    os.fsync(f.fileno())
