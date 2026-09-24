@@ -397,3 +397,44 @@ def test_failed_task_requires_explicit_replay(tmp_path):
     assert q.replay(tid) is True
     assert q.get(tid).status == TaskStatus.PENDING
     assert q.next_task().task_id == tid
+
+def test_cron_add_rolls_back_memory_when_persistence_fails(tmp_path):
+    scheduler = SchedulerManager(cron_persist_path=str(tmp_path / "cron.json"))
+    original_save = scheduler._save_cron_jobs
+    scheduler._save_cron_jobs = lambda: (_ for _ in ()).throw(OSError("disk full"))
+    try:
+        with pytest.raises(OSError, match="disk full"):
+            scheduler.add_cron_job("rollback", "* * * * *", "noop")
+        assert scheduler._cron_jobs == {}
+    finally:
+        scheduler._save_cron_jobs = original_save
+        scheduler.shutdown()
+
+
+def test_cron_reservation_rolls_back_when_persistence_fails(tmp_path):
+    scheduler = SchedulerManager(
+        queue_persist_path=str(tmp_path / "queue.json"),
+        cron_persist_path=str(tmp_path / "cron.json"),
+    )
+    try:
+        task_id = scheduler.add_cron_job("reservation", "* * * * *", "noop")
+        job = scheduler._cron_jobs[task_id]
+        job["cron"].get_next_run = lambda now: now.replace(microsecond=0)
+        original_save = scheduler._save_cron_jobs
+        scheduler._save_cron_jobs = lambda: (_ for _ in ()).throw(OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            scheduler.process_cron_jobs()
+        assert scheduler._cron_jobs[task_id]["last_run"] is None
+        scheduler._save_cron_jobs = original_save
+    finally:
+        scheduler.shutdown()
+
+
+def test_shutdown_is_idempotent_and_marks_scheduler_stopped():
+    scheduler = SchedulerManager()
+    assert scheduler._running is True
+    scheduler.shutdown()
+    assert scheduler._running is False
+    scheduler.shutdown()
+    assert scheduler._stop_event.is_set()
+\n
