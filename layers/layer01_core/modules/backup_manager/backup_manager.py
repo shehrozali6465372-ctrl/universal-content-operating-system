@@ -40,6 +40,14 @@ class BackupManager:
 
     def __init__(self, backup_dir: str = "backups", max_backups: int = 50,
                  default_retention_days: int = 30):
+        if not isinstance(max_backups, int) or isinstance(max_backups, bool) or max_backups < 1:
+            raise ValueError("max_backups must be a positive integer")
+        if (
+            not isinstance(default_retention_days, int)
+            or isinstance(default_retention_days, bool)
+            or default_retention_days < 0
+        ):
+            raise ValueError("default_retention_days must be a non-negative integer")
         self._backup_dir = Path(backup_dir)
         self._backup_dir.mkdir(parents=True, exist_ok=True)
         self._registry_path = self._backup_dir / "_registry.json"
@@ -125,6 +133,12 @@ class BackupManager:
 
         if source not in self.BACKUP_SOURCES:
             source = "all"
+        if retention_days is not None and (
+            not isinstance(retention_days, int)
+            or isinstance(retention_days, bool)
+            or retention_days < 0
+        ):
+            raise ValueError("retention_days must be a non-negative integer")
 
         with self._lock:
             self._counter += 1
