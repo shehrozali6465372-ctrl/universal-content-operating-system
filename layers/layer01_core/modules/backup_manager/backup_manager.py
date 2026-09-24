@@ -298,11 +298,6 @@ class BackupManager:
                     target.replace(displaced)
                 temp_target.replace(target)
                 temp_target = None
-                if displaced is not None:
-                    if displaced.is_dir():
-                        shutil.rmtree(str(displaced))
-                    else:
-                        displaced.unlink()
             except Exception:
                 if target.exists():
                     if target.is_dir():
