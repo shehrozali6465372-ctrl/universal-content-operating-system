@@ -301,7 +301,7 @@ class TaskQueue:
                 loaded[task.task_id] = task
             with self._lock:
                 self._tasks = loaded
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             raise RuntimeError(f"Task queue persistence is unreadable: {self._persist_path}") from exc
 
     def _save(self) -> None:
