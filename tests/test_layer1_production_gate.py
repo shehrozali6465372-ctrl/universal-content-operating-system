@@ -168,3 +168,12 @@ def test_backup_copy_failure_leaves_no_partial_artifact(tmp_path, monkeypatch):
     assert bm.count() == 0
     assert list(backup_dir.glob("*.bak")) == []
     assert list(backup_dir.glob("*.stage")) == []
+
+
+def test_memory_snapshot_rejects_path_escape(tmp_path):
+    from layers.layer01_core.modules.memory_manager import MemoryManager
+    manager = MemoryManager(db_path="memory.db", project_root=str(tmp_path)).initialize()
+    with pytest.raises(ValueError, match="escapes project root"):
+        manager.snapshot("../outside-memory.json")
+    assert not (tmp_path.parent / "outside-memory.json").exists()
+    manager.close()
