@@ -115,6 +115,8 @@ class MemoryManager:
         """Save a memory entry. Returns entry ID."""
         self._ensure_init()
         self._validate_entry(level, category, key, value, importance)
+        if not isinstance(tags, str):
+            raise TypeError("Memory tags must be a string")
         with self._lock:
             return self._save_locked(level, category, key, value, tags, importance)
 
@@ -178,6 +180,8 @@ class MemoryManager:
                     value = entry.get("value", "")
                     importance = entry.get("importance", 0.5)
                     self._validate_entry(level, category, key, value, importance)
+                    if not isinstance(entry.get("tags", ""), str):
+                        raise TypeError("Memory tags must be a string")
                     if level == MemoryLevel.STM.value:
                         self._save_locked(
                             level, entry.get("category", "general"),
