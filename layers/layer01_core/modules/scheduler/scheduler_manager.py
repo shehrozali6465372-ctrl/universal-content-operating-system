@@ -13,9 +13,13 @@ Task Orchestrator with:
 
 import time
 import traceback
+import json
+import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Event, RLock
 
 from layers.layer01_core.modules.scheduler.task_queue import (
@@ -28,16 +32,31 @@ from layers.layer01_core.modules.scheduler.cron_parser import CronParser
 class SchedulerManager:
     """Task Orchestrator with decision-based scheduling."""
 
-    def __init__(self, queue_persist_path: Optional[str] = None, retry_persist_path: Optional[str] = None):
+    def __init__(
+        self,
+        queue_persist_path: Optional[str] = None,
+        retry_persist_path: Optional[str] = None,
+        cron_persist_path: Optional[str] = None,
+    ):
         self._queue = TaskQueue(persist_path=queue_persist_path)
         self._retry_manager = RetryManager(persist_path=retry_persist_path)
         self._handlers: Dict[str, Callable] = {}
         self._history: List[Dict] = []
         self._cron_jobs: Dict[str, Dict] = {}
+        self._cron_persist_path = (
+            Path(cron_persist_path)
+            if cron_persist_path
+            else (
+                Path(queue_persist_path).with_name("scheduler_cron.json")
+                if queue_persist_path
+                else None
+            )
+        )
         self._running = False
         self._stop_event = Event()
         self._lock = RLock()
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="layer1-task")
+        self._load_cron_jobs()
 
     # ── Job Registration ────────────────────
 
@@ -86,10 +105,12 @@ class SchedulerManager:
             self._cron_jobs[task_id] = {
                 "name": name,
                 "cron": parser,
+                "cron_expr": cron_expr,
                 "job_type": job_type,
                 "params": params or {},
                 "last_run": None,
             }
+            self._save_cron_jobs()
         return task_id
 
     # ── Execution ───────────────────────────
@@ -221,7 +242,7 @@ class SchedulerManager:
     def process_cron_jobs(self) -> List[Dict]:
         """Check and run due cron jobs."""
         results = []
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         with self._lock:
             jobs = list(self._cron_jobs.items())
         for job_id, job in jobs:
@@ -249,9 +270,81 @@ class SchedulerManager:
                 with self._lock:
                     current = self._cron_jobs.get(job_id)
                     if current is not None:
-                        current["last_run"] = next_run
+                        current["last_run"] = next_run.isoformat()
+                        self._save_cron_jobs()
 
         return results
+
+    def _load_cron_jobs(self) -> None:
+        if self._cron_persist_path is None or not self._cron_persist_path.exists():
+            return
+        try:
+            data = json.loads(self._cron_persist_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not isinstance(data.get("jobs", {}), dict):
+                raise ValueError("cron persistence must contain a jobs object")
+            loaded = {}
+            for task_id, item in data["jobs"].items():
+                if not isinstance(task_id, str) or not isinstance(item, dict):
+                    raise ValueError("invalid persisted cron job")
+                name = item["name"]
+                expr = item["cron"]
+                job_type = item["job_type"]
+                params = item.get("params", {})
+                last_run = item.get("last_run")
+                parser = CronParser(expr)
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("cron job name must be non-empty")
+                if not isinstance(job_type, str) or not job_type.strip():
+                    raise ValueError("cron job type must be non-empty")
+                if not isinstance(params, dict):
+                    raise ValueError("cron job params must be a dictionary")
+                if last_run is not None:
+                    parsed = datetime.fromisoformat(last_run)
+                    if parsed.tzinfo is None or parsed.utcoffset() is None:
+                        raise ValueError("persisted cron last_run must include timezone")
+                loaded[task_id] = {
+                    "name": name,
+                    "cron": parser,
+                    "cron_expr": expr,
+                    "job_type": job_type,
+                    "params": params,
+                    "last_run": last_run,
+                }
+            with self._lock:
+                self._cron_jobs = loaded
+        except (OSError, json.JSONDecodeError, TypeError, KeyError, ValueError) as exc:
+            raise RuntimeError(f"Cron persistence is unreadable: {self._cron_persist_path}") from exc
+
+    def _save_cron_jobs(self) -> None:
+        if self._cron_persist_path is None:
+            return
+        self._cron_persist_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"jobs": {}}
+        for task_id, job in self._cron_jobs.items():
+            data["jobs"][task_id] = {
+                "name": job["name"],
+                "cron": job["cron_expr"],
+                "job_type": job["job_type"],
+                "params": job["params"],
+                "last_run": job["last_run"],
+            }
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(self._cron_persist_path.parent),
+            prefix=".scheduler-cron.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, self._cron_persist_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     def shutdown(self, wait: bool = True) -> None:
         """Stop scheduling and release worker resources."""
