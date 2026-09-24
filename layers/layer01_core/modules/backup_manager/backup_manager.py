@@ -484,18 +484,51 @@ class BackupManager:
             return self._entries[backup_id]
 
     def delete_backup(self, backup_id: str) -> bool:
+        """Delete a backup transactionally with registry persistence.
+
+        The artifact is first moved to a staging name. The registry commit
+        happens while the original artifact remains recoverable; only after a
+        successful commit is the staged artifact permanently removed.
+        """
         with self._lock:
             if backup_id not in self._entries:
                 raise BackupNotFoundError(f"Backup '{backup_id}' not found")
-            entry = self._entries.pop(backup_id)
+
+            entry = self._entries[backup_id]
             backup_file = self._safe_backup_path(entry.filepath)
-            if backup_file.exists():
-                if backup_file.is_dir():
-                    shutil.rmtree(str(backup_file))
+            staged_path = None
+            removed_audit_len = len(self._audit_log)
+
+            try:
+                if backup_file.exists():
+                    staged_path = self._backup_dir / f".delete-{uuid.uuid4().hex}"
+                    backup_file.replace(staged_path)
+
+                self._entries.pop(backup_id)
+                self._audit("DELETE", backup_id)
+                try:
+                    self._save_registry()
+                except Exception:
+                    self._entries[backup_id] = entry
+                    del self._audit_log[removed_audit_len:]
+                    if staged_path is not None and staged_path.exists() and not backup_file.exists():
+                        staged_path.replace(backup_file)
+                    raise
+            except Exception:
+                if staged_path is not None and staged_path.exists() and not backup_file.exists():
+                    staged_path.replace(backup_file)
+                raise
+
+        if staged_path is not None and staged_path.exists():
+            try:
+                if staged_path.is_dir():
+                    shutil.rmtree(str(staged_path))
                 else:
-                    backup_file.unlink()
-            self._audit("DELETE", backup_id)
-            self._save_registry()
+                    staged_path.unlink()
+            except Exception as exc:
+                raise RuntimeError(
+                    "Backup registry committed but artifact cleanup failed"
+                ) from exc
         return True
 
     def count(self, source: Optional[str] = None) -> int:
