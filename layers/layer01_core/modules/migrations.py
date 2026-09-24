@@ -164,39 +164,41 @@ class MigrationManager:
 
     def migrate(self) -> List[int]:
         """Apply pending migrations transactionally and in strict version order."""
-        applied = []
         with self._lock:
+            applied = []
             pending = self.get_pending_migrations()
             expected = self.get_current_version() + 1
-        for migration in pending:
-            version = migration["version"]
-            if version != expected:
-                raise RuntimeError(
-                    f"Migration ordering gap: expected v{expected}, got v{version}"
-                )
-            try:
-                self._conn.execute("BEGIN IMMEDIATE")
-                statement = ""
-                for line in migration["up_sql"].splitlines():
-                    statement += line + "\n"
-                    if sqlite3.complete_statement(statement):
-                        sql = statement.strip()
-                        if sql:
-                            self._conn.execute(sql)
-                        statement = ""
-                if statement.strip():
-                    self._conn.execute(statement)
-                self._conn.execute(
-                    "INSERT INTO schema_version (version, description) VALUES (?, ?)",
-                    (version, migration["description"]),
-                )
-                self._conn.commit()
-                applied.append(version)
-                expected += 1
-            except Exception as e:
-                self._conn.rollback()
-                raise RuntimeError(f"Migration v{version} failed; transaction rolled back") from e
-        return applied
+            for migration in pending:
+                version = migration["version"]
+                if version != expected:
+                    raise RuntimeError(
+                        f"Migration ordering gap: expected v{expected}, got v{version}"
+                    )
+                try:
+                    self._conn.execute("BEGIN IMMEDIATE")
+                    statement = ""
+                    for line in migration["up_sql"].splitlines():
+                        statement += line + "\n"
+                        if sqlite3.complete_statement(statement):
+                            sql = statement.strip()
+                            if sql:
+                                self._conn.execute(sql)
+                            statement = ""
+                    if statement.strip():
+                        self._conn.execute(statement)
+                    self._conn.execute(
+                        "INSERT INTO schema_version (version, description) VALUES (?, ?)",
+                        (version, migration["description"]),
+                    )
+                    self._conn.commit()
+                    applied.append(version)
+                    expected += 1
+                except Exception as e:
+                    self._conn.rollback()
+                    raise RuntimeError(
+                        f"Migration v{version} failed; transaction rolled back"
+                    ) from e
+            return applied
 
     def rollback(self, target_version: int, allow_data_loss: bool = False) -> None:
         """Rollback only reversible migrations; never fake a rollback by editing metadata."""
