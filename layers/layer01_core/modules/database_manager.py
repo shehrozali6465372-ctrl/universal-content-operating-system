@@ -246,48 +246,49 @@ class DatabaseManager:
                     raise RuntimeError("Backup integrity check failed")
         except sqlite3.DatabaseError as exc:
             raise RuntimeError("Backup integrity check failed") from exc
-        with self._lock:
-            was_initialized = self._initialized
-            if self._conn is not None:
-                self._conn.close()
-                self._conn = None
-                self._initialized = False
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            fd, staged_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".restore.tmp")
-            os.close(fd)
-            staged = Path(staged_name)
-            old_name = None
-            try:
-                shutil.copy2(str(bf), str(staged))
-                with sqlite3.connect(str(staged)) as check_conn:
-                    if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                        raise RuntimeError("Staged backup integrity check failed")
-                if self._db_path.exists():
-                    fd, old_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".pre_restore.tmp")
-                    os.close(fd)
-                    os.replace(str(self._db_path), old_name)
-                os.replace(str(staged), str(self._db_path))
-                staged = None
-                if was_initialized or self._conn is None:
-                    try:
+        with self._lifecycle_lock:
+                with self._lock:
+                was_initialized = self._initialized
+                if self._conn is not None:
+                    self._conn.close()
+                    self._conn = None
+                    self._initialized = False
+                self._db_path.parent.mkdir(parents=True, exist_ok=True)
+                fd, staged_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".restore.tmp")
+                os.close(fd)
+                staged = Path(staged_name)
+                old_name = None
+                try:
+                    shutil.copy2(str(bf), str(staged))
+                    with sqlite3.connect(str(staged)) as check_conn:
+                        if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                            raise RuntimeError("Staged backup integrity check failed")
+                    if self._db_path.exists():
+                        fd, old_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".pre_restore.tmp")
+                        os.close(fd)
+                        os.replace(str(self._db_path), old_name)
+                    os.replace(str(staged), str(self._db_path))
+                    staged = None
+                    if was_initialized or self._conn is None:
+                        try:
+                            self.initialize()
+                        except Exception:
+                            if self._db_path.exists():
+                                os.unlink(self._db_path)
+                            if old_name and os.path.exists(old_name):
+                                os.replace(old_name, str(self._db_path))
+                            self.initialize()
+                            raise
+                    if old_name and os.path.exists(old_name):
+                        os.unlink(old_name)
+                except Exception:
+                    if staged and staged.exists():
+                        staged.unlink()
+                    if old_name and os.path.exists(old_name) and not self._db_path.exists():
+                        os.replace(old_name, str(self._db_path))
+                    if was_initialized and not self._initialized:
                         self.initialize()
-                    except Exception:
-                        if self._db_path.exists():
-                            os.unlink(self._db_path)
-                        if old_name and os.path.exists(old_name):
-                            os.replace(old_name, str(self._db_path))
-                        self.initialize()
-                        raise
-                if old_name and os.path.exists(old_name):
-                    os.unlink(old_name)
-            except Exception:
-                if staged and staged.exists():
-                    staged.unlink()
-                if old_name and os.path.exists(old_name) and not self._db_path.exists():
-                    os.replace(old_name, str(self._db_path))
-                if was_initialized and not self._initialized:
-                    self.initialize()
-                raise
+                    raise
 
     # ── Health Check ────────────────────────
 
