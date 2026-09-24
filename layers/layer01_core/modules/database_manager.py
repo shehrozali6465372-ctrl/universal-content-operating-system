@@ -19,9 +19,15 @@ from layers.layer01_core.modules.migrations import MigrationManager
 
 
 class DatabaseManager:
+    _path_locks: Dict[str, RLock] = {}
+    _path_locks_guard = RLock()
     def __init__(self, db_path: str = "data/agent.db", project_root: Optional[str] = None):
         self._project_root = Path(project_root).resolve() if project_root else None
         self._db_path = self._safe_path(db_path, "database path")
+        with self._path_locks_guard:
+            self._lifecycle_lock = self._path_locks.setdefault(
+                str(self._db_path), RLock()
+            )
         self._conn: Optional[sqlite3.Connection] = None
         self._migration_manager: Optional[MigrationManager] = None
         self._initialized = False
@@ -67,22 +73,28 @@ class DatabaseManager:
             raise RuntimeError(
                 "Layer 1 local SQLite is development/test-only; production persistence is owned by Layer 13 PostgreSQL"
             )
-        with self._lock:
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
-            try:
-                conn.row_factory = sqlite3.Row
-                conn.execute("PRAGMA journal_mode=WAL")
-                conn.execute("PRAGMA foreign_keys=ON")
-                migration_manager = MigrationManager(conn)
-                migration_manager.migrate()
-            except Exception:
-                conn.close()
-                raise
-            self._conn = conn
-            self._migration_manager = migration_manager
-            self._initialized = True
-            return self
+        with self._lifecycle_lock:
+            with self._lock:
+                if self._initialized and self._conn is not None:
+                    return self
+                self._db_path.parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(
+                    str(self._db_path), check_same_thread=False, timeout=30.0
+                )
+                try:
+                    conn.row_factory = sqlite3.Row
+                    conn.execute("PRAGMA busy_timeout=30000")
+                    conn.execute("PRAGMA journal_mode=WAL")
+                    conn.execute("PRAGMA foreign_keys=ON")
+                    migration_manager = MigrationManager(conn)
+                    migration_manager.migrate()
+                except Exception:
+                    conn.close()
+                    raise
+                self._conn = conn
+                self._migration_manager = migration_manager
+                self._initialized = True
+                return self
 
     def close(self) -> None:
         with self._lock:
