@@ -206,7 +206,7 @@ class ConfigManager:
     def _safe_persist_config(self) -> Dict[str, Any]:
         """Return a persistence-safe snapshot with credential values redacted."""
         return {
-            key: ("***SECRET***" if key in SECRET_KEYS else value)
+            key: ("***SECRET***" if self._is_secret_key(key) else value)
             for key, value in self._config.items()
         }
 
