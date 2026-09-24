@@ -137,15 +137,19 @@ class TaskQueue:
             return task
 
     def claim(self, task_id: str) -> bool:
-        """Atomically claim a pending task for direct execution."""
+        """Atomically claim a pending, dependency-ready, due task."""
         with self._lock:
             task = self._tasks.get(task_id)
-            if task is None:
+            if task is None or task.status != TaskStatus.PENDING:
                 return False
-            if task.status == TaskStatus.RUNNING:
-                return True
-            if task.status != TaskStatus.PENDING:
+            if not self._dependencies_met(task):
                 return False
+            if task.not_before:
+                try:
+                    if datetime.now(timezone.utc) < datetime.fromisoformat(task.not_before):
+                        return False
+                except (TypeError, ValueError):
+                    return False
             task.status = TaskStatus.RUNNING
             self._save()
             return True
