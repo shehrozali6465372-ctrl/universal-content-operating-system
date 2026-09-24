@@ -6,6 +6,7 @@ Run: python -m pytest layers/layer01_core/tests/test_scheduler.py -v
 """
 
 import pytest
+import json
 from datetime import datetime
 from layers.layer01_core.modules.scheduler.cron_parser import CronParser
 from layers.layer01_core.modules.scheduler.task_queue import Task, TaskQueue, TaskPriority, TaskStatus
@@ -379,3 +380,10 @@ def test_queue_does_not_dedupe_different_payloads():
     first = q.add(Task(name="publish", job_type="post", params={"account": "a"}))
     second = q.add(Task(name="publish", job_type="post", params={"account": "b"}))
     assert second != first
+
+
+def test_corrupt_task_persistence_missing_field_fails_closed(tmp_path):
+    path = tmp_path / "queue.json"
+    path.write_text(json.dumps({"tasks": [{"job_type": "broken"}]}), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Task queue persistence is unreadable"):
+        TaskQueue(persist_path=str(path))
