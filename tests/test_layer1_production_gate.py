@@ -177,3 +177,11 @@ def test_memory_snapshot_rejects_path_escape(tmp_path):
         manager.snapshot("../outside-memory.json")
     assert not (tmp_path.parent / "outside-memory.json").exists()
     manager.close()
+
+
+def test_layer13_uninitialized_backend_fails_health():
+    from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
+    backend = PostgreSQLManager()
+    report = backend.health_check()
+    assert report["overall"] == "FAIL"
+    assert report["initialized"] is False
