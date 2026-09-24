@@ -35,7 +35,7 @@ class AudienceIntelManager:
 
     def __init__(self, storage_path: Optional[str] = None):
         self._audiences: Dict[str, AudienceProfile] = {}
-        self._lock = Lock()
+        self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
 
         # Sub-analyzers
