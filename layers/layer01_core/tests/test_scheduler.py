@@ -437,4 +437,4 @@ def test_shutdown_is_idempotent_and_marks_scheduler_stopped():
     assert scheduler._running is False
     scheduler.shutdown()
     assert scheduler._stop_event.is_set()
-\n
+
