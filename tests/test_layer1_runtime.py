@@ -56,32 +56,9 @@ def test_production_runtime_contracts_with_real_layer13_postgresql(tmp_path, mon
     pg = PostgreSQLManager()
     assert pg.initialize() is True
 
-    class _L13MemoryLifecycle:
-        """Layer 1 lifecycle adapter over the real Layer 13 memory repository."""
-        def health_check(self):
-            return pg.health_check()
-
-        def save(self, *args, **kwargs):
-            return pg.memory.save(*args, **kwargs)
-
-        def load(self, *args, **kwargs):
-            return pg.memory.load(*args, **kwargs)
-
-        def search(self, *args, **kwargs):
-            return pg.memory.search(*args, **kwargs)
-
-        def increment_access(self, *args, **kwargs):
-            return pg.memory.increment_access(*args, **kwargs)
-
-        def get_by_level(self, *args, **kwargs):
-            return pg.memory.get_by_level(*args, **kwargs)
-
-        def delete_by_level(self, *args, **kwargs):
-            return pg.memory.delete_by_level(*args, **kwargs)
-
-        def close(self):
-            # PostgreSQLManager owns the shared pool lifecycle.
-            return None
+    from layers.layer13_persistence.modules.postgresql.layer1_memory_backend import (
+        Layer1PostgreSQLMemoryBackend,
+    )
 
     runtime = Layer1Runtime(project_root=str(tmp_path))
     try:
@@ -89,7 +66,7 @@ def test_production_runtime_contracts_with_real_layer13_postgresql(tmp_path, mon
             profile="production",
             master_key="runtime-test-master-key",
             database_backend=pg,
-            memory_backend=_L13MemoryLifecycle(),
+            memory_backend=Layer1PostgreSQLMemoryBackend(pg),
         )
         assert runtime.health_check()["ready"] is True
     finally:
