@@ -127,6 +127,11 @@ class SchedulerManager:
             "started_at": datetime.now(timezone.utc).isoformat(),
         }
 
+        if self._stop_event.is_set():
+            result["status"] = "SKIPPED"
+            result["error"] = "Scheduler is shut down"
+            return result
+
         if not _claimed and not self._queue.claim(task.task_id):
             result["status"] = "SKIPPED"
             result["error"] = "Task is not pending or has already been claimed"
