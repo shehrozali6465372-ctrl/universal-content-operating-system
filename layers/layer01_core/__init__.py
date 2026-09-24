@@ -148,22 +148,31 @@ class Layer1Runtime:
         }
 
     def shutdown(self) -> None:
-        """Drain scheduling first, then close each owned resource exactly once."""
+        """Drain scheduling first, then close all owned resources safely."""
+        errors = []
         if self.scheduler is not None:
-            self.scheduler.shutdown(wait=True)
+            try:
+                self.scheduler.shutdown(wait=True)
+            except Exception as exc:
+                errors.append(exc)
 
         # Database and memory may be two views over one Layer 13 persistence
         # owner. Close by object identity so shared backends are not torn down
-        # twice during normal shutdown or fail-closed startup rollback.
+        # twice. Continue cleanup even when one resource fails to close.
         closed = set()
         for resource in (self.memory, self.database):
             if resource is None or id(resource) in closed:
                 continue
             close = getattr(resource, "close", None)
             if callable(close):
-                close()
+                try:
+                    close()
+                except Exception as exc:
+                    errors.append(exc)
             closed.add(id(resource))
         self._started = False
+        if errors:
+            raise RuntimeError("Layer 1 shutdown encountered resource cleanup failures") from errors[0]
 
     @property
     def is_ready(self) -> bool:
