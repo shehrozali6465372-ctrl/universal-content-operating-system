@@ -83,6 +83,13 @@ class TestTaskQueue:
         nxt = q.next_task()
         assert nxt.name == "main"
 
+    def test_get_returns_state_isolation(self):
+        q = TaskQueue()
+        tid = q.add(Task(name="isolated", job_type="d"))
+        exposed = q.get(tid)
+        exposed.status = TaskStatus.FAILED
+        assert q.get(tid).status == TaskStatus.PENDING
+
     def test_cancel(self):
         q = TaskQueue()
         tid = q.add(Task(name="c", job_type="d"))
