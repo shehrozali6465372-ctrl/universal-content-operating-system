@@ -95,7 +95,11 @@ class DatabaseManager:
     def transaction(self):
         if not self._initialized:
             raise RuntimeError("Database not initialized.")
-        old_flag = self._in_transaction
+        # Nested callers must share the outer transaction. Committing here
+        # would violate atomicity and could persist only part of the workflow.
+        if self._in_transaction:
+            yield self._conn
+            return
         self._in_transaction = True
         with self._lock:
             try:
@@ -105,7 +109,7 @@ class DatabaseManager:
                 self._conn.rollback()
                 raise
             finally:
-                self._in_transaction = old_flag
+                self._in_transaction = False
 
     def _run(self, sql: str, params=()):
         with self._lock:
@@ -137,6 +141,8 @@ class DatabaseManager:
 
     def insert(self, table: str, data: Dict[str, Any]) -> int:
         self._ensure_init()
+        if not isinstance(data, dict) or not data:
+            raise ValueError("insert data must be a non-empty dictionary")
         table = self._identifier(table)
         cols = ", ".join(self._identifier(k) for k in data.keys())
         phs = ", ".join(["?" for _ in data])
@@ -147,8 +153,13 @@ class DatabaseManager:
         self._ensure_init()
         if not rows:
             return 0
+        if not all(isinstance(row, dict) and row for row in rows):
+            raise ValueError("insert_many rows must be non-empty dictionaries")
+        keys = tuple(rows[0].keys())
+        if any(tuple(row.keys()) != keys for row in rows[1:]):
+            raise ValueError("insert_many rows must have identical columns")
         table = self._identifier(table)
-        cols = ", ".join(self._identifier(k) for k in rows[0].keys())
+        cols = ", ".join(self._identifier(k) for k in keys)
         phs = ", ".join(["?" for _ in rows[0]])
         sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
         data = [list(r.values()) for r in rows]
@@ -172,6 +183,8 @@ class DatabaseManager:
 
     def update(self, table: str, data: Dict[str, Any], where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
+        if not isinstance(data, dict) or not data:
+            raise ValueError("update data must be a non-empty dictionary")
         table = self._identifier(table)
         sets = ", ".join(f"{self._identifier(k)} = ?" for k in data)
         cur = self._run(f"UPDATE {table} SET {sets} WHERE {self._where_clause(where)}", list(data.values()) + list(where_params))
