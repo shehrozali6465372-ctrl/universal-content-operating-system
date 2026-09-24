@@ -300,3 +300,19 @@ class TestHealthCheck:
 def test_backup_entry_rejects_invalid_retention():
     with pytest.raises(ValueError, match="retention_days"):
         BackupEntry("id", "logs", "file.bak", retention_days=-1)
+
+def test_delete_backup_rolls_back_on_registry_failure(bm, sample_files):
+    entry = bm.backup("database", str(sample_files / "data.json"), compress=False)
+    backup_file = bm._backup_dir / entry.filepath
+    original_save = bm._save_registry
+    bm._save_registry = lambda: (_ for _ in ()).throw(OSError("disk full"))
+    try:
+        with pytest.raises(OSError, match="disk full"):
+            bm.delete_backup(entry.backup_id)
+    finally:
+        bm._save_registry = original_save
+
+    assert bm.count() == 1
+    assert backup_file.exists()
+    assert bm.get_entry(entry.backup_id).backup_id == entry.backup_id
+\n
