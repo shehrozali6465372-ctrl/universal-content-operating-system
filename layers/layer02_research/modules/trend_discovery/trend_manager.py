@@ -15,7 +15,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
-from threading import Lock
+from threading import RLock
 
 from layers.layer02_research.modules.trend_discovery.trend_entry import TrendEntry
 from layers.layer02_research.modules.trend_discovery.exceptions import (
