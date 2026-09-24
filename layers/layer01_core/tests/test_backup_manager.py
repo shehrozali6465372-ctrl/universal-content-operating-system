@@ -135,6 +135,19 @@ class TestRestore:
         with pytest.raises(BackupIntegrityError):
             bm.restore(entry.backup_id, str(tmp_path / "out.json"))
 
+    def test_restore_failure_preserves_existing_target_and_cleans_staging(self, bm, sample_files, tmp_path):
+        entry = bm.backup("database", str(sample_files / "data.json"), compress=False)
+        target = tmp_path / "existing.json"
+        target.write_text("original")
+        backup_file = bm._backup_dir / entry.filepath
+        backup_file.write_text("TAMPERED")
+
+        with pytest.raises(BackupIntegrityError):
+            bm.restore(entry.backup_id, str(target))
+
+        assert target.read_text() == "original"
+        assert list(tmp_path.glob(".restore-*")) == []
+
 
 # ── Test 4: Integrity ───────────────────────
 
