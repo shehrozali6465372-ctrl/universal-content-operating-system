@@ -65,36 +65,37 @@ class FileManager:
 
     def write(self, filepath: str, content: str, create_backup: bool = True, verify: bool = False) -> bool:
         """Atomic write: temp file → rename. Never half-written."""
-        full = self._resolve(filepath)
-        full.parent.mkdir(parents=True, exist_ok=True)
+        with self._global_lock:
+            full = self._resolve(filepath)
+            full.parent.mkdir(parents=True, exist_ok=True)
 
-        # Auto backup
-        if create_backup and full.exists():
-            self.backup(filepath)
+            # Auto backup
+            if create_backup and full.exists():
+                self.backup(filepath)
 
-        # Atomic write via temp file
-        fd, tmp_path = tempfile.mkstemp(dir=str(full.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, str(full))
-        except Exception:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
+            # Atomic write via temp file
+            fd, tmp_path = tempfile.mkstemp(dir=str(full.parent), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, str(full))
+            except Exception:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                raise
 
-        # A content replacement invalidates any previous integrity metadata.
-        # Recreate it only when the caller explicitly requests verification.
-        hash_path = Path(str(full) + ".sha256")
-        if verify:
-            save_hash(str(full))
-        elif hash_path.exists():
-            hash_path.unlink()
+            # A content replacement invalidates any previous integrity metadata.
+            # Recreate it only when the caller explicitly requests verification.
+            hash_path = Path(str(full) + ".sha256")
+            if verify:
+                save_hash(str(full))
+            elif hash_path.exists():
+                hash_path.unlink()
 
-        self._cache.invalidate(str(full))
-        return True
+            self._cache.invalidate(str(full))
+            return True
 
     def append(self, filepath: str, content: str) -> bool:
         """Atomically append content while serializing concurrent writers."""
