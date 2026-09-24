@@ -125,6 +125,8 @@ class SettingsEventBus:
                       event_type: Optional[str] = None,
                       limit: int = 50) -> List[dict]:
         """Get recent events with optional filtering."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("event log limit must be a positive integer")
         with self._lock:
             events = list(self._event_log)
         if key:
