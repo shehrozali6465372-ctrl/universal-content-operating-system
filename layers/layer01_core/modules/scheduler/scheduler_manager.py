@@ -240,39 +240,37 @@ class SchedulerManager:
     # ── Cron Processing ─────────────────────
 
     def process_cron_jobs(self) -> List[Dict]:
-        """Check and run due cron jobs."""
+        """Check due cron jobs with atomic per-job schedule reservation."""
         results = []
         now = datetime.now(timezone.utc)
         with self._lock:
             jobs = list(self._cron_jobs.items())
+
         for job_id, job in jobs:
-            last_run = job.get("last_run")
-            if last_run:
-                # Convert string back to datetime if needed
+            with self._lock:
+                current = self._cron_jobs.get(job_id)
+                if current is None:
+                    continue
+                last_run = current.get("last_run")
                 if isinstance(last_run, str):
                     last_run = datetime.fromisoformat(last_run)
+                next_run = current["cron"].get_next_run(now)
+                time_diff = abs((now - next_run).total_seconds())
+                if time_diff >= 60 or (last_run is not None and next_run <= last_run):
+                    continue
+                # Reserve this schedule occurrence while holding the same lock
+                # used by all cron writers, preventing concurrent schedulers from
+                # enqueueing/executing the same occurrence twice.
+                current["last_run"] = next_run.isoformat()
+                self._save_cron_jobs()
+                scheduled_name = f"{current['name']}@{next_run.isoformat()}"
+                job_type = current["job_type"]
+                params = dict(current["params"])
 
-            next_run = job["cron"].get_next_run(now)
-
-            # Check if we're within 1 minute of the next run
-            time_diff = abs((now - next_run).total_seconds())
-            if time_diff < 60 and (last_run is None or next_run > last_run):
-                scheduled_name = f"{job['name']}@{next_run.isoformat()}"
-                task_id = self.add_task(
-                    scheduled_name,
-                    job["job_type"],
-                    params=job["params"],
-                )
-                task = self._queue.get(task_id)
-                if task is not None:
-                    result = self.run_task(task)
-                    results.append(result)
-                with self._lock:
-                    current = self._cron_jobs.get(job_id)
-                    if current is not None:
-                        current["last_run"] = next_run.isoformat()
-                        self._save_cron_jobs()
-
+            task_id = self.add_task(scheduled_name, job_type, params=params)
+            task = self._queue.get(task_id)
+            if task is not None:
+                results.append(self.run_task(task))
         return results
 
     def _load_cron_jobs(self) -> None:
@@ -347,10 +345,14 @@ class SchedulerManager:
             raise
 
     def shutdown(self, wait: bool = True) -> None:
-        """Stop scheduling and release worker resources."""
-        self._stop_event.set()
-        self._running = False
-        self._executor.shutdown(wait=wait, cancel_futures=True)
+        """Stop scheduling and release worker resources idempotently."""
+        with self._lock:
+            if not self._running and self._stop_event.is_set():
+                return
+            self._stop_event.set()
+            self._running = False
+            executor = self._executor
+        executor.shutdown(wait=wait, cancel_futures=True)
 
     # ── Query ───────────────────────────────
 
