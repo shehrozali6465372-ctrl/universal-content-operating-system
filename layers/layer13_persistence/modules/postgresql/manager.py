@@ -107,6 +107,10 @@ class PostgreSQLManager:
             "tables": {},
             "overall": "PASS",
         }
+        if not self._initialized or self._pool is None:
+            report["overall"] = "FAIL"
+            report["error"] = "PostgreSQL persistence is not initialized"
+            return report
         if self._pool:
             tables = self._pool.get_tables()
             for table in TABLES:
