@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import json
 from typing import Any, Dict, List, Optional
+from threading import RLock
 from datetime import datetime, timezone
 
 from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool, ConnectionConfig
@@ -38,6 +39,7 @@ class PostgreSQLManager:
         self._config = config or ConnectionConfig.from_env()
         self._pool: Optional[ConnectionPool] = None
         self._initialized = False
+        self._lifecycle_lock = RLock()
 
         # Repositories
         self.config: Optional[ConfigRepository] = None
@@ -252,13 +254,28 @@ class PostgreSQLManager:
 
     def close(self):
         """Close all connections and stop monitors."""
-        if self.health_checker:
-            self.health_checker.stop_monitoring()
-        if self.leak_detector:
-            self.leak_detector.stop_monitoring()
-        if self._pool:
-            self._pool.close()
-        self._initialized = False
+        with self._lifecycle_lock:
+            if self.health_checker:
+                self.health_checker.stop_monitoring()
+            if self.leak_detector:
+                self.leak_detector.stop_monitoring()
+            if self._pool:
+                self._pool.close()
+            self._pool = None
+            self._initialized = False
+            self.config = None
+            self.memory = None
+            self.logs = None
+            self.posts = None
+            self.analytics = None
+            self.learning = None
+            self.jobs = None
+            self.health_checker = None
+            self.slow_query_logger = None
+            self.transaction_recovery = None
+            self.leak_detector = None
+            self.benchmark = None
+            self.backup_manager = None
 
 
 # Singleton
