@@ -365,3 +365,20 @@ def test_database_concurrent_initialization_is_serialized(tmp_path):
     finally:
         for db in results:
             db.close()
+
+
+def test_backup_restore_rejects_symlink_target(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("safe")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+    entry = bm.backup("test", str(source), compress=False)
+    target = tmp_path / "restore.txt"
+    target.write_text("outside")
+    link = tmp_path / "restore-link"
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are unavailable")
+    with pytest.raises(ValueError, match="symlink"):
+        bm.restore(entry.backup_id, str(link))
