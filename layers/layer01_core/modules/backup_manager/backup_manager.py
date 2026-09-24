@@ -66,6 +66,8 @@ class BackupManager:
                 raise ValueError("invalid registry structure")
             for key, entry_data in entries.items():
                 entry = BackupEntry.from_dict(entry_data)
+                if key != entry.backup_id:
+                    raise ValueError("registry key does not match backup_id")
                 self._safe_backup_path(entry.filepath)
                 self._entries[key] = entry
             self._audit_log = audit_log[-200:]
@@ -132,13 +134,26 @@ class BackupManager:
         backup_filename = f"{backup_id}.bak"
         backup_path = self._backup_dir / backup_filename
 
-        # Copy first; integrity is recorded from the exact backup payload so
-        # restore verification is independent of concurrent source changes.
-        if src.is_file():
-            shutil.copy2(str(src), str(backup_path))
-        else:
-            backup_path = self._backup_dir / f"{backup_id}.dir"
-            shutil.copytree(str(src), str(backup_path), dirs_exist_ok=True)
+        # Stage the copy first. A failed copy must never leave a partially
+        # registered backup artifact behind.
+        staged_path = self._backup_dir / f".{backup_id}.stage"
+        try:
+            if src.is_file():
+                staged_path = staged_path.with_suffix(".bak.stage")
+                shutil.copy2(str(src), str(staged_path))
+                os.replace(staged_path, backup_path)
+            else:
+                staged_path = staged_path.with_suffix(".dir.stage")
+                shutil.copytree(str(src), str(staged_path))
+                os.replace(staged_path, self._backup_dir / f"{backup_id}.dir")
+                backup_path = self._backup_dir / f"{backup_id}.dir"
+        except Exception:
+            if staged_path.is_dir():
+                shutil.rmtree(str(staged_path), ignore_errors=True)
+            else:
+                staged_path.unlink(missing_ok=True)
+            backup_path.unlink(missing_ok=True)
+            raise
 
         # Calculate the hash of the exact uncompressed backup payload.
         file_hash = self._calculate_hash(backup_path)
@@ -297,7 +312,7 @@ class BackupManager:
                 return False
             entry = self._entries[backup_id]
 
-        backup_file = self._backup_dir / entry.filepath
+        backup_file = self._safe_backup_path(entry.filepath)
         if not backup_file.exists():
             return False
 
@@ -431,7 +446,9 @@ class BackupManager:
             except Exception:
                 results[bid] = False
 
-        self._audit("DISASTER_RECOVERY", "*", f"target={target_dir}")
+        with self._lock:
+            self._audit("DISASTER_RECOVERY", "*", f"target={target_dir}")
+            self._save_registry()
         return results
 
     # ── Audit Trail ─────────────────────────
