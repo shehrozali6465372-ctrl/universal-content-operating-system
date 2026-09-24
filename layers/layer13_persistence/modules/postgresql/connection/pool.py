@@ -55,6 +55,7 @@ class ConnectionPool:
         self._lock = threading.RLock()
         self._pg_available: Optional[bool] = None
         self._initialized = False
+        self._closing = False
 
         # Retry state
         self._consecutive_failures = 0
@@ -75,6 +76,7 @@ class ConnectionPool:
         with self._lock:
             if self._initialized:
                 return self._pg_available or False
+            self._closing = False
             try:
                 import psycopg2
                 import psycopg2.pool
@@ -121,36 +123,44 @@ class ConnectionPool:
 
     @contextmanager
     def connection(self):
-        """Acquire a connection from the pool."""
-        if not self._initialized:
-            self.initialize()
-
-        if self._pg_available:
-            conn = self._pg_conn_pool.getconn()
-            self._active_conns += 1
-            self._idle_conns = max(0, self._idle_conns - 1)
-            try:
-                yield conn
-            finally:
-                self._pg_conn_pool.putconn(conn)
-                self._active_conns = max(0, self._active_conns - 1)
-                self._idle_conns += 1
-        else:
-            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-                raise RuntimeError("PostgreSQL is unavailable; SQLite fallback is disabled in production")
-            import sqlite3
-            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-                os.path.dirname(os.path.dirname(__file__))))), "ai_content_os.db")
-            if not os.path.exists(os.path.dirname(db_path)):
-                db_path = os.path.join("/tmp", "ai_content_os.db")
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            self._active_conns += 1
-            try:
-                yield conn
-            finally:
-                conn.close()
-                self._active_conns = max(0, self._active_conns - 1)
+        """Acquire a connection while preserving pool lifecycle ownership."""
+        with self._lock:
+            if self._closing:
+                raise RuntimeError("PostgreSQL connection pool is closing")
+            if not self._initialized:
+                self.initialize()
+            if self._closing:
+                raise RuntimeError("PostgreSQL connection pool is closing")
+            pg_available = self._pg_available
+            if pg_available:
+                conn = self._pg_conn_pool.getconn()
+                self._active_conns += 1
+                self._idle_conns = max(0, self._idle_conns - 1)
+            else:
+                if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                    raise RuntimeError("PostgreSQL is unavailable; SQLite fallback is disabled in production")
+                import sqlite3
+                db_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.dirname(os.path.dirname(__file__))))),
+                    "ai_content_os.db",
+                )
+                if not os.path.exists(os.path.dirname(db_path)):
+                    db_path = os.path.join("/tmp", "ai_content_os.db")
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                self._active_conns += 1
+        try:
+            yield conn
+        finally:
+            with self._lock:
+                if pg_available:
+                    self._pg_conn_pool.putconn(conn)
+                    self._active_conns = max(0, self._active_conns - 1)
+                    self._idle_conns += 1
+                else:
+                    conn.close()
+                    self._active_conns = max(0, self._active_conns - 1)
 
     def _execute_with_retry(self, fn, *args, **kwargs):
         """Execute a function with retry + auto-reconnect."""
@@ -418,9 +428,17 @@ class ConnectionPool:
     def close(self):
         """Close all connections and reset lifecycle state."""
         with self._lock:
-            if self._pg_available and hasattr(self, '_pg_conn_pool'):
-                self._pg_conn_pool.closeall()
-            self._pg_available = None
-            self._initialized = False
-            self._active_conns = 0
-            self._idle_conns = 0
+            if self._active_conns:
+                raise RuntimeError(
+                    f"Cannot close PostgreSQL pool with {self._active_conns} active connection(s)"
+                )
+            self._closing = True
+            try:
+                if self._pg_available and hasattr(self, "_pg_conn_pool"):
+                    self._pg_conn_pool.closeall()
+            finally:
+                self._pg_available = None
+                self._initialized = False
+                self._active_conns = 0
+                self._idle_conns = 0
+                self._closing = False
