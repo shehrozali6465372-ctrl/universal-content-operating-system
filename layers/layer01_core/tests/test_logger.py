@@ -277,3 +277,8 @@ class TestHealthCheck:
         assert report["overall"] == "PASS"
         assert "log_dir" in report["checks"]
         assert "entries" in report["checks"]
+
+
+def test_log_rotation_path_escape_is_rejected(rotator):
+    with pytest.raises(ValueError, match="escapes log directory"):
+        rotator.needs_rotation("../outside.log")
