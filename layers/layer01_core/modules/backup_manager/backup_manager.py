@@ -65,7 +65,9 @@ class BackupManager:
             if not isinstance(entries, dict) or not isinstance(audit_log, list):
                 raise ValueError("invalid registry structure")
             for key, entry_data in entries.items():
-                self._entries[key] = BackupEntry.from_dict(entry_data)
+                entry = BackupEntry.from_dict(entry_data)
+                self._safe_backup_path(entry.filepath)
+                self._entries[key] = entry
             self._audit_log = audit_log[-200:]
         except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
             raise RuntimeError(f"Backup registry is unreadable: {self._registry_path}") from exc
@@ -99,6 +101,15 @@ class BackupManager:
         self._audit_log.append(entry)
         if len(self._audit_log) > 200:
             self._audit_log = self._audit_log[-200:]
+
+    def _safe_backup_path(self, relative_path: str) -> Path:
+        """Resolve a registry path and require it to remain under backup_dir."""
+        candidate = (self._backup_dir / relative_path).resolve()
+        try:
+            candidate.relative_to(self._backup_dir.resolve())
+        except ValueError as exc:
+            raise ValueError(f"backup path escapes backup directory: {relative_path}") from exc
+        return candidate
 
     # ── Core: Backup ─────────────────────────
 
@@ -193,7 +204,7 @@ class BackupManager:
                 raise BackupNotFoundError(f"Backup '{backup_id}' not found")
             entry = self._entries[backup_id]
 
-        backup_file = self._backup_dir / entry.filepath
+        backup_file = self._safe_backup_path(entry.filepath)
         if not backup_file.exists():
             raise BackupNotFoundError(f"Backup file not found: {entry.filepath}")
 
