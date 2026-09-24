@@ -215,6 +215,14 @@ class TestSchedulerManager:
         result = scheduler.run_next()
         assert result["status"] == "FAILED"
 
+    def test_cancel_does_not_override_claimed_task(self, scheduler):
+        scheduler.register_handler("once", lambda p: None)
+        tid = scheduler.add_task("claimed", "once")
+        task = scheduler.get_task(tid)
+        assert scheduler._queue.claim(tid) is True
+        assert scheduler.cancel_task(tid) is False
+        assert scheduler._queue.get(tid).status.value == "RUNNING"
+
     def test_direct_run_task_does_not_double_claim(self, scheduler):
         scheduler.register_handler("once", lambda p: None)
         tid = scheduler.add_task("once_job", "once")
