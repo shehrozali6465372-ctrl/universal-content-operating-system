@@ -42,6 +42,7 @@ class RetryManager:
             if task_id not in self._retries:
                 self._retries[task_id] = {"attempts": 0, "last_failure": now}
 
+            previous = dict(self._retries.get(task_id, {}))
             info = self._retries[task_id]
             info["attempts"] += 1
             info["last_failure"] = now
@@ -55,7 +56,14 @@ class RetryManager:
                 "delay_seconds": delay,
                 "next_retry_at": datetime.fromtimestamp(now + delay, tz=timezone.utc).isoformat(),
             }
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                if previous:
+                    self._retries[task_id] = previous
+                else:
+                    self._retries.pop(task_id, None)
+                raise
             return result
 
     def record_success(self, task_id: str) -> None:
@@ -63,8 +71,14 @@ class RetryManager:
         if not isinstance(task_id, str) or not task_id.strip():
             raise ValueError("task_id must be a non-empty string")
         with self._lock:
+            previous = self._retries.get(task_id)
             self._retries.pop(task_id, None)
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                if previous is not None:
+                    self._retries[task_id] = previous
+                raise
 
     def should_retry(self, task_id: str, max_retries: int = 3) -> bool:
         """Check if a task should be retried."""
@@ -92,8 +106,13 @@ class RetryManager:
 
     def clear(self) -> None:
         with self._lock:
+            previous = dict(self._retries)
             self._retries.clear()
-            self._save()
+            try:
+                self._save()
+            except Exception:
+                self._retries = previous
+                raise
 
     def _load(self) -> None:
         if not self._persist_path or not self._persist_path.exists():
