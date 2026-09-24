@@ -16,7 +16,7 @@ import yaml
 import json
 from pathlib import Path
 from typing import Any, Optional, Dict, List
-from threading import Lock
+from threading import RLock
 
 from layers.layer01_core.modules.config_schema import (
     get_all_fields,
@@ -47,7 +47,7 @@ class ConfigManager:
     """Singleton config manager with immutable protection and versioning."""
 
     _instances: Dict[tuple, "ConfigManager"] = {}
-    _lock = Lock()
+    _lock = RLock()
 
     def __new__(cls, project_root: Optional[str] = None, admin_mode: bool = False, *args, **kwargs):
         root = str(Path(project_root).resolve()) if project_root else str(Path(__file__).resolve().parents[3])
@@ -70,6 +70,7 @@ class ConfigManager:
         self._config: Dict[str, Any] = {}
         self._admin_mode = admin_mode
         self._loaded = False
+        self._state_lock = RLock()
 
     def _safe_path(self, value: str) -> Path:
         candidate = (self._project_root / value).resolve()
@@ -92,20 +93,20 @@ class ConfigManager:
         return self._config.get("CONFIG_VERSION", CONFIG_VERSION)
 
     def load(self, env_file: str = ".env", yaml_file: str = "config/default.yaml") -> "ConfigManager":
-        self._config.clear()
-        self._load_yaml(self._safe_path(yaml_file))
-        self._load_env(self._safe_path(env_file))
+        with self._state_lock:
+            self._config.clear()
+            self._load_yaml(self._safe_path(yaml_file))
+            self._load_env(self._safe_path(env_file))
 
-        defaults = get_defaults()
-        for key, value in defaults.items():
-            if key not in self._config:
-                self._config[key] = value
+            defaults = get_defaults()
+            for key, value in defaults.items():
+                if key not in self._config:
+                    self._config[key] = value
 
-        self._apply_env_overrides()
-
-        self._config["CONFIG_VERSION"] = CONFIG_VERSION
-        self._loaded = True
-        return self
+            self._apply_env_overrides()
+            self._config["CONFIG_VERSION"] = CONFIG_VERSION
+            self._loaded = True
+            return self
 
     def _load_yaml(self, yaml_path: Path) -> None:
         if not yaml_path.exists():
@@ -144,20 +145,23 @@ class ConfigManager:
                 self._config[full_key] = value
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._config.get(key, default)
+        with self._state_lock:
+            return self._config.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
         """Set config value. Blocked for immutable keys unless admin_mode."""
-        if key in IMMUTABLE_KEYS and not self._admin_mode:
-            raise InvalidConfig(
-                key,
-                f"'{key}' is immutable and cannot be changed at runtime. "
-                f"Use admin_mode=True to override."
-            )
-        self._config[key] = value
+        with self._state_lock:
+            if key in IMMUTABLE_KEYS and not self._admin_mode:
+                raise InvalidConfig(
+                    key,
+                    f"'{key}' is immutable and cannot be changed at runtime. "
+                    f"Use admin_mode=True to override."
+                )
+            self._config[key] = value
 
     def has(self, key: str) -> bool:
-        return key in self._config
+        with self._state_lock:
+            return key in self._config
 
     def all(self) -> Dict[str, Any]:
         """Return a redacted configuration snapshot; raw credentials require explicit get()."""
