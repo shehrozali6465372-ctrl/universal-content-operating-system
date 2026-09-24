@@ -66,6 +66,17 @@ class Task:
             raise ValueError("job_type must be a non-empty string")
         if not isinstance(self.params, dict):
             raise TypeError("task params must be a dictionary")
+        try:
+            json.dumps(self.params)
+        except (TypeError, ValueError) as exc:
+            raise TypeError("task params must be JSON-serializable") from exc
+        if self.conditions is not None:
+            if not isinstance(self.conditions, dict):
+                raise TypeError("task conditions must be a dictionary")
+            try:
+                json.dumps(self.conditions)
+            except (TypeError, ValueError) as exc:
+                raise TypeError("task conditions must be JSON-serializable") from exc
         if not isinstance(self.dependencies, list) or not all(
             isinstance(dep, str) and dep.strip() for dep in self.dependencies
         ):
