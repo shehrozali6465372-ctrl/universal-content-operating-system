@@ -479,9 +479,9 @@ def test_setting_persistence_preserves_version_metadata():
     assert restored.last_changed == "2026-01-01T00:00:00+00:00"
 
 
-def test_settings_rollback_rejects_zero_steps(settings_manager):
+def test_settings_rollback_rejects_zero_steps(sm):
     with pytest.raises(ValueError, match="positive integer"):
-        settings_manager.rollback("missing", steps=0)
+        sm.rollback("missing", steps=0)
 
 
 def test_settings_load_rejects_invalid_root(tmp_path):
