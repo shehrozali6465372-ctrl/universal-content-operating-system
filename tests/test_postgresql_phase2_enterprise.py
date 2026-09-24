@@ -526,3 +526,39 @@ class TestProductionPersistenceGuards:
         assert ConnectionPool._identifier("agent_config") == "agent_config"
         with pytest.raises(ValueError):
             ConnectionPool._identifier("agent_config; DROP TABLE users")
+
+
+def test_connection_pool_transaction_rolls_back_on_exception():
+    from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool
+    pool = ConnectionPool()
+    pool.initialize()
+    table = "layer1_transaction_test"
+    try:
+        pool.execute(
+            f"CREATE TABLE IF NOT EXISTS {table} (id SERIAL PRIMARY KEY, value TEXT)"
+        )
+        pool.execute(f"DELETE FROM {table}")
+        with pytest.raises(RuntimeError, match="rollback"):
+            with pool.transaction() as conn:
+                conn.cursor().execute(
+                    f"INSERT INTO {table} (value) VALUES (%s)", ("must-rollback",)
+                )
+                raise RuntimeError("rollback")
+        assert pool.query_one(
+            f"SELECT value FROM {table} WHERE value = %s", ("must-rollback",)
+        ) is None
+    finally:
+        pool.execute(f"DROP TABLE IF EXISTS {table}")
+        pool.close()
+
+
+def test_connection_pool_close_rejects_active_connection():
+    from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool
+    pool = ConnectionPool()
+    pool.initialize()
+    try:
+        with pool.connection():
+            with pytest.raises(RuntimeError, match="active connection"):
+                pool.close()
+    finally:
+        pool.close()
