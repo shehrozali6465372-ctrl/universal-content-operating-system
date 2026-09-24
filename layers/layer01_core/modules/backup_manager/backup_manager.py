@@ -219,7 +219,8 @@ class BackupManager:
         target.parent.mkdir(parents=True, exist_ok=True)
 
         # Decompress if needed
-        temp_target = Path(tempfile.mkdtemp(dir=str(target.parent), prefix=".restore-")) / target.name
+        temp_dir = Path(tempfile.mkdtemp(dir=str(target.parent), prefix=".restore-"))
+        temp_target = temp_dir / target.name
         try:
             if entry.compressed:
                 with gzip.open(str(backup_file), "rb") as f_in:
@@ -255,7 +256,9 @@ class BackupManager:
                     displaced.replace(target)
                 raise
         finally:
-            shutil.rmtree(str(temp_target.parent), ignore_errors=True) if temp_target is not None else None
+            # Always remove the staging directory, including after a successful
+            # atomic replace where temp_target no longer points at a live path.
+            shutil.rmtree(str(temp_dir), ignore_errors=True)
 
         with self._lock:
             self._audit("RESTORE", backup_id, f"target={target_path}")
