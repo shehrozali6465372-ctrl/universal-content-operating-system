@@ -12,6 +12,8 @@ Core trend discovery engine:
 """
 
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -268,12 +270,28 @@ class TrendManager:
         if path is None:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "trends": {k: v.to_dict() for k, v in self._trends.items()},
-            "history": self._history[-200:],
-        }
-        path.write_text(json.dumps(data, indent=2, default=str))
-        return True
+        with self._lock:
+            data = {
+                "trends": {k: v.to_dict() for k, v in self._trends.items()},
+                "history": self._history[-200:],
+            }
+        payload = json.dumps(data, indent=2, default=str)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=str(path.parent),
+            text=True,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, path)
+            return True
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
     # ── Stats ────────────────────────────────
 
