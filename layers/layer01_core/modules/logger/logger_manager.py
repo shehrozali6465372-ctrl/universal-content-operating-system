@@ -174,7 +174,7 @@ class LoggerManager:
         ts = entry["timestamp"][:19]
         mod = entry["module"]
         msg = entry["message"]
-        print(f"{color}[{ts}] [{level.value:8s}] [{mod}] {msg}{RESET}", file=sys.stderr)
+        sys.stderr.write(f"{color}[{ts}] [{level.value:8s}] [{mod}] {msg}{RESET}\\n")
 
     # ── Query ───────────────────────────────
 
