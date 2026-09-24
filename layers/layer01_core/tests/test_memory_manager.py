@@ -243,3 +243,16 @@ class TestStats:
         assert stats["levels"]["long_term"]["count"] >= 1
         assert stats["levels"]["episodic"]["count"] >= 1
         assert "stm_buffer" in stats
+
+
+def test_memory_rejects_invalid_level_and_importance(mem):
+    with pytest.raises(ValueError, match="Invalid memory level"):
+        mem.save("invalid", "cat", "key", "value")
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        mem.save("long_term", "cat", "key", "value", importance=2.0)
+
+
+def test_memory_batch_validates_before_mutation(mem):
+    with pytest.raises(ValueError, match="Invalid memory level"):
+        mem.save_batch([{"level": "invalid", "category": "c", "key": "k", "value": "v"}])
+    assert mem.get_stats()["total_persistent"] == 0
