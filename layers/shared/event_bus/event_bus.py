@@ -116,7 +116,10 @@ class EventBus:
                 handler.callback(event)
                 results.append({"handler": handler.name, "status": "success"})
                 if handler.once:
-                    self.unsubscribe(event_type=key, name=handler.name)
+                    self.unsubscribe(
+                        event_type="*" if handler in wildcard_handlers else key,
+                        name=handler.name,
+                    )
             except Exception as exc:
                 errors.append(f"{handler.name}: {str(exc)}")
                 self._error_count += 1
