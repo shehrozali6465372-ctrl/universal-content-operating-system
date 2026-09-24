@@ -55,23 +55,26 @@ class MemoryManager:
 
     def initialize(self) -> "MemoryManager":
         """Create the development/test local store; production memory belongs to Layer 13."""
-        if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-            raise RuntimeError(
-                "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
-            )
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
-        try:
-            conn.row_factory = sqlite3.Row
-            self._conn = conn
-            self._create_tables()
-        except Exception:
-            conn.close()
-            self._conn = None
-            self._initialized = False
-            raise
-        self._initialized = True
-        return self
+        with self._lock:
+            if self._initialized and self._conn is not None:
+                return self
+            if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                raise RuntimeError(
+                    "Layer 1 local memory persistence is development/test-only; production memory is owned by Layer 13"
+                )
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
+            try:
+                conn.row_factory = sqlite3.Row
+                self._conn = conn
+                self._create_tables()
+            except Exception:
+                conn.close()
+                self._conn = None
+                self._initialized = False
+                raise
+            self._initialized = True
+            return self
 
     def _create_tables(self) -> None:
         self._conn.executescript("""
