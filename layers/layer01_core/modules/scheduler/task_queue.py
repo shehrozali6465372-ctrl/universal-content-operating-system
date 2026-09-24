@@ -273,14 +273,15 @@ class TaskQueue:
                 raise ValueError(
                     f"Only FAILED or CANCELLED tasks can be explicitly replayed: {task.status.value}"
                 )
+            previous_status = task.status
+            previous_not_before = task.not_before
             task.status = TaskStatus.PENDING
-            old_not_before = task.not_before
             task.not_before = None
             try:
                 self._save()
             except Exception:
-                task.status = TaskStatus.FAILED if task.status == TaskStatus.PENDING else task.status
-                task.not_before = old_not_before
+                task.status = previous_status
+                task.not_before = previous_not_before
                 raise
             return True
 
