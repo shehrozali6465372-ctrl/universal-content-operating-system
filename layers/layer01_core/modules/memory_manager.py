@@ -114,11 +114,27 @@ class MemoryManager:
     ) -> int:
         """Save a memory entry. Returns entry ID."""
         self._ensure_init()
+        level = self._normalize_level(level)
         self._validate_entry(level, category, key, value, importance)
         if not isinstance(tags, str):
             raise TypeError("Memory tags must be a string")
         with self._lock:
             return self._save_locked(level, category, key, value, tags, importance)
+
+    @staticmethod
+    def _normalize_level(level: str) -> str:
+        aliases = {
+            "stm": MemoryLevel.STM.value,
+            "working": MemoryLevel.WORKING.value,
+            "ltm": MemoryLevel.LTM.value,
+            "episodic": MemoryLevel.EPISODIC.value,
+        }
+        if not isinstance(level, str):
+            raise TypeError("Memory level must be a string")
+        normalized = aliases.get(level.strip().lower(), level.strip().lower())
+        if normalized not in {member.value for member in MemoryLevel}:
+            raise ValueError(f"Invalid memory level: {level}")
+        return normalized
 
     @staticmethod
     def _validate_entry(
@@ -174,7 +190,7 @@ class MemoryManager:
             persistent = []
             try:
                 for entry in entries:
-                    level = entry.get("level", "long_term")
+                    level = self._normalize_level(entry.get("level", "long_term"))
                     category = entry.get("category", "general")
                     key = entry.get("key", "")
                     value = entry.get("value", "")
@@ -212,8 +228,7 @@ class MemoryManager:
     def load(self, level: str, category: str = "", key: str = "") -> List[Dict]:
         """Load memory entries with optional filters."""
         self._ensure_init()
-        if level not in {member.value for member in MemoryLevel}:
-            raise ValueError(f"Invalid memory level: {level}")
+        level = self._normalize_level(level)
 
         with self._lock:
             if level == MemoryLevel.STM.value:
@@ -307,8 +322,7 @@ class MemoryManager:
     def clear_level(self, level: str) -> int:
         """Clear all entries for a memory level."""
         self._ensure_init()
-        if level not in {member.value for member in MemoryLevel}:
-            raise ValueError(f"Invalid memory level: {level}")
+        level = self._normalize_level(level)
         with self._lock:
             if level == MemoryLevel.STM.value:
                 count = len(self._stm_buffer)
