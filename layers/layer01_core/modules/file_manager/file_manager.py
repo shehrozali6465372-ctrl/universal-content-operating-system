@@ -162,7 +162,7 @@ class FileManager:
     # ── Backup & Restore ────────────────────
 
     def backup(self, filepath: str) -> Optional[str]:
-        """Create timestamped backup. Returns backup path."""
+        """Create a timestamped backup with artifact/hash commit semantics."""
         with self._global_lock:
             full = self._resolve(filepath)
             if not full.exists():
@@ -172,8 +172,21 @@ class FileManager:
             ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             backup_name = f"{full.name}.{ts}.bak"
             backup_path = backup_dir / backup_name
-            shutil.copy2(str(full), str(backup_path))
-            save_hash(str(backup_path))
+            staged_path = backup_dir / f".{backup_name}.stage"
+            staged_hash = Path(str(staged_path) + ".sha256")
+            final_hash = Path(str(backup_path) + ".sha256")
+            try:
+                shutil.copy2(str(full), str(staged_path))
+                save_hash(str(staged_path))
+                os.replace(str(staged_path), str(backup_path))
+                os.replace(str(staged_hash), str(final_hash))
+            except Exception:
+                for path in (staged_path, staged_hash, backup_path, final_hash):
+                    try:
+                        path.unlink()
+                    except FileNotFoundError:
+                        pass
+                raise
             return str(backup_path.relative_to(self._base))
 
     def restore(self, backup_path: str, target_path: str) -> bool:
@@ -189,16 +202,27 @@ class FileManager:
             if not ok or expected_hash is None:
                 raise ValueError("Backup integrity verification failed")
 
+            raw_target = Path(target_path)
+            if raw_target.is_symlink():
+                raise ValueError("restore target must not be a symlink")
+            parent = raw_target.parent
+            while parent != parent.parent:
+                if parent.exists() and parent.is_symlink():
+                    raise ValueError("restore target parent must not be a symlink")
+                parent = parent.parent
+
             tp.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp_name = tempfile.mkstemp(dir=str(tp.parent), suffix=".restore.tmp")
             os.close(fd)
             displaced = None
+            sidecar = Path(str(tp) + ".sha256")
+            old_sidecar = sidecar.read_bytes() if sidecar.exists() else None
             try:
                 shutil.copy2(str(bp), tmp_name)
                 if calculate_hash(tmp_name) != expected_hash:
                     raise ValueError("Backup integrity verification failed during restore")
                 if tp.exists():
-                    displaced = tp.parent / f".{tp.name}.pre-restore.tmp"
+                    displaced = tp.parent / f".{tp.name}.pre-restore-{os.getpid()}.tmp"
                     os.replace(str(tp), str(displaced))
                 os.replace(tmp_name, str(tp))
                 tmp_name = None
@@ -211,8 +235,20 @@ class FileManager:
                         os.unlink(tmp_name)
                     except OSError:
                         pass
-                if displaced is not None and displaced.exists() and not tp.exists():
+                if tp.exists():
+                    try:
+                        tp.unlink()
+                    except OSError:
+                        pass
+                if displaced is not None and displaced.exists():
                     os.replace(str(displaced), str(tp))
+                if old_sidecar is None:
+                    try:
+                        sidecar.unlink()
+                    except FileNotFoundError:
+                        pass
+                else:
+                    sidecar.write_bytes(old_sidecar)
                 raise
             finally:
                 if displaced is not None and displaced.exists():
