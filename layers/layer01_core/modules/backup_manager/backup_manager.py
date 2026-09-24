@@ -262,7 +262,15 @@ class BackupManager:
         if not self.verify_integrity(backup_id):
             raise BackupIntegrityError(f"Integrity check failed for '{backup_id}'")
 
-        target = Path(target_path).resolve()
+        raw_target = Path(target_path)
+        if raw_target.exists() and raw_target.is_symlink():
+            raise ValueError("restore target must not be a symlink")
+        parent = raw_target.parent
+        while parent != parent.parent:
+            if parent.exists() and parent.is_symlink():
+                raise ValueError("restore target parent must not be a symlink")
+            parent = parent.parent
+        target = raw_target.resolve()
         if target == backup_file.resolve():
             raise ValueError("restore target must differ from backup artifact")
         target.parent.mkdir(parents=True, exist_ok=True)
