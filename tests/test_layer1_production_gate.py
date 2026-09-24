@@ -382,3 +382,9 @@ def test_backup_restore_rejects_symlink_target(tmp_path):
         pytest.skip("symlinks are unavailable")
     with pytest.raises(ValueError, match="symlink"):
         bm.restore(entry.backup_id, str(link))
+
+
+def test_backup_entry_rejects_invalid_hash():
+    from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
+    with pytest.raises(ValueError, match="SHA-256"):
+        BackupEntry("id", "test", "x.bak", hash_sha256="not-a-hash")
