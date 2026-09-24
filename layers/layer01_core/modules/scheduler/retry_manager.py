@@ -5,6 +5,7 @@ Layer 1: Core System — Module 7
 Manages retries with exponential backoff for failed tasks.
 """
 
+import math
 import time
 from typing import Dict, Any
 from datetime import datetime, timezone
@@ -19,8 +20,14 @@ class RetryManager:
     """Exponential backoff retry management."""
 
     def __init__(self, base_delay: float = 1.0, max_delay: float = 300.0, persist_path: str = None):
-        self._base_delay = base_delay
-        self._max_delay = max_delay
+        if not isinstance(base_delay, (int, float)) or not math.isfinite(base_delay) or base_delay < 0:
+            raise ValueError("base_delay must be a finite non-negative number")
+        if not isinstance(max_delay, (int, float)) or not math.isfinite(max_delay) or max_delay < 0:
+            raise ValueError("max_delay must be a finite non-negative number")
+        if max_delay < base_delay:
+            raise ValueError("max_delay must be greater than or equal to base_delay")
+        self._base_delay = float(base_delay)
+        self._max_delay = float(max_delay)
         self._retries: Dict[str, Dict] = {}
         self._persist_path = Path(persist_path) if persist_path else None
         self._lock = RLock()
@@ -54,6 +61,8 @@ class RetryManager:
 
     def should_retry(self, task_id: str, max_retries: int = 3) -> bool:
         """Check if a task should be retried."""
+        if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0:
+            raise ValueError("max_retries must be a non-negative integer")
         with self._lock:
             info = self._retries.get(task_id)
             if not info:
@@ -66,20 +75,39 @@ class RetryManager:
             return info["attempts"] if info else 0
 
     def get_stats(self) -> Dict[str, Any]:
-        return {
-            "tasks_with_retries": len(self._retries),
-            "total_retry_count": sum(v["attempts"] for v in self._retries.values()),
-        }
+        with self._lock:
+            return {
+                "tasks_with_retries": len(self._retries),
+                "total_retry_count": sum(v["attempts"] for v in self._retries.values()),
+            }
 
     def clear(self) -> None:
-        self._retries.clear()
-        self._save()
+        with self._lock:
+            self._retries.clear()
+            self._save()
 
     def _load(self) -> None:
         if not self._persist_path or not self._persist_path.exists():
             return
-        data = json.loads(self._persist_path.read_text(encoding="utf-8"))
-        self._retries = data.get("retries", {})
+        try:
+            data = json.loads(self._persist_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not isinstance(data.get("retries", {}), dict):
+                raise ValueError("retry persistence must contain a retries object")
+            retries = data.get("retries", {})
+            validated: Dict[str, Dict[str, Any]] = {}
+            for task_id, info in retries.items():
+                if not isinstance(task_id, str) or not isinstance(info, dict):
+                    raise ValueError("invalid retry record")
+                attempts = info.get("attempts")
+                last_failure = info.get("last_failure")
+                if (not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 1
+                        or not isinstance(last_failure, (int, float)) or not math.isfinite(last_failure)):
+                    raise ValueError(f"invalid retry record for {task_id!r}")
+                validated[task_id] = {"attempts": attempts, "last_failure": float(last_failure)}
+            with self._lock:
+                self._retries = validated
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise RuntimeError(f"Retry persistence is unreadable: {self._persist_path}") from exc
 
     def _save(self) -> None:
         if not self._persist_path:
