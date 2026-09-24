@@ -52,7 +52,7 @@ class ConnectionPool:
 
     def __init__(self, config: Optional[ConnectionConfig] = None):
         self._config = config or ConnectionConfig.from_env()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._pg_available: Optional[bool] = None
         self._initialized = False
 
@@ -72,10 +72,10 @@ class ConnectionPool:
 
     def initialize(self) -> bool:
         """Initialize pool. Returns True if PostgreSQL is available."""
-        if self._initialized:
-            return self._pg_available or False
-
-        try:
+        with self._lock:
+            if self._initialized:
+                return self._pg_available or False
+            try:
             import psycopg2
             import psycopg2.pool
 
@@ -94,16 +94,16 @@ class ConnectionPool:
             self._last_success_time = time.time()
             return True
 
-        except ImportError as exc:
-            self._pg_available = False
+            except ImportError as exc:
+                self._pg_available = False
             self._initialized = True
             self._last_error = f"PostgreSQL driver unavailable: {exc}"
             if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
                 raise RuntimeError("PostgreSQL driver is unavailable in production") from exc
             return False
 
-        except Exception as exc:
-            self._pg_available = False
+            except Exception as exc:
+                self._pg_available = False
             self._initialized = True
             self._last_error = str(exc)
             if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
@@ -418,6 +418,11 @@ class ConnectionPool:
         return self.get_pool_metrics()
 
     def close(self):
-        """Close all connections."""
-        if self._pg_available and hasattr(self, '_pg_conn_pool'):
-            self._pg_conn_pool.closeall()
+        """Close all connections and reset lifecycle state."""
+        with self._lock:
+            if self._pg_available and hasattr(self, '_pg_conn_pool'):
+                self._pg_conn_pool.closeall()
+            self._pg_available = None
+            self._initialized = False
+            self._active_conns = 0
+            self._idle_conns = 0
