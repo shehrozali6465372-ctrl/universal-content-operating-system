@@ -150,8 +150,32 @@ class MigrationManager:
             up_sql="CREATE INDEX IF NOT EXISTS idx_memory_category ON agent_memory(category);",
         )
 
+    def _validate_history(self) -> None:
+        """Reject missing, unknown, or non-contiguous applied migration versions."""
+        history = self._conn.execute(
+            "SELECT version FROM schema_version ORDER BY version"
+        ).fetchall()
+        versions = [row[0] for row in history]
+        if any(
+            not isinstance(version, int) or isinstance(version, bool) or version < 1
+            for version in versions
+        ):
+            raise RuntimeError("Invalid schema migration history: version must be a positive integer")
+        expected = list(range(1, len(versions) + 1))
+        if versions != expected:
+            raise RuntimeError(
+                f"Invalid schema migration history: expected contiguous versions {expected}, got {versions}"
+            )
+        registered = {migration["version"] for migration in self._registry.get_all()}
+        unknown = [version for version in versions if version not in registered]
+        if unknown:
+            raise RuntimeError(
+                f"Invalid schema migration history: unknown migration versions {unknown}"
+            )
+
     def get_current_version(self) -> int:
-        """Get current schema version."""
+        """Get current schema version after validating persisted history."""
+        self._validate_history()
         cursor = self._conn.execute("SELECT MAX(version) FROM schema_version")
         result = cursor.fetchone()
         return result[0] if result[0] is not None else 0
