@@ -315,4 +315,3 @@ def test_delete_backup_rolls_back_on_registry_failure(bm, sample_files):
     assert bm.count() == 1
     assert backup_file.exists()
     assert bm.get_entry(entry.backup_id).backup_id == entry.backup_id
-\n
