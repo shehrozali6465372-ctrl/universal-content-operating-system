@@ -92,7 +92,7 @@ class SecretsManager:
         self._legacy_fernet = Fernet(
             base64.urlsafe_b64encode(master_key.encode().ljust(32, b"\0")[:32])
         )
-        self._fernet = None
+        self._fernet = self._legacy_fernet
 
         self._audit.log("SYSTEM", "HEALTH_CHECK", "SUCCESS", "SecretsManager initialized")
         return self
