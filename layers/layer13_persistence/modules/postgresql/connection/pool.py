@@ -455,7 +455,7 @@ class ConnectionPool:
             total_retries = self._total_retries
             consecutive_failures = self._consecutive_failures
             last_error = self._last_error
-            total_latency_ms = self._total_latency_ms
+            total_latency_ms = sum(lats)
             pg_available = self._pg_available
             initialized = self._initialized
         avg_lat = sum(lats) / len(lats) if lats else 0.0
