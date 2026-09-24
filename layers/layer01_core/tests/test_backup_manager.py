@@ -105,6 +105,10 @@ class TestCreateBackup:
         assert entry is not None
         assert entry.source == "configs"
 
+    def test_backup_json_rejects_path_traversal(self, bm):
+        with pytest.raises(ValueError, match="single path component"):
+            bm.backup_json("configs", {"safe": True}, filename="../escape.json")
+
 
 # ── Test 3: Restore ─────────────────────────
 
