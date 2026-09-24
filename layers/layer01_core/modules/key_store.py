@@ -41,6 +41,10 @@ class KeyStore:
         Corrupt or non-object JSON is a hard failure: silently treating it as
         an empty store could overwrite the remaining encrypted secrets.
         """
+        with self._lock:
+            return self._load_unlocked()
+
+    def _load_unlocked(self) -> Dict[str, str]:
         if not self._path.exists():
             return {}
         try:
@@ -56,6 +60,10 @@ class KeyStore:
 
     def save(self, secrets: Dict[str, str]) -> None:
         """Atomically replace the secrets file with restrictive permissions."""
+        with self._lock:
+            self._save_unlocked(secrets)
+
+    def _save_unlocked(self, secrets: Dict[str, str]) -> None:
         if not isinstance(secrets, dict) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in secrets.items()
         ):
@@ -90,41 +98,41 @@ class KeyStore:
     def add(self, name: str, encrypted_value: str) -> None:
         """Add or update a single secret atomically within this process."""
         with self._lock:
-            secrets = self.load()
+            secrets = self._load_unlocked()
             secrets[name] = encrypted_value
-            self.save(secrets)
+            self._save_unlocked(secrets)
 
     def remove(self, name: str) -> bool:
         """Remove a secret atomically within this process."""
         with self._lock:
-            secrets = self.load()
+            secrets = self._load_unlocked()
             if name in secrets:
                 del secrets[name]
-                self.save(secrets)
+                self._save_unlocked(secrets)
                 return True
             return False
 
     def get(self, name: str) -> Optional[str]:
         """Get encrypted value by name."""
         with self._lock:
-            return self.load().get(name)
+            return self._load_unlocked().get(name)
 
     def has(self, name: str) -> bool:
         """Check if secret exists."""
         with self._lock:
-            return name in self.load()
+            return name in self._load_unlocked()
 
     def names(self) -> list:
         """Return list of secret names (no values)."""
         with self._lock:
-            return list(self.load().keys())
+            return list(self._load_unlocked().keys())
 
     def count(self) -> int:
         """Return total number of stored secrets."""
         with self._lock:
-            return len(self.load())
+            return len(self._load_unlocked())
 
     def clear(self) -> None:
         """Remove all secrets from file."""
         with self._lock:
-            self.save({})
+            self._save_unlocked({})
