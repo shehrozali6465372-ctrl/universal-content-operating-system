@@ -45,21 +45,23 @@ class FileManager:
 
     def read(self, filepath: str, use_cache: bool = True) -> Optional[str]:
         """Read a file safely. Returns None if not found."""
-        full = self._resolve(filepath)
-        if not full.exists():
-            return None
-        if use_cache and self._cache.has(str(full)):
-            return self._cache.get(str(full))
-        content = full.read_text(encoding="utf-8")
-        if use_cache:
-            self._cache.set(str(full), content)
-        return content
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if not full.exists():
+                return None
+            if use_cache and self._cache.has(str(full)):
+                return self._cache.get(str(full))
+            content = full.read_text(encoding="utf-8")
+            if use_cache:
+                self._cache.set(str(full), content)
+            return content
 
     def read_bytes(self, filepath: str) -> Optional[bytes]:
-        full = self._resolve(filepath)
-        if not full.exists():
-            return None
-        return full.read_bytes()
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if not full.exists():
+                return None
+            return full.read_bytes()
 
     # ── Atomic Write ────────────────────────
 
@@ -161,17 +163,18 @@ class FileManager:
 
     def backup(self, filepath: str) -> Optional[str]:
         """Create timestamped backup. Returns backup path."""
-        full = self._resolve(filepath)
-        if not full.exists():
-            return None
-        backup_dir = self._base / "backups"
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if not full.exists():
+                return None
+            backup_dir = self._base / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         backup_name = f"{full.name}.{ts}.bak"
-        backup_path = backup_dir / backup_name
-        shutil.copy2(str(full), str(backup_path))
-        save_hash(str(backup_path))
-        return str(backup_path.relative_to(self._base))
+            backup_path = backup_dir / backup_name
+            shutil.copy2(str(full), str(backup_path))
+            save_hash(str(backup_path))
+            return str(backup_path.relative_to(self._base))
 
     def restore(self, backup_path: str, target_path: str) -> bool:
         """Restore only after verifying the staged payload, with rollback safety."""
@@ -243,48 +246,50 @@ class FileManager:
 
     def compress(self, filepath: str) -> Optional[str]:
         """Gzip compress a file. Returns compressed path."""
-        full = self._resolve(filepath)
-        if not full.exists():
-            return None
-        gz_path = full.with_suffix(full.suffix + ".gz")
-        fd, tmp_name = tempfile.mkstemp(dir=str(gz_path.parent), suffix=".gz.tmp")
-        os.close(fd)
-        try:
-            with open(full, "rb") as f_in:
-                with gzip.open(tmp_name, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            os.replace(tmp_name, str(gz_path))
-        except Exception:
+        with self._global_lock:
+            full = self._resolve(filepath)
+            if not full.exists():
+                return None
+            gz_path = full.with_suffix(full.suffix + ".gz")
+            fd, tmp_name = tempfile.mkstemp(dir=str(gz_path.parent), suffix=".gz.tmp")
+            os.close(fd)
             try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-        return str(gz_path.relative_to(self._base))
+                with open(full, "rb") as f_in:
+                    with gzip.open(tmp_name, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                os.replace(tmp_name, str(gz_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
+            return str(gz_path.relative_to(self._base))
 
     def decompress(self, gz_path: str) -> Optional[str]:
         """Decompress a gz file."""
-        full = self._resolve(gz_path)
-        if not full.exists():
-            return None
-        out_path = full.with_suffix("")
-        fd, tmp_name = tempfile.mkstemp(dir=str(out_path.parent), suffix=".decompress.tmp")
-        os.close(fd)
-        try:
-            with gzip.open(str(full), "rb") as f_in:
-                with open(tmp_name, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-                    f_out.flush()
-                    os.fsync(f_out.fileno())
-            os.replace(tmp_name, str(out_path))
-        except Exception:
+        with self._global_lock:
+            full = self._resolve(gz_path)
+            if not full.exists():
+                return None
+            out_path = full.with_suffix("")
+            fd, tmp_name = tempfile.mkstemp(dir=str(out_path.parent), suffix=".decompress.tmp")
+            os.close(fd)
             try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-        self._cache.invalidate(str(out_path))
-        return str(out_path.relative_to(self._base))
+                with gzip.open(str(full), "rb") as f_in:
+                    with open(tmp_name, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                        f_out.flush()
+                        os.fsync(f_out.fileno())
+                os.replace(tmp_name, str(out_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
+            self._cache.invalidate(str(out_path))
+            return str(out_path.relative_to(self._base))
 
     # ── File Lock ───────────────────────────
 
