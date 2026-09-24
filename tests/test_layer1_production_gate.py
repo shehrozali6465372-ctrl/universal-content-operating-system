@@ -136,3 +136,52 @@ def test_backup_registry_rejects_path_escape(tmp_path):
     (backup_dir / "_registry.json").write_text(json.dumps(registry))
     with pytest.raises(RuntimeError, match="unreadable"):
         BackupManager(str(backup_dir))
+
+
+def test_backup_registry_rejects_key_mismatch(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("safe")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+    entry = bm.backup("test", str(source), compress=False)
+    registry = json.loads((backup_dir / "_registry.json").read_text())
+    payload = registry["entries"].pop(entry.backup_id)
+    registry["entries"]["forged-id"] = payload
+    (backup_dir / "_registry.json").write_text(json.dumps(registry))
+    with pytest.raises(RuntimeError, match="unreadable"):
+        BackupManager(str(backup_dir))
+
+
+def test_backup_copy_failure_leaves_no_partial_artifact(tmp_path, monkeypatch):
+    source = tmp_path / "source.txt"
+    source.write_text("payload")
+    backup_dir = tmp_path / "backups"
+    bm = BackupManager(str(backup_dir))
+
+    def fail_copy(*args, **kwargs):
+        raise OSError("copy failed")
+
+    monkeypatch.setattr("layers.layer01_core.modules.backup_manager.backup_manager.shutil.copy2", fail_copy)
+    with pytest.raises(OSError, match="copy failed"):
+        bm.backup("test", str(source), compress=False)
+
+    assert bm.count() == 0
+    assert list(backup_dir.glob("*.bak")) == []
+    assert list(backup_dir.glob("*.stage")) == []
+
+
+def test_memory_snapshot_rejects_path_escape(tmp_path):
+    from layers.layer01_core.modules.memory_manager import MemoryManager
+    manager = MemoryManager(db_path="memory.db", project_root=str(tmp_path)).initialize()
+    with pytest.raises(ValueError, match="escapes project root"):
+        manager.snapshot("../outside-memory.json")
+    assert not (tmp_path.parent / "outside-memory.json").exists()
+    manager.close()
+
+
+def test_layer13_uninitialized_backend_fails_health():
+    from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
+    backend = PostgreSQLManager()
+    report = backend.health_check()
+    assert report["overall"] == "FAIL"
+    assert report["initialized"] is False

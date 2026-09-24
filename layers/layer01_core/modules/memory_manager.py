@@ -306,7 +306,11 @@ class MemoryManager:
     def snapshot(self, filepath: str = "data/memory_snapshot.json") -> Path:
         """Export all persistent memory to JSON."""
         self._ensure_init()
-        save_path = self._project_root / filepath
+        save_path = (self._project_root / filepath).resolve()
+        try:
+            save_path.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Memory snapshot path escapes project root: {filepath}") from exc
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         with self._lock:
