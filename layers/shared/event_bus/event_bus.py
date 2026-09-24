@@ -134,7 +134,8 @@ class EventBus:
                     )
             except Exception as exc:
                 errors.append(f"{handler.name}: {str(exc)}")
-                self._error_count += 1
+                with self._lock:
+                    self._error_count += 1
 
         with self._lock:
             self._publish_count += 1
@@ -178,10 +179,11 @@ class EventBus:
 
     def get_handler_count(self, event_type: Optional[EventType] = None) -> int:
         """Get number of registered handlers."""
-        if event_type:
-            key = event_type.value if isinstance(event_type, EventType) else event_type
-            return len(self._handlers.get(key, []))
-        return sum(len(handlers) for handlers in self._handlers.values())
+        with self._lock:
+            if event_type:
+                key = event_type.value if isinstance(event_type, EventType) else event_type
+                return len(self._handlers.get(key, []))
+            return sum(len(handlers) for handlers in self._handlers.values())
 
     def get_stats(self) -> Dict[str, Any]:
         """Get bus statistics."""
@@ -196,11 +198,13 @@ class EventBus:
 
     def clear_history(self):
         """Clear event history."""
-        self._history.clear()
+        with self._lock:
+            self._history.clear()
 
     def reset(self):
         """Clear all handlers and history."""
-        self._handlers.clear()
-        self._history.clear()
-        self._publish_count = 0
-        self._error_count = 0
+        with self._lock:
+            self._handlers.clear()
+            self._history.clear()
+            self._publish_count = 0
+            self._error_count = 0
