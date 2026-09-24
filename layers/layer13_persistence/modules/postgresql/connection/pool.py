@@ -111,15 +111,18 @@ class ConnectionPool:
                 return False
 
     def _auto_reconnect(self) -> bool:
-        """Close and re-initialize pool after consecutive failures."""
-        try:
-            if self._pg_available and hasattr(self, '_pg_conn_pool'):
-                self._pg_conn_pool.closeall()
-        except Exception:
-            pass
-        self._initialized = False
-        self._pg_available = None
-        return self.initialize()
+        """Reconnect only when no borrowed connections can be invalidated."""
+        with self._lock:
+            if self._active_conns:
+                return False
+            try:
+                if self._pg_available and hasattr(self, "_pg_conn_pool"):
+                    self._pg_conn_pool.closeall()
+            except Exception:
+                pass
+            self._initialized = False
+            self._pg_available = None
+            return self.initialize()
 
     @contextmanager
     def connection(self):
