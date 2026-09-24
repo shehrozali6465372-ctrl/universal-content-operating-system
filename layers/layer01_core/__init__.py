@@ -109,6 +109,10 @@ class Layer1Runtime:
             raise
 
         self._started = True
+        readiness = self.health_check()
+        if not readiness["ready"]:
+            self.shutdown()
+            raise RuntimeError("Layer 1 startup health check failed; runtime is not ready")
         return self
 
     def health_check(self) -> Dict[str, Any]:
