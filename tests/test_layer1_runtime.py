@@ -73,3 +73,27 @@ def test_production_runtime_contracts_with_real_layer13_postgresql(tmp_path, mon
         assert runtime.health_check()["ready"] is True
     finally:
         runtime.shutdown()
+
+
+class _FailingBackend:
+    def health_check(self):
+        return {"overall": "FAIL", "checks": {"connection": {"status": "FAIL"}}}
+    def close(self):
+        self.closed = True
+
+
+def test_production_start_fails_closed_on_unhealthy_persistence(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "test-page")
+    monkeypatch.setenv("FACEBOOK_ACCESS_TOKEN", "test-token")
+    runtime = Layer1Runtime(project_root=str(tmp_path))
+    import pytest
+    with pytest.raises(RuntimeError, match="startup health check"):
+        runtime.start(
+            profile="production",
+            master_key="runtime-test-master-key",
+            database_backend=_FailingBackend(),
+            memory_backend=_FailingBackend(),
+        )
+    assert runtime.is_ready is False
