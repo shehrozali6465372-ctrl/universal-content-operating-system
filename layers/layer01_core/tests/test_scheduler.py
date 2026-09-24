@@ -397,9 +397,3 @@ def test_failed_task_requires_explicit_replay(tmp_path):
     assert q.replay(tid) is True
     assert q.get(tid).status == TaskStatus.PENDING
     assert q.next_task().task_id == tid
-
-
-def test_successful_task_cannot_be_replayed():
-    q = TaskQueue()
-    tid = q.add(Task(name="done", job_type="d"))
-    q.update_status(tid, TaskStatus.SUCCESS) if False else None
