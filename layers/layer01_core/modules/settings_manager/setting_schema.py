@@ -64,7 +64,7 @@ class SettingEntry:
             "str": str, "int": int, "float": float,
             "bool": bool, "list": list, "dict": dict,
         }
-        return cls(
+        entry = cls(
             key=data["key"],
             value=data["value"],
             default_value=data.get("default_value"),
@@ -74,6 +74,13 @@ class SettingEntry:
             immutable=data.get("immutable", False),
             description=data.get("description", ""),
         )
+        entry.last_changed = data.get("last_changed", entry.last_changed)
+        entry.changed_by = data.get("changed_by", entry.changed_by)
+        version = data.get("version", entry.version)
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ValueError("setting version must be a positive integer")
+        entry.version = version
+        return entry
 
     def validate_value(self, value: Any) -> bool:
         """Run type check and custom validator."""
