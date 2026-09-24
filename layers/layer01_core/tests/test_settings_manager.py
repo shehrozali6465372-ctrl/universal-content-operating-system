@@ -205,6 +205,18 @@ class TestFeatureFlags:
         assert "f1" in flags
         assert "f2" in flags
 
+    def test_flag_rollout_requires_stable_key(self, sm):
+        sm.register_flag("partial", rollout_pct=50)
+        assert sm.is_flag_active("partial") is False
+        assert sm.is_flag_active("partial", {"rollout_key": "user-1"}) == sm.is_flag_active(
+            "partial", {"rollout_key": "user-1"}
+        )
+
+    def test_flag_rollout_rejects_invalid_percentage(self, sm):
+        with pytest.raises(ValueError):
+            sm.register_flag("invalid", rollout_pct=101)
+
+
     def test_flag_rollout_zero(self, sm):
         sm.register_flag("zero_rollout", rollout_pct=0)
         assert not sm.is_flag_active("zero_rollout")
