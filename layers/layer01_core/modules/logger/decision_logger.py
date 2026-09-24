@@ -7,9 +7,11 @@ This is the key differentiator — Agent remembers WHY it made each decision.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+from threading import RLock
 
 
 class DecisionLogger:
@@ -19,6 +21,7 @@ class DecisionLogger:
         self._path = Path(log_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._decisions: List[Dict] = []
+        self._lock = RLock()
 
     def log_decision(
         self,
@@ -41,9 +44,12 @@ class DecisionLogger:
             "data_sources": data_sources,
             "tags": tags or [],
         }
-        self._decisions.append(entry)
-        with open(self._path, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        with self._lock:
+            self._decisions.append(entry)
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
         return entry
 
     def get_decisions(
@@ -112,6 +118,7 @@ class DecisionLogger:
         return counts
 
     def clear(self) -> None:
-        self._decisions.clear()
-        if self._path.exists():
-            self._path.write_text("")
+        with self._lock:
+            self._decisions.clear()
+            if self._path.exists():
+                self._path.write_text("", encoding="utf-8")
