@@ -260,13 +260,26 @@ class TaskQueue:
     def _load(self) -> None:
         if not self._persist_path or not self._persist_path.exists():
             return
-        data = json.loads(self._persist_path.read_text(encoding="utf-8"))
-        for item in data.get("tasks", []):
-            task = Task.from_dict(item)
-            # A process cannot safely resume an in-flight handler after a crash.
-            if task.status == TaskStatus.RUNNING:
-                task.status = TaskStatus.PENDING
-            self._tasks[task.task_id] = task
+        try:
+            data = json.loads(self._persist_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or not isinstance(data.get("tasks", []), list):
+                raise ValueError("task queue persistence must contain a tasks list")
+            loaded = {}
+            for item in data["tasks"]:
+                if not isinstance(item, dict):
+                    raise ValueError("invalid persisted task record")
+                task = Task.from_dict(item)
+                # A process cannot safely resume an in-flight handler after a crash.
+                # Keep the task terminal so a caller must explicitly replay it.
+                if task.status == TaskStatus.RUNNING:
+                    task.status = TaskStatus.FAILED
+                if task.task_id in loaded:
+                    raise ValueError(f"duplicate persisted task id: {task.task_id}")
+                loaded[task.task_id] = task
+            with self._lock:
+                self._tasks = loaded
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise RuntimeError(f"Task queue persistence is unreadable: {self._persist_path}") from exc
 
     def _save(self) -> None:
         if not self._persist_path:
