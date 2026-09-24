@@ -361,7 +361,7 @@ class BackupManager:
 
             for bid in ids_to_remove:
                 entry = self._entries.pop(bid)
-                backup_file = self._backup_dir / entry.filepath
+                backup_file = self._safe_backup_path(entry.filepath)
                 if backup_file.exists():
                     if backup_file.is_dir():
                         shutil.rmtree(str(backup_file))
