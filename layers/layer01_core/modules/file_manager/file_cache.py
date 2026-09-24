@@ -72,5 +72,5 @@ class FileCache:
                 "max_size": self._max_size,
                 "hits": self._hits,
                 "misses": self._misses,
-                "hit_rate": self._hits / total if total else 0.0,
+                "hit_rate": f"{(self._hits / total if total else 0.0):.1%}",
             }
