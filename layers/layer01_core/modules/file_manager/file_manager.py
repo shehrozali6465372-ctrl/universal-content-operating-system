@@ -180,6 +180,8 @@ class FileManager:
             if not bp.exists():
                 return False
             tp = self._resolve(target_path)
+            if bp == tp:
+                raise ValueError("backup and restore target must be different paths")
             ok, expected_hash = verify_hash(str(bp))
             if not ok or expected_hash is None:
                 raise ValueError("Backup integrity verification failed")
