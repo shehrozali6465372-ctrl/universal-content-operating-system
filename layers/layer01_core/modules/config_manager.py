@@ -165,10 +165,11 @@ class ConfigManager:
 
     def all(self) -> Dict[str, Any]:
         """Return a redacted configuration snapshot; raw credentials require explicit get()."""
-        return {
-            key: ("***SECRET***" if self._is_secret_key(key) else value)
-            for key, value in self._config.items()
-        }
+        with self._state_lock:
+            return {
+                key: ("***SECRET***" if self._is_secret_key(key) else value)
+                for key, value in self._config.items()
+            }
 
     @staticmethod
     def _is_secret_key(key: str) -> bool:
@@ -219,6 +220,8 @@ class ConfigManager:
         """Atomically persist non-secret configuration; credential keys are excluded."""
         save_path = self._safe_path(filepath)
         save_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._state_lock:
+            payload = self._safe_persist_config()
         fd, tmp_name = tempfile.mkstemp(
             dir=str(save_path.parent),
             prefix=f".{save_path.name}.",
@@ -226,7 +229,7 @@ class ConfigManager:
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(self._safe_persist_config(), f, indent=2, default=str)
+                json.dump(payload, f, indent=2, default=str)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_name, save_path)
