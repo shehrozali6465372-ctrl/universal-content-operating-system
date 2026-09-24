@@ -244,7 +244,9 @@ class BackupManager:
         if not self.verify_integrity(backup_id):
             raise BackupIntegrityError(f"Integrity check failed for '{backup_id}'")
 
-        target = Path(target_path)
+        target = Path(target_path).resolve()
+        if target == backup_file.resolve():
+            raise ValueError("restore target must differ from backup artifact")
         target.parent.mkdir(parents=True, exist_ok=True)
 
         # Decompress if needed
