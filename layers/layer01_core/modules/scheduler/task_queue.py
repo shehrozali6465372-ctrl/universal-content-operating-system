@@ -59,6 +59,37 @@ class Task:
     conditions: Optional[Dict] = None  # Decision-based conditions
     not_before: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("task name must be a non-empty string")
+        if not isinstance(self.job_type, str) or not self.job_type.strip():
+            raise ValueError("job_type must be a non-empty string")
+        if not isinstance(self.params, dict):
+            raise TypeError("task params must be a dictionary")
+        if not isinstance(self.dependencies, list) or not all(
+            isinstance(dep, str) and dep.strip() for dep in self.dependencies
+        ):
+            raise TypeError("task dependencies must be a list of non-empty strings")
+        if (
+            not isinstance(self.timeout_seconds, int)
+            or isinstance(self.timeout_seconds, bool)
+            or self.timeout_seconds < 1
+        ):
+            raise ValueError("timeout_seconds must be a positive integer")
+        if (
+            not isinstance(self.max_retries, int)
+            or isinstance(self.max_retries, bool)
+            or self.max_retries < 0
+        ):
+            raise ValueError("max_retries must be a non-negative integer")
+        if self.not_before is not None:
+            if not isinstance(self.not_before, str):
+                raise TypeError("not_before must be an ISO-8601 string")
+            try:
+                datetime.fromisoformat(self.not_before)
+            except ValueError as exc:
+                raise ValueError("not_before must be a valid ISO-8601 timestamp") from exc
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name, "job_type": self.job_type,
