@@ -79,10 +79,17 @@ class SettingsEventBus:
 
         # Notify key-specific subscribers
         handlers = []
+        seen = set()
         with self._lock:
-            handlers.extend(self._subscribers.get(event.event_type, []))
-            handlers.extend(self._subscribers.get(event.key, []))
-            handlers.extend(self._global_subscribers)
+            for handler in (
+                self._subscribers.get(event.event_type, [])
+                + self._subscribers.get(event.key, [])
+                + self._global_subscribers
+            ):
+                marker = id(handler)
+                if marker not in seen:
+                    seen.add(marker)
+                    handlers.append(handler)
 
         for handler in handlers:
             try:

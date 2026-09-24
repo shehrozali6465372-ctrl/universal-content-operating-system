@@ -7,6 +7,7 @@ Central logger with 9 levels, structured JSON output, colored console.
 
 import json
 import sys
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
@@ -45,6 +46,14 @@ LOG_COLORS = {
     LogLevel.AUDIT: "\033[94m",      # Blue
 }
 RESET = "\033[0m"
+_SECRET_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH")
+
+def _redact(value):
+    if isinstance(value, dict):
+        return {k: ("***REDACTED***" if any(m in str(k).upper() for m in _SECRET_MARKERS) else _redact(v)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact(v) for v in value]
+    return value
 
 
 class LoggerManager:
@@ -68,6 +77,13 @@ class LoggerManager:
         enable_file: bool = True,
     ):
         if hasattr(self, "_initialized"):
+            # The singleton is process-wide, but the runtime may rebind its
+            # output directory between isolated application contexts/tests.
+            self._log_dir = Path(log_dir)
+            self._log_dir.mkdir(parents=True, exist_ok=True)
+            self._min_level = LogLevel(min_level.upper())
+            self._enable_console = enable_console
+            self._enable_file = enable_file
             return
         self._initialized = True
 
@@ -100,15 +116,14 @@ class LoggerManager:
             "message": message,
         }
         if details:
-            entry["details"] = details
+            entry["details"] = _redact(details)
 
         with self._lock:
             self._entries.append(entry)
-
-        if self._enable_console:
-            self._print_colored(entry)
-        if self._enable_file:
-            self._write_to_file(entry)
+            if self._enable_console:
+                self._print_colored(entry)
+            if self._enable_file:
+                self._write_to_file(entry)
 
         return entry
 
@@ -145,8 +160,13 @@ class LoggerManager:
 
     def _write_to_file(self, entry: Dict) -> None:
         log_file = self._log_dir / "agent.log"
-        with open(log_file, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(_redact(entry), default=str) + "\n")
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
 
     def _print_colored(self, entry: Dict) -> None:
         level = LogLevel(entry["level"])

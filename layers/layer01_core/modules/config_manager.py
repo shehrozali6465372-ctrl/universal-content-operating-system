@@ -7,9 +7,11 @@ Central configuration manager with:
 - Immutable settings protection
 - Config versioning for migration support
 - Schema validation
+- Secret-safe persistence
 """
 
 import os
+import tempfile
 import yaml
 import json
 from pathlib import Path
@@ -29,19 +31,33 @@ from layers.layer01_core.modules.exceptions import (
 
 CONFIG_VERSION = 1
 
+# Values for these keys are credentials and must never be persisted by the
+# configuration plane. Layer 1 SecretsManager is the credential source of truth.
+SECRET_KEYS = frozenset({
+    "OPENAI_API_KEY",
+    "FACEBOOK_ACCESS_TOKEN",
+    "GITHUB_TOKEN",
+    "GITHUB_ACCESS_TOKEN",
+    "MASTER_KEY",
+    "AGENT_MASTER_KEY",
+})
+
 
 class ConfigManager:
     """Singleton config manager with immutable protection and versioning."""
 
-    _instance = None
+    _instances: Dict[tuple, "ConfigManager"] = {}
     _lock = Lock()
 
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
+    def __new__(cls, project_root: Optional[str] = None, admin_mode: bool = False, *args, **kwargs):
+        root = str(Path(project_root).resolve()) if project_root else str(Path(__file__).resolve().parents[3])
+        key = (root, bool(admin_mode))
+        with cls._lock:
+            instance = cls._instances.get(key)
+            if instance is None:
+                instance = super().__new__(cls)
+                cls._instances[key] = instance
+            return instance
 
     def __init__(self, project_root: Optional[str] = None, admin_mode: bool = False):
         if hasattr(self, "_initialized") and self._initialized:
@@ -55,6 +71,14 @@ class ConfigManager:
         self._admin_mode = admin_mode
         self._loaded = False
 
+    def _safe_path(self, value: str) -> Path:
+        candidate = (self._project_root / value).resolve()
+        try:
+            candidate.relative_to(self._project_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Config path escapes project root: {value}") from exc
+        return candidate
+
     @property
     def project_root(self) -> Path:
         return self._project_root
@@ -67,12 +91,10 @@ class ConfigManager:
     def config_version(self) -> int:
         return self._config.get("CONFIG_VERSION", CONFIG_VERSION)
 
-    # ── Loading ─────────────────────────────
-
     def load(self, env_file: str = ".env", yaml_file: str = "config/default.yaml") -> "ConfigManager":
         self._config.clear()
-        self._load_yaml(self._project_root / yaml_file)
-        self._load_env(self._project_root / env_file)
+        self._load_yaml(self._safe_path(yaml_file))
+        self._load_env(self._safe_path(env_file))
 
         defaults = get_defaults()
         for key, value in defaults.items():
@@ -81,16 +103,14 @@ class ConfigManager:
 
         self._apply_env_overrides()
 
-        # Always set config version
         self._config["CONFIG_VERSION"] = CONFIG_VERSION
-
         self._loaded = True
         return self
 
     def _load_yaml(self, yaml_path: Path) -> None:
         if not yaml_path.exists():
             return
-        with open(yaml_path, "r") as f:
+        with open(yaml_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if data and isinstance(data, dict):
             self._flatten_dict(data)
@@ -98,7 +118,7 @@ class ConfigManager:
     def _load_env(self, env_path: Path) -> None:
         if not env_path.exists():
             return
-        with open(env_path, "r") as f:
+        with open(env_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -123,32 +143,43 @@ class ConfigManager:
             else:
                 self._config[full_key] = value
 
-    # ── Access ──────────────────────────────
-
     def get(self, key: str, default: Any = None) -> Any:
         return self._config.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
         """Set config value. Blocked for immutable keys unless admin_mode."""
-        if key in IMMUTABLE_KEYS:
-            if not self._admin_mode:
-                raise InvalidConfig(
-                    key,
-                    f"'{key}' is immutable and cannot be changed at runtime. "
-                    f"Use admin_mode=True to override."
-                )
+        if key in IMMUTABLE_KEYS and not self._admin_mode:
+            raise InvalidConfig(
+                key,
+                f"'{key}' is immutable and cannot be changed at runtime. "
+                f"Use admin_mode=True to override."
+            )
         self._config[key] = value
 
     def has(self, key: str) -> bool:
         return key in self._config
 
     def all(self) -> Dict[str, Any]:
-        return dict(self._config)
+        """Return a redacted configuration snapshot; raw credentials require explicit get()."""
+        return {
+            key: ("***SECRET***" if self._is_secret_key(key) else value)
+            for key, value in self._config.items()
+        }
+
+    @staticmethod
+    def _is_secret_key(key: str) -> bool:
+        terminal = key.upper().rsplit(".", 1)[-1]
+        return (
+            terminal in SECRET_KEYS
+            or terminal.endswith("_API_KEY")
+            or terminal.endswith("_TOKEN")
+            or terminal.endswith("_SECRET")
+            or terminal.endswith("_PASSWORD")
+            or terminal.endswith("_CREDENTIAL")
+        )
 
     def get_immutable_keys(self) -> List[str]:
         return list(IMMUTABLE_KEYS)
-
-    # ── Validation ──────────────────────────
 
     def validate(self) -> List[str]:
         errors = []
@@ -172,17 +203,36 @@ class ConfigManager:
         if errors:
             raise SchemaError(errors)
 
-    # ── Save ────────────────────────────────
+    def _safe_persist_config(self) -> Dict[str, Any]:
+        """Return a persistence-safe snapshot with credential values redacted."""
+        return {
+            key: ("***SECRET***" if self._is_secret_key(key) else value)
+            for key, value in self._config.items()
+        }
 
     def save(self, filepath: str = "config/agent_config.json") -> None:
-        save_path = self._project_root / filepath
+        """Atomically persist non-secret configuration; credentials are redacted."""
+        save_path = self._safe_path(filepath)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, "w") as f:
-            json.dump(self._config, f, indent=2, default=str)
-
-    # ── Reset ───────────────────────────────
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(save_path.parent),
+            prefix=f".{save_path.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self._safe_persist_config(), f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, save_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @classmethod
     def reset(cls) -> None:
         with cls._lock:
-            cls._instance = None
+            cls._instances.clear()

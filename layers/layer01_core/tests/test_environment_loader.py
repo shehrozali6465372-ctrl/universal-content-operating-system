@@ -100,6 +100,12 @@ class TestLoading:
         assert isinstance(result, dict)
         assert "OPENAI_API_KEY" in result
 
+    def test_all_redacts_secret_values(self, loader):
+        loader.load(profile="dev")
+        result = loader.all()
+        assert result["OPENAI_API_KEY"] == "***SECRET***"
+        assert result["FACEBOOK_ACCESS_TOKEN"] == "***SECRET***"
+
 
 # ── Test 3: Override Priority ───────────────
 
@@ -226,3 +232,11 @@ class TestReset:
         assert loader.is_loaded is False
         assert loader.current_profile is None
         assert loader.all() == {}
+
+
+def test_audit_log_path_escape_rejected(tmp_path):
+    with pytest.raises(ValueError, match="audit path escapes"):
+        EnvironmentLoader(
+            project_root=str(tmp_path),
+            audit_log_path="../outside-audit.log",
+        )

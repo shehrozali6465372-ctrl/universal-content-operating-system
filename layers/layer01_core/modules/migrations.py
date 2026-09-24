@@ -17,7 +17,11 @@ class MigrationRegistry:
         self._migrations: List[Dict] = []
 
     def register(self, version: int, description: str, up_sql: str) -> None:
-        """Register a new migration."""
+        """Register a migration exactly once; duplicate versions are invalid."""
+        if not isinstance(version, int) or version < 1:
+            raise ValueError("migration version must be a positive integer")
+        if any(m["version"] == version for m in self._migrations):
+            raise ValueError(f"duplicate migration version: {version}")
         self._migrations.append({
             "version": version,
             "description": description,
@@ -153,36 +157,58 @@ class MigrationManager:
         return self._registry.get_pending(current)
 
     def migrate(self) -> List[int]:
-        """Apply all pending migrations. Returns list of applied versions."""
+        """Apply pending migrations transactionally and in strict version order."""
         applied = []
         pending = self.get_pending_migrations()
-
+        expected = self.get_current_version() + 1
         for migration in pending:
+            version = migration["version"]
+            if version != expected:
+                raise RuntimeError(
+                    f"Migration ordering gap: expected v{expected}, got v{version}"
+                )
             try:
-                self._conn.executescript(migration["up_sql"])
+                self._conn.execute("BEGIN IMMEDIATE")
+                statement = ""
+                for line in migration["up_sql"].splitlines():
+                    statement += line + "\n"
+                    if sqlite3.complete_statement(statement):
+                        sql = statement.strip()
+                        if sql:
+                            self._conn.execute(sql)
+                        statement = ""
+                if statement.strip():
+                    self._conn.execute(statement)
                 self._conn.execute(
                     "INSERT INTO schema_version (version, description) VALUES (?, ?)",
-                    (migration["version"], migration["description"]),
+                    (version, migration["description"]),
                 )
                 self._conn.commit()
-                applied.append(migration["version"])
+                applied.append(version)
+                expected += 1
             except Exception as e:
                 self._conn.rollback()
-                raise RuntimeError(
-                    f"Migration v{migration['version']} failed: {e}"
-                )
-
+                raise RuntimeError(f"Migration v{version} failed; transaction rolled back") from e
         return applied
 
-    def rollback(self, target_version: int) -> None:
-        """Rollback to a specific version (WARNING: may lose data)."""
+    def rollback(self, target_version: int, allow_data_loss: bool = False) -> None:
+        """Rollback only reversible migrations; never fake a rollback by editing metadata."""
         current = self.get_current_version()
         if target_version >= current:
             return
-        self._conn.execute(
-            "DELETE FROM schema_version WHERE version > ?", (target_version,)
+        if target_version < 1:
+            if not allow_data_loss:
+                raise RuntimeError("Rollback below v1 requires explicit allow_data_loss=True")
+            raise RuntimeError("Initial schema rollback is not implemented safely")
+        # v2 is index-only and therefore safely reversible.
+        if current >= 2 and target_version == 1:
+            self._conn.execute("DROP INDEX IF EXISTS idx_memory_category")
+            self._conn.execute("DELETE FROM schema_version WHERE version = 2")
+            self._conn.commit()
+            return
+        raise RuntimeError(
+            f"Rollback from v{current} to v{target_version} is not safely reversible"
         )
-        self._conn.commit()
 
     def migration_history(self) -> List[Dict]:
         """Get history of applied migrations."""

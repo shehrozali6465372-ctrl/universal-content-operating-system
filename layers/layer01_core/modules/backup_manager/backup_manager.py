@@ -7,7 +7,7 @@ Comprehensive data protection:
 - SHA-256 integrity verification
 - Auto backup rotation with retention policy
 - Compression support
-- Encrypted backup support (Fernet)
+- Integrity-verified backup/restore (encryption is owned by deployment/storage policy)
 - Disaster recovery with restore wizard
 - Full audit trail
 """
@@ -15,11 +15,14 @@ Comprehensive data protection:
 import json
 import gzip
 import shutil
+import tempfile
+import os
 import hashlib
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from threading import Lock
+from threading import RLock
 
 from layers.layer01_core.modules.backup_manager.backup_entry import BackupEntry
 from layers.layer01_core.modules.backup_manager.exceptions import (
@@ -43,7 +46,7 @@ class BackupManager:
         self._max_backups = max_backups
         self._default_retention_days = default_retention_days
         self._entries: Dict[str, BackupEntry] = {}
-        self._lock = Lock()
+        self._lock = RLock()
         self._audit_log: List[dict] = []
         self._counter = 0
         self._load_registry()
@@ -51,18 +54,42 @@ class BackupManager:
     # ── Registry Persistence ─────────────────
 
     def _load_registry(self) -> None:
-        if self._registry_path.exists():
-            data = json.loads(self._registry_path.read_text())
-            for key, entry_data in data.get("entries", {}).items():
-                self._entries[key] = BackupEntry.from_dict(entry_data)
-            self._audit_log = data.get("audit_log", [])
+        if not self._registry_path.exists():
+            return
+        try:
+            data = json.loads(self._registry_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("registry must be a JSON object")
+            entries = data.get("entries", {})
+            audit_log = data.get("audit_log", [])
+            if not isinstance(entries, dict) or not isinstance(audit_log, list):
+                raise ValueError("invalid registry structure")
+            for key, entry_data in entries.items():
+                entry = BackupEntry.from_dict(entry_data)
+                self._safe_backup_path(entry.filepath)
+                self._entries[key] = entry
+            self._audit_log = audit_log[-200:]
+        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+            raise RuntimeError(f"Backup registry is unreadable: {self._registry_path}") from exc
 
     def _save_registry(self) -> None:
         data = {
             "entries": {k: v.to_dict() for k, v in self._entries.items()},
             "audit_log": self._audit_log[-200:],
         }
-        self._registry_path.write_text(json.dumps(data, indent=2, default=str))
+        fd, tmp_name = tempfile.mkstemp(dir=str(self._backup_dir), prefix="._registry.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self._registry_path)
+        except Exception:
+            try:
+                Path(tmp_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
 
     def _audit(self, action: str, backup_id: str, details: str = "") -> None:
         entry = {
@@ -74,6 +101,15 @@ class BackupManager:
         self._audit_log.append(entry)
         if len(self._audit_log) > 200:
             self._audit_log = self._audit_log[-200:]
+
+    def _safe_backup_path(self, relative_path: str) -> Path:
+        """Resolve a registry path and require it to remain under backup_dir."""
+        candidate = (self._backup_dir / relative_path).resolve()
+        try:
+            candidate.relative_to(self._backup_dir.resolve())
+        except ValueError as exc:
+            raise ValueError(f"backup path escapes backup directory: {relative_path}") from exc
+        return candidate
 
     # ── Core: Backup ─────────────────────────
 
@@ -88,33 +124,47 @@ class BackupManager:
         if source not in self.BACKUP_SOURCES:
             source = "all"
 
-        self._counter += 1
+        with self._lock:
+            self._counter += 1
+            counter = self._counter
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-        backup_id = f"{source}_{ts}_{self._counter}"
+        backup_id = f"{source}_{ts}_{counter}"
         backup_filename = f"{backup_id}.bak"
         backup_path = self._backup_dir / backup_filename
 
-        # Copy file or directory
+        # Copy first; integrity is recorded from the exact backup payload so
+        # restore verification is independent of concurrent source changes.
         if src.is_file():
             shutil.copy2(str(src), str(backup_path))
         else:
             backup_path = self._backup_dir / f"{backup_id}.dir"
             shutil.copytree(str(src), str(backup_path), dirs_exist_ok=True)
 
-        # Compress if requested
+        # Calculate the hash of the exact uncompressed backup payload.
+        file_hash = self._calculate_hash(backup_path)
+
+        # Compress if requested, using a staged container so a failed
+        # compression never destroys the valid uncompressed backup.
         final_path = backup_path
         is_compressed = False
         if compress and backup_path.is_file():
             gz_path = Path(str(backup_path) + ".gz")
-            with open(backup_path, "rb") as f_in:
-                with gzip.open(str(gz_path), "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            fd, tmp_gz = tempfile.mkstemp(dir=str(self._backup_dir), suffix=".gz.tmp")
+            os.close(fd)
+            try:
+                with open(backup_path, "rb") as f_in:
+                    with gzip.open(str(tmp_gz), "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                os.replace(tmp_gz, str(gz_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_gz)
+                except OSError:
+                    pass
+                raise
             backup_path.unlink()
             final_path = gz_path
             is_compressed = True
-
-        # Calculate hash
-        file_hash = self._calculate_hash(final_path)
         size = self._get_size(final_path)
 
         entry = BackupEntry(
@@ -130,21 +180,23 @@ class BackupManager:
 
         with self._lock:
             self._entries[backup_id] = entry
+            self._audit("CREATE", backup_id, f"source={source}, size={size}")
             self._save_registry()
-
-        self._audit("CREATE", backup_id, f"source={source}, size={size}")
         return entry
 
     def backup_json(self, source: str, data: Any,
                     filename: str = "data.json",
                     description: str = "") -> Optional[BackupEntry]:
-        """Backup in-memory data as JSON file."""
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        temp_path = self._backup_dir / f"_temp_{ts}.json"
-        temp_path.write_text(json.dumps(data, indent=2, default=str))
-        result = self.backup(source, str(temp_path), description=description)
-        temp_path.unlink(missing_ok=True)
-        return result
+        """Backup in-memory JSON data using a safe temporary filename."""
+        safe_name = Path(filename).name
+        if safe_name != filename or safe_name in {"", ".", ".."}:
+            raise ValueError("backup JSON filename must be a single path component")
+        temp_path = self._backup_dir / f"._temp_{uuid.uuid4().hex}_{safe_name}"
+        try:
+            temp_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+            return self.backup(source, str(temp_path), description=description)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     # ── Core: Restore ────────────────────────
 
@@ -155,7 +207,7 @@ class BackupManager:
                 raise BackupNotFoundError(f"Backup '{backup_id}' not found")
             entry = self._entries[backup_id]
 
-        backup_file = self._backup_dir / entry.filepath
+        backup_file = self._safe_backup_path(entry.filepath)
         if not backup_file.exists():
             raise BackupNotFoundError(f"Backup file not found: {entry.filepath}")
 
@@ -167,32 +219,72 @@ class BackupManager:
         target.parent.mkdir(parents=True, exist_ok=True)
 
         # Decompress if needed
-        if entry.compressed:
-            with gzip.open(str(backup_file), "rb") as f_in:
-                with open(str(target), "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        elif backup_file.is_dir():
-            shutil.copytree(str(backup_file), str(target), dirs_exist_ok=True)
-        else:
-            shutil.copy2(str(backup_file), str(target))
+        temp_target = Path(tempfile.mkdtemp(dir=str(target.parent), prefix=".restore-")) / target.name
+        try:
+            if entry.compressed:
+                with gzip.open(str(backup_file), "rb") as f_in:
+                    with open(str(temp_target), "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+            elif backup_file.is_dir():
+                shutil.copytree(str(backup_file), str(temp_target), dirs_exist_ok=True)
+            else:
+                shutil.copy2(str(backup_file), str(temp_target))
 
-        self._audit("RESTORE", backup_id, f"target={target_path}")
+            if self._calculate_hash(temp_target) != entry.hash_sha256:
+                raise BackupIntegrityError(f"Restored payload verification failed for '{backup_id}'")
+
+            displaced = None
+            try:
+                if target.exists():
+                    displaced = target.parent / f".{target.name}.pre-restore-{uuid.uuid4().hex}"
+                    target.replace(displaced)
+                temp_target.replace(target)
+                temp_target = None
+                if displaced is not None:
+                    if displaced.is_dir():
+                        shutil.rmtree(str(displaced))
+                    else:
+                        displaced.unlink()
+            except Exception:
+                if target.exists():
+                    if target.is_dir():
+                        shutil.rmtree(str(target))
+                    else:
+                        target.unlink()
+                if displaced is not None and displaced.exists():
+                    displaced.replace(target)
+                raise
+        finally:
+            shutil.rmtree(str(temp_target.parent), ignore_errors=True) if temp_target is not None else None
+
+        with self._lock:
+            self._audit("RESTORE", backup_id, f"target={target_path}")
+            self._save_registry()
         return True
 
     # ── Integrity ────────────────────────────
 
     def _calculate_hash(self, filepath: Path) -> str:
+        """Hash files or directories deterministically, including file boundaries."""
         sha256 = hashlib.sha256()
         if filepath.is_file():
             with open(filepath, "rb") as f:
                 while chunk := f.read(8192):
                     sha256.update(chunk)
-        else:
-            for f in sorted(filepath.rglob("*")):
-                if f.is_file():
-                    with open(f, "rb") as fh:
-                        while chunk := fh.read(8192):
-                            sha256.update(chunk)
+            return sha256.hexdigest()
+
+        root = filepath.resolve()
+        for f in sorted(root.rglob("*")):
+            if not f.is_file():
+                continue
+            relative = f.relative_to(root).as_posix().encode("utf-8")
+            sha256.update(len(relative).to_bytes(8, "big"))
+            sha256.update(relative)
+            size = f.stat().st_size
+            sha256.update(size.to_bytes(8, "big"))
+            with open(f, "rb") as fh:
+                while chunk := fh.read(8192):
+                    sha256.update(chunk)
         return sha256.hexdigest()
 
     def verify_integrity(self, backup_id: str) -> bool:
@@ -206,7 +298,23 @@ class BackupManager:
         if not backup_file.exists():
             return False
 
-        current_hash = self._calculate_hash(backup_file)
+        if entry.compressed:
+            temp_dir = Path(tempfile.mkdtemp(dir=str(self._backup_dir), prefix=".verify-"))
+            try:
+                temp_file = temp_dir / "payload"
+                try:
+                    with gzip.open(str(backup_file), "rb") as src, open(str(temp_file), "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                except (OSError, EOFError, gzip.BadGzipFile):
+                    return False
+                current_hash = self._calculate_hash(temp_file)
+            finally:
+                shutil.rmtree(str(temp_dir), ignore_errors=True)
+        else:
+            try:
+                current_hash = self._calculate_hash(backup_file)
+            except OSError:
+                return False
         return current_hash == entry.hash_sha256
 
     def verify_all(self) -> Dict[str, bool]:
@@ -288,8 +396,8 @@ class BackupManager:
                     shutil.rmtree(str(backup_file))
                 else:
                     backup_file.unlink()
+            self._audit("DELETE", backup_id)
             self._save_registry()
-        self._audit("DELETE", backup_id)
         return True
 
     def count(self, source: Optional[str] = None) -> int:

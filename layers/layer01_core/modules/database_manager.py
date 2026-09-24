@@ -4,12 +4,15 @@ Layer 1: Core System — Module 4
 """
 
 import sqlite3
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from contextlib import contextmanager
+from threading import RLock, local
 
 from layers.layer01_core.modules.models import get_all_table_names
 from layers.layer01_core.modules.migrations import MigrationManager
@@ -17,12 +20,39 @@ from layers.layer01_core.modules.migrations import MigrationManager
 
 class DatabaseManager:
     def __init__(self, db_path: str = "data/agent.db", project_root: Optional[str] = None):
-        self._project_root = Path(project_root) if project_root else Path.cwd()
-        self._db_path = self._project_root / db_path
+        self._project_root = Path(project_root).resolve() if project_root else None
+        self._db_path = self._safe_path(db_path, "database path")
         self._conn: Optional[sqlite3.Connection] = None
         self._migration_manager: Optional[MigrationManager] = None
         self._initialized = False
-        self._in_transaction = False
+        self._tx_local = local()
+        self._lock = RLock()
+
+    def _safe_path(self, path: str, label: str) -> Path:
+        raw = Path(path)
+        if raw.is_absolute():
+            candidate = raw.resolve()
+            if self._project_root is not None:
+                try:
+                    candidate.relative_to(self._project_root)
+                except ValueError as exc:
+                    raise ValueError(f"{label} escapes project root: {path}") from exc
+            return candidate
+        root = self._project_root or Path.cwd().resolve()
+        candidate = (root / raw).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"{label} escapes project root: {path}") from exc
+        return candidate
+
+    @property
+    def _in_transaction(self) -> bool:
+        return bool(getattr(self._tx_local, "active", False))
+
+    @_in_transaction.setter
+    def _in_transaction(self, value: bool) -> None:
+        self._tx_local.active = bool(value)
 
     @property
     def db_path(self) -> Path:
@@ -33,8 +63,12 @@ class DatabaseManager:
         return self._initialized
 
     def initialize(self) -> "DatabaseManager":
+        if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+            raise RuntimeError(
+                "Layer 1 local SQLite is development/test-only; production persistence is owned by Layer 13 PostgreSQL"
+            )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path))
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
@@ -44,10 +78,11 @@ class DatabaseManager:
         return self
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
-            self._initialized = False
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
+                self._initialized = False
 
     @contextmanager
     def transaction(self):
@@ -55,20 +90,22 @@ class DatabaseManager:
             raise RuntimeError("Database not initialized.")
         old_flag = self._in_transaction
         self._in_transaction = True
-        try:
-            yield self._conn
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        finally:
-            self._in_transaction = old_flag
+        with self._lock:
+            try:
+                yield self._conn
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            finally:
+                self._in_transaction = old_flag
 
     def _run(self, sql: str, params=()):
-        if self._in_transaction:
-            return self._conn.execute(sql, params)
-        with self.transaction():
-            return self._conn.execute(sql, params)
+        with self._lock:
+            if self._in_transaction:
+                return self._conn.execute(sql, params)
+            with self.transaction():
+                return self._conn.execute(sql, params)
 
     _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -77,6 +114,17 @@ class DatabaseManager:
         if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
             raise ValueError(f"unsafe SQL identifier: {value}")
         return value
+
+    @classmethod
+    def _where_clause(cls, where: str) -> str:
+        """Allow only parameterized, identifier-based predicates."""
+        if not isinstance(where, str) or not where.strip():
+            raise ValueError("WHERE clause cannot be empty")
+        atom = r"(?:[A-Za-z_][A-Za-z0-9_]*\s*(?:=|!=|<>|<=|>=|<|>|LIKE)\s*\?|[A-Za-z_][A-Za-z0-9_]*\s+IS(?:\s+NOT)?\s+NULL|[0-9]+\s*=\s*[0-9]+)"
+        pattern = rf"^\s*{atom}(?:\s+(?:AND|OR)\s+{atom})*\s*$"
+        if not re.fullmatch(pattern, where, flags=re.IGNORECASE):
+            raise ValueError("unsafe or unsupported SQL WHERE clause")
+        return where
 
     # ── CRUD ────────────────────────────────
 
@@ -106,57 +154,109 @@ class DatabaseManager:
 
     def query(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         self._ensure_init()
-        return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
 
     def query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         self._ensure_init()
-        row = self._conn.execute(sql, params).fetchone()
-        return dict(row) if row else None
+        with self._lock:
+            row = self._conn.execute(sql, params).fetchone()
+            return dict(row) if row else None
 
     def update(self, table: str, data: Dict[str, Any], where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
         sets = ", ".join(f"{self._identifier(k)} = ?" for k in data)
-        cur = self._run(f"UPDATE {table} SET {sets} WHERE {where}", list(data.values()) + list(where_params))
+        cur = self._run(f"UPDATE {table} SET {sets} WHERE {self._where_clause(where)}", list(data.values()) + list(where_params))
         return cur.rowcount
 
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
-        cur = self._run(f"DELETE FROM {table} WHERE {where}", where_params)
+        cur = self._run(f"DELETE FROM {table} WHERE {self._where_clause(where)}", where_params)
         return cur.rowcount
 
     def count(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         self._ensure_init()
         table = self._identifier(table)
-        return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {where}", params).fetchone()["c"]
+        with self._lock:
+            return self._conn.execute(f"SELECT COUNT(*) as c FROM {table} WHERE {self._where_clause(where)}", params).fetchone()["c"]
 
     def table_exists(self, name: str) -> bool:
         self._ensure_init()
         name = self._identifier(name)
-        return self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+        with self._lock:
+            return self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
     def get_tables(self) -> List[str]:
         self._ensure_init()
-        return [r["name"] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'schema_version'").fetchall()]
+        with self._lock:
+            return [r["name"] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'schema_version'").fetchall()]
 
     # ── Backup & Restore ────────────────────
 
     def backup(self, backup_path: str) -> Path:
         self._ensure_init()
-        dest = self._project_root / backup_path
+        dest = self._safe_path(backup_path, "backup path")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(dest)) as bc:
-            self._conn.backup(bc)
+        with self._lock:
+            with sqlite3.connect(str(dest)) as bc:
+                self._conn.backup(bc)
         return dest
 
     def restore(self, backup_path: str) -> None:
-        bf = Path(backup_path) if Path(backup_path).is_absolute() else self._project_root / backup_path
-        if not bf.exists():
+        """Atomically replace the live DB after validating the backup."""
+        bf = self._safe_path(backup_path, "backup path")
+        if not bf.exists() or not bf.is_file():
             raise FileNotFoundError(f"Backup not found: {backup_path}")
-        self.close()
-        shutil.copy2(str(bf), str(self._db_path))
-        self.initialize()
+        try:
+            with sqlite3.connect(str(bf)) as check_conn:
+                if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise RuntimeError("Backup integrity check failed")
+        except sqlite3.DatabaseError as exc:
+            raise RuntimeError("Backup integrity check failed") from exc
+        with self._lock:
+            was_initialized = self._initialized
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+                self._initialized = False
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, staged_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".restore.tmp")
+            os.close(fd)
+            staged = Path(staged_name)
+            old_name = None
+            try:
+                shutil.copy2(str(bf), str(staged))
+                with sqlite3.connect(str(staged)) as check_conn:
+                    if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                        raise RuntimeError("Staged backup integrity check failed")
+                if self._db_path.exists():
+                    fd, old_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".pre_restore.tmp")
+                    os.close(fd)
+                    os.replace(str(self._db_path), old_name)
+                os.replace(str(staged), str(self._db_path))
+                staged = None
+                if was_initialized or self._conn is None:
+                    try:
+                        self.initialize()
+                    except Exception:
+                        if self._db_path.exists():
+                            os.unlink(self._db_path)
+                        if old_name and os.path.exists(old_name):
+                            os.replace(old_name, str(self._db_path))
+                        self.initialize()
+                        raise
+                if old_name and os.path.exists(old_name):
+                    os.unlink(old_name)
+            except Exception:
+                if staged and staged.exists():
+                    staged.unlink()
+                if old_name and os.path.exists(old_name) and not self._db_path.exists():
+                    os.replace(old_name, str(self._db_path))
+                if was_initialized and not self._initialized:
+                    self.initialize()
+                raise
 
     # ── Health Check ────────────────────────
 
@@ -164,10 +264,13 @@ class DatabaseManager:
         report = {"timestamp": datetime.now(timezone.utc).isoformat(), "checks": {}, "overall": "PASS"}
         try:
             self._ensure_init()
-            self._conn.execute("SELECT 1")
+            with self._lock:
+                self._conn.execute("SELECT 1")
             report["checks"]["connection"] = {"status": "PASS", "message": "Connected"}
         except Exception as e:
             report["checks"]["connection"] = {"status": "FAIL", "message": str(e)}
+            report["overall"] = "FAIL"
+            return report
 
         expected = set(get_all_table_names())
         missing = expected - set(self.get_tables())

@@ -13,9 +13,10 @@ Task Orchestrator with:
 
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone
-from threading import Event
+from threading import Event, RLock
 
 from layers.layer01_core.modules.scheduler.task_queue import (
     Task, TaskQueue, TaskPriority, TaskStatus,
@@ -27,19 +28,24 @@ from layers.layer01_core.modules.scheduler.cron_parser import CronParser
 class SchedulerManager:
     """Task Orchestrator with decision-based scheduling."""
 
-    def __init__(self):
-        self._queue = TaskQueue()
-        self._retry_manager = RetryManager()
+    def __init__(self, queue_persist_path: Optional[str] = None, retry_persist_path: Optional[str] = None):
+        self._queue = TaskQueue(persist_path=queue_persist_path)
+        self._retry_manager = RetryManager(persist_path=retry_persist_path)
         self._handlers: Dict[str, Callable] = {}
         self._history: List[Dict] = []
         self._cron_jobs: Dict[str, Dict] = {}
         self._running = False
         self._stop_event = Event()
+        self._lock = RLock()
+        self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="layer1-task")
 
     # ── Job Registration ────────────────────
 
     def register_handler(self, job_type: str, handler: Callable) -> None:
-        self._handlers[job_type] = handler
+        if not job_type or not callable(handler):
+            raise ValueError("job_type and callable handler are required")
+        with self._lock:
+            self._handlers[job_type] = handler
 
     # ── Add Jobs ────────────────────────────
 
@@ -76,18 +82,19 @@ class SchedulerManager:
         """Add a recurring cron-based job."""
         parser = CronParser(cron_expr)
         task_id = self.add_task(name, job_type, params=params)
-        self._cron_jobs[task_id] = {
-            "name": name,
-            "cron": parser,
-            "job_type": job_type,
-            "params": params or {},
-            "last_run": None,
-        }
+        with self._lock:
+            self._cron_jobs[task_id] = {
+                "name": name,
+                "cron": parser,
+                "job_type": job_type,
+                "params": params or {},
+                "last_run": None,
+            }
         return task_id
 
     # ── Execution ───────────────────────────
 
-    def run_task(self, task: Task) -> Dict[str, Any]:
+    def run_task(self, task: Task, _claimed: bool = False) -> Dict[str, Any]:
         """Execute a single task. Returns result dict."""
         result = {
             "task_id": task.task_id,
@@ -98,6 +105,11 @@ class SchedulerManager:
             "duration_ms": 0,
             "started_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        if not _claimed and not self._queue.claim(task.task_id):
+            result["status"] = "SKIPPED"
+            result["error"] = "Task is not pending or has already been claimed"
+            return result
 
         # Check conditions
         if task.conditions and not self._check_conditions(task.conditions):
@@ -117,14 +129,29 @@ class SchedulerManager:
 
         start_time = time.time()
         try:
-            handler(task.params)
+            future = self._executor.submit(handler, task.params)
+            future.result(timeout=max(1, task.timeout_seconds))
             result["status"] = "SUCCESS"
             self._queue.update_status(task.task_id, TaskStatus.SUCCESS)
             self._retry_manager.record_success(task.task_id)
+        except FutureTimeoutError:
+            result["error"] = f"Task timed out after {task.timeout_seconds}s"
+            cancelled = future.cancel()
+            retry_info = self._retry_manager.record_failure(task.task_id)
+            # A running Python thread cannot be safely killed. Retrying it could duplicate side effects.
+            if cancelled and self._retry_manager.should_retry(task.task_id, task.max_retries):
+                result["status"] = "RETRY"
+                result["retry"] = retry_info
+                task.not_before = retry_info["next_retry_at"]
+                self._queue.update_status(task.task_id, TaskStatus.PENDING)
+            else:
+                result["status"] = "FAILED"
+                if not cancelled:
+                    result["error"] += "; retry suppressed because handler is still running"
+                self._queue.update_status(task.task_id, TaskStatus.FAILED)
         except Exception as e:
-            result["error"] = str(e)
-            result["traceback"] = traceback.format_exc()
-
+            result["error"] = str(e)[:500]
+            result["traceback"] = traceback.format_exc(limit=5)
             retry_info = self._retry_manager.record_failure(task.task_id)
             if self._retry_manager.should_retry(task.task_id, task.max_retries):
                 result["status"] = "RETRY"
@@ -162,7 +189,7 @@ class SchedulerManager:
         task = self._queue.next_task()
         if task is None:
             return None
-        return self.run_task(task)
+        return self.run_task(task, _claimed=True)
 
     def run_all(self) -> List[Dict[str, Any]]:
         """Run all pending tasks."""
@@ -173,17 +200,21 @@ class SchedulerManager:
                 break
             results.append(result)
             if result["status"] == "RETRY":
-                time.sleep(1)
+                delay = result.get("retry", {}).get("delay_seconds", 1)
+                self._stop_event.wait(min(delay, 300))
         return results
 
     def _record_history(self, task: Task, result: Dict) -> None:
-        self._history.append({
-            "task_id": task.task_id,
-            "name": task.name,
-            "status": result["status"],
-            "duration_ms": result["duration_ms"],
-            "timestamp": result["started_at"],
-        })
+        with self._lock:
+            self._history.append({
+                "task_id": task.task_id,
+                "name": task.name,
+                "status": result["status"],
+                "duration_ms": result["duration_ms"],
+                "timestamp": result["started_at"],
+            })
+            if len(self._history) > 10000:
+                del self._history[:-10000]
 
     # ── Cron Processing ─────────────────────
 
@@ -191,7 +222,9 @@ class SchedulerManager:
         """Check and run due cron jobs."""
         results = []
         now = datetime.now()
-        for job_id, job in self._cron_jobs.items():
+        with self._lock:
+            jobs = list(self._cron_jobs.items())
+        for job_id, job in jobs:
             last_run = job.get("last_run")
             if last_run:
                 # Convert string back to datetime if needed
@@ -203,16 +236,28 @@ class SchedulerManager:
             # Check if we're within 1 minute of the next run
             time_diff = abs((now - next_run).total_seconds())
             if time_diff < 60 and (last_run is None or next_run > last_run):
-                task = Task(
-                    name=job["name"],
-                    job_type=job["job_type"],
+                scheduled_name = f"{job['name']}@{next_run.isoformat()}"
+                task_id = self.add_task(
+                    scheduled_name,
+                    job["job_type"],
                     params=job["params"],
                 )
-                result = self.run_task(task)
-                job["last_run"] = now
-                results.append(result)
+                task = self._queue.get(task_id)
+                if task is not None:
+                    result = self.run_task(task)
+                    results.append(result)
+                with self._lock:
+                    current = self._cron_jobs.get(job_id)
+                    if current is not None:
+                        current["last_run"] = next_run
 
         return results
+
+    def shutdown(self, wait: bool = True) -> None:
+        """Stop scheduling and release worker resources."""
+        self._stop_event.set()
+        self._running = False
+        self._executor.shutdown(wait=wait, cancel_futures=True)
 
     # ── Query ───────────────────────────────
 
@@ -220,7 +265,10 @@ class SchedulerManager:
         return self._queue.get(task_id)
 
     def get_history(self, limit: int = 50) -> List[Dict]:
-        return self._history[-limit:]
+        if not isinstance(limit, int) or limit < 1:
+            raise ValueError("history limit must be positive")
+        with self._lock:
+            return list(self._history[-min(limit, 10000):])
 
     def get_queue_stats(self) -> Dict[str, Any]:
         return {

@@ -96,6 +96,33 @@ class TestTaskQueue:
         assert q.pending_count == 2
         assert q.total_count == 2
 
+    def test_next_task_atomically_claims(self):
+        q = TaskQueue()
+        tid = q.add(Task(name="once", job_type="d"))
+        first = q.next_task()
+        second = q.next_task()
+        assert first.task_id == tid
+        assert second is None
+        assert q.get(tid).status == TaskStatus.RUNNING
+
+    def test_claim_rejects_unmet_dependency(self):
+        q = TaskQueue()
+        dep_id = q.add(Task(name="dependency", job_type="d"))
+        task_id = q.add(Task(name="dependent", job_type="d", dependencies=[dep_id]))
+        assert q.claim(task_id) is False
+        assert q.get(task_id).status == TaskStatus.PENDING
+
+    def test_claim_rejects_future_retry(self):
+        q = TaskQueue()
+        future = datetime.now().astimezone().replace(microsecond=0)
+        from datetime import timedelta
+        task_id = q.add(Task(
+            name="future", job_type="d",
+            not_before=(future + timedelta(minutes=5)).isoformat(),
+        ))
+        assert q.claim(task_id) is False
+        assert q.get(task_id).status == TaskStatus.PENDING
+
 
 # ── Test 3: Retry Manager ──────────────────
 
@@ -187,6 +214,15 @@ class TestSchedulerManager:
         scheduler.add_task("orphan", "nonexistent_type")
         result = scheduler.run_next()
         assert result["status"] == "FAILED"
+
+    def test_direct_run_task_does_not_double_claim(self, scheduler):
+        scheduler.register_handler("once", lambda p: None)
+        tid = scheduler.add_task("once_job", "once")
+        task = scheduler.get_task(tid)
+        first = scheduler.run_task(task)
+        second = scheduler.run_task(task)
+        assert first["status"] == "SUCCESS"
+        assert second["status"] == "SKIPPED"
 
     def test_decision_conditions(self, scheduler):
         scheduler.register_handler("cond", lambda p: None)

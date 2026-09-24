@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 """
 Tests for File Manager Module
 Layer 1: Core System — Module 8
@@ -59,6 +60,15 @@ class TestAtomicWrite:
         fm.write("verified.txt", "data", verify=True)
         assert (fm._base / "verified.txt.sha256").exists()
 
+    def test_write_invalidates_stale_hash_metadata(self, fm):
+        fm.save_and_verify("verified.txt", "version1")
+        assert (fm._base / "verified.txt.sha256").exists()
+        fm.write("verified.txt", "version2", create_backup=False)
+        assert not (fm._base / "verified.txt.sha256").exists()
+        match, current = fm.verify_hash("verified.txt")
+        assert match is False
+        assert current is None
+
     def test_append(self, fm):
         fm.write("log.txt", "line1\n")
         fm.append("log.txt", "line2\n")
@@ -74,6 +84,14 @@ class TestFileOps:
         fm.write("src.txt", "copy me")
         fm.copy("src.txt", "dst.txt")
         assert fm.read("dst.txt") == "copy me"
+
+    def test_copy_preserves_hash_sidecar_and_invalidates_cache(self, fm):
+        fm.save_and_verify("src.txt", "copy me")
+        assert fm.read("src.txt") == "copy me"
+        fm.copy("src.txt", "dst.txt")
+        assert fm.read("dst.txt") == "copy me"
+        match, _ = fm.verify_hash("dst.txt")
+        assert match is True
 
     def test_move(self, fm):
         fm.write("before.txt", "moving")
@@ -118,6 +136,15 @@ class TestBackupRestore:
         fm.restore(backup_path, "restoreme.txt")
         assert fm.read("restoreme.txt") == "original"
 
+    def test_restore_rejects_tampered_backup(self, fm):
+        fm.write("protected.txt", "original")
+        backup_path = fm.backup("protected.txt")
+        backup = fm._base / backup_path
+        backup.write_text("tampered")
+        with pytest.raises(ValueError, match="integrity"):
+            fm.restore(backup_path, "protected.txt")
+        assert fm.read("protected.txt", use_cache=False) == "original"
+
 
 # ── Test 5: Hash Verification ──────────────
 
@@ -144,6 +171,12 @@ class TestHashVerification:
         (fm._base / "tampered.txt").write_text("modified")
         match, _ = fm.verify_hash("tampered.txt")
         assert match is False
+
+    def test_verify_missing_metadata_fails_closed(self, fm):
+        fm.write("unverified.txt", "content", create_backup=False)
+        match, current = fm.verify_hash("unverified.txt")
+        assert match is False
+        assert current is None
 
     def test_string_hash(self):
         h = calculate_string_hash("test")
@@ -256,3 +289,32 @@ class TestHealthCheck:
         fm.backup("bk.txt")
         report = fm.health_check()
         assert "backups" in report["checks"]
+
+
+def test_path_escape_is_rejected(tmp_path):
+    manager = FileManager(base_path=str(tmp_path / "files"))
+    manager.write("inside.txt", "ok", create_backup=False)
+    with pytest.raises(ValueError, match="escapes FileManager base directory"):
+        manager.write("../outside.txt", "blocked", create_backup=False)
+
+
+def test_import_csv_handles_quoted_commas_and_newlines(fm):
+    fm.write("quoted.csv", 'name,notes\n"Ali, Jr.","hello, world"\n"Sara","line1\\nline2"\n', create_backup=False)
+    rows = fm.import_csv("quoted.csv")
+    assert rows[0]["name"] == "Ali, Jr."
+    assert rows[0]["notes"] == "hello, world"
+
+
+def test_list_files_rejects_nested_glob(fm):
+    with pytest.raises(ValueError):
+        fm.list_files(".", "../*")
+
+
+def test_concurrent_writes_are_serialized(fm):
+    def do_write(i):
+        fm.write("concurrent.txt", f"payload-{i}", create_backup=False)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(do_write, range(32)))
+    value = fm.read("concurrent.txt", use_cache=False)
+    assert value is not None
+    assert value.startswith("payload-")

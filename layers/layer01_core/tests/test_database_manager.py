@@ -73,6 +73,12 @@ class TestMigrations:
         pending_after_v1 = registry.get_pending(1)
         assert len(pending_after_v1) == 1
 
+    def test_migration_registry_rejects_duplicate_versions(self):
+        registry = MigrationRegistry()
+        registry.register(1, "First", "CREATE TABLE t1 (id INTEGER PRIMARY KEY);")
+        with pytest.raises(ValueError, match="duplicate migration version"):
+            registry.register(1, "Duplicate", "CREATE TABLE t2 (id INTEGER PRIMARY KEY);")
+
 
 # ── Test 3: Insert ─────────────────────────
 
@@ -233,3 +239,32 @@ class TestStats:
         assert stats["tables"] >= 8
         assert stats["total_rows"] >= 1
         assert stats["db_size_kb"] >= 0
+
+
+def test_health_check_uninitialized_fails_cleanly():
+    manager = DatabaseManager()
+    report = manager.health_check()
+    assert report["overall"] == "FAIL"
+    assert report["checks"]["connection"]["status"] == "FAIL"
+
+
+def test_restore_rejects_path_escape(db, tmp_path):
+    with pytest.raises(ValueError):
+        db.restore(str(tmp_path.parent / "outside.db"))
+
+
+def test_restore_rejects_corrupt_backup_without_touching_live_db(db, tmp_path):
+    db.insert("agent_config", {"key": "keep", "value": "live"})
+    corrupt = tmp_path / "corrupt.db"
+    corrupt.write_bytes(b"not a sqlite database")
+    with pytest.raises(RuntimeError):
+        db.restore(str(corrupt))
+    row = db.query_one("SELECT value FROM agent_config WHERE key = ?", ("keep",))
+    assert row["value"] == "live"
+
+def test_where_clause_rejects_injection(db):
+    db.insert("agent_config", {"key": "safe", "value": "x"})
+    with pytest.raises(ValueError):
+        db.count("agent_config", "key = ? OR 1=1 --", ("safe",))
+    with pytest.raises(ValueError):
+        db.delete("agent_config", "key = ?; DELETE FROM agent_config", ("safe",))
