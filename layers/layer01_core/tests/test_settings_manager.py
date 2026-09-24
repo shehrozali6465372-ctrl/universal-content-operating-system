@@ -342,6 +342,15 @@ class TestEventSystem:
         assert count >= 1
         assert sm_prepopulated.events.get_event_log() == []
 
+    def test_subscriber_failure_is_logged(self, sm_prepopulated, caplog):
+        def broken(_event):
+            raise RuntimeError("subscriber boom")
+        sm_prepopulated.events.subscribe("setting_changed", broken)
+        with caplog.at_level("ERROR"):
+            sm_prepopulated.set("LOG_LEVEL", "DEBUG")
+        assert "Settings event subscriber failed" in caplog.text
+
+
     def test_subscriber_count(self, sm_prepopulated):
         sm_prepopulated.events.subscribe("setting_changed", lambda e: None)
         sm_prepopulated.events.subscribe_all(lambda e: None)
