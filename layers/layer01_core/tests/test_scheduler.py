@@ -112,6 +112,40 @@ class TestTaskQueue:
         assert q.claim(task_id) is False
         assert q.get(task_id).status == TaskStatus.PENDING
 
+    def test_task_rejects_naive_not_before(self):
+        with pytest.raises(ValueError, match="timezone offset"):
+            Task(name="naive", job_type="d", not_before="2026-01-01T00:00:00")
+
+    def test_task_rejects_non_serializable_params(self):
+        with pytest.raises(TypeError, match="JSON-serializable"):
+            Task(name="bad", job_type="d", params={"value": object()})
+
+    def test_cron_persists_across_restart(self, tmp_path):
+        queue_path = tmp_path / "queue.json"
+        retry_path = tmp_path / "retry.json"
+        cron_path = tmp_path / "cron.json"
+        first = SchedulerManager(
+            queue_persist_path=str(queue_path),
+            retry_persist_path=str(retry_path),
+            cron_persist_path=str(cron_path),
+        )
+        first.register_handler("noop", lambda _: None)
+        first.add_cron_job("persisted", "*/5 * * * *", "noop", params={"x": 1})
+        first.shutdown()
+
+        second = SchedulerManager(
+            queue_persist_path=str(queue_path),
+            retry_persist_path=str(retry_path),
+            cron_persist_path=str(cron_path),
+        )
+        try:
+            assert len(second._cron_jobs) == 1
+            job = next(iter(second._cron_jobs.values()))
+            assert job["cron_expr"] == "*/5 * * * *"
+            assert job["params"] == {"x": 1}
+        finally:
+            second.shutdown()
+
     def test_claim_rejects_future_retry(self):
         q = TaskQueue()
         future = datetime.now().astimezone().replace(microsecond=0)
