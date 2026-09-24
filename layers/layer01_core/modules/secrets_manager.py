@@ -36,6 +36,8 @@ from threading import RLock
 
 try:
     from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     FERNET_AVAILABLE = True
 except ImportError:
     FERNET_AVAILABLE = False
@@ -87,8 +89,10 @@ class SecretsManager:
             )
 
         self._master_key = master_key
-        derived_key = base64.urlsafe_b64encode(master_key.encode().ljust(32, b"\0")[:32])
-        self._fernet = Fernet(derived_key)
+        self._legacy_fernet = Fernet(
+            base64.urlsafe_b64encode(master_key.encode().ljust(32, b"\0")[:32])
+        )
+        self._fernet = None
 
         self._audit.log("SYSTEM", "HEALTH_CHECK", "SUCCESS", "SecretsManager initialized")
         return self
@@ -99,25 +103,42 @@ class SecretsManager:
 
     # ── Encryption ──────────────────────────
 
-    def encrypt(self, value: str) -> str:
-        """Encrypt a plaintext value."""
+    def _derive_v2_fernet(self, salt: bytes) -> "Fernet":
+        """Derive a Fernet key from the master key using a per-secret salt."""
         self._ensure_setup()
-        encrypted = self._fernet.encrypt(value.encode())
-        return encrypted.decode()
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=600_000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(self._master_key.encode("utf-8")))
+        return Fernet(key)
+
+    def encrypt(self, value: str) -> str:
+        """Encrypt using versioned, salted key derivation."""
+        self._ensure_setup()
+        salt = os.urandom(16)
+        encrypted = self._derive_v2_fernet(salt).encrypt(value.encode("utf-8"))
+        return "v2:" + base64.urlsafe_b64encode(salt).decode("ascii") + ":" + encrypted.decode("ascii")
 
     def decrypt(self, encrypted_value: str) -> str:
-        """Decrypt an encrypted value."""
+        """Decrypt v2 values and legacy pre-v2 Fernet values."""
         self._ensure_setup()
-        decrypted = self._fernet.decrypt(encrypted_value.encode())
-        return decrypted.decode()
+        if encrypted_value.startswith("v2:"):
+            parts = encrypted_value.split(":", 2)
+            if len(parts) != 3:
+                raise ValueError("Malformed v2 secret")
+            salt = base64.urlsafe_b64decode(parts[1].encode("ascii"))
+            return self._derive_v2_fernet(salt).decrypt(parts[2].encode("ascii")).decode("utf-8")
+        return self._legacy_fernet.decrypt(encrypted_value.encode("ascii")).decode("utf-8")
 
     def is_encrypted(self, value: str) -> bool:
-        """Check if a value is already encrypted (Fernet format)."""
+        """Check whether a value is decryptable as a managed secret."""
         if not FERNET_AVAILABLE:
             return False
         try:
-            self._ensure_setup()
-            self._fernet.decrypt(value.encode())
+            self.decrypt(value)
             return True
         except Exception:
             return False
@@ -128,10 +149,7 @@ class SecretsManager:
         """Store a secret (encrypts if plaintext)."""
         with self._lock:
             self._ensure_setup()
-            if self.is_encrypted(value):
-                encrypted = value
-            else:
-                encrypted = self.encrypt(value)
+            encrypted = self.encrypt(value)
             self._key_store.add(name, encrypted)
             self._audit.log(name, "CREATED", "SUCCESS")
 
@@ -199,7 +217,7 @@ class SecretsManager:
 
     # ── Health Check ────────────────────────
 
-    def health_check(self) -> Dict[str, any]:
+    def health_check(self) -> Dict[str, object]:
         """
         Run full health check:
         1. Master key present?
