@@ -199,9 +199,10 @@ class TestSave:
         assert saved["MY_KEY"] == "my_value"
         assert "***SECRET***" not in saved["MY_KEY"]
         assert saved["CONFIG_VERSION"] == CONFIG_VERSION
-        assert saved["OPENAI_API_KEY"] == "***SECRET***"
-        assert saved["FACEBOOK_ACCESS_TOKEN"] == "***SECRET***"
+        assert "OPENAI_API_KEY" not in saved
+        assert "FACEBOOK_ACCESS_TOKEN" not in saved
         assert "sk-super-secret" not in (tmp_path / "config" / "agent_config.json").read_text()
+        assert "fb-super-secret" not in (tmp_path / "config" / "agent_config.json").read_text()
 
     def test_save_replaces_atomically(self, tmp_path):
         config = ConfigManager(project_root=tmp_path).load()
@@ -220,4 +221,4 @@ def test_save_redacts_unlisted_credential_shaped_keys(tmp_path):
     cm.save("config/safe.json")
     raw = (tmp_path / "config" / "safe.json").read_text()
     assert "synthetic-secret" not in raw
-    assert "***SECRET***" in raw
+    assert "STRIPE_API_KEY" not in raw
