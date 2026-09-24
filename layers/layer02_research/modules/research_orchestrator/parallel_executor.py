@@ -11,6 +11,8 @@ Manages parallel execution of independent modules:
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set
 
+from layers.layer02_research.modules.research_planner.exceptions import DependencyError
+
 from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
 
 
@@ -57,11 +59,28 @@ class ParallelExecutor:
         for module in module_order:
             graph.add_node(module)
 
+        module_set = set(module_order)
+        if len(module_set) != len(module_order):
+            raise DependencyError("module_order contains duplicate module names")
+
         if dependencies:
+            unknown_modules = set(dependencies) - module_set
+            if unknown_modules:
+                raise DependencyError(
+                    f"Dependencies declared for unknown modules: {sorted(unknown_modules)}"
+                )
             for module, deps in dependencies.items():
+                unknown_deps = set(deps) - module_set
+                if unknown_deps:
+                    raise DependencyError(
+                        f"Module '{module}' depends on unknown modules: {sorted(unknown_deps)}"
+                    )
                 for dep in deps:
-                    if dep in module_order and module in module_order:
-                        graph.add_edge(dep, module)
+                    if dep == module:
+                        raise DependencyError(
+                            f"Module '{module}' cannot depend on itself"
+                        )
+                    graph.add_edge(dep, module)
 
         waves: List[List[str]] = []
         completed: Set[str] = set()
@@ -69,12 +88,10 @@ class ParallelExecutor:
         while len(completed) < len(module_order):
             ready = graph.get_ready_nodes(completed)
             if not ready:
-                # Remaining modules have unresolvable deps; add them individually
                 remaining = [m for m in module_order if m not in completed]
-                for m in remaining:
-                    waves.append([m])
-                    completed.add(m)
-                break
+                raise DependencyError(
+                    f"Dependency cycle detected among modules: {remaining}"
+                )
 
             waves.append(ready)
             completed.update(ready)
