@@ -95,6 +95,9 @@ class EventBus:
     def subscriber_count(self) -> int:
         return sum(len(handlers) for handlers in self._handlers.values())
 
+    def unsubscribe_all(self, callback: Callable[[Event], Any]) -> bool:
+        return self.remove_callback(callback)
+
     def publish(self, event: Event) -> Dict[str, Any]:
         """Publish an event to all subscribed handlers."""
         key = event.event_type.value if isinstance(event.event_type, EventType) else event.event_type
