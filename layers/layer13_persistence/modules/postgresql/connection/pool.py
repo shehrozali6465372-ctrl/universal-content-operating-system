@@ -166,9 +166,12 @@ class ConnectionPool:
                     self._active_conns = max(0, self._active_conns - 1)
 
     def _execute_with_retry(self, fn, *args, **kwargs):
-        """Execute a function with retry + auto-reconnect."""
+        """Execute a function with bounded retry attempts."""
+        max_attempts = self._config.max_retries
+        if not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or max_attempts < 1:
+            raise ValueError("max_retries must be a positive integer")
         last_error = None
-        for attempt in range(self._config.max_retries):
+        for attempt in range(max_attempts):
             try:
                 result = fn(*args, **kwargs)
                 self._consecutive_failures = 0
@@ -180,12 +183,12 @@ class ConnectionPool:
                 self._total_retries += 1
                 self._last_error = str(exc)
 
-                if attempt < self._config.max_retries - 1:
+                if attempt < max_attempts - 1:
                     delay = self._config.retry_delays[min(attempt, len(self._config.retry_delays) - 1)]
                     time.sleep(delay)
 
                 # Auto-reconnect after max retries
-                if attempt == self._config.max_retries - 1 and self._consecutive_failures >= 3:
+                if attempt == max_attempts - 1 and self._consecutive_failures >= 3:
                     self._auto_reconnect()
                     try:
                         result = fn(*args, **kwargs)
