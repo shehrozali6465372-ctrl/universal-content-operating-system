@@ -197,6 +197,13 @@ class TestRotation:
         assert bm.count() <= 10
 
 
+    def test_cleanup_rejects_escaped_registry_path(self, bm, sample_files):
+        entry = bm.backup("database", str(sample_files / "data.json"), compress=False)
+        entry.filepath = "../outside"
+        with pytest.raises(ValueError, match="escapes backup directory"):
+            bm.delete_backup(entry.backup_id)
+
+
 # ── Test 6: Listing & Queries ───────────────
 
 class TestListing:
