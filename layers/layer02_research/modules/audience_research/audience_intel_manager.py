@@ -15,7 +15,7 @@ Central manager for audience intelligence:
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 import os
 import tempfile
 from typing import Dict, List, Optional
