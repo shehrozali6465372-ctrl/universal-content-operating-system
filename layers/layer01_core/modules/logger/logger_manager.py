@@ -193,7 +193,8 @@ class LoggerManager:
         limit: int = 100,
     ) -> List[Dict]:
         """Get log entries with optional filters."""
-        entries = self._entries
+        with self._lock:
+            entries = list(self._entries)
         if level:
             entries = [e for e in entries if e["level"] == level.upper()]
         if module:
@@ -218,15 +219,19 @@ class LoggerManager:
 
     def count_by_level(self) -> Dict[str, int]:
         """Count entries by level."""
+        with self._lock:
+            entries = list(self._entries)
         counts = {}
-        for e in self._entries:
+        for e in entries:
             counts[e["level"]] = counts.get(e["level"], 0) + 1
         return counts
 
     def count_by_module(self) -> Dict[str, int]:
         """Count entries by module."""
+        with self._lock:
+            entries = list(self._entries)
         counts = {}
-        for e in self._entries:
+        for e in entries:
             counts[e["module"]] = counts.get(e["module"], 0) + 1
         return counts
 
@@ -236,8 +241,10 @@ class LoggerManager:
         """Export all entries to JSON file."""
         path = self._safe_output_path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            entries = list(self._entries)
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._entries, f, indent=2, default=str)
+            json.dump(_redact(entries), f, indent=2, default=str)
         return path
 
     # ── Health Check ────────────────────────
