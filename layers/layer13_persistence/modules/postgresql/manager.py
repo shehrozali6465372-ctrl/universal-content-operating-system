@@ -62,32 +62,52 @@ class PostgreSQLManager:
             return True
 
         self._pool = ConnectionPool(self._config)
-        pg_available = self._pool.initialize()
+        try:
+            pg_available = self._pool.initialize()
 
-        # Initialize repositories
-        self.config = ConfigRepository(self._pool)
-        self.memory = MemoryRepository(self._pool)
-        self.logs = LogRepository(self._pool)
-        self.posts = PostRepository(self._pool)
-        self.analytics = AnalyticsRepository(self._pool)
-        self.learning = LearningRepository(self._pool)
-        self.jobs = JobRepository(self._pool)
+            # Initialize repositories
+            self.config = ConfigRepository(self._pool)
+            self.memory = MemoryRepository(self._pool)
+            self.logs = LogRepository(self._pool)
+            self.posts = PostRepository(self._pool)
+            self.analytics = AnalyticsRepository(self._pool)
+            self.learning = LearningRepository(self._pool)
+            self.jobs = JobRepository(self._pool)
 
-        # Initialize enterprise components
-        self.health_checker = DatabaseHealthChecker(self._pool)
-        self.slow_query_logger = SlowQueryLogger()
-        self.transaction_recovery = TransactionRecovery(self._pool)
-        self.leak_detector = ConnectionLeakDetector()
-        self.benchmark = PerformanceBenchmark(self._pool)
-        self.backup_manager = BackupManager(self._pool)
+            # Initialize enterprise components
+            self.health_checker = DatabaseHealthChecker(self._pool)
+            self.slow_query_logger = SlowQueryLogger()
+            self.transaction_recovery = TransactionRecovery(self._pool)
+            self.leak_detector = ConnectionLeakDetector()
+            self.benchmark = PerformanceBenchmark(self._pool)
+            self.backup_manager = BackupManager(self._pool)
 
-        if not pg_available and os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
-            raise RuntimeError("PostgreSQL is required for production persistence")
-        # Create tables; schema failures are fatal because partial persistence is unsafe.
-        self._create_tables()
+            if not pg_available and os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
+                raise RuntimeError("PostgreSQL is required for production persistence")
+            # Create tables; schema failures are fatal because partial persistence is unsafe.
+            self._create_tables()
 
-        self._initialized = True
-        return pg_available
+            self._initialized = True
+            return pg_available
+        except Exception:
+            self._initialized = False
+            if self._pool is not None:
+                self._pool.close()
+            self._pool = None
+            self.config = None
+            self.memory = None
+            self.logs = None
+            self.posts = None
+            self.analytics = None
+            self.learning = None
+            self.jobs = None
+            self.health_checker = None
+            self.slow_query_logger = None
+            self.transaction_recovery = None
+            self.leak_detector = None
+            self.benchmark = None
+            self.backup_manager = None
+            raise
 
     def _create_tables(self):
         """Create all tables if they don't exist."""
