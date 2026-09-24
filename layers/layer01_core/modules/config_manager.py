@@ -212,7 +212,7 @@ class ConfigManager:
         }
 
     def save(self, filepath: str = "config/agent_config.json") -> None:
-        """Atomically persist non-secret configuration; credentials are redacted."""
+        """Atomically persist non-secret configuration; credential keys are excluded."""
         save_path = self._safe_path(filepath)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(
