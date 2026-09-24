@@ -7,8 +7,11 @@ Other modules (Logger, Memory, Scheduler, etc.) subscribe to react to changes.
 """
 
 from datetime import datetime, timezone
+import logging
 from typing import Any, Callable, Dict, List, Optional
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 
 class SettingsEvent:
@@ -95,7 +98,11 @@ class SettingsEventBus:
             try:
                 handler(event)
             except Exception:
-                pass  # Don't let subscriber errors break the bus
+                logger.exception(
+                    "Settings event subscriber failed: event_type=%s key=%s",
+                    event.event_type,
+                    event.key,
+                )
 
     def get_event_log(self, key: Optional[str] = None,
                       event_type: Optional[str] = None,
