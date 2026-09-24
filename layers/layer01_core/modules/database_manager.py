@@ -246,15 +246,18 @@ class DatabaseManager:
                     raise RuntimeError("Backup integrity check failed")
         except sqlite3.DatabaseError as exc:
             raise RuntimeError("Backup integrity check failed") from exc
+
         with self._lifecycle_lock:
-                with self._lock:
+            with self._lock:
                 was_initialized = self._initialized
                 if self._conn is not None:
                     self._conn.close()
                     self._conn = None
                     self._initialized = False
                 self._db_path.parent.mkdir(parents=True, exist_ok=True)
-                fd, staged_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".restore.tmp")
+                fd, staged_name = tempfile.mkstemp(
+                    dir=str(self._db_path.parent), suffix=".restore.tmp"
+                )
                 os.close(fd)
                 staged = Path(staged_name)
                 old_name = None
@@ -264,7 +267,9 @@ class DatabaseManager:
                         if check_conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                             raise RuntimeError("Staged backup integrity check failed")
                     if self._db_path.exists():
-                        fd, old_name = tempfile.mkstemp(dir=str(self._db_path.parent), suffix=".pre_restore.tmp")
+                        fd, old_name = tempfile.mkstemp(
+                            dir=str(self._db_path.parent), suffix=".pre_restore.tmp"
+                        )
                         os.close(fd)
                         os.replace(str(self._db_path), old_name)
                     os.replace(str(staged), str(self._db_path))
