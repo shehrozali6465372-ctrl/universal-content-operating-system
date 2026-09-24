@@ -67,15 +67,22 @@ class DatabaseManager:
             raise RuntimeError(
                 "Layer 1 local SQLite is development/test-only; production persistence is owned by Layer 13 PostgreSQL"
             )
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA foreign_keys=ON")
-        self._migration_manager = MigrationManager(self._conn)
-        self._migration_manager.migrate()
-        self._initialized = True
-        return self
+        with self._lock:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
+            try:
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA foreign_keys=ON")
+                migration_manager = MigrationManager(conn)
+                migration_manager.migrate()
+            except Exception:
+                conn.close()
+                raise
+            self._conn = conn
+            self._migration_manager = migration_manager
+            self._initialized = True
+            return self
 
     def close(self) -> None:
         with self._lock:
