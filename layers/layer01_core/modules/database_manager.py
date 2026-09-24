@@ -97,11 +97,12 @@ class DatabaseManager:
                 return self
 
     def close(self) -> None:
-        with self._lock:
-            if self._conn:
-                self._conn.close()
-                self._conn = None
-                self._initialized = False
+        with self._lifecycle_lock:
+            with self._lock:
+                if self._conn:
+                    self._conn.close()
+                    self._conn = None
+                    self._initialized = False
 
     @contextmanager
     def transaction(self):
