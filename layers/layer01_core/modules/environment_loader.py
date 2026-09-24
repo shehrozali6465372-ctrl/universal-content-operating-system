@@ -219,7 +219,7 @@ class EnvironmentLoader:
         normalized = key.upper()
         terminal = normalized.rsplit(".", 1)[-1]
         secret = (
-            terminal.endswith("_KEY")
+            terminal.endswith("_API_KEY")
             or terminal.endswith("_TOKEN")
             or terminal.endswith("_SECRET")
             or terminal.endswith("_PASSWORD")
