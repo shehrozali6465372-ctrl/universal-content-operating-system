@@ -56,6 +56,7 @@ class SchedulerManager:
         self._stop_event = Event()
         self._lock = RLock()
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="layer1-task")
+        self._running = True
         self._load_cron_jobs()
 
     # ── Job Registration ────────────────────
@@ -102,15 +103,23 @@ class SchedulerManager:
         parser = CronParser(cron_expr)
         task_id = self.add_task(name, job_type, params=params)
         with self._lock:
+            previous = self._cron_jobs.get(task_id)
             self._cron_jobs[task_id] = {
                 "name": name,
                 "cron": parser,
                 "cron_expr": cron_expr,
                 "job_type": job_type,
-                "params": params or {},
+                "params": dict(params or {}),
                 "last_run": None,
             }
-            self._save_cron_jobs()
+            try:
+                self._save_cron_jobs()
+            except Exception:
+                if previous is None:
+                    self._cron_jobs.pop(task_id, None)
+                else:
+                    self._cron_jobs[task_id] = previous
+                raise
         return task_id
 
     # ── Execution ───────────────────────────
@@ -352,7 +361,7 @@ class SchedulerManager:
     def shutdown(self, wait: bool = True) -> None:
         """Stop scheduling and release worker resources idempotently."""
         with self._lock:
-            if not self._running and self._stop_event.is_set():
+            if self._stop_event.is_set():
                 return
             self._stop_event.set()
             self._running = False
