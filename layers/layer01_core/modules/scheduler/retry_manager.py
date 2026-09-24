@@ -35,6 +35,8 @@ class RetryManager:
 
     def record_failure(self, task_id: str) -> Dict[str, Any]:
         """Record a failure for a task. Returns delay info."""
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
         with self._lock:
             now = time.time()
             if task_id not in self._retries:
@@ -44,7 +46,10 @@ class RetryManager:
             info["attempts"] += 1
             info["last_failure"] = now
 
-            delay = min(self._base_delay * (2 ** (info["attempts"] - 1)), self._max_delay)
+            attempts = info["attempts"]
+            delay = self._max_delay if attempts > 1024 else min(
+                self._base_delay * (2 ** (attempts - 1)), self._max_delay
+            )
             result = {
                 "attempt": info["attempts"],
                 "delay_seconds": delay,
@@ -55,12 +60,16 @@ class RetryManager:
 
     def record_success(self, task_id: str) -> None:
         """Reset retry count on success."""
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
         with self._lock:
             self._retries.pop(task_id, None)
             self._save()
 
     def should_retry(self, task_id: str, max_retries: int = 3) -> bool:
         """Check if a task should be retried."""
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
         if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0:
             raise ValueError("max_retries must be a non-negative integer")
         with self._lock:
