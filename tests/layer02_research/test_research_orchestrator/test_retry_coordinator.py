@@ -1,3 +1,4 @@
+import pytest
 """Tests for RetryCoordinator."""
 
 from layers.layer02_research.modules.research_orchestrator.retry_coordinator import (
@@ -92,3 +93,33 @@ class TestRetryCoordinator:
             assert False, "Should have raised"
         except RetryExhaustedError:
             pass
+
+    def test_retry_policy_rejects_invalid_configuration(self):
+        with pytest.raises(ValueError):
+            RetryPolicy(max_retries=0)
+        with pytest.raises(ValueError):
+            RetryPolicy(base_delay_sec=-1)
+        with pytest.raises(ValueError):
+            RetryPolicy(base_delay_sec=2, max_delay_sec=1)
+        with pytest.raises(ValueError):
+            RetryPolicy(backoff_multiplier=0)
+
+    def test_execute_with_retry_applies_backoff(self, monkeypatch):
+        sleeps = []
+        monkeypatch.setattr(
+            "layers.layer02_research.modules.research_orchestrator.retry_coordinator.time.sleep",
+            sleeps.append,
+        )
+        attempts = {"n": 0}
+
+        def flaky():
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("boom")
+            return "ok"
+
+        coordinator = RetryCoordinator(
+            RetryPolicy(max_retries=3, base_delay_sec=2, max_delay_sec=10, jitter=False)
+        )
+        assert coordinator.execute_with_retry("m", flaky) == "ok"
+        assert sleeps == [2, 4]
