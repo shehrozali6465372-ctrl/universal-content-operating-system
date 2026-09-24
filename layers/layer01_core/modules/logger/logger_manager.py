@@ -193,6 +193,8 @@ class LoggerManager:
         limit: int = 100,
     ) -> List[Dict]:
         """Get log entries with optional filters."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("log entry limit must be a positive integer")
         with self._lock:
             entries = list(self._entries)
         if level:
@@ -203,6 +205,8 @@ class LoggerManager:
 
     def get_from_file(self, limit: int = 100) -> List[Dict]:
         """Read last N entries from log file."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("log file limit must be a positive integer")
         log_file = self._log_dir / "agent.log"
         if not log_file.exists():
             return []
