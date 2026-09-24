@@ -119,6 +119,8 @@ class SecretsManager:
         """Encrypt using versioned, salted key derivation."""
         if not isinstance(value, str):
             raise TypeError("secret value must be a string")
+        if not value:
+            raise ValueError("secret value must be non-empty")
         self._ensure_setup()
         salt = os.urandom(16)
         encrypted = self._derive_v2_fernet(salt).encrypt(value.encode("utf-8"))
