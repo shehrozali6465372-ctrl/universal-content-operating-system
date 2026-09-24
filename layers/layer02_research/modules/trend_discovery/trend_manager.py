@@ -68,7 +68,7 @@ class TrendManager:
         self._trends: Dict[str, TrendEntry] = {}
         self._sources: Dict[str, TrendSource] = {}
         self._history: List[dict] = []
-        self._lock = Lock()
+        self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
         self._max_history = 500
         self._load()
