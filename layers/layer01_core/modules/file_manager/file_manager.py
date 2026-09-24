@@ -84,9 +84,13 @@ class FileManager:
                 os.unlink(tmp_path)
             raise
 
-        # Hash verification
+        # A content replacement invalidates any previous integrity metadata.
+        # Recreate it only when the caller explicitly requests verification.
+        hash_path = Path(str(full) + ".sha256")
         if verify:
             save_hash(str(full))
+        elif hash_path.exists():
+            hash_path.unlink()
 
         self._cache.invalidate(str(full))
         return True
