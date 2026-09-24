@@ -69,7 +69,6 @@ def test_migration_failure_rolls_back_schema_and_history(tmp_path):
         "failing migration",
         "CREATE TABLE temporary_test (id INTEGER PRIMARY KEY); INVALID SQL;",
     )
-    manager.migrate()
     with pytest.raises(RuntimeError, match="Migration v3 failed"):
         manager.migrate()
     assert conn.execute(
