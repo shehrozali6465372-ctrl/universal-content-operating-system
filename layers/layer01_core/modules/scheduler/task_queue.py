@@ -178,12 +178,14 @@ class TaskQueue:
             return None
 
     def cancel(self, task_id: str) -> bool:
+        """Cancel a task only while it has not been claimed for execution."""
         with self._lock:
-            if task_id in self._tasks:
-                self._tasks[task_id].status = TaskStatus.CANCELLED
-                self._save()
-                return True
-        return False
+            task = self._tasks.get(task_id)
+            if task is None or task.status not in (TaskStatus.PENDING, TaskStatus.WAITING):
+                return False
+            task.status = TaskStatus.CANCELLED
+            self._save()
+            return True
 
     def clear_completed(self) -> None:
         with self._lock:
