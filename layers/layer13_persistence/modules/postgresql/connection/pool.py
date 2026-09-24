@@ -74,6 +74,8 @@ class ConnectionConfig:
 class ConnectionPool:
     """Thread-safe PostgreSQL connection pool with retry, reconnect, and metrics."""
 
+    _MAX_LATENCY_SAMPLES = 1000
+
     def __init__(self, config: Optional[ConnectionConfig] = None):
         self._config = config or ConnectionConfig.from_env()
         self._lock = threading.RLock()
@@ -247,7 +249,11 @@ class ConnectionPool:
                 start = time.time()
                 cursor.execute(exec_sql, params)
                 latency = (time.time() - start) * 1000
-                self._query_latencies.append(latency)
+                with self._lock:
+                    self._query_latencies.append(latency)
+                    self._total_latency_ms += latency
+                    if len(self._query_latencies) > self._MAX_LATENCY_SAMPLES:
+                        del self._query_latencies[:-self._MAX_LATENCY_SAMPLES]
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
                 rows = cursor.fetchall()
                 return [dict(zip(columns, row)) for row in rows]
@@ -436,28 +442,39 @@ class ConnectionPool:
 
     def get_pool_metrics(self) -> Dict[str, Any]:
         """Get comprehensive pool metrics."""
-        lats = self._query_latencies
+        with self._lock:
+            lats = list(self._query_latencies)
+            active_conns = self._active_conns
+            idle_conns = self._idle_conns
+            total_queries = self._total_queries
+            failed_queries = self._failed_queries
+            total_retries = self._total_retries
+            consecutive_failures = self._consecutive_failures
+            last_error = self._last_error
+            total_latency_ms = self._total_latency_ms
+            pg_available = self._pg_available
+            initialized = self._initialized
         avg_lat = sum(lats) / len(lats) if lats else 0.0
         sorted_lats = sorted(lats)
         p95 = sorted_lats[int(len(sorted_lats) * 0.95)] if len(sorted_lats) >= 2 else avg_lat
         p99 = sorted_lats[int(len(sorted_lats) * 0.99)] if len(sorted_lats) >= 2 else avg_lat
 
         return {
-            "postgresql_available": self._pg_available,
-            "initialized": self._initialized,
-            "healthy": self.is_healthy() if self._initialized else False,
-            "active_connections": self._active_conns,
-            "idle_connections": self._idle_conns,
-            "total_queries": self._total_queries,
-            "failed_queries": self._failed_queries,
-            "total_retries": self._total_retries,
-            "consecutive_failures": self._consecutive_failures,
-            "last_error": self._last_error,
+            "postgresql_available": pg_available,
+            "initialized": initialized,
+            "healthy": self.is_healthy() if initialized else False,
+            "active_connections": active_conns,
+            "idle_connections": idle_conns,
+            "total_queries": total_queries,
+            "failed_queries": failed_queries,
+            "total_retries": total_retries,
+            "consecutive_failures": consecutive_failures,
+            "last_error": last_error,
             "latency": {
                 "avg_ms": round(avg_lat, 2),
                 "p95_ms": round(p95, 2),
                 "p99_ms": round(p99, 2),
-                "total_latency_ms": round(self._total_latency_ms, 2),
+                "total_latency_ms": round(total_latency_ms, 2),
                 "samples": len(lats),
             },
             "config": {
