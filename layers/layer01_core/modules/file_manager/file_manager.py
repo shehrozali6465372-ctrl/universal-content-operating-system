@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from io import StringIO
 from datetime import datetime, timezone
 from threading import Lock, RLock
+from weakref import WeakValueDictionary
 
 from layers.layer01_core.modules.file_manager.hash_utils import calculate_hash, save_hash, verify_hash
 from layers.layer01_core.modules.file_manager.file_cache import FileCache
@@ -37,7 +38,7 @@ class FileManager:
     def __init__(self, base_path: str = ".", cache_size: int = 100):
         self._base = Path(base_path).resolve()
         self._cache = FileCache(cache_size)
-        self._locks: Dict[str, Lock] = {}
+        self._locks = WeakValueDictionary()
         self._global_lock = RLock()
 
     # ── Safe Read ───────────────────────────
