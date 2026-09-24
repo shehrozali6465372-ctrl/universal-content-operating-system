@@ -51,15 +51,32 @@ class SettingsEventBus:
 
     def subscribe(self, event_type: str, callback: Callable) -> None:
         """Subscribe to a specific setting change event."""
+        if not isinstance(event_type, str) or not event_type.strip():
+            raise ValueError("event_type must be a non-empty string")
+        if not callable(callback):
+            raise TypeError("callback must be callable")
         with self._lock:
             if event_type not in self._subscribers:
                 self._subscribers[event_type] = []
-            self._subscribers[event_type].append(callback)
+            if callback not in self._subscribers[event_type]:
+                self._subscribers[event_type].append(callback)
 
     def subscribe_all(self, callback: Callable) -> None:
         """Subscribe to ALL setting change events."""
+        if not callable(callback):
+            raise TypeError("callback must be callable")
         with self._lock:
-            self._global_subscribers.append(callback)
+            if callback not in self._global_subscribers:
+                self._global_subscribers.append(callback)
+
+    def unsubscribe_all(self, callback: Callable) -> bool:
+        """Remove a global subscription."""
+        with self._lock:
+            try:
+                self._global_subscribers.remove(callback)
+                return True
+            except ValueError:
+                return False
 
     def unsubscribe(self, event_type: str, callback: Callable) -> bool:
         """Remove a specific subscription."""
