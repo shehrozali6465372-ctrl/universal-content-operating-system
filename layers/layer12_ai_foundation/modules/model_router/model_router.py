@@ -32,8 +32,8 @@ class ModelRequest:
         self.request_type = request_type
         self.prompt = prompt
         self.model = model
-        self.parameters: Dict[str, Any] = kwargs
-        self.system_prompt = kwargs.pop("system_prompt", "")
+        self.system_prompt = str(kwargs.pop("system_prompt", ""))
+        self.parameters: Dict[str, Any] = dict(kwargs)
         self.metadata: Dict[str, Any] = {}
 
 
@@ -104,7 +104,12 @@ class ModelRouter:
         return False
 
     def set_routing(self, request_type: RequestType, provider_order: List[str]) -> None:
-        self._routing_table[request_type] = provider_order
+        unknown = [name for name in provider_order if name not in self._providers]
+        if unknown:
+            raise ValueError(f"unknown providers in routing table: {unknown}")
+        if len(set(provider_order)) != len(provider_order):
+            raise ValueError("provider_order must not contain duplicates")
+        self._routing_table[request_type] = list(provider_order)
 
     def _provider_order(self, request_type: RequestType) -> List[ProviderAdapter]:
         """Return configured routing order, then unlisted providers."""
@@ -198,6 +203,7 @@ class ModelRouter:
         response.provider = ""
         response.latency_ms = (time.time() - start) * 1000
         response.metadata["error"] = detail
+        response.metadata["attempted_providers"] = sorted(attempted)
         self._record(request, "", "failed", response.latency_ms, detail)
         return response
 
