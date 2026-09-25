@@ -8,10 +8,13 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Optional
+
 from layers.layer11_async_runtime.modules.async_task_manager.models import TaskState
 
 
 class AsyncTask:
+    """Runtime-local execution record."""
+
     __slots__ = (
         "task_id", "name", "state", "result", "error",
         "created_at", "started_at", "finished_at", "duration_ms",
@@ -32,13 +35,23 @@ class AsyncTask:
 class AsyncRuntime:
     """Thread-safe runtime for coroutine and blocking work."""
 
-    def __init__(self, max_workers: int = 10, max_tracked_tasks: int = 10_000,\n                 task_timeout: Optional[float] = 300.0) -> None:
-        if max_workers < 1:
+    def __init__(
+        self,
+        max_workers: int = 10,
+        max_tracked_tasks: int = 10_000,
+        task_timeout: Optional[float] = 300.0,
+    ) -> None:
+        if isinstance(max_workers, bool) or max_workers < 1:
             raise ValueError("max_workers must be >= 1")
-        if max_tracked_tasks < 1:
+        if isinstance(max_tracked_tasks, bool) or max_tracked_tasks < 1:
             raise ValueError("max_tracked_tasks must be >= 1")
+        if task_timeout is not None and (
+            isinstance(task_timeout, bool) or task_timeout <= 0
+        ):
+            raise ValueError("task_timeout must be > 0 or None")
         self._max_workers = max_workers
         self._max_tracked_tasks = max_tracked_tasks
+        self._task_timeout = task_timeout
         self._thread_pool: Optional[ThreadPoolExecutor] = None
         self._tasks: Dict[str, AsyncTask] = {}
         self._running = False
@@ -63,7 +76,7 @@ class AsyncRuntime:
             self._running = True
 
     def stop(self) -> None:
-        """Stop the runtime and release worker resources."""
+        """Stop the runtime and wait for worker threads to finish."""
         with self._lock:
             if not self._running and self._stopped:
                 return
@@ -96,24 +109,37 @@ class AsyncRuntime:
             self._prune_tasks_locked()
             return task
 
-    def _finish_task(self, task: AsyncTask, state: TaskState,
-                     error: Optional[Exception] = None) -> None:
+    def _finish_task(
+        self,
+        task: AsyncTask,
+        state: TaskState,
+        error: Optional[Exception] = None,
+    ) -> None:
         with self._lock:
             task.error = error
             task.state = state
-            task.finished_at = time.time()
+            task.finished_at = time.monotonic()
             if task.started_at is not None:
-                task.duration_ms = (task.finished_at - task.started_at) * 1000
+                task.duration_ms = max(
+                    0.0, (task.finished_at - task.started_at) * 1000
+                )
             self._metrics["total_duration_ms"] += task.duration_ms
             self._metrics[state.value] += 1
+            self._prune_tasks_locked()
 
     def _prune_tasks_locked(self) -> None:
         if len(self._tasks) <= self._max_tracked_tasks:
             return
         finished = sorted(
-            (t for t in self._tasks.values() if t.state in {
-                TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}),
-            key=lambda t: t.finished_at or t.created_at,
+            (
+                task for task in self._tasks.values()
+                if task.state in {
+                    TaskState.COMPLETED,
+                    TaskState.FAILED,
+                    TaskState.CANCELLED,
+                }
+            ),
+            key=lambda task: task.finished_at or task.created_at,
         )
         remove_count = len(self._tasks) - self._max_tracked_tasks
         for task in finished[:remove_count]:
@@ -121,7 +147,7 @@ class AsyncRuntime:
 
     def run_coroutine(self, coro: Coroutine[Any, Any, Any]) -> Any:
         """Run a coroutine from synchronous code."""
-        if inspect.iscoroutine(coro) is False:
+        if not inspect.iscoroutine(coro):
             raise TypeError("coro must be a coroutine")
         with self._lock:
             running = self._running
@@ -134,14 +160,23 @@ class AsyncRuntime:
             pass
         else:
             coro.close()
-            raise RuntimeError("run_coroutine cannot be called from a running event loop")
+            raise RuntimeError(
+                "run_coroutine cannot be called from a running event loop"
+            )
         return asyncio.run(self.execute_coroutine(coro))
 
     async def execute_coroutine(self, coro: Coroutine[Any, Any, Any]) -> Any:
         """Execute one coroutine in the caller's event loop."""
+        if not inspect.iscoroutine(coro):
+            raise TypeError("coro must be a coroutine")
         task = self._begin_task(getattr(coro, "__name__", "coroutine"))
         try:
-            result = await coro
+            if self._task_timeout is None:
+                result = await coro
+            else:
+                result = await asyncio.wait_for(
+                    coro, timeout=self._task_timeout
+                )
             task.result = result
             self._finish_task(task, TaskState.COMPLETED)
             return result
@@ -154,7 +189,11 @@ class AsyncRuntime:
 
     async def gather(self, *coros: Coroutine[Any, Any, Any]) -> List[Any]:
         """Run multiple coroutines concurrently."""
-        return await asyncio.gather(*(self.execute_coroutine(c) for c in coros))
+        if not coros:
+            return []
+        return await asyncio.gather(
+            *(self.execute_coroutine(coro) for coro in coros)
+        )
 
     def run_parallel(self, *coros: Coroutine[Any, Any, Any]) -> List[Any]:
         """Run multiple coroutines concurrently from synchronous code."""
@@ -169,14 +208,23 @@ class AsyncRuntime:
             raise RuntimeError("async runtime is not running")
         return self.run_coroutine(self._gather(coros))
 
-    async def _gather(self, coros: tuple[Coroutine[Any, Any, Any], ...]) -> List[Any]:
+    async def _gather(
+        self, coros: tuple[Coroutine[Any, Any, Any], ...]
+    ) -> List[Any]:
         return await self.gather(*coros)
 
-    def submit_to_thread(self, fn: Callable[..., Any], *args: Any,
-                         timeout: Optional[float] = None, **kwargs: Any) -> Any:
+    def submit_to_thread(
+        self,
+        fn: Callable[..., Any],
+        *args: Any,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Run blocking work in the bounded worker pool."""
         if not callable(fn):
             raise TypeError("fn must be callable")
+        if timeout is not None and timeout <= 0:
+            raise ValueError("timeout must be > 0 or None")
         with self._lock:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
@@ -185,8 +233,9 @@ class AsyncRuntime:
             future = self._thread_pool.submit(fn, *args, **kwargs)
         return future.result(timeout=timeout)
 
-    async def submit_to_thread_async(self, fn: Callable[..., Any], *args: Any,
-                                     **kwargs: Any) -> Any:
+    async def submit_to_thread_async(
+        self, fn: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """Run blocking work in the bounded worker pool from async code."""
         if not callable(fn):
             raise TypeError("fn must be callable")
@@ -197,12 +246,15 @@ class AsyncRuntime:
             if pool is None:
                 raise RuntimeError("async runtime worker pool is unavailable")
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(pool, lambda: fn(*args, **kwargs))
+        return await loop.run_in_executor(
+            pool, lambda: fn(*args, **kwargs)
+        )
 
     def health(self) -> Dict[str, Any]:
         with self._lock:
             return {
                 "running": self._running,
+                "task_timeout": self._task_timeout,
                 "max_workers": self._max_workers,
                 "tasks_tracked": len(self._tasks),
                 "metrics": dict(self._metrics),
@@ -214,9 +266,12 @@ class AsyncRuntime:
 
     def list_tasks(self) -> List[Dict[str, Any]]:
         with self._lock:
-            return [{
-                "task_id": t.task_id,
-                "name": t.name,
-                "state": t.state.value,
-                "duration_ms": t.duration_ms,
-            } for t in self._tasks.values()]
+            return [
+                {
+                    "task_id": task.task_id,
+                    "name": task.name,
+                    "state": task.state.value,
+                    "duration_ms": task.duration_ms,
+                }
+                for task in self._tasks.values()
+            ]
