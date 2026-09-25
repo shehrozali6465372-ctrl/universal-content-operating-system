@@ -164,9 +164,12 @@ class IntelligenceOrchestrator:
         request_events: List[PipelineEvent] = []
 
         # Cache check
-        fingerprint = hashlib.sha256(f"{topic}\0{text}\0{trend_history or []}\0{domain}".encode("utf-8")).hexdigest()\n        cache_key = f"intel_{fingerprint}"
+        fingerprint = hashlib.sha256(f"{topic}\0{text}\0{trend_history or []}\0{domain}".encode("utf-8")).hexdigest()
+        cache_key = f"intel_{fingerprint}"
         cached = self.cache.get(cache_key)
-        if cached is not None:\n            cached.metadata["cached"] = True\n            return cached
+        if cached is not None:
+            cached.metadata["cached"] = True
+            return cached
 
         history = trend_history or [50.0]
 
@@ -202,7 +205,10 @@ class IntelligenceOrchestrator:
         )
 
         # 5. Recommendations
-        # RecommendationEngine is shared by the orchestrator instance; isolate this request\n        # without clearing state owned by other callers by creating a request-local engine.\n        request_recommender = RecommendationEngine()\n        if result.trend_prediction:
+        # RecommendationEngine is shared by the orchestrator instance; isolate this request
+        # without clearing state owned by other callers by creating a request-local engine.
+        request_recommender = RecommendationEngine()
+        if result.trend_prediction:
             request_recommender.generate_topic_recommendations(
                 [{"topic": topic, "overall_score": result.trend_prediction.predicted_score}]
             )
