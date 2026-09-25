@@ -46,8 +46,8 @@ class LayerDependencies:
         remaining = set(layers)
         while remaining:
             ready = [
-                l for l in remaining
-                if all(d in resolved for d in self.get_dependencies(l))
+                layer for layer in remaining
+                if all(d in resolved for d in self.get_dependencies(layer))
             ]
             if not ready:
                 ready = list(remaining)
@@ -62,9 +62,9 @@ class LayerDependencies:
     def get_ready_layers(self, completed: List[str],
                           layers: Optional[List[str]] = None) -> List[str]:
         layers = layers or list(self.LAYER_ORDER)
-        remaining = [l for l in layers if l not in completed]
+        remaining = [l for layer in layers if layer not in completed]
         return [
-            l for l in remaining
+            layer for layer in remaining
             if all(d in completed for d in self.get_dependencies(l))
         ]
 
