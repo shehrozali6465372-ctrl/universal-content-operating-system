@@ -1,7 +1,6 @@
 """Validated conversion funnel analysis."""
 from __future__ import annotations
 import time
-import uuid
 from threading import RLock
 from typing import Any, Dict, List, Optional
 
