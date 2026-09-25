@@ -1,5 +1,6 @@
 """Job Queue — Priority-based job queue for publishing."""
 from __future__ import annotations
+import threading
 from typing import Dict, List, Optional
 
 from layers.layer07_publishing.modules.scheduler_queue.publish_job import PublishJob
@@ -13,14 +14,20 @@ class JobQueue:
         self._jobs: Dict[str, PublishJob] = {}
         self._enqueue_count = 0
         self._dequeue_count = 0
+        self._lock = threading.RLock()
 
     def enqueue(self, job: PublishJob) -> bool:
         """Add a job to the queue."""
-        if len(self._jobs) >= self._max_size:
-            return False
-        self._jobs[job.job_id] = job
-        self._enqueue_count += 1
-        return True
+        if not job.job_id:
+            raise ValueError("job_id is required")
+        with self._lock:
+            if job.job_id in self._jobs:
+                return False
+            if len(self._jobs) >= self._max_size:
+                return False
+            self._jobs[job.job_id] = job
+            self._enqueue_count += 1
+            return True
 
     def enqueue_batch(self, jobs: List[PublishJob]) -> int:
         """Add multiple jobs."""
@@ -32,17 +39,18 @@ class JobQueue:
 
     def dequeue(self, platform: Optional[str] = None) -> Optional[PublishJob]:
         """Get the next ready job. Optionally filter by platform."""
-        ready = [
-            j for j in self._jobs.values()
-            if j.is_ready() and (platform is None or j.platform == platform)
-        ]
+        with self._lock:
+            ready = [
+                j for j in self._jobs.values()
+                if j.is_ready() and (platform is None or j.platform == platform)
+            ]
         if not ready:
             return None
         ready.sort(key=lambda j: (j.priority, j.created_at))
-        job = ready[0]
-        job.status = "running"
-        self._dequeue_count += 1
-        return job
+            job = ready[0]
+            job.status = "running"
+            self._dequeue_count += 1
+            return job
 
     def dequeue_many(self, count: int, platform: Optional[str] = None) -> List[PublishJob]:
         """Dequeue multiple jobs at once."""
