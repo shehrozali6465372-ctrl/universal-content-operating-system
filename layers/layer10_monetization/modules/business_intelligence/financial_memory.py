@@ -28,12 +28,16 @@ class FinancialMemory:
     """Store successful strategies, failed campaigns, seasonal trends, and revenue history."""
 
     def __init__(self, max_entries: int = 5000) -> None:
-        if max_entries <= 0:\n            raise ValueError("max_entries must be positive")\n        self._max_entries = max_entries
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+        self._max_entries = max_entries
         self._entries: List[FinancialMemoryEntry] = []
 
     def store(self, category: str, key: str, data: Dict[str, Any],
               confidence: float = 0.5, tags: Optional[List[str]] = None) -> FinancialMemoryEntry:
-        if not category or not key or not 0 <= confidence <= 1:\n            raise ValueError("category, key, and confidence are required")\n        entry = FinancialMemoryEntry(category, key)
+        if not category or not key or not 0 <= confidence <= 1:
+            raise ValueError("category, key, and confidence are required")
+        entry = FinancialMemoryEntry(category, key)
         entry.data = dict(data)
         entry.confidence = confidence
         if tags:
@@ -46,7 +50,9 @@ class FinancialMemory:
     def search(self, category: str = "", key: str = "",
                tag: str = "", min_confidence: float = 0.0,
                limit: int = 50) -> List[FinancialMemoryEntry]:
-        if not 0 <= min_confidence <= 1:\n            raise ValueError("min_confidence must be between 0 and 1")\n        results = self._entries
+        if not 0 <= min_confidence <= 1:
+            raise ValueError("min_confidence must be between 0 and 1")
+        results = self._entries
         if category:
             results = [e for e in results if e.category == category]
         if key:
