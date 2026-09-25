@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional
 
 class CachedResult:
     __slots__ = ("key", "data", "created_at", "expires_at", "last_accessed", "hit_count")
-    def __init__(self, key: str, data: Any, ttl_seconds: int) -> None:
+    def __init__(self, key: str, data: Any, ttl_seconds: int, copy_data: bool = True) -> None:
         now = time.monotonic()
         self.key = key
-        self.data = copy.deepcopy(data)
+        self.data = copy.deepcopy(data) if copy_data else data
         self.created_at = now
         self.expires_at = now + ttl_seconds if ttl_seconds else float("inf")
         self.last_accessed = now
@@ -39,9 +39,7 @@ class IntelligenceCache:
             if key not in self._cache and len(self._cache) >= self._max_size:
                 oldest = min(self._cache.values(), key=lambda c: c.last_accessed)
                 self._cache.pop(oldest.key, None)
-            self._cache[key] = CachedResult(key, data if copy_data else data, self._ttl)
-            if not copy_data:
-                self._cache[key].data = data
+            self._cache[key] = CachedResult(key, data, self._ttl, copy_data=copy_data)
 
     def get_reference(self, key: str) -> Optional[Any]:
         """Return the cached object by reference for explicit identity-sensitive caches."""
