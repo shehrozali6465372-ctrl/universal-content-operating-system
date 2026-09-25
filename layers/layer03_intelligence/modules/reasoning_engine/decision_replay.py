@@ -131,8 +131,18 @@ class ReplayStore:
             return len(self._replays)
 
     def to_dict(self) -> Dict:
-        return {
-            "count": self.count(),
-            "replays": [r.to_dict() for r in self._replays[-10:]],
-            "common_paths": self.get_common_paths(),
-        }
+        with self._lock:
+            recent = [replay.to_dict() for replay in self._replays[-10:]]
+            paths: Dict[str, int] = {}
+            for replay in self._replays:
+                path = replay.get_path()
+                paths[path] = paths.get(path, 0) + 1
+            common_paths = [
+                {"path": path, "count": count}
+                for path, count in sorted(paths.items(), key=lambda item: -item[1])
+            ]
+            return {
+                "count": len(self._replays),
+                "replays": recent,
+                "common_paths": common_paths,
+            }
