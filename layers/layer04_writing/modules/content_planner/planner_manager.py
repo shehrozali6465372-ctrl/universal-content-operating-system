@@ -1,6 +1,8 @@
 """Planner Manager — Central orchestrator for Content Planner."""
 from __future__ import annotations
 import time
+from threading import RLock
+from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
@@ -76,6 +78,7 @@ class PlannerManager:
         self.constraint_manager = constraint_manager or ConstraintManager()
         self.validator = validator or PlanValidator()
         self._plan_count = 0
+        self._lock = RLock()
 
     def create_plan(
         self,
@@ -89,7 +92,7 @@ class PlannerManager:
         """Create a complete writing plan from intelligence inputs."""
         start = time.time()
         result = PlannerResult()
-        result.planning_id = f"planner_{int(time.time() * 1000) % 10000000}"
+        result.planning_id = f"planner_{uuid4().hex}"
 
         # 1. Goal Analysis
         result.goal_analysis = self.goal_analyzer.analyze(
@@ -140,13 +143,13 @@ class PlannerManager:
         # 7. Validation
         result.validation = self.validator.validate(plan)
         if not result.validation.is_valid:
-            # Create a minimal valid plan as fallback
-            errors = result.validation.errors
-            result.metadata["validation_warnings"] = errors
+            result.metadata["validation_errors"] = list(result.validation.errors)
+            raise ValueError("Generated writing plan failed validation")
 
         result.plan = plan
         result.pipeline_time_ms = (time.time() - start) * 1000
-        self._plan_count += 1
+        with self._lock:
+            self._plan_count += 1
         return result
 
     def update_plan(self, plan: WritingPlan, updates: Dict[str, Any]) -> PlannerResult:
@@ -182,4 +185,5 @@ class PlannerManager:
 
     @property
     def plan_count(self) -> int:
-        return self._plan_count
+        with self._lock:
+            return self._plan_count
