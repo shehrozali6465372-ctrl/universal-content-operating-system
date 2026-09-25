@@ -66,13 +66,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
-      - name: Verify production credential is configured
+      - name: Verify DeepSeek production credential is configured
         run: |
           test -n "$OPENAI_API_KEY"
 
-      - name: Verify configured OpenAI production model is discoverable
+      - name: Verify configured DeepSeek production model is discoverable
         run: |
           python - <<'PY'
           import json
@@ -80,14 +80,14 @@ jobs:
           import urllib.request
 
           request = urllib.request.Request(
-              "https://api.openai.com/v1/models",
-              headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"},
+              "https://api.deepseek.com/models",
+              headers={"Authorization": f"Bearer {os.environ['DEEPSEEK_API_KEY']}"},
           )
           with urllib.request.urlopen(request, timeout=20) as response:
               payload = json.load(response)
 
           model_ids = {item["id"] for item in payload.get("data", [])}
-          required = "gpt-5.6-luna"
+          required = "deepseek-flash"
           if required not in model_ids:
               raise SystemExit(
                   f"Configured production model {required!r} is not available"
