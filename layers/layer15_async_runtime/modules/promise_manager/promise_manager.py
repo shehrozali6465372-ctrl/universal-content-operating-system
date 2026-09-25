@@ -6,7 +6,9 @@ from enum import Enum
 
 
 class PromiseState(str, Enum):
-    PENDING = "pending"; RESOLVED = "resolved"; REJECTED = "rejected"
+    PENDING = "pending"
+    RESOLVED = "resolved"
+    REJECTED = "rejected"
 
 
 class Promise:
