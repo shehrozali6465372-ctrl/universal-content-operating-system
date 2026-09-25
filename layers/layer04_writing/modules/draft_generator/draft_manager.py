@@ -1,6 +1,9 @@
 """Draft Manager — Central orchestrator for Draft Generator."""
 from __future__ import annotations
 import time
+import os
+from threading import RLock
+from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
@@ -18,7 +21,7 @@ class GeneratedDraft:
                  "tokens_used", "latency_ms", "metadata", "created_at")
 
     def __init__(self, topic: str = "", text: str = "") -> None:
-        self.draft_id = f"draft_{int(time.time() * 1000) % 10000000}"
+        self.draft_id = f"draft_{uuid4().hex}"
         self.plan_id = ""
         self.topic = topic
         self.text = text
@@ -86,7 +89,10 @@ class DraftManager:
         variant_generator: Optional[VariantGenerator] = None,
         memory: Optional[DraftMemory] = None,
     ) -> None:
+        if provider is None and os.getenv("UCOS_ENV", "development").lower() == "production":
+            raise RuntimeError("A real LLM provider is required in production")
         self.provider = provider or MockLLMProvider()
+        self._lock = RLock()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.validator = validator or DraftValidator()
         self.variant_generator = variant_generator or VariantGenerator(self.prompt_builder)
@@ -109,7 +115,7 @@ class DraftManager:
 
         # 2. Call LLM
         if not self.provider.is_configured():
-            raise Exception("LLM provider not configured")
+            raise RuntimeError("LLM provider not configured")
 
         llm_response = self.provider.generate(
             prompt=prompt.user_prompt,
@@ -141,7 +147,8 @@ class DraftManager:
         result.draft = draft
         result.total_tokens = draft.tokens_used
         result.total_latency_ms = (time.time() - start) * 1000
-        self._draft_count += 1
+        with self._lock:
+            self._draft_count += 1
         return result
 
     def generate_variants(
@@ -188,7 +195,8 @@ class DraftManager:
         result.draft = generated[0] if generated else None
         result.total_tokens = total_tokens
         result.total_latency_ms = (time.time() - start) * 1000
-        self._draft_count += len(generated)
+        with self._lock:
+            self._draft_count += len(generated)
         return result
 
     def get_history(self, topic: str = "", limit: int = 10) -> List[Dict[str, Any]]:
@@ -199,4 +207,5 @@ class DraftManager:
 
     @property
     def draft_count(self) -> int:
-        return self._draft_count
+        with self._lock:
+            return self._draft_count
