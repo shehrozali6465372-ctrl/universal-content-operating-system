@@ -44,6 +44,7 @@ from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_cache import
 from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_report import (
     LLMReportGenerator,
 )
+from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import ProviderResponse
 
 
 class LLMManager:
@@ -139,23 +140,34 @@ class LLMManager:
                 max_tokens=max_tokens,
                 system_prompt=system_prompt,
             )
-            if not isinstance(generated, str) or not generated.strip():
-                raise RuntimeError(
-                    "AI generator returned empty or non-text output"
-                )
+            if not isinstance(generated, (str, ProviderResponse, LLMResponse)):
+                raise RuntimeError("AI generator returned an unsupported response type")
 
-        response = LLMResponse(generated, model, provider)
-        response.request_id = request.request_id
-        response.latency_ms = (time.time() - start) * 1000
-        response.usage = {
-            "prompt_tokens": len(prompt.split()) * 2,
-            "completion_tokens": len(response.content.split()) * 2,
-            "total_tokens": (
-                len(prompt.split()) * 2 + len(response.content.split()) * 2
-            ),
-        }
-        response.metadata["usage_estimated"] = True
-        response.metadata["cost_estimated"] = True
+        if isinstance(generated, ProviderResponse):
+            response = LLMResponse(generated.content, generated.model, generated.provider)
+            response.request_id = generated.request_id or request.request_id
+            response.finish_reason = generated.finish_reason
+            response.usage = dict(generated.usage)
+            response.latency_ms = generated.latency_ms or (time.time() - start) * 1000
+            response.metadata["usage_estimated"] = False
+            response.metadata["cost_estimated"] = False
+        elif isinstance(generated, LLMResponse):
+            response = generated
+            response.request_id = response.request_id or request.request_id
+            response.latency_ms = response.latency_ms or (time.time() - start) * 1000
+        else:
+            response = LLMResponse(generated, model, provider)
+            response.request_id = request.request_id
+            response.latency_ms = (time.time() - start) * 1000
+            response.usage = {
+                "prompt_tokens": len(prompt.split()) * 2,
+                "completion_tokens": len(response.content.split()) * 2,
+                "total_tokens": (
+                    len(prompt.split()) * 2 + len(response.content.split()) * 2
+                ),
+            }
+            response.metadata["usage_estimated"] = True
+            response.metadata["cost_estimated"] = True
 
         self.metrics.record_request(
             provider, model, response.total_tokens, 0.001,
