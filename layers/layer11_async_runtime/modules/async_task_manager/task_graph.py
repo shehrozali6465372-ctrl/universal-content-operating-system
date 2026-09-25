@@ -70,11 +70,12 @@ class TaskGraph:
         if not isinstance(completed, set):
             raise TypeError("completed must be a set")
         with self._lock:
+            completed_ids = completed.intersection(self._adj)
             return sorted(
                 task_id
                 for task_id in self._adj
-                if task_id not in completed
-                and self._reverse[task_id].issubset(completed)
+                if task_id not in completed_ids
+                and self._reverse[task_id].issubset(completed_ids)
             )
 
     def _has_cycle_locked(self) -> bool:
