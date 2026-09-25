@@ -23,7 +23,7 @@ class BrandVisualProfile:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
-            "primary_colors": self.primary_colors,
+            "primary_colors": list(self.primary_colors),
             "style": self.style,
             "mood": self.mood,
         }
@@ -55,7 +55,18 @@ class ImageMemory:
 
     def get_profile(self, name: str) -> Optional[BrandVisualProfile]:
         with self._lock:
-            return self._profiles.get(name)
+            profile = self._profiles.get(name)
+            if profile is None:
+                return None
+            snapshot = BrandVisualProfile(profile.name)
+            snapshot.primary_colors = list(profile.primary_colors)
+            snapshot.secondary_colors = list(profile.secondary_colors)
+            snapshot.fonts = list(profile.fonts)
+            snapshot.style = profile.style
+            snapshot.mood = profile.mood
+            snapshot.donts = list(profile.donts)
+            snapshot.platform_profiles = dict(profile.platform_profiles)
+            return snapshot
 
     def store_image(self, platform: str, topic: str, url: str,
                     profile_name: str = "") -> Dict[str, Any]:
@@ -65,18 +76,23 @@ class ImageMemory:
             raise ValueError("topic must not be empty")
         if not isinstance(url, str) or not url.strip():
             raise ValueError("url must not be empty")
-        if profile_name and profile_name not in self._profiles:
-            raise ValueError("Unknown visual profile: " + profile_name)
-        record = {"platform": platform.strip(), "topic": topic.strip(), "url": url.strip(),
-                  "profile": profile_name, "timestamp": time.time()}
         with self._lock:
+            if profile_name and profile_name not in self._profiles:
+                raise ValueError("Unknown visual profile: " + profile_name)
+            record = {
+                "platform": platform.strip(),
+                "topic": topic.strip(),
+                "url": url.strip(),
+                "profile": profile_name,
+                "timestamp": time.time(),
+            }
             self._history.append(record)
             if len(self._history) > self.MAX_HISTORY:
                 del self._history[:-self.MAX_HISTORY]
-        return dict(record)
+            return dict(record)
 
     def get_history(self, platform: str = "", limit: int = 10) -> List[Dict[str, Any]]:
-        if limit < 1 or limit > self.MAX_HISTORY:
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1 or limit > self.MAX_HISTORY:
             raise ValueError(f"limit must be between 1 and {self.MAX_HISTORY}")
         with self._lock:
             if platform:
