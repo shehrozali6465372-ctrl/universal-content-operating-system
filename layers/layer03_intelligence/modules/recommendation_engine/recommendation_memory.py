@@ -38,8 +38,8 @@ class RecommendationMemory:
         with self._lock:
             for r in reversed(self._records):
                 if r.topic == topic:
-                r.outcome = outcome
-                return True
+                    r.outcome = outcome
+                    return True
         return False
 
     def get_successful(self) -> List[RecRecord]:
