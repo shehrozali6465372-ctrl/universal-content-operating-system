@@ -70,7 +70,7 @@ jobs:
 
       - name: Static Layer 13 Audit
         run: |
-          ruff check layers/layer13_persistence tests/layer13_persistence tests/unit/test_layer13_postgresql_production_hardening.py --select E,F,W --ignore E501,E402
+          ruff check layers/layer13_persistence/modules/postgresql tests/unit/test_layer13_postgresql_production_hardening.py tests/layer13_persistence/test_layer13_postgresql_real_production.py --select E,F,W --ignore E501,E402
 
       - name: Unit Hardening Tests
         run: |
