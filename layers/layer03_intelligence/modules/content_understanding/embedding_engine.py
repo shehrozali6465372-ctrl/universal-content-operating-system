@@ -69,6 +69,8 @@ class EmbeddingEngine:
         Args:
             vocab_size: Maximum vocabulary size to keep (top features).
         """
+        if vocab_size < 1:
+            raise ValueError("vocab_size must be >= 1")
         self.vocab_size = vocab_size
         self._vocab: Dict[str, int] = {}
         self._idf: Dict[str, float] = {}
@@ -82,6 +84,11 @@ class EmbeddingEngine:
         """
         doc_freq: Counter = Counter()
         term_freq: Counter = Counter()
+        if not corpus:
+            self._vocab.clear()
+            self._idf.clear()
+            self._fitted = False
+            return
         n_docs = len(corpus)
 
         for text in corpus:
