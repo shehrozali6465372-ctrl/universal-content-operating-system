@@ -76,3 +76,21 @@ def test_orchestrator_fails_closed_on_invalid_generated_draft():
     orchestrator = WritingOrchestrator(provider=InvalidDraftProvider())
     with pytest.raises(ValueError, match="failed validation"):
         orchestrator.run("AI", platforms=["facebook"])
+
+
+def test_orchestrator_rejects_unknown_platform():
+    with pytest.raises(ValueError, match="Unsupported platform"):
+        WritingOrchestrator().run("AI", platforms=["unknown"])
+
+
+def test_optimizer_rejects_unknown_platform():
+    from layers.layer04_writing.modules.content_optimizer.content_optimizer import ContentOptimizer
+    with pytest.raises(ValueError, match="Unsupported platform"):
+        ContentOptimizer().optimize("AI", platform="unknown")
+
+
+def test_writing_memory_returns_defensive_voice_copy():
+    memory = WritingMemory()
+    voice = memory.set_voice("brand", personality=["expert"])
+    voice.personality.append("mutated")
+    assert memory.get_voice("brand").personality == ["expert"]
