@@ -122,7 +122,8 @@ class WritingOrchestrator:
         result.plan.language = language
 
         # 2. Generate draft
-        draft_result = self.draft_manager.generate(plan_result.plan)
+        draft_context = intelligence_data or {}
+        draft_result = self.draft_manager.generate(plan_result.plan, context=draft_context)
         result.draft = draft_result.draft.text if draft_result.draft else ""
         result.total_tokens = draft_result.total_tokens
 
