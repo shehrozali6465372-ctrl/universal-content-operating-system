@@ -39,6 +39,7 @@ class PostgreSQLManager:
         self._config = config or ConnectionConfig.from_env()
         self._pool: Optional[ConnectionPool] = None
         self._initialized = False
+        self._postgresql_available = False
         self._lifecycle_lock = RLock()
 
         # Repositories
@@ -67,6 +68,7 @@ class PostgreSQLManager:
             self._pool = ConnectionPool(self._config)
             try:
                 pg_available = self._pool.initialize()
+                self._postgresql_available = pg_available
 
                 self.config = ConfigRepository(self._pool)
                 self.memory = MemoryRepository(self._pool)
@@ -86,11 +88,13 @@ class PostgreSQLManager:
                 if not pg_available and os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
                     raise RuntimeError("PostgreSQL is required for production persistence")
 
-                self._create_tables()
+                if pg_available:
+                    self._create_tables()
                 self._initialized = True
                 return pg_available
             except Exception:
                 self._initialized = False
+                self._postgresql_available = False
                 if self._pool is not None:
                     self._pool.close()
                 self._pool = None
@@ -109,14 +113,17 @@ class PostgreSQLManager:
                 self.backup_manager = None
                 raise
 
-    def _create_tables(self):
-        """Create all tables if they don't exist."""
-        for table in TABLES:
-            cols = ", ".join(table["columns"])
-            sql = f"CREATE TABLE IF NOT EXISTS {table['name']} ({cols})"
-            self._pool.execute(sql)
-        for idx_sql in get_all_indexes_sql():
-            self._pool.execute(idx_sql)
+    def _create_tables(self) -> None:
+        """Create the complete schema atomically on PostgreSQL."""
+        if self._pool is None or not self._postgresql_available:
+            raise RuntimeError("PostgreSQL is required to create the production persistence schema")
+        with self._pool.transaction() as conn:
+            cursor = conn.cursor()
+            for table in TABLES:
+                cols = ", ".join(table["columns"])
+                cursor.execute(f"CREATE TABLE IF NOT EXISTS {table['name']} ({cols})")
+            for idx_sql in get_all_indexes_sql():
+                cursor.execute(idx_sql)
 
     def health_check(self) -> Dict[str, Any]:
         """Comprehensive health check."""
@@ -263,6 +270,7 @@ class PostgreSQLManager:
                 self._pool.close()
             self._pool = None
             self._initialized = False
+            self._postgresql_available = False
             self.config = None
             self.memory = None
             self.logs = None
@@ -280,12 +288,15 @@ class PostgreSQLManager:
 
 # Singleton
 _db_instance: Optional[PostgreSQLManager] = None
+_db_instance_lock = RLock()
 
 
 def get_database(config: Optional[ConnectionConfig] = None) -> PostgreSQLManager:
-    """Get or create database singleton."""
+    """Get or create the process-wide database singleton safely."""
     global _db_instance
-    if _db_instance is None:
-        _db_instance = PostgreSQLManager(config)
-        _db_instance.initialize()
-    return _db_instance
+    with _db_instance_lock:
+        if _db_instance is None:
+            instance = PostgreSQLManager(config)
+            instance.initialize()
+            _db_instance = instance
+        return _db_instance
