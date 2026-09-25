@@ -140,7 +140,8 @@ class RecommendationManager:
         return result
 
     def get_health(self) -> Dict:
-        return {
+        with self._lock:
+            return {
             "modules": ["CandidateGenerator", "RankingEngine", "ConstraintFilter",
                        "DiversityEngine", "NoveltyEngine", "ExplanationBuilder",
                        "ConfidenceCalculator", "RecommendationMemory", "FeedbackCollector"],
