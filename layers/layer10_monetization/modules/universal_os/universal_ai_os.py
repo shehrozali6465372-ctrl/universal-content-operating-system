@@ -27,10 +27,13 @@ class UniversalAIOS:
         self._events: List[Dict[str, Any]] = []
         self._error_count: int = 0
         self._recovery_count: int = 0
+        self._max_events = 10000
 
     def start(self) -> bool:
         if self._state == SystemState.RUNNING:
             return True
+        if self._state in (SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING):
+            return False
         self._state = SystemState.STARTING
         self._record_event("system_starting")
         self._state = SystemState.RUNNING
@@ -64,8 +67,12 @@ class UniversalAIOS:
         return True
 
     def restart(self) -> bool:
-        self.stop()
-        self.start()
+        if self._state in (SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING):
+            return False
+        if not self.stop():
+            return False
+        if not self.start():
+            return False
         self._record_event("system_restarted")
         return True
 
@@ -105,3 +112,5 @@ class UniversalAIOS:
 
     def _record_event(self, event_type: str) -> None:
         self._events.append({"type": event_type, "timestamp": time.time()})
+        if len(self._events) > self._max_events:
+            del self._events[:-self._max_events]
