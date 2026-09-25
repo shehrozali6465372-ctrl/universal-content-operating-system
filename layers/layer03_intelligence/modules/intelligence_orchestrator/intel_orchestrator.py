@@ -157,6 +157,7 @@ class IntelligenceOrchestrator:
     ) -> IntelligenceResult:
         """Run full intelligence analysis on a topic."""
         start = time.time()
+        self._last_events = []
         result = IntelligenceResult(topic)
 
         # Cache check
