@@ -49,8 +49,10 @@ class HashtagEngine:
                  categories: Optional[List[str]] = None,
                  custom_hashtags: Optional[List[str]] = None) -> HashtagResult:
         """Generate hashtags and keywords from content."""
+        if platform not in PLATFORM_HASHTAG_LIMITS:
+            raise ValueError(f"Unsupported platform: {platform}")
         result = HashtagResult(platform=platform)
-        max_hashtags = PLATFORM_HASHTAG_LIMITS.get(platform, 5)
+        max_hashtags = PLATFORM_HASHTAG_LIMITS[platform]
 
         # Extract from text
         auto_tags = self._extract_from_text(text)
