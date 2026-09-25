@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner, ImagePlan
@@ -55,7 +56,9 @@ class ImageOrchestrator:
         self.prompt_builder = ImagePromptBuilder()
         self.provider = provider
         if self.provider is None:
-            raise RuntimeError("A real image provider must be explicitly configured; mock providers are test-only.")
+            raise RuntimeError(
+                "A real image provider must be explicitly configured; mock providers are test-only."
+            )
         self.layout_engine = LayoutEngine()
         self.thumbnail = ThumbnailEngine()
         self.carousel = CarouselPlanner()
@@ -63,6 +66,7 @@ class ImageOrchestrator:
         self.optimizer = ImageOptimizer()
         self.memory = ImageMemory()
         self._run_count = 0
+        self._counter_lock = RLock()
 
     def run(self, topic: str, platform: str = "facebook",
             image_type: str = "photo", style: str = "modern") -> ImageOrchestratorResult:
@@ -71,20 +75,15 @@ class ImageOrchestrator:
         result = ImageOrchestratorResult(topic=topic)
         result.platform = platform
 
-        # Plan
         plans = self.planner.plan(topic, platform, image_type)
         result.image_plan = plans[0] if plans else None
 
-        # Prompt
         result.prompt = self.prompt_builder.build(
             f"{image_type} about {topic}", style=style, platform=platform
         )
 
-        # Layout
         result.layout = self.layout_engine.get_layout(platform, image_type)
 
-        # Generate using the explicitly configured real provider.
-        # Never continue with an empty/mock asset.
         if not self.provider.is_configured():
             raise RuntimeError("Configured image provider is unavailable or not authenticated")
         result.image_response = self.provider.generate(
@@ -107,30 +106,34 @@ class ImageOrchestrator:
             raise RuntimeError("Image asset provenance hash is missing or invalid")
         result.metadata["provider"] = provider_name
         result.metadata["model"] = getattr(result.image_response, "model", "")
-        result.metadata["asset_sha256"] = (
-            getattr(result.image_response, "metadata", {}) or {}
-        ).get("sha256", "")
+        result.metadata["asset_sha256"] = expected_hash
 
-        # Optimize
         dims = result.layout
         result.optimization = self.optimizer.optimize(
             dims.width, dims.height, platform
         )
 
-        # Store
         self.memory.store_image(
             platform=platform, topic=topic,
-            url=result.image_response.image_url if result.image_response else "",
+            url=result.image_response.image_url,
         )
 
         result.pipeline_time_ms = (time.monotonic() - start) * 1000
-        self._run_count += 1
+        with self._counter_lock:
+            self._run_count += 1
         return result
 
     def run_multi_platform(self, topic: str, platforms: Optional[List[str]] = None) -> List[ImageOrchestratorResult]:
-        plats = platforms or ["facebook", "instagram", "twitter", "linkedin"]
-        return [self.run(topic, p) for p in plats]
+        """Run the pipeline for each explicitly requested platform."""
+        if platforms is None:
+            platforms = ["facebook", "instagram", "twitter", "linkedin"]
+        if not isinstance(platforms, list):
+            raise ValueError("platforms must be a list or None")
+        if not platforms:
+            raise ValueError("platforms must not be empty")
+        return [self.run(topic, platform) for platform in platforms]
 
     @property
     def run_count(self) -> int:
-        return self._run_count
+        with self._counter_lock:
+            return self._run_count
