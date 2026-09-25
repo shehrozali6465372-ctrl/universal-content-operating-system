@@ -45,6 +45,10 @@ class LayoutEngine:
     def get_layout(self, platform: str, image_type: str = "photo",
                    layout_type: Optional[str] = None) -> LayoutSpec:
         """Get a layout specification."""
+        if layout_type and layout_type not in LAYOUT_PRESETS:
+            raise ValueError(f"Unsupported layout type: {layout_type}")
+        if platform not in {"facebook", "instagram", "twitter", "linkedin", "pinterest", "youtube"}:
+            raise ValueError(f"Unsupported layout platform: {platform}")
         if layout_type:
             lt = layout_type
         elif image_type == "infographic":
