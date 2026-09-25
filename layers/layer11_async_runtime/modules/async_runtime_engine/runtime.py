@@ -196,7 +196,12 @@ class AsyncRuntime:
         """Execute one coroutine in the caller's event loop."""
         if not inspect.iscoroutine(coro):
             raise TypeError("coro must be a coroutine")
-        task = self._begin_task(getattr(coro, "__name__", "coroutine"))
+        try:
+            task = self._begin_task(getattr(coro, "__name__", "coroutine"))
+        except Exception:
+            # Close caller-owned coroutine when admission fails.
+            coro.close()
+            raise
         try:
             if self._task_timeout is None:
                 result = await coro
