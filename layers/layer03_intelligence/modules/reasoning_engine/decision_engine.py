@@ -12,7 +12,9 @@ class DecisionOption:
     def __init__(self, name: str = "", metadata: Optional[Dict] = None):
         self.name = name
         self.scores: Dict[str, float] = {}
-        self.metadata = metadata or {}
+        if metadata is not None and not isinstance(metadata, dict):
+            raise TypeError("metadata must be a dict")
+        self.metadata = dict(metadata or {})
         self.overall_score = 0.0
 
     def to_dict(self) -> Dict:
@@ -69,6 +71,10 @@ class DecisionEngine:
             return result
 
         for option in options:
+            if not isinstance(option, DecisionOption):
+                raise TypeError("options must contain DecisionOption instances")
+            if any(not isinstance(v, (int, float)) or not isfinite(v) for v in option.scores.values()):
+                raise ValueError("option scores must be finite numbers")
             weighted = 0.0
             total_weight = 0.0
             for criterion, score in option.scores.items():
