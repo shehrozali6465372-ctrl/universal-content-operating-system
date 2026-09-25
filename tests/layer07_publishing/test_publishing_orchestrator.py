@@ -12,6 +12,15 @@ from layers.layer07_publishing.modules.publishing_orchestrator.publishing_orches
 from layers.layer07_publishing.modules.publishing_orchestrator.exceptions import (
     OrchestratorError, PipelineError, IntegrationError,
 )
+from layers.layer07_publishing.modules.publisher_engine.publish_result import PublisherResult
+
+
+class FakePublisherManager:
+    def publish(self, request):
+        result = PublisherResult(success=True, platform=request.platform)
+        result.set_success("real-manager-post-1", "https://example.test/post/1")
+        return result
+
 
 
 # ─── PipelineStage Tests ─────────────────────────────────────────────
@@ -422,7 +431,7 @@ class TestMetricsCollector:
 # ─── PublishingOrchestrator Tests ─────────────────────────────────────
 class TestPublishingOrchestrator:
     def setup_method(self):
-        self.orch = PublishingOrchestrator()
+        self.orch = PublishingOrchestrator(publisher_manager=FakePublisherManager())
 
     def test_create_default_pipeline(self):
         pipeline = self.orch.create_default_pipeline()
