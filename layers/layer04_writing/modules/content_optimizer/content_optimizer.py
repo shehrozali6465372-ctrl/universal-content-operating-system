@@ -1,5 +1,6 @@
 """Content Optimizer — SEO, readability, and platform optimization."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
