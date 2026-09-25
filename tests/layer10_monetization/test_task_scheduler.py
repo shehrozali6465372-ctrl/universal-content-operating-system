@@ -431,7 +431,7 @@ class TestLoadBalancer:
     def test_round_robin(self):
         lb = LoadBalancer("round_robin")
         w1 = lb.select_worker(self.pool)
-        w2 = lb.select_worker(self.pool)
+        _w2 = lb.select_worker(self.pool)
         assert w1 is not None
 
     def test_random(self):
@@ -492,7 +492,8 @@ class TestSchedulerEventBus:
         assert len(received) == 1
 
     def test_unsubscribe(self):
-        handler = lambda e: None
+        def handler(e):
+            pass
         self.bus.subscribe("test", handler)
         result = self.bus.unsubscribe("test", handler)
         assert result is True
@@ -614,25 +615,25 @@ class TestTaskScheduler:
     def test_execute_next(self):
         task = Task("layer01", priority=PRIORITY_HIGH)
         self.scheduler.schedule_task(task)
-        result = self.scheduler.execute_next(lambda l: {"ok": True})
+        result = self.scheduler.execute_next(lambda layer: {"ok": True})
         assert result is not None
         assert result.status == "completed"
 
     def test_execute_next_failure(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        result = self.scheduler.execute_next(lambda l: 1/0)
+        result = self.scheduler.execute_next(lambda layer: 1/0)
         assert result is not None
         assert result.status == "failed"
 
     def test_execute_next_empty(self):
-        result = self.scheduler.execute_next(lambda l: {"ok": True})
+        result = self.scheduler.execute_next(lambda layer: {"ok": True})
         assert result is None
 
     def test_pause_task(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        self.scheduler.execute_next(lambda l: {"ok": True})
+        self.scheduler.execute_next(lambda layer: {"ok": True})
         # After execution, task is completed, not running
         # Need to test with a task that stays running
         result = self.scheduler.pause_task("nonexistent")
@@ -654,7 +655,7 @@ class TestTaskScheduler:
     def test_retry_task(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        self.scheduler.execute_next(lambda l: 1/0)
+        self.scheduler.execute_next(lambda layer: 1/0)
         completed = self.scheduler._completed_tasks
         if completed:
             result = self.scheduler.retry_task(completed[0].task_id)
@@ -663,7 +664,7 @@ class TestTaskScheduler:
     def test_generate_report(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        self.scheduler.execute_next(lambda l: {"ok": True})
+        self.scheduler.execute_next(lambda layer: {"ok": True})
         report = self.scheduler.generate_report()
         assert report.report_id.startswith("srep_")
 
@@ -677,7 +678,7 @@ class TestTaskScheduler:
         for i in range(5):
             self.scheduler.schedule_task(Task(f"layer_{i}"))
         for _ in range(5):
-            self.scheduler.execute_next(lambda l: {"ok": True})
+            self.scheduler.execute_next(lambda layer: {"ok": True})
         assert self.scheduler.get_completed_count() == 5
 
     def test_worker_exhaustion(self):
@@ -685,7 +686,7 @@ class TestTaskScheduler:
             self.scheduler.schedule_task(Task(f"layer_{i}"))
         executed = 0
         for _ in range(10):
-            result = self.scheduler.execute_next(lambda l: {"ok": True})
+            result = self.scheduler.execute_next(lambda layer: {"ok": True})
             if result:
                 executed += 1
         assert executed > 0
@@ -693,14 +694,14 @@ class TestTaskScheduler:
     def test_event_bus_tracking(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        self.scheduler.execute_next(lambda l: {"ok": True})
+        self.scheduler.execute_next(lambda layer: {"ok": True})
         events = self.scheduler.event_bus.get_events()
         assert len(events) > 0
 
     def test_metrics_recorded(self):
         task = Task("layer01")
         self.scheduler.schedule_task(task)
-        self.scheduler.execute_next(lambda l: {"ok": True})
+        self.scheduler.execute_next(lambda layer: {"ok": True})
         summary = self.scheduler.metrics.get_summary()
         assert summary["total_scheduled"] == 1
 
@@ -730,7 +731,7 @@ class TestTaskSchedulerIntegration:
 
         executed = []
         for _ in range(5):
-            result = self.scheduler.execute_next(lambda l: {"layer": l, "ok": True})
+            result = self.scheduler.execute_next(lambda layer: {"layer": l, "ok": True})
             if result:
                 executed.append(result)
 
@@ -763,14 +764,14 @@ class TestTaskSchedulerIntegration:
         self.scheduler.schedule_task(Task("l_critical", priority=PRIORITY_CRITICAL))
         self.scheduler.schedule_task(Task("l_normal", priority=PRIORITY_NORMAL))
 
-        first = self.scheduler.execute_next(lambda l: {"ok": True})
+        first = self.scheduler.execute_next(lambda layer: {"ok": True})
         assert first.priority == PRIORITY_CRITICAL
 
     def test_report_generation(self):
         for i in range(3):
             self.scheduler.schedule_task(Task(f"layer_{i}"))
         for _ in range(3):
-            self.scheduler.execute_next(lambda l: {"ok": True})
+            self.scheduler.execute_next(lambda layer: {"ok": True})
 
         report = self.scheduler.generate_report()
         d = report.export_dict()
@@ -782,7 +783,7 @@ class TestTaskSchedulerIntegration:
         for i in range(5):
             self.scheduler.schedule_task(Task(f"layer_{i}"))
         for _ in range(5):
-            self.scheduler.execute_next(lambda l: {"ok": True})
+            self.scheduler.execute_next(lambda layer: {"ok": True})
 
         stats = self.scheduler.worker_pool.get_stats()
         assert stats["total_completed"] == 5
@@ -791,7 +792,7 @@ class TestTaskSchedulerIntegration:
         task = Task("layer01")
         self.scheduler.schedule_task(task)
         # Execute and fail, then retry
-        self.scheduler.execute_next(lambda l: 1/0)
+        self.scheduler.execute_next(lambda layer: 1/0)
         assert len(self.scheduler._completed_tasks) > 0
         failed_task = self.scheduler._completed_tasks[-1]
         result = self.scheduler.retry_task(failed_task.task_id)
@@ -802,7 +803,7 @@ class TestTaskSchedulerIntegration:
         for i in range(5):
             self.scheduler.schedule_task(Task(f"layer_{i}"))
         for _ in range(5):
-            self.scheduler.execute_next(lambda l: {"ok": True})
+            self.scheduler.execute_next(lambda layer: {"ok": True})
 
         report = self.scheduler.generate_report()
         # Should not recommend scaling when workers are idle
