@@ -93,7 +93,7 @@ class PipelineLogger:
 
     def log(self, layer: str, event: str, data: Optional[Dict[str, Any]] = None) -> None:
         self.events.append({"time": time.time(), "layer": layer, "event": event, "data": data or {}})
-        print(f"[{layer}] {event}")
+        self._logger.info("[%s] %s", layer, event)
 
 
 class PipelineWiring:
