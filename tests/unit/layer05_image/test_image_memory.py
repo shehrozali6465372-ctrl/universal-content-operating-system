@@ -43,3 +43,18 @@ def test_image_memory_returns_copies_not_internal_records() -> None:
     record = memory.get_history(limit=1)[0]
     record["topic"] = "mutated"
     assert memory.get_history(limit=1)[0]["topic"] == "topic"
+
+
+def test_image_memory_profile_reads_are_snapshots() -> None:
+    memory = ImageMemory()
+    memory.set_profile("brand", colors=["#111111"])
+    profile = memory.get_profile("brand")
+    assert profile is not None
+    profile.primary_colors.append("#222222")
+    assert memory.get_profile("brand").primary_colors == ["#111111"]
+
+
+def test_image_memory_rejects_boolean_history_limit() -> None:
+    memory = ImageMemory()
+    with pytest.raises(ValueError, match="between 1"):
+        memory.get_history(limit=True)
