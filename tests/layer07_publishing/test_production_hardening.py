@@ -70,5 +70,5 @@ def test_url_only_platform_does_not_send_local_media_paths():
     result = manager.publish(request)
 
     assert result.success is False
-    assert result.error_category in {"validation", "unknown"}
+    assert result.error_category == "media"
     assert "public media URL" in result.error_message
