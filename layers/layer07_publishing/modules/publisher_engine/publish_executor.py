@@ -1,7 +1,7 @@
 """Publish Executor — Execute publish, edit, delete, reschedule via plugins."""
 from __future__ import annotations
 import time
-from typing import Any
+from typing import Any, List, Optional
 
 from layers.layer07_publishing.modules.platform_plugin_manager.base_publisher import (
     BasePublisher, PublishResult,
@@ -20,19 +20,20 @@ class PublishExecutor:
         self,
         publisher: BasePublisher,
         request: PublishRequest,
+        media_paths: Optional[List[str]] = None,
     ) -> PublishResult:
-        start = time.time()
+        start = time.monotonic()
         try:
             result = publisher.publish(
                 content=request.content,
-                media_paths=request.get_media_paths(),
+                media_paths=request.get_media_paths() if media_paths is None else media_paths,
                 content_type=request.content_type,
             )
         except Exception as e:
             result = PublishResult(success=False, platform=request.platform)
             result.error_message = str(e)[:500]
 
-        elapsed = (time.time() - start) * 1000
+        elapsed = (time.monotonic() - start) * 1000
         self._execution_count += 1
         self._total_time_ms += elapsed
         return result
