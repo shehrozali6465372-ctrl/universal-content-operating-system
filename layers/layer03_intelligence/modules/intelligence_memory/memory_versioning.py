@@ -52,13 +52,13 @@ class MemoryVersioner:
         with self._lock:
             versions = self._versions.get(entry_id, [])
             vnum = len(versions) + 1
-        mv = MemoryVersion(entry_id=entry_id, data=copy.deepcopy(data), version_number=vnum)
+            mv = MemoryVersion(entry_id=entry_id, data=copy.deepcopy(data), version_number=vnum)
             mv.change_summary = change_summary
             if versions:
                 mv.parent_version = versions[-1].version_id
             versions.append(mv)
             self._versions[entry_id] = versions
-            return mv
+            return copy.deepcopy(mv)
 
     def get_latest(self, entry_id: str) -> Optional[MemoryVersion]:
         with self._lock:
