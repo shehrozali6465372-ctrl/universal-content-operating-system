@@ -46,7 +46,14 @@ class PostgreSQLVerification:
         # Initialize shared pool
         from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool
         self._shared_pool = ConnectionPool()
-        self._shared_pool.initialize()
+        pg_available = self._shared_pool.initialize()
+        if not pg_available:
+            self.results.append({
+                "test": "PostgreSQL availability",
+                "status": "FAIL",
+                "error": "PostgreSQL is unavailable; this verification suite must never certify a fallback backend",
+            })
+            return self._final_report()
 
         # Phase 1
         self._test_connection()
@@ -100,21 +107,30 @@ class PostgreSQLVerification:
 
             pool = self._shared_pool
             created = 0
+            errors = []
             for table in TABLES:
                 cols = ", ".join(table["columns"])
                 sql = f"CREATE TABLE IF NOT EXISTS {table['name']} ({cols})"
                 try:
                     pool.execute(sql)
                     created += 1
-                except Exception:
-                    pass
+                except Exception as exc:
+                    errors.append({"table": table["name"], "error": str(exc)[:200]})
 
             tables = pool.get_tables()
+            passed = created == len(TABLES) and not errors and all(
+                table["name"] in tables for table in TABLES
+            )
 
             self.results.append({
                 "test": "Table Creation",
-                "status": "PASS",
-                "evidence": {"tables_created": created, "total_tables": len(TABLES), "tables_found": tables},
+                "status": "PASS" if passed else "FAIL",
+                "evidence": {
+                    "tables_created": created,
+                    "total_tables": len(TABLES),
+                    "tables_found": tables,
+                    "errors": errors,
+                },
                 "duration_ms": round((time.time() - t0) * 1000, 1),
             })
             self._print("Table Creation", "PASS", f"{created}/{len(TABLES)} tables, {len(tables)} found")
