@@ -168,3 +168,23 @@ def test_openai_does_not_retry_non_transient_http_failures(monkeypatch):
     with pytest.raises(RuntimeError, match="HTTPError"):
         provider.generate(ProviderRequest("hello", "gpt-4o-mini", "openai"))
     assert attempts["count"] == 1
+
+def test_production_factory_is_wired_to_real_provider_and_fails_closed(monkeypatch):
+    for name in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "XAI_API_KEY",
+        "MISTRAL_API_KEY",
+        "COHERE_API_KEY",
+        "OPENROUTER_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("UCOS_ENV", "production")
+    from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_factory import (
+        LLMFactory,
+    )
+    manager = LLMFactory.create("production")
+    with pytest.raises(RuntimeError, match="API key is not configured"):
+        manager.generate("real provider contract")
