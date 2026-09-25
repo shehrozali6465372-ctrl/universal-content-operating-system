@@ -1,7 +1,7 @@
 # Layer 07 — Publishing
 
 **Layer:** 07 — Publishing  
-**Status:** Production-hardening in progress  
+**Status:** Production code-gate certified  
 **Scope:** account-aware publishing, platform adapters, media handling, scheduling, failure recovery, analytics hooks, memory, policies, and orchestration.
 
 ## Production invariants
