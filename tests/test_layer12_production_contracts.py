@@ -136,7 +136,7 @@ def test_openai_retries_transient_http_failures(monkeypatch):
 
     provider = OpenAIProvider({"api_key": "test-key", "max_retries": 2})
     assert provider.initialize() is True
-    response = provider.generate(ProviderRequest("hello", "gpt-4o-mini", "openai"))
+    response = provider.generate(ProviderRequest("hello", "gpt-5.6-luna", "openai"))
 
     assert response.content == "ok"
     assert response.request_id == "req_test"
@@ -166,7 +166,7 @@ def test_openai_does_not_retry_non_transient_http_failures(monkeypatch):
     provider = OpenAIProvider({"api_key": "test-key", "max_retries": 3})
     provider.initialize()
     with pytest.raises(RuntimeError, match="HTTPError"):
-        provider.generate(ProviderRequest("hello", "gpt-4o-mini", "openai"))
+        provider.generate(ProviderRequest("hello", "gpt-5.6-luna", "openai"))
     assert attempts["count"] == 1
 
 def test_production_factory_is_wired_to_real_provider_and_fails_closed(monkeypatch):
