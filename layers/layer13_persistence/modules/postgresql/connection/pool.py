@@ -350,7 +350,7 @@ class ConnectionPool:
                     cursor.execute(sql, list(data.values()))
                     conn.commit()
                     return cursor.lastrowid
-        return self._execute_with_retry(_do)
+        return self._execute_with_retry(_do, retry=False)
 
     def insert_many(self, table: str, rows: List[Dict[str, Any]]) -> int:
         """Insert multiple rows (with retry)."""
@@ -405,7 +405,7 @@ class ConnectionPool:
                 cursor.execute(exec_sql, where_params)
                 conn.commit()
                 return cursor.rowcount
-        return self._execute_with_retry(_do)
+        return self._execute_with_retry(_do, retry=False)
 
     def query(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Execute SELECT query."""
