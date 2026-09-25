@@ -138,3 +138,23 @@ def test_real_postgresql_persistence_path():
         assert float(rows["metric_value"]) == 42.0
     finally:
         manager.close()
+
+
+def test_real_postgresql_persistence_survives_reconnect():
+    manager = PostgreSQLManager()
+    assert manager.initialize() is True
+    metric = "layer8_certification_reconnect"
+    try:
+        assert manager.analytics is not None
+        persistence = PostgreSQLAnalyticsPersistence(manager.analytics)
+        persistence.record_metric(metric, 7.0, {"run_id": "reconnect"})
+    finally:
+        manager.close()
+    assert manager.initialize() is True
+    try:
+        assert manager.analytics is not None
+        rows = manager.analytics.get_latest(metric)
+        assert rows is not None
+        assert float(rows["metric_value"]) == 7.0
+    finally:
+        manager.close()
