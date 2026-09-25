@@ -11,6 +11,8 @@ from layers.layer08_analytics.modules.funnel_analyzer.analyzer import FunnelAnal
 from layers.layer08_analytics.modules.metric_engine.metrics import MetricDefinition, MetricEngine
 from layers.layer08_analytics.modules.report_generator.reports import ReportGenerator
 from layers.layer08_analytics.modules.trend_detector.detector import TrendDetector
+from layers.layer08_analytics.modules.analytics_persistence import PostgreSQLAnalyticsPersistence
+from layers.layer13_persistence.modules.postgresql.manager import PostgreSQLManager
 
 
 class Sink:
@@ -119,3 +121,20 @@ def test_production_mode_fails_closed_without_durable_persistence():
 def test_production_mode_accepts_durable_persistence():
     orchestrator = AnalyticsOrchestrator(persistence=Sink(), production=True)
     assert orchestrator.get_health()["durable_persistence"] is True
+
+
+def test_real_postgresql_persistence_path():
+    manager = PostgreSQLManager()
+    assert manager.initialize() is True
+    try:
+        assert manager.analytics is not None
+        persistence = PostgreSQLAnalyticsPersistence(manager.analytics)
+        orchestrator = AnalyticsOrchestrator(persistence=persistence, production=True)
+        metric = "layer8_certification_real_db"
+        point = orchestrator.collector.collect_manual("ci", metric, 42.0, run_id="layer8-cert")
+        assert point.value == 42.0
+        rows = manager.analytics.get_latest(metric)
+        assert rows is not None
+        assert float(rows["metric_value"]) == 42.0
+    finally:
+        manager.close()
