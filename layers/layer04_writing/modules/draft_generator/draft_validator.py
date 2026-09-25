@@ -39,6 +39,7 @@ class DraftValidator:
 
     def __init__(self) -> None:
         self._check_count = 0
+        self._lock = RLock()
 
     def validate(self, draft: str, length: str = "medium", platform: str = "facebook",
                  rules: Optional[Dict[str, Any]] = None) -> DraftValidationResult:
