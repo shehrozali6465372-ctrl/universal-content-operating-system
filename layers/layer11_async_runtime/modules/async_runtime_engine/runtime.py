@@ -129,6 +129,11 @@ class AsyncRuntime:
         """Run a coroutine from synchronous code."""
         if inspect.iscoroutine(coro) is False:
             raise TypeError("coro must be a coroutine")
+        with self._lock:
+            running = self._running
+        if not running:
+            coro.close()
+            raise RuntimeError("async runtime is not running")
         try:
             asyncio.get_running_loop()
         except RuntimeError:
