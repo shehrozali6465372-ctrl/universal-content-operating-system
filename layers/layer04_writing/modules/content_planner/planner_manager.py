@@ -158,18 +158,34 @@ class PlannerManager:
         return result
 
     def update_plan(self, plan: WritingPlan, updates: Dict[str, Any]) -> PlannerResult:
-        """Update an existing plan and re-validate."""
-        for field, value in updates.items():
-            if hasattr(plan, field):
-                setattr(plan, field, value)
-        plan.updated_at = time.time()
-        plan.version += 1
+        """Update mutable plan fields and re-validate."""
+        if not isinstance(plan, WritingPlan):
+            raise TypeError("plan must be a WritingPlan")
+        if not isinstance(updates, dict):
+            raise TypeError("updates must be a dictionary")
 
-        validation = self.validator.validate(plan)
+        mutable_fields = {
+            "topic", "goal", "platform", "audience", "tone", "length",
+            "language", "content_type", "strategy", "cta", "hashtags",
+            "emoji_level", "structure", "constraints", "metadata",
+        }
+        unknown = sorted(set(updates) - mutable_fields)
+        if unknown:
+            raise ValueError(f"Plan fields are immutable or unsupported: {unknown}")
+
+        with self._lock:
+            for field, value in updates.items():
+                setattr(plan, field, value)
+            plan.updated_at = time.time()
+            plan.version += 1
+            validation = self.validator.validate(plan)
+
         result = PlannerResult()
         result.plan = plan
         result.validation = validation
         result.metadata = {"updated": True}
+        if not validation.is_valid:
+            result.metadata["validation_errors"] = list(validation.errors)
         return result
 
     def validate_plan(self, plan: WritingPlan) -> ValidationResult:
