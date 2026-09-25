@@ -1,5 +1,6 @@
 """Constraint Manager — Manage writing constraints and requirements."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -29,25 +30,34 @@ class ConstraintManager:
 
     def __init__(self) -> None:
         self._constraints: Dict[str, WritingConstraint] = {}
+        self._lock = RLock()
 
     def add(self, name: str, constraint_type: str = "must",
             value: Any = None, description: str = "") -> WritingConstraint:
         """Add a constraint."""
         c = WritingConstraint(name=name, constraint_type=constraint_type, value=value)
         c.description = description
-        self._constraints[name] = c
+        with self._lock:
+            self._constraints[name] = c
         return c
 
     def remove(self, name: str) -> bool:
-        return self._constraints.pop(name, None) is not None
+        with self._lock:
+            return self._constraints.pop(name, None) is not None
 
     def get(self, name: str) -> Optional[WritingConstraint]:
-        return self._constraints.get(name)
+        with self._lock:
+            c = self._constraints.get(name)
+            if c is None:
+                return None
+            return self._copy(c)
 
     def check(self, plan_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Check plan data against all constraints."""
         violations: List[Dict[str, Any]] = []
-        for name, constraint in self._constraints.items():
+        with self._lock:
+            constraints = {name: self._copy(c) for name, c in self._constraints.items()}
+        for name, constraint in constraints.items():
             if constraint.constraint_type == "must":
                 plan_value = plan_data.get(name)
                 if plan_value != constraint.value:
@@ -71,10 +81,20 @@ class ConstraintManager:
         return violations
 
     def get_all(self) -> List[WritingConstraint]:
-        return list(self._constraints.values())
+        with self._lock:
+            return [self._copy(c) for c in self._constraints.values()]
 
     def count(self) -> int:
-        return len(self._constraints)
+        with self._lock:
+            return len(self._constraints)
+
+    @staticmethod
+    def _copy(constraint: WritingConstraint) -> WritingConstraint:
+        c = WritingConstraint(constraint.name, constraint.constraint_type, constraint.value)
+        c.severity = constraint.severity
+        c.description = constraint.description
+        return c
 
     def clear(self) -> None:
-        self._constraints.clear()
+        with self._lock:
+            self._constraints.clear()
