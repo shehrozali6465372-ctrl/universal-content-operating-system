@@ -60,3 +60,37 @@ jobs:
       - name: Layer 12 production-source lint
         run: |
           ruff check layers/layer12_ai_foundation --select E9,F821,F822,F823,F811 --ignore E501,E402
+
+  live-provider-preflight:
+    needs: production-gate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Verify production credential is configured
+        run: |
+          test -n "$OPENAI_API_KEY"
+
+      - name: Verify configured OpenAI production model is discoverable
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          request = urllib.request.Request(
+              "https://api.openai.com/v1/models",
+              headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"},
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              payload = json.load(response)
+
+          model_ids = {item["id"] for item in payload.get("data", [])}
+          required = "gpt-5.6-luna"
+          if required not in model_ids:
+              raise SystemExit(
+                  f"Configured production model {required!r} is not available"
+              )
+          print(f"verified model: {required}")
+          PY
