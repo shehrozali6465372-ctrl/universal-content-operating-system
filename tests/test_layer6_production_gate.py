@@ -93,7 +93,7 @@ def test_default_orchestrator_uses_real_engines_not_simulation() -> None:
 def test_fact_validator_does_not_treat_citation_presence_as_truth() -> None:
     validator = FactValidator()
     report = validator.validate(
-        "According to Reuters, the market changed significantly in 2024."
+        "The market grew by 25% in 2024 (Reuters, 2024)."
     )
     assert report.claim_validations
     assert all(
@@ -104,7 +104,7 @@ def test_fact_validator_does_not_treat_citation_presence_as_truth() -> None:
 
 def test_fact_validator_can_verify_exact_supplied_evidence() -> None:
     validator = FactValidator()
-    claim = "The market changed significantly in 2024."
+    claim = "The market grew by 25% in 2024."
     report = validator.validate(
         f"{claim} (Reuters, 2024)",
         evidence_texts=[{"source": "Reuters", "text": claim}],
