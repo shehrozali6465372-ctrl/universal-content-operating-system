@@ -1,6 +1,7 @@
 """EventStream — bounded in-process event bus with observable handler failures."""
 from __future__ import annotations
 import itertools
+import threading
 import time
 from typing import Any, Callable, Dict, List
 
@@ -35,15 +36,17 @@ class EventStream:
         self._subscribers: Dict[str, List[Callable[[Event], None]]] = {}
         self._events: List[Event] = []
         self._global_handlers: List[Callable[[Event], None]] = []
+        self._lock = threading.RLock()
 
     def publish(self, event_type: str, source: str = "",
                 data: Dict[str, Any] = None) -> Event:
         event = Event(event_type, source)
         event.data = dict(data or {})
-        self._events.append(event)
-        if len(self._events) > self._max_events:
-            del self._events[:-self._max_events]
-        handlers = list(self._subscribers.get(event_type, []))
+        with self._lock:
+            self._events.append(event)
+            if len(self._events) > self._max_events:
+                del self._events[:-self._max_events]
+            handlers = list(self._subscribers.get(event_type, []))
         for handler in handlers + list(self._global_handlers):
             try:
                 handler(event)
@@ -55,44 +58,51 @@ class EventStream:
     def subscribe(self, event_type: str, handler: Callable[[Event], None]) -> None:
         if not callable(handler):
             raise ValueError("handler must be callable")
-        self._subscribers.setdefault(event_type, []).append(handler)
+        with self._lock:
+            self._subscribers.setdefault(event_type, []).append(handler)
 
     def subscribe_all(self, handler: Callable[[Event], None]) -> None:
         if not callable(handler):
             raise ValueError("handler must be callable")
-        self._global_handlers.append(handler)
+        with self._lock:
+            self._global_handlers.append(handler)
 
     def unsubscribe(self, event_type: str, handler: Callable[[Event], None]) -> bool:
-        handlers = self._subscribers.get(event_type, [])
-        if handler not in handlers:
-            return False
-        handlers.remove(handler)
-        if not handlers:
-            self._subscribers.pop(event_type, None)
-        return True
+        with self._lock:
+            handlers = self._subscribers.get(event_type, [])
+            if handler not in handlers:
+                return False
+            handlers.remove(handler)
+            if not handlers:
+                self._subscribers.pop(event_type, None)
+            return True
 
     def get_events(self, event_type: str = "", count: int = 50) -> List[Event]:
         if count <= 0:
             return []
-        events = self._events if not event_type else [
+        with self._lock:
+            events = self._events if not event_type else [
             event for event in self._events if event.event_type == event_type
         ]
         return list(events[-count:])
 
     def get_event_types(self) -> List[str]:
-        return sorted({event.event_type for event in self._events})
+        with self._lock:
+            return sorted({event.event_type for event in self._events})
 
     def clear_events(self) -> int:
-        count = len(self._events)
-        self._events.clear()
-        return count
+        with self._lock:
+            count = len(self._events)
+            self._events.clear()
+            return count
 
     def get_stats(self) -> Dict[str, Any]:
-        types: Dict[str, int] = {}
+        with self._lock:
+            types: Dict[str, int] = {}
         errors = 0
         for event in self._events:
             types[event.event_type] = types.get(event.event_type, 0) + 1
             errors += len(event.handler_errors)
-        return {"total_events": len(self._events), "by_type": types,
+            return {"total_events": len(self._events), "by_type": types,
                 "subscriber_count": sum(len(h) for h in self._subscribers.values()),
                 "handler_errors": errors}
