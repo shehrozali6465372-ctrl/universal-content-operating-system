@@ -47,6 +47,14 @@ class PublishJob:
             return False
         return self.scheduled_time is not None and time.time() >= self.scheduled_time
 
+    def is_retry_ready(self) -> bool:
+        return (
+            self.status == "pending"
+            and bool(self.metadata.get("retry_scheduled"))
+            and self.scheduled_time is not None
+            and time.time() >= self.scheduled_time
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "job_id": self.job_id,
