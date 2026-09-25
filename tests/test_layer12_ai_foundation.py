@@ -2230,12 +2230,12 @@ class TestMultiModelMonitor:
 class TestMultiModelOptimizer:
     def test_optimize_selection(self):
         o = MultiModelOptimizer()
-        models = o.optimize_model_selection(["gpt-4o", "claude-sonnet-4-6", "gemini-3.8-flash", "gpt-5.6-luna"], "generation")
+        models = o.optimize_model_selection(["gpt-5.6-sol", "deepseek-v4-pro", "gemini-3.8-flash", "gpt-5.6-luna"], "generation")
         assert len(models) >= 2
 
     def test_optimize_creative(self):
         o = MultiModelOptimizer()
-        models = o.optimize_model_selection(["gpt-4o", "claude", "gemini", "deepseek"], "creative")
+        models = o.optimize_model_selection(["gpt-5.6-sol", "gpt-5.6-luna", "gemini-3.8-flash", "deepseek-flash"], "creative")
         assert "gpt-4o" in models or "claude" in models
 
     def test_optimize_consensus(self):
@@ -4840,13 +4840,13 @@ class TestTokenCounter:
 
 class TestPriceCalculator:
     def test_calculate(self):
-        cost = PriceCalculator.calculate("gpt-4o", 1000, 500)
+        cost = PriceCalculator.calculate("gpt-5.6-luna", 1000, 500)
         assert cost > 0
 
     def test_compare(self):
-        costs = PriceCalculator.compare_models(1000, 500, ["gpt-4o", "gpt-5.6-luna"])
-        assert "gpt-4o" in costs
-        assert costs["gpt-5.6-luna"] < costs["gpt-4o"]
+        costs = PriceCalculator.compare_models(1000, 500, ["gpt-5.6-luna", "gpt-5.6-sol"])
+        assert "gpt-5.6-sol" in costs
+        assert costs["gpt-5.6-luna"] < costs["gpt-5.6-sol"]
 
 
 class TestCostMemory:
@@ -4896,8 +4896,8 @@ class TestCostOptimizer:
 class TestModelSwitcher:
     def test_switch_down(self):
         s = ModelSwitcher()
-        result = s.switch_down("gpt-4o", 0.0005)
-        assert result == "gemini-3.8-flash"
+        result = s.switch_down("gpt-5.6-sol", 0.0005)
+        assert result == "gpt-5.6-luna"
 
     def test_tier(self):
         s = ModelSwitcher()
