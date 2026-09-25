@@ -58,7 +58,7 @@ class TestPublishJob:
     def test_is_ready_pending(self):
         j = PublishJob()
         j.scheduled_time = time.time() - 1
-        assert j.is_ready() is False
+        assert j.is_ready() is True
 
     def test_is_ready_scheduled_past(self):
         j = PublishJob()

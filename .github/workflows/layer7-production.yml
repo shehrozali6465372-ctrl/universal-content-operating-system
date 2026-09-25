@@ -1,0 +1,102 @@
+name: Layer 7 Production Gate
+
+on:
+  push:
+    branches:
+      - hardening/layer7-production
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "layers/layer07_publishing/**"
+      - "tests/layer07_publishing/**"
+      - ".github/workflows/layer7-production.yml"
+      - "requirements.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ucos-layer7-production-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layer7-production:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+
+      - name: Compile Layer 7
+        run: python -m compileall -q layers/layer07_publishing tests/layer07_publishing
+
+      - name: Layer 7 Static Checks
+        run: >-
+          ruff check
+          layers/layer07_publishing/modules/failure_recovery/circuit_breaker.py
+          layers/layer07_publishing/modules/failure_recovery/recovery_manager.py
+          layers/layer07_publishing/modules/media_manager/runtime_media.py
+          layers/layer07_publishing/modules/platform_plugin_manager/plugin_manager.py
+          layers/layer07_publishing/modules/publisher_engine/publish_executor.py
+          layers/layer07_publishing/modules/publisher_engine/publish_transaction.py
+          layers/layer07_publishing/modules/publisher_engine/publisher_manager.py
+          layers/layer07_publishing/modules/publishing_orchestrator/pipeline_stage.py
+          layers/layer07_publishing/modules/publishing_orchestrator/publishing_orchestrator.py
+          layers/layer07_publishing/modules/scheduler_queue/job_queue.py
+          layers/layer07_publishing/modules/scheduler_queue/publish_job.py
+          layers/layer07_publishing/modules/scheduler_queue/queue_orchestrator.py
+          layers/layer07_publishing/modules/scheduler_queue/worker_manager.py
+          tests/layer07_publishing/test_failure_recovery.py
+          tests/layer07_publishing/test_layer07_production_hardening.py
+          tests/layer07_publishing/test_publishing_orchestrator.py
+          --select E9,F63,F7,F82 --ignore E501,E402
+
+      - name: Layer 7 Test Suite
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest tests/layer07_publishing -q --tb=short 2>&1 | tee layer7-test-output.txt
+
+      - name: Layer 7 Production Evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          out = pathlib.Path("layer7-production-evidence.txt")
+          sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          out.write_text(
+              "Layer 7 production gate evidence\n"
+              f"commit={sha}\n"
+              f"python={sys.version.split()[0]}\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Layer 7 Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer7-production-evidence
+          path: |
+            layer7-production-evidence.txt
+            layer7-test-output.txt
+          if-no-files-found: ignore

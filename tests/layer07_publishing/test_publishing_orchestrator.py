@@ -12,6 +12,15 @@ from layers.layer07_publishing.modules.publishing_orchestrator.publishing_orches
 from layers.layer07_publishing.modules.publishing_orchestrator.exceptions import (
     OrchestratorError, PipelineError, IntegrationError,
 )
+from layers.layer07_publishing.modules.publisher_engine.publish_result import PublisherResult
+
+
+class FakePublisherManager:
+    def publish(self, request):
+        result = PublisherResult(success=True, platform=request.platform)
+        result.set_success("real-manager-post-1", "https://example.test/post/1")
+        return result
+
 
 
 # ─── PipelineStage Tests ─────────────────────────────────────────────
@@ -39,10 +48,11 @@ class TestPipelineStage:
         assert result is False
         assert "test error" in s.error
 
-    def test_execute_no_handler(self):
+    def test_execute_no_handler_fails_closed(self):
         s = PipelineStage("noop", "no handler", 1)
         result = s.execute({})
-        assert result is True
+        assert result is False
+        assert "no handler" in s.error.lower()
 
     def test_to_dict(self):
         s = PipelineStage("test", "desc", 1, True)
@@ -422,7 +432,7 @@ class TestMetricsCollector:
 # ─── PublishingOrchestrator Tests ─────────────────────────────────────
 class TestPublishingOrchestrator:
     def setup_method(self):
-        self.orch = PublishingOrchestrator()
+        self.orch = PublishingOrchestrator(publisher_manager=FakePublisherManager())
 
     def test_create_default_pipeline(self):
         pipeline = self.orch.create_default_pipeline()
@@ -432,7 +442,8 @@ class TestPublishingOrchestrator:
         result = self.orch.publish("facebook", "Hello world")
         assert result["success"] is True
         assert result["platform"] == "facebook"
-        assert len(result["completed_stages"]) >= 5
+        assert result["post_id"] == "real-manager-post-1"
+        assert len(result["completed_stages"]) == 2
 
     def test_publish_multiple_platforms(self):
         r1 = self.orch.publish("facebook", "FB post")
