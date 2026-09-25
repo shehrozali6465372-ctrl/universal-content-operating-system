@@ -39,11 +39,10 @@ class GeminiImageProvider(BaseImageProvider):
 
     """
 
-    GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1"
+    GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
     SUPPORTED_MODELS = [
         "gemini-3.1-flash-image",
-        "gemini-3-pro-image-preview",
-        "gemini-2.5-flash-image",
+        "gemini-3-pro-image",
     ]
 
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3.1-flash-image") -> None:
