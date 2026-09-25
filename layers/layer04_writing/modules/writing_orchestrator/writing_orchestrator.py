@@ -110,6 +110,10 @@ class WritingOrchestrator:
             raise ValueError("platforms must contain at least one non-empty platform")
         if len(set(target_platforms)) != len(target_platforms):
             raise ValueError("platforms must not contain duplicates")
+        from layers.layer04_writing.modules.content_planner.plan_validator import VALID_PLATFORMS
+        unknown = [p for p in target_platforms if p not in VALID_PLATFORMS]
+        if unknown:
+            raise ValueError(f"Unsupported platform(s): {unknown}")
         result = OrchestratorResult(topic=topic)
 
 
