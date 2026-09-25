@@ -226,7 +226,8 @@ class IntelligenceOrchestrator:
 
         # Cache
         self.cache.store(cache_key, result)
-        self._total_analyses += 1
+        with self._lock:
+            self._total_analyses += 1
         return result
 
     def analyze_batch(
@@ -269,15 +270,14 @@ class IntelligenceOrchestrator:
             with self._lock:
                 metrics.failure_count += 1
             with self._lock:
-                self._last_events.append(event)
+                events.append(event)
                 self._total_events += 1
             return None
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get execution metrics for all modules."""
-        return {
-            name: m.to_dict() for name, m in self._metrics.items()
-        }
+        with self._lock:
+            return {name: m.to_dict() for name, m in self._metrics.items()}
 
     def get_health(self) -> HealthStatus:
         """Check health of all modules."""
