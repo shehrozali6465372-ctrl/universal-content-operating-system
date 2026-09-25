@@ -71,6 +71,8 @@ class AIOrchestrator:
             raise ValueError("module name must not be empty")
         if module is None:
             raise ValueError("module must not be None")
+        if not callable(getattr(module, "evaluate", None)) and not callable(getattr(module, "check", None)):
+            raise TypeError(f"module '{name}' must expose callable evaluate() or check()")
         self._linked_modules[name] = module
         self.health.check(name, True)
 
@@ -96,6 +98,8 @@ class AIOrchestrator:
                 result = component.check(str(input_data))
             else:
                 raise TypeError(f"Linked component '{target}' has no supported execution method")
+            if not isinstance(result, dict):
+                raise TypeError(f"Linked component '{target}' returned non-dict result")
         except Exception as exc:
             logger.exception("AI orchestration task failed: task=%s", task)
             self.monitor.alert("error", f"Task failed: {task}")
