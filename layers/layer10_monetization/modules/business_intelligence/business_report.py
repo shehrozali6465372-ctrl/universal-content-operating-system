@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import json
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _BR_COUNTER = itertools.count(1)
 
@@ -86,7 +86,7 @@ class BusinessReportGenerator:
         return report
 
     def get_recent(self, count: int = 5) -> List[BusinessReport]:
-        return self._reports[-count:]
+        if count < 0:\n            raise ValueError("count must be >= 0")\n        return self._reports[-count:] if count else []
 
     def get_by_type(self, report_type: str) -> List[BusinessReport]:
         return [r for r in self._reports if r.report_type == report_type]
