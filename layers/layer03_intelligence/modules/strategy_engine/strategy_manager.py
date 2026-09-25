@@ -133,7 +133,9 @@ class StrategyManager:
             if c.strategy_id == selection.selected_id:
                 result.selected_strategy = c
                 break
-        selected_index = next((i for i, c in enumerate(candidates) if c.strategy_id == selection.selected_id), 0)\n        result.evaluation = evaluations[selected_index] if evaluations else None\n        result.risk_assessment = risk_assessments[selected_index] if risk_assessments else None
+        selected_index = next((i for i, c in enumerate(candidates) if c.strategy_id == selection.selected_id), 0)
+        result.evaluation = evaluations[selected_index] if evaluations else None
+        result.risk_assessment = risk_assessments[selected_index] if risk_assessments else None
 
         # 5. Goal plan
         if goal_configs:
@@ -145,7 +147,8 @@ class StrategyManager:
         result.adaptations = [adapt_result]
 
         # 7. Explain
-        eval_dict = result.evaluation.to_dict() if result.evaluation else {}\n        risk_dict = result.risk_assessment.to_dict() if result.risk_assessment else {}
+        eval_dict = result.evaluation.to_dict() if result.evaluation else {}
+        risk_dict = result.risk_assessment.to_dict() if result.risk_assessment else {}
         result.explanation = self.explainer.explain(
             result.selected_strategy.to_dict(), eval_data=eval_dict, risk_data=risk_dict
         )
