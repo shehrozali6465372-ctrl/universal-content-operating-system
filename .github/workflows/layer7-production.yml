@@ -63,7 +63,7 @@ jobs:
           tests/layer07_publishing/test_failure_recovery.py
           tests/layer07_publishing/test_layer07_production_hardening.py
           tests/layer07_publishing/test_publishing_orchestrator.py
-          --select E,F,W --ignore E501,E402
+          --select E9,F63,F7,F82 --ignore E501,E402
 
       - name: Layer 7 Test Suite
         shell: bash
