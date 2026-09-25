@@ -1,5 +1,6 @@
 """LLMManager — Central AI model management."""
 from __future__ import annotations
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -21,8 +22,9 @@ from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_report impor
 class LLMManager:
     """Central AI model management — the brain of the AI OS."""
 
-    def __init__(self, config: Optional[LLMConfig] = None) -> None:
+    def __init__(self, config: Optional[LLMConfig] = None, generator: Any = None) -> None:
         self.config = config or LLMConfig()
+        self._generator = generator
         self.metrics = LLMMetrics()
         self.memory = LLMMemory()
         self.cost_tracker = LLMCostTracker(self.config.budget_limit)
@@ -66,7 +68,24 @@ class LLMManager:
                 return response
 
         start = time.time()
-        response = LLMResponse(self._simulate_response(prompt, model), model, provider)
+        if self._generator is None:
+            if os.getenv("UCOS_ENV", "").strip().lower() == "production":
+                raise RuntimeError(
+                    "LLMManager has no production generator; refusing simulated AI output"
+                )
+            generated = f"[development-only simulated response for {provider}/{model}]"
+        else:
+            generated = self._generator(
+                prompt=prompt,
+                model=model,
+                provider=provider,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
+            if not isinstance(generated, str) or not generated.strip():
+                raise RuntimeError("AI generator returned empty or non-text output")
+        response = LLMResponse(generated, model, provider)
         response.request_id = request.request_id
         response.latency_ms = (time.time() - start) * 1000
         response.usage = {"prompt_tokens": len(prompt.split()) * 2,
@@ -110,5 +129,3 @@ class LLMManager:
         return {"running": self._is_running, "config": self.config.to_dict(),
                 "metrics": self.metrics.to_dict(), "cache": self.cache.get_stats()}
 
-    def _simulate_response(self, prompt: str, model: str) -> str:
-        return ""
