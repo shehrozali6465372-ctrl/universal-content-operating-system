@@ -16,7 +16,8 @@ class LoopReportGenerator:
         self._reports: List[LoopReport] = []
     def generate(self, report_type: str = "status", data: Dict[str, Any] = None) -> LoopReport:
         report = LoopReport(report_type)
-        if data: report.data = dict(data)
+        if data:
+            report.data = dict(data)
         self._reports.append(report)
         return report
     def get_recent(self, count: int = 5) -> List[LoopReport]:
