@@ -343,9 +343,10 @@ class LearningOrchestrator:
             raise ProductionLearningDataRequired("memory_entries must be supplied for memory evolution")
         result = self.memory_manager.run_evolution_cycle(entries)
         return {
-            "patterns_stored": result.memories_optimized,
-            "lessons_learned": result.recommendations,
+            "patterns_stored": result.merge_count + result.classification_count,
             "memory_cycle_id": result.cycle_id,
+            "entries_processed": result.entries_processed,
+            "entries_after": result.entries_after,
         }
 
     def _stage_self_improve(self, content: str, platform: str, ctx: Dict[str, Any]) -> Dict[str, Any]:
