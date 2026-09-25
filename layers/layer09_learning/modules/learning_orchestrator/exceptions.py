@@ -1,18 +1,26 @@
-"""Custom exceptions for Learning Orchestrator."""
+"""Custom exceptions for the Layer 9 learning orchestrator."""
 from __future__ import annotations
 
 
 class LearningOrchestratorError(Exception):
-    """Base exception for learning orchestrator errors."""
+    """Base exception for learning-orchestration failures."""
 
 
 class PipelineError(LearningOrchestratorError):
-    """Raised when the learning pipeline fails."""
+    """Raised when the learning pipeline cannot be constructed or completed."""
 
 
 class ModuleExecutionError(LearningOrchestratorError):
-    """Raised when a specific module fails during execution."""
+    """Raised when a learning module fails during execution."""
 
 
 class AggregationError(LearningOrchestratorError):
-    """Raised when result aggregation fails."""
+    """Raised when stage results cannot be merged safely."""
+
+
+class ProductionLearningDataRequired(LearningOrchestratorError):
+    """Raised when a production learning run lacks observed data.
+
+    Layer 9 must never manufacture feedback, performance outcomes, predictions,
+    or optimization evidence merely to make an orchestration appear successful.
+    """
