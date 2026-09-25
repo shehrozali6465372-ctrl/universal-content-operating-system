@@ -15,7 +15,6 @@ import threading
 from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
 import re
 
 
@@ -362,11 +361,11 @@ class ConnectionPool:
         if any(tuple(row.keys()) != columns for row in rows[1:]):
             raise ValueError("insert_many rows must have identical columns")
         def _do():
-            table = self._identifier(table)
+            table_name = self._identifier(table)
             cols = ", ".join(self._identifier(k) for k in columns)
             ph = self._placeholder()
             phs = ", ".join([ph for _ in rows[0]])
-            sql = f"INSERT INTO {table} ({cols}) VALUES ({phs})"
+            sql = f"INSERT INTO {table_name} ({cols}) VALUES ({phs})"
             data = [list(r.values()) for r in rows]
             with self.connection() as conn:
                 cursor = conn.cursor()
