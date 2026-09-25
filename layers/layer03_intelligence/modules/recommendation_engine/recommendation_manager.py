@@ -87,7 +87,7 @@ class RecommendationManager:
         # Filter
         filter_result = self.filter.filter(all_candidates)
         result.filtered_count = len(filter_result.filtered_out)
-        candidates = filter_result.passed if filter_result.passed else all_candidates
+        candidates = filter_result.passed
 
         # Rank
         ranked = self.ranker.rank(candidates)
@@ -98,8 +98,7 @@ class RecommendationManager:
         candidates = div_result.selected if div_result.selected else ranked
 
         # Take top N
-        max_n = data.get("max_results", 5)
-        top = candidates[:max_n]
+        max_n = data.get("max_results", 5)\n        if not isinstance(max_n, int) or isinstance(max_n, bool) or max_n < 1:\n            raise ValueError("max_results must be a positive integer")\n        top = candidates[:max_n]
 
         # Build recommendations with explanations
         for c in top:
