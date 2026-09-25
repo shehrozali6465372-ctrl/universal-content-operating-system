@@ -1,0 +1,68 @@
+name: Layer 14 Production Certification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer14-production-certification
+  cancel-in-progress: false
+
+jobs:
+  layer14:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      APP_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Layer 14
+        run: |
+          python -m compileall -q layers/layer14_enterprise_integration
+
+      - name: Import Layer 14 Core
+        run: |
+          python - <<'PY'
+          import importlib
+          from pathlib import Path
+          root = Path("layers/layer14_enterprise_integration/modules")
+          modules = []
+          for p in root.rglob("*.py"):
+              if p.name == "__init__.py":
+                  continue
+              rel = p.relative_to(Path(".")).with_suffix("")
+              modules.append(".".join(rel.parts))
+          failures = []
+          for name in sorted(modules):
+              try:
+                  importlib.import_module(name)
+              except Exception as exc:
+                  failures.append(f"{name}: {type(exc).__name__}: {exc}")
+          if failures:
+              raise SystemExit("\n".join(failures))
+          print(f"Imported {len(modules)} Layer 14 modules successfully")
+          PY
+
+      - name: Layer 14 Production Gate
+        run: |
+          python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
+
+      - name: Layer 14 Security Regression
+        run: |
+          python -m pytest -q tests -k "layer14 or api_gateway or integration" --tb=short
