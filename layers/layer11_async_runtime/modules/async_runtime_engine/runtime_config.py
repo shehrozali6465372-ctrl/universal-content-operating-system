@@ -11,7 +11,7 @@ class RuntimeConfig:
         self.log_level="INFO"; self.metadata:Dict[str,Any]={}
         self.validate()
     def validate(self)->None:
-        integer_fields=("max_workers","max_tasks","max_retries","queue_size","batch_size")
+        integer_fields=("max_workers","max_tasks","queue_size","batch_size")
         positive_fields=("task_timeout","shutdown_timeout","health_check_interval","metrics_interval")
         for name in integer_fields:
             value=getattr(self,name)
