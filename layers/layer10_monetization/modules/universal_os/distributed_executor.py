@@ -53,9 +53,14 @@ class DistributedExecutor:
         self._workers_active += 1
         task.status = "running"
         try:
-            task.result = task.func() if task.func is not None else "executed"
-            task.status = "completed"
-            self._completed.append(task)
+            if task.func is None:
+                task.status = "failed"
+                task.error = "NoExecutableFunction"
+                self._failed.append(task)
+            else:
+                task.result = task.func()
+                task.status = "completed"
+                self._completed.append(task)
         except Exception as exc:
             task.status = "failed"
             task.error = type(exc).__name__
