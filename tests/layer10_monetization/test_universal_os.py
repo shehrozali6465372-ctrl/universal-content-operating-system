@@ -908,14 +908,14 @@ class TestDistributedExecutor:
         assert task.status == "queued"
 
     def test_execute_next(self):
-        self.de.submit("task1")
+        self.de.submit("task1", lambda: "ok")
         result = self.de.execute_next()
         assert result is not None
         assert result.status == "completed"
 
     def test_execute_all(self):
-        self.de.submit("a")
-        self.de.submit("b")
+        self.de.submit("a", lambda: "a")
+        self.de.submit("b", lambda: "b")
         results = self.de.execute_all()
         assert len(results) == 2
 
