@@ -36,7 +36,9 @@ class AnalyticsResult:
 class AnalyticsOrchestrator:
     """Collect -> calculate -> trend -> report, without creating Layer 13 resources."""
 
-    def __init__(self, persistence: Optional[AnalyticsPersistence] = None) -> None:
+    def __init__(self, persistence: Optional[AnalyticsPersistence] = None, production: bool = False) -> None:
+        if production and not (persistence is not None and bool(getattr(persistence, "durable", False))):
+            raise RuntimeError("Layer 8 production mode requires a durable Layer 13 analytics persistence adapter")
         self.persistence = persistence
         persist = self._persist_point if persistence is not None else None
         self.collector = DataCollector(persist=persist)
