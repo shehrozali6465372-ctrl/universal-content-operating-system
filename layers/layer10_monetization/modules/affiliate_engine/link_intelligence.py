@@ -208,8 +208,8 @@ class LinkIntelligence:
         total_revenue = sum(link.total_revenue for link in links)
         return {
             "total_links": len(links),
-            "active_links": sum(1 for l in links if any(v.active for v in l.variants)),
-            "ab_test_links": sum(1 for l in links if l.ab_test_enabled),
+            "active_links": sum(1 for link in links if any(v.active for v in link.variants)),
+            "ab_test_links": sum(1 for link in links if link.ab_test_enabled),
             "total_clicks": total_clicks,
             "total_conversions": total_conversions,
             "total_revenue": round(total_revenue, 2),
