@@ -1,5 +1,6 @@
 """Prompt Builder — Build LLM prompts from WritingPlan."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, Optional
 
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
@@ -63,6 +64,7 @@ class PromptBuilder:
 
     def __init__(self) -> None:
         self._prompt_count = 0
+        self._lock = RLock()
 
     def build(self, plan: WritingPlan, context: Optional[Dict[str, Any]] = None) -> PromptSet:
         """Build a complete prompt set from a WritingPlan."""
@@ -80,7 +82,8 @@ class PromptBuilder:
         # User prompt
         ps.user_prompt = self._build_user_prompt(plan, context)
 
-        self._prompt_count += 1
+        with self._lock:
+            self._prompt_count += 1
         return ps
 
     def build_variant(self, plan: WritingPlan, variant_type: str = "alternative") -> PromptSet:
@@ -161,4 +164,5 @@ class PromptBuilder:
 
     @property
     def prompt_count(self) -> int:
-        return self._prompt_count
+        with self._lock:
+            return self._prompt_count
