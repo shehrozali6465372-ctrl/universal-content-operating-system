@@ -55,8 +55,9 @@ class TestRevenueTracker:
         assert entry.revenue_type == "other"
 
     def test_record_negative_amount(self):
-        entry = self.rt.record("ad_revenue", -10.0)
-        assert entry.amount == 0.0
+        import pytest
+        with pytest.raises(ValueError):
+            self.rt.record("ad_revenue", -10.0)
 
     def test_get_total_revenue(self):
         self.rt.record("ad_revenue", 100.0, "facebook")
@@ -785,6 +786,7 @@ class TestBusinessOrchestrator:
         assert self.orch._is_running is False
 
     def test_run_pipeline(self):
+        self.orch.start()
         results = self.orch.run_pipeline("facebook",
                                           {"ad_revenue": 1000, "affiliate": 500},
                                           {"cost": 300})
@@ -795,6 +797,7 @@ class TestBusinessOrchestrator:
         assert "duration_ms" in results
 
     def test_run_pipeline_empty(self):
+        self.orch.start()
         results = self.orch.run_pipeline("x")
         assert "stages" in results
 
@@ -814,16 +817,19 @@ class TestBusinessOrchestrator:
         assert isinstance(api, BusinessIntelligenceAPI)
 
     def test_pipeline_runs_tracked(self):
+        self.orch.start()
         self.orch.run_pipeline("facebook")
         self.orch.run_pipeline("x")
         assert len(self.orch._pipeline_runs) == 2
 
     def test_revenue_tracking(self):
+        self.orch.start()
         self.orch.run_pipeline("facebook", {"ad_revenue": 500})
         total = self.orch.revenue_tracker.get_total_revenue("facebook")
         assert total == 500
 
     def test_roi_tracking(self):
+        self.orch.start()
         self.orch.run_pipeline("facebook",
                                 {"ad_revenue": 1000},
                                 {"cost": 500})
