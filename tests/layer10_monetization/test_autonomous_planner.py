@@ -102,7 +102,8 @@ class TestDecisionMatrix:
 
     def test_evaluate(self):
         a = self.dm.add_option("a")
-        a.set_score("impact", 0.9); a.set_score("risk", 0.2)
+        a.set_score("impact", 0.9)
+        a.set_score("risk", 0.2)
         b = self.dm.add_option("b")
         b.set_score("impact", 0.5); b.set_score("risk", 0.5)
         best = self.dm.evaluate()
