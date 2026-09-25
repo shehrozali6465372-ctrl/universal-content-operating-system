@@ -209,6 +209,17 @@ class TestDraftMemory:
         self.dm.store("p2", "AI", "text2")
         assert len(self.dm.get_by_plan("p1")) == 1
 
+    def test_invalid_max_size(self):
+        import pytest
+        with pytest.raises(ValueError):
+            DraftMemory(max_size=0)
+
+    def test_defensive_read(self):
+        rec = self.dm.store("p1", "AI", "original")
+        got = self.dm.get_recent(1)[0]
+        got.text = "mutated"
+        assert self.dm.get_recent(1)[0].text == "original"
+
     def test_max_size(self):
         for i in range(7):
             self.dm.store(f"p{i}", "topic", f"text{i}")
