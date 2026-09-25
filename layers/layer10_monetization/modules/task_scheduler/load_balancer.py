@@ -83,6 +83,6 @@ class LoadBalancer:
         return hotspots
 
     def rebalance(self, pool: WorkerPool) -> int:
-        busy = pool.get_busy_workers()
+        # Busy-worker count is intentionally not required for hotspot detection.
         hotspots = self.detect_hotspots(pool)
         return len(hotspots)
