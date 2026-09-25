@@ -36,7 +36,7 @@ class TestIntelligenceOrchestrator:
     def test_cache(self):
         r1 = self.orch.analyze("Cached Topic")
         r2 = self.orch.analyze("Cached Topic")
-        assert r1 is r2  # cached returns same object
+        assert r1 is not r2  # cache returns an isolated defensive copy
         assert r2.metadata.get("cached") is True  # marked as cached
 
     def test_analyze_batch(self):
