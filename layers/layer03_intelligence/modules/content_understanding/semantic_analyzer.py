@@ -26,11 +26,14 @@ Version: 1.0.0
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Dict, List, Set, Tuple
 
 from layers.shared.models.event import Event, EventType
 from layers.layer03_intelligence.modules.content_understanding.entity_linker import EntityLinker
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -619,5 +622,6 @@ class SemanticAnalyzer:
                     "confidence": result.confidence,
                 },
             ))
-        except Exception:
-            pass  # Never break analysis due to event publishing
+        except Exception as exc:
+            # Event delivery is best-effort, but failures must remain observable.
+            logger.warning("Semantic analysis event publication failed: %s", exc)
