@@ -57,3 +57,22 @@ def test_import_plan_fails_closed_on_invalid_platform():
     from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
     with pytest.raises(ValueError, match="failed validation"):
         PlannerManager().import_plan({"topic": "AI", "platform": "unknown"})
+
+
+def test_mock_provider_is_rejected_in_production(monkeypatch):
+    monkeypatch.setenv("UCOS_ENV", "production")
+    with pytest.raises(RuntimeError, match="real LLM provider"):
+        DraftManager(provider=MockLLMProvider())
+
+
+def test_orchestrator_fails_closed_on_invalid_generated_draft():
+    class InvalidDraftProvider(MockLLMProvider):
+        def generate(self, prompt, system_prompt="", **kwargs):
+            response = super().generate(prompt, system_prompt, **kwargs)
+            response.text = "too short"
+            response.tokens_used = 2
+            return response
+
+    orchestrator = WritingOrchestrator(provider=InvalidDraftProvider())
+    with pytest.raises(ValueError, match="failed validation"):
+        orchestrator.run("AI", platforms=["facebook"])
