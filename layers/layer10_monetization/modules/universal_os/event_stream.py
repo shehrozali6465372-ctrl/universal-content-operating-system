@@ -1,9 +1,10 @@
 """EventStream — bounded in-process event bus with observable handler failures."""
 from __future__ import annotations
+
 import itertools
 import threading
 import time
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 _ES_COUNTER = itertools.count(1)
 
@@ -21,13 +22,18 @@ class Event:
         self.handler_errors: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"event_id": self.event_id, "type": self.event_type,
-                "source": self.source, "timestamp": self.timestamp,
-                "handled": self.handled, "handler_errors": list(self.handler_errors)}
+        return {
+            "event_id": self.event_id,
+            "type": self.event_type,
+            "source": self.source,
+            "timestamp": self.timestamp,
+            "handled": self.handled,
+            "handler_errors": list(self.handler_errors),
+        }
 
 
 class EventStream:
-    """Global event bus — publish events and retain only a bounded history."""
+    """Global event bus with bounded history and isolated handler failures."""
 
     def __init__(self, max_events: int = 10000) -> None:
         if max_events <= 0:
@@ -38,8 +44,12 @@ class EventStream:
         self._global_handlers: List[Callable[[Event], None]] = []
         self._lock = threading.RLock()
 
-    def publish(self, event_type: str, source: str = "",
-                data: Dict[str, Any] = None) -> Event:
+    def publish(
+        self,
+        event_type: str,
+        source: str = "",
+        data: Optional[Dict[str, Any]] = None,
+    ) -> Event:
         event = Event(event_type, source)
         event.data = dict(data or {})
         with self._lock:
@@ -47,7 +57,8 @@ class EventStream:
             if len(self._events) > self._max_events:
                 del self._events[:-self._max_events]
             handlers = list(self._subscribers.get(event_type, []))
-        for handler in handlers + list(self._global_handlers):
+            handlers.extend(self._global_handlers)
+        for handler in handlers:
             try:
                 handler(event)
                 event.handled = True
@@ -81,10 +92,12 @@ class EventStream:
         if count <= 0:
             return []
         with self._lock:
-            events = self._events if not event_type else [
-            event for event in self._events if event.event_type == event_type
-        ]
-        return list(events[-count:])
+            events = (
+                self._events
+                if not event_type
+                else [e for e in self._events if e.event_type == event_type]
+            )
+            return list(events[-count:])
 
     def get_event_types(self) -> List[str]:
         with self._lock:
@@ -99,10 +112,15 @@ class EventStream:
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:
             types: Dict[str, int] = {}
-        errors = 0
-        for event in self._events:
-            types[event.event_type] = types.get(event.event_type, 0) + 1
-            errors += len(event.handler_errors)
-            return {"total_events": len(self._events), "by_type": types,
-                "subscriber_count": sum(len(h) for h in self._subscribers.values()),
-                "handler_errors": errors}
+            errors = 0
+            for event in self._events:
+                types[event.event_type] = types.get(event.event_type, 0) + 1
+                errors += len(event.handler_errors)
+            return {
+                "total_events": len(self._events),
+                "by_type": types,
+                "subscriber_count": sum(
+                    len(handlers) for handlers in self._subscribers.values()
+                ),
+                "handler_errors": errors,
+            }
