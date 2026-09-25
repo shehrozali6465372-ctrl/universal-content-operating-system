@@ -76,6 +76,7 @@ class StrategyManager:
         self.explainer = explainer or StrategyExplainer()
         self._pipeline_count = 0
         self._lock = RLock()
+        self._lock = RLock()
 
     def run_pipeline(
         self,
