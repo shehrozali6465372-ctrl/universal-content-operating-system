@@ -162,6 +162,9 @@ class DraftManager:
         result = DraftManagerResult()
         result.plan_id = plan.plan_id
 
+        if not self.provider.is_configured():
+            raise RuntimeError("LLM provider not configured")
+
         # Generate variants
         variants = self.variant_generator.generate_variants(plan, variant_types)
 
@@ -181,7 +184,7 @@ class DraftManager:
                 draft.llm_response = llm_resp
                 draft.provider = self.provider.provider_name
                 draft.tokens_used = llm_resp.tokens_used
-                draft.validation = self.validator.validate(draft.text, length=plan.length)
+                draft.validation = self.validator.validate(draft.text, length=plan.length, platform=plan.platform)
                 total_tokens += draft.tokens_used
 
                 self.memory.store(
