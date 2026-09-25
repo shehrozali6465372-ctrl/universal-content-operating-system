@@ -3,6 +3,8 @@ from __future__ import annotations
 import itertools
 import time
 from pathlib import Path
+
+from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
 from typing import Any, Dict, List, Optional
 
 from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
@@ -79,22 +81,16 @@ class PublisherManager:
             reservation_id = decision.reservation_id
 
         try:
+            media_paths = self._resolve_media_paths(request)
             if request.has_media():
-                tracker.update("uploading", f"Uploading {len(request.media_assets)} assets")
-                upload_results = self.uploader.upload_assets(request.media_assets, self._default_uploader)
-                failed_uploads = [u for u in upload_results if not u.success]
-                if failed_uploads:
-                    result.set_error(f"Upload failed: {failed_uploads[0].error}", "upload")
-                    tracker.update("failed", "Upload failed")
-                    self._record_event("publish_failed", request, result)
-                    return result
+                tracker.update("uploading", f"Preparing {len(media_paths)} media assets")
 
             tracker.update("publishing", f"Publishing to {request.platform}")
             publisher = self._get_publisher(request.platform)
             if publisher is None:
                 result.set_error(f"No plugin registered for '{request.platform}'", "plugin")
             else:
-                pub_result = self.executor.execute_publish(publisher, request)
+                pub_result = self.executor.execute_publish(publisher, request, media_paths=media_paths)
                 if pub_result.success:
                     result.set_success(pub_result.post_id, pub_result.url)
                     if pub_result.metadata:
@@ -143,11 +139,29 @@ class PublisherManager:
     def _get_publisher(self, platform: str):
         return self.plugin_manager.registry.get_instance(platform)
 
-    def _default_uploader(self, asset: Any) -> UploadResult:
-        result = UploadResult(asset.asset_id or asset.file_name)
-        result.success = True
-        result.media_id = f"media_{asset.file_name}"
-        return result
+    @staticmethod
+    def _resolve_media_paths(request: PublishRequest) -> List[str]:
+        paths = request.get_media_paths()
+        if not paths:
+            return []
+
+        url_platforms = {"instagram", "pinterest", "tiktok"}
+        if request.platform.strip().lower() not in url_platforms:
+            return paths
+
+        resolved: List[str] = []
+        for path in paths:
+            if path.startswith(("http://", "https://")):
+                resolved.append(path)
+                continue
+            public_url = RuntimeMedia.public_url(path)
+            if not public_url:
+                raise ValueError(
+                    f"{request.platform} requires a public media URL; "
+                    f"no URL is configured for asset '{path}'"
+                )
+            resolved.append(public_url)
+        return resolved
 
     def _record_event(self, event: str, request: PublishRequest, result: PublisherResult) -> None:
         self._events.append({"event": event, "request_id": request.request_id,
