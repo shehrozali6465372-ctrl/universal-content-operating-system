@@ -623,6 +623,24 @@ class TestAsyncRuntime:
         assert runtime.run_coroutine(asyncio_sleep_result()) == "ok"
         runtime.stop()
 
+    def test_thread_pool_jobs_are_tracked_and_drained(self):
+        import time
+
+        runtime = AsyncRuntime(max_workers=1, shutdown_timeout=1.0)
+        runtime.start()
+        assert runtime.submit_to_thread(lambda: "done") == "done"
+        assert runtime.health()["thread_jobs_draining"] == 0
+        runtime.stop()
+        assert runtime.health()["thread_jobs_draining"] == 0
+
+    def test_shutdown_timeout_is_validated(self):
+        try:
+            AsyncRuntime(shutdown_timeout=0)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("non-positive shutdown timeout must be rejected")
+
     def test_thread_pool(self):
         runtime = AsyncRuntime(max_workers=2)
         runtime.start()
