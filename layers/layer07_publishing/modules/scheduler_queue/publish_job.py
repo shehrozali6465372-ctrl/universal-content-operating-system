@@ -46,7 +46,7 @@ class PublishJob:
         if self.status not in ("pending", "scheduled"):
             return False
         if self.scheduled_time is None:
-            return self.status == "pending"
+            return False
         return time.time() >= self.scheduled_time
 
     def to_dict(self) -> Dict[str, Any]:
