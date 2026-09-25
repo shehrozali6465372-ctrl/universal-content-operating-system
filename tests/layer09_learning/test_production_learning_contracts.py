@@ -1,5 +1,7 @@
 """Production contracts for Layer 9.
 
+CI must compile the exact branch revision before certification.
+
 These tests prevent the orchestrator from silently becoming a synthetic
 success generator again.
 """
