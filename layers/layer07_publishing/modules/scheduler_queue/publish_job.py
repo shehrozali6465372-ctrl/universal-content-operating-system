@@ -43,9 +43,11 @@ class PublishJob:
         self.metadata: Dict[str, Any] = {}
 
     def is_ready(self) -> bool:
-        if self.status != "scheduled":
+        if self.status not in ("pending", "scheduled"):
             return False
-        return self.scheduled_time is not None and time.time() >= self.scheduled_time
+        if self.scheduled_time is None:
+            return self.status == "pending"
+        return time.time() >= self.scheduled_time
 
     def to_dict(self) -> Dict[str, Any]:
         return {
