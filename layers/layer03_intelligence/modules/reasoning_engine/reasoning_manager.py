@@ -125,7 +125,7 @@ class ReasoningManager:
                            duration_ms=0)
             if result.decision.chosen_option:
                 self.decision_memory.create_and_store(
-                    f"{topic}_{int(_time.time())}",
+                    f"{topic}_{uuid4().hex}",
                     result.decision.chosen_option.name,
                     result.decision.confidence, {"topic": topic})
 
