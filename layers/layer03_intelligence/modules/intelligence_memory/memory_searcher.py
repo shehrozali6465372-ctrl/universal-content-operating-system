@@ -32,6 +32,10 @@ class MemorySearcher:
     def search(self, query: str, stores: Optional[List[str]] = None,
                limit: int = 10) -> List[SearchResult]:
         """Search across registered stores."""
+        if limit < 1:
+            return []
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be between 0 and 1")
         results: List[SearchResult] = []
         target_stores = stores or list(self._stores.keys())
 
