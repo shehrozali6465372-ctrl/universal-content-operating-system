@@ -19,7 +19,6 @@ from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_builder i
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_factory import RuntimeFactory
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_context import RuntimeContext
 from layers.layer11_async_runtime.modules.event_loop_management.loop_manager import LoopManager
-from layers.layer11_async_runtime.modules.event_loop_management.event_loop import AsyncEventLoop
 from layers.layer11_async_runtime.modules.event_loop_management.loop_registry import LoopRegistry
 from layers.layer11_async_runtime.modules.async_task_manager.task import Task
 from layers.layer11_async_runtime.modules.async_task_manager.task_graph import TaskGraph
@@ -154,7 +153,8 @@ class TestRuntimeEvents:
 
     def test_unsubscribe(self):
         e = RuntimeEvents()
-        h = lambda ev: None
+        def h(ev):
+            return None
         e.subscribe("test", h)
         assert e.unsubscribe("test", h) is True
 
