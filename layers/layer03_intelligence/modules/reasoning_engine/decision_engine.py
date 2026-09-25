@@ -1,5 +1,7 @@
 """Decision Engine - Makes decisions by evaluating options against criteria."""
 from __future__ import annotations
+from math import isfinite
+from threading import RLock
 from typing import Dict, List, Optional
 
 
@@ -44,12 +46,22 @@ class DecisionEngine:
 
     def __init__(self) -> None:
         self._criteria_weights: Dict[str, float] = {}
+        self._lock = RLock()
 
     def set_weights(self, weights: Dict[str, float]) -> None:
+        if not isinstance(weights, dict) or any(not isinstance(v, (int, float)) or not isfinite(v) or v < 0 for v in weights.values()):
+            raise ValueError("weights must be finite non-negative numbers")
         total = sum(weights.values())
-        self._criteria_weights = {k: v / total for k, v in weights.items()} if total > 0 else weights
+        with self._lock:
+            self._criteria_weights = {k: v / total for k, v in weights.items()} if total > 0 else {}
 
     def decide(self, options: List[DecisionOption], reasoning: bool = True) -> DecisionResult:
+        if not isinstance(options, list):
+            raise TypeError("options must be a list")
+        with self._lock:
+            return self._decide_locked(options, reasoning)
+
+    def _decide_locked(self, options: List[DecisionOption], reasoning: bool = True) -> DecisionResult:
         result = DecisionResult()
         result.all_options = options
 
