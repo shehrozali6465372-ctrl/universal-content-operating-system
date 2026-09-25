@@ -1,6 +1,7 @@
 """Trend History - Stores snapshots of trend data over time."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -93,11 +94,14 @@ class TrendHistory:
         self._topics: Dict[str, TopicHistory] = {}
         self._max = max_snapshots_per_topic
         self._max_topics = max_topics
+        self._lock = RLock()
 
     def record(self, topic: str, score: float = 0.0, momentum: float = 0.0,
                lifecycle_stage: str = "unknown", virality_score: float = 0.0,
                platform_count: int = 0, confidence: float = 0.0,
                metadata: Optional[Dict] = None) -> TrendSnapshot:
+        if not topic:
+            raise ValueError("topic must not be empty")
         snapshot = TrendSnapshot(topic)
         snapshot.score = score
         snapshot.momentum = momentum
@@ -107,6 +111,10 @@ class TrendHistory:
         snapshot.confidence = confidence
         snapshot.metadata = metadata or {}
 
+        with self._lock:
+            return self._record_locked(topic, snapshot)
+
+    def _record_locked(self, topic: str, snapshot: TrendSnapshot) -> TrendSnapshot:
         if topic not in self._topics:
             if len(self._topics) >= self._max_topics:
                 oldest_topic = min(self._topics.values(), key=lambda h: h.last_updated or h.first_seen).topic
