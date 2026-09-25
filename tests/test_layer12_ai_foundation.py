@@ -5052,7 +5052,7 @@ class TestCostOrchestrator:
 
     def test_estimate(self):
         o = CostOrchestrator()
-        cost = o.estimate_cost("gpt-4o", 1000, 500)
+        cost = o.estimate_cost("gpt-5.6-luna", 1000, 500)
         assert cost > 0
 
     def test_find_best(self):
