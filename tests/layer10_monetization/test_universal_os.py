@@ -262,7 +262,8 @@ class TestEventStream:
         assert len(handled) == 1
 
     def test_unsubscribe(self):
-        handler = lambda e: None
+        def handler(e):
+            pass
         self.es.subscribe("test", handler)
         assert self.es.unsubscribe("test", handler) is True
 
