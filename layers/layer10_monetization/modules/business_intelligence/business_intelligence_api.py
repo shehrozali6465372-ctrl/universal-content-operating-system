@@ -63,7 +63,7 @@ class BusinessIntelligenceAPI:
             if latest.get("arpu", 0) < 10:
                 recs.append("Explore upsell opportunities")
         if not recs:
-            recs.append("Metrics look healthy — continue current strategy")
+            recs.append("Insufficient business metrics data for a recommendation")
         return recs
 
     def get_health(self) -> Dict[str, Any]:
