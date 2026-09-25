@@ -11,6 +11,10 @@ class Objective:
                  direction: str = "maximize", target_value: float = 1.0,
                  min_value: float = 0.0):
         self.name = name
+        if weight < 0:
+            raise ValueError("objective weight must be non-negative")
+        if direction not in {"maximize", "minimize"}:
+            raise ValueError("objective direction must be maximize or minimize")
         self.weight = weight
         self.direction = direction  # maximize or minimize
         self.target_value = target_value
@@ -66,7 +70,12 @@ class MultiObjectiveOptimizer:
         self._objectives: List[Objective] = []
 
     def add_objective(self, objective: Objective) -> None:
+        if any(o.name == objective.name for o in self._objectives):
+            raise ValueError(f"duplicate objective: {objective.name}")
         self._objectives.append(objective)
+
+    def clear_objectives(self) -> None:
+        self._objectives.clear()
 
     def optimize(self, candidates: Dict[str, Dict[str, float]]) -> MultiObjectiveResult:
         result = MultiObjectiveResult()
@@ -107,7 +116,12 @@ class MultiObjectiveOptimizer:
         best = None
         best_score = -1
         for sol in result.pareto_front:
-            score = sum(sol.scores.get(o.name, 0) * weights.get(o.name, 0) for o in self._objectives)
+            score = 0.0
+            for o in self._objectives:
+                value = sol.scores.get(o.name, 0.0)
+                if o.direction == "minimize":
+                    value = 1.0 - value
+                score += value * weights.get(o.name, 0.0)
             if score > best_score:
                 best_score = score
                 best = sol
