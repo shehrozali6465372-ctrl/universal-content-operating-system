@@ -30,19 +30,19 @@ class LLMFactory:
         },
         "production": {
             "default_provider": "openai",
-            "default_model": "gpt-4o-mini",
+            "default_model": "gpt-5.6-luna",
             "budget_limit": 100.0,
             "enable_streaming": False,
         },
         "premium": {
             "default_provider": "openai",
-            "default_model": "gpt-4o",
+            "default_model": "gpt-5.6-sol",
             "budget_limit": 500.0,
             "enable_streaming": False,
         },
         "budget": {
             "default_provider": "deepseek",
-            "default_model": "deepseek-chat",
+            "default_model": "deepseek-flash",
             "budget_limit": 50.0,
         },
     }
