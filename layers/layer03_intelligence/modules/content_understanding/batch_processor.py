@@ -76,9 +76,8 @@ class BatchProcessor:
         self._analyzer = analyzer
         self._cache: Dict[str, object] = {}
         self._max_cache_size = max_cache_size
-        with self._lock:
-            self._metrics = BatchMetrics()
         self._lock = RLock()
+        self._metrics = BatchMetrics()
 
     def analyze_many(self, texts: List[str], domain: str = "general") -> list:
         """Analyze multiple texts in batch.
@@ -117,7 +116,8 @@ class BatchProcessor:
         return result
 
     def get_metrics(self) -> Dict:
-        return self._metrics.to_dict()
+        with self._lock:
+            return self._metrics.to_dict()
 
     def cache_size(self) -> int:
         with self._lock:
@@ -128,4 +128,5 @@ class BatchProcessor:
             self._cache.clear()
 
     def reset_metrics(self) -> None:
-        self._metrics = BatchMetrics()
+        with self._lock:
+            self._metrics = BatchMetrics()
