@@ -81,9 +81,9 @@ class PlatformConstraints:
         self.max_hashtags = spec["max_hashtags"]
         self.recommended_hashtags = spec["recommended_hashtags"]
         self.max_emojis = spec["max_emojis_per_post"]
-        self.content_types = spec["content_types"]
-        self.best_practices = spec["best_practices"]
-        self.algorithm_favors = spec["algorithm_favors"]
+        self.content_types = list(spec["content_types"])
+        self.best_practices = list(spec["best_practices"])
+        self.algorithm_favors = list(spec["algorithm_favors"])
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -93,9 +93,9 @@ class PlatformConstraints:
             "max_hashtags": self.max_hashtags,
             "recommended_hashtags": self.recommended_hashtags,
             "max_emojis": self.max_emojis,
-            "content_types": self.content_types,
-            "best_practices": self.best_practices,
-            "algorithm_favors": self.algorithm_favors,
+            "content_types": list(self.content_types),
+            "best_practices": list(self.best_practices),
+            "algorithm_favors": list(self.algorithm_favors),
         }
 
 
@@ -111,7 +111,17 @@ class PlatformPlanner:
         with self._lock:
             if platform not in self._constraints_cache:
                 self._constraints_cache[platform] = PlatformConstraints(platform)
-            return self._constraints_cache[platform]
+            cached = self._constraints_cache[platform]
+            copy = PlatformConstraints(platform)
+            copy.max_length = cached.max_length
+            copy.recommended_length = cached.recommended_length
+            copy.max_hashtags = cached.max_hashtags
+            copy.recommended_hashtags = cached.recommended_hashtags
+            copy.max_emojis = cached.max_emojis
+            copy.content_types = list(cached.content_types)
+            copy.best_practices = list(cached.best_practices)
+            copy.algorithm_favors = list(cached.algorithm_favors)
+            return copy
 
     def recommend(self, platform: str, goal: str = "educate") -> Dict[str, Any]:
         """Recommend content parameters for a platform and goal."""
