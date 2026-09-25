@@ -51,3 +51,9 @@ def test_variant_validation_receives_platform():
     plan.length = "short"
     result = manager.generate_variants(plan, ["original"])
     assert result.variants[0].validation is not None
+
+
+def test_import_plan_fails_closed_on_invalid_platform():
+    from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
+    with pytest.raises(ValueError, match="failed validation"):
+        PlannerManager().import_plan({"topic": "AI", "platform": "unknown"})
