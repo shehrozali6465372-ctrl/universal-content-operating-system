@@ -128,7 +128,7 @@ class WritingOrchestrator:
         result.total_tokens = draft_result.total_tokens
 
         # 3. Generate hook
-        hook_result = self.hook_engine.generate(topic, goal=goal, platform="facebook")
+        # Hooks are platform-specific; generate one per output platform.
 
         # 4. For each platform, optimize
         for platform in target_platforms:
@@ -143,7 +143,7 @@ class WritingOrchestrator:
             po.hashtags = hashtags.hashtags
 
             # Hook
-            po.hook = hook_result.hook
+            po.hook = self.hook_engine.generate(topic, goal=goal, platform=platform).hook
 
             # CTA
             cta = self.cta_engine.generate(platform=platform, goal=goal)
