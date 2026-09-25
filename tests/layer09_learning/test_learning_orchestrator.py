@@ -491,95 +491,113 @@ class TestLearningOrchestrator:
     def setup_method(self):
         self.orchestrator = LearningOrchestrator()
 
-    def test_orchestrate_basic(self):
-        report = self.orchestrator.orchestrate("Test content", platform="facebook")
-        assert report.report_id.startswith("lr_")
-        assert len(report.modules_executed) > 0
-        assert report.duration_ms >= 0
+    @staticmethod
+    def context() -> dict:
+        return {
+            "learning_signals": [
+                {
+                    "source": "analytics",
+                    "signal_type": "engagement",
+                    "metric_name": "engagement_rate",
+                    "value": 0.42,
+                    "previous_value": 0.31,
+                    "confidence": 0.95,
+                    "platform": "facebook",
+                    "content_id": "observed-content-1",
+                }
+            ],
+            "previous_learning_signals": [],
+            "memory_entries": [
+                {
+                    "entry_id": "observed-1",
+                    "source_type": "lesson",
+                    "confidence": 0.9,
+                    "usage_count": 3,
+                    "age_days": 2,
+                    "tags": ["engagement"],
+                }
+            ],
+            "predicted_scores": {"quality": 0.70},
+            "actual_scores": {"quality": 0.74},
+            "feedback": [
+                {
+                    "negative": False,
+                    "category": "content",
+                    "description": "observed positive engagement",
+                }
+            ],
+            "issues": [],
+            "metrics": {"engagement_rate": 0.42},
+            "quality_scores": {"content": 0.74},
+            "current_score": 0.74,
+            "brand_content_samples": ["Observed brand content with measured engagement."],
+        }
 
-    def test_orchestrate_with_context(self):
-        context = {"brand": "test", "goal": "engagement"}
-        report = self.orchestrator.orchestrate("Test", context=context)
-        assert len(report.modules_executed) > 0
+    def run(self, content="Observed content", platform="facebook"):
+        return self.orchestrator.orchestrate(
+            content,
+            platform=platform,
+            context=self.context(),
+        )
+
+    def test_orchestrate_requires_observed_signals(self):
+        with pytest.raises(Exception, match="learning_signals"):
+            self.orchestrator.orchestrate("content", platform="facebook")
+
+    def test_orchestrate_basic(self):
+        report = self.run()
+        assert report.report_id.startswith("lr_")
+        assert report.duration_ms >= 0
+        assert not report.modules_failed
 
     def test_orchestrate_all_modules_executed(self):
-        report = self.orchestrator.orchestrate("Test content")
+        report = self.run()
         expected = [s.value for s in PipelineStage]
-        for module in expected:
-            assert module in report.modules_executed
-
-    def test_orchestrate_learning_score(self):
-        report = self.orchestrator.orchestrate("Test content")
-        assert report.learning_score > 0
-
-    def test_orchestrate_confidence(self):
-        report = self.orchestrator.orchestrate("Test content")
-        assert report.confidence_score > 0
-
-    def test_orchestrate_empty_content(self):
-        report = self.orchestrator.orchestrate("")
-        assert len(report.modules_executed) > 0
+        assert report.modules_executed == expected
 
     def test_health(self):
-        self.orchestrator.orchestrate("Test")
+        self.run()
         health = self.orchestrator.get_health()
         assert health["pipeline_stages"] == 9
-        assert "health_status" in health
-        assert "metrics" in health
+        assert health["health_status"] == "healthy"
+        assert health["success_rate"] == 1.0
 
     def test_recent_reports(self):
         for i in range(3):
-            self.orchestrator.orchestrate(f"Content {i}")
-        reports = self.orchestrator.get_recent_reports(2)
-        assert len(reports) == 2
+            self.run(f"Observed content {i}")
+        assert len(self.orchestrator.get_recent_reports(2)) == 2
 
     def test_orchestration_count(self):
         assert self.orchestrator.orchestration_count == 0
-        self.orchestrator.orchestrate("Test 1")
-        self.orchestrator.orchestrate("Test 2")
+        self.run("Observed content 1")
+        self.run("Observed content 2")
         assert self.orchestrator.orchestration_count == 2
 
-    def test_event_bus_has_events(self):
-        self.orchestrator.orchestrate("Test content")
-        events = self.orchestrator.event_bus_instance.get_events()
-        assert len(events) > 0
+    def test_event_bus_has_completion_event(self):
+        self.run()
+        event_types = [e.event_type for e in self.orchestrator.event_bus_instance.get_events()]
+        assert "learning_started" in event_types
+        assert "learning_completed" in event_types
 
     def test_metrics_recorded(self):
-        self.orchestrator.orchestrate("Test content")
+        self.run()
         metrics = self.orchestrator.metrics.get_summary()
         assert metrics["total_runs"] == 1
         assert metrics["successful_runs"] == 1
 
     def test_scheduler_runs(self):
-        self.orchestrator.orchestrate("Test content")
+        self.run()
         assert self.orchestrator.scheduler.get_total_runs() == 1
 
-    def test_health_monitor_updates(self):
-        self.orchestrator.orchestrate("Test content")
-        health_status = self.orchestrator.health_monitor.get_overall_status()
-        assert health_status in ("healthy", "degraded", "critical", "unknown")
-
-    def test_multiple_orchestrations(self):
-        for i in range(5):
-            self.orchestrator.orchestrate(f"Content {i}", platform="facebook")
-        assert self.orchestrator.orchestration_count == 5
-        assert self.orchestrator.metrics.get_summary()["total_runs"] == 5
-
-    def test_patterns_detected(self):
-        report = self.orchestrator.orchestrate("Test content with patterns")
-        assert isinstance(report.patterns_detected, list)
-
-    def test_report_summary(self):
-        report = self.orchestrator.orchestrate("Test")
-        summary = report.get_summary()
-        assert "lessons_count" in summary
-        assert "improvements_count" in summary
-        assert "learning_score" in summary
+    def test_empty_content_fails_closed(self):
+        report = self.run("")
+        assert "optimize_content" in report.modules_failed
+        assert "predict_engagement" in report.modules_failed
 
     def test_different_platforms(self):
         for platform in ("facebook", "instagram", "linkedin", "x"):
-            report = self.orchestrator.orchestrate(f"Content for {platform}", platform=platform)
-            assert len(report.modules_executed) > 0
+            report = self.run(f"Observed content for {platform}", platform=platform)
+            assert not report.modules_failed
 
 
 # ─── Integration Tests ────────────────────────────────────────────
@@ -587,55 +605,57 @@ class TestLearningOrchestratorIntegration:
     def setup_method(self):
         self.orchestrator = LearningOrchestrator()
 
-    def test_full_pipeline(self):
-        content = "AI is transforming the future of work."
-        report = self.orchestrator.orchestrate(content, platform="linkedin")
+    def context(self):
+        return TestLearningOrchestrator.context()
 
+    def run(self, content, platform):
+        return self.orchestrator.orchestrate(
+            content,
+            platform=platform,
+            context=self.context(),
+        )
+
+    def test_full_pipeline(self):
+        report = self.run(
+            "AI is transforming the future of work.",
+            "linkedin",
+        )
         assert len(report.modules_executed) == 9
-        assert len(report.modules_failed) == 0
-        assert report.learning_score > 0
-        assert report.confidence_score > 0
+        assert not report.modules_failed
         assert report.duration_ms > 0
 
     def test_cross_platform_pipeline(self):
-        platforms = ["facebook", "instagram", "x", "linkedin", "tiktok"]
-        reports = []
-        for platform in platforms:
-            report = self.orchestrator.orchestrate(f"Content for {platform}", platform=platform)
-            reports.append(report)
-
-        assert len(reports) == 5
-        assert all(len(r.modules_executed) > 0 for r in reports)
+        for platform in ("facebook", "instagram", "x", "linkedin", "tiktok"):
+            report = self.run(f"Observed content for {platform}", platform)
+            assert len(report.modules_executed) == 9
+            assert not report.modules_failed
 
     def test_pipeline_with_different_content_types(self):
-        content_types = [
-            "Short post",
-            "Long article about AI transformation in enterprise",
-            "Question: What do you think about the future of AI?",
+        for content in (
+            "Short observed post",
+            "Observed article about AI transformation in enterprise",
+            "Observed question about the future of AI",
             "#AI #Future #Technology #Innovation",
-        ]
-        for ct in content_types:
-            report = self.orchestrator.orchestrate(ct, platform="facebook")
-            assert len(report.modules_executed) > 0
+        ):
+            report = self.run(content, "facebook")
+            assert len(report.modules_executed) == 9
 
     def test_health_monitoring_across_runs(self):
         for i in range(3):
-            self.orchestrator.orchestrate(f"Content {i}")
-
+            self.run(f"Observed content {i}", "facebook")
         health = self.orchestrator.get_health()
-        assert health["health_status"] in ("healthy", "degraded")
+        assert health["health_status"] == "healthy"
         assert health["metrics"]["total_runs"] == 3
 
-    def test_event_bus_tracks_all_events(self):
-        self.orchestrator.orchestrate("Test content")
-        events = self.orchestrator.event_bus_instance.get_events()
-        event_types = [e.event_type for e in events]
+    def test_event_bus_tracks_completion(self):
+        self.run("Observed content", "facebook")
+        event_types = [e.event_type for e in self.orchestrator.event_bus_instance.get_events()]
         assert "learning_started" in event_types
         assert "learning_completed" in event_types
 
     def test_metrics_accuracy(self):
         for i in range(5):
-            self.orchestrator.orchestrate(f"Content {i}")
+            self.run(f"Observed content {i}", "facebook")
         metrics = self.orchestrator.metrics.get_summary()
         assert metrics["total_runs"] == 5
         assert metrics["successful_runs"] == 5
