@@ -1,6 +1,5 @@
 """PriorityQueue — priority-based async task queue."""
 from __future__ import annotations
-import asyncio
 import heapq
 import time
 import uuid
@@ -9,7 +8,11 @@ from enum import IntEnum
 
 
 class Priority(IntEnum):
-    CRITICAL = 0; HIGH = 1; NORMAL = 2; LOW = 3; BACKGROUND = 4
+    CRITICAL = 0
+    HIGH = 1
+    NORMAL = 2
+    LOW = 3
+    BACKGROUND = 4
 
 
 class PriorityItem:
