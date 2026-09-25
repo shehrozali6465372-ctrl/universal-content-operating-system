@@ -1,5 +1,6 @@
 """Image Orchestrator — Coordinates all image modules."""
 from __future__ import annotations
+import hashlib
 import time
 from typing import Any, Dict, List, Optional
 
@@ -100,6 +101,10 @@ class ImageOrchestrator:
             raise RuntimeError("Mock image providers are forbidden in production")
         if not image_url or not image_data:
             raise RuntimeError("Image provider returned an incomplete real asset")
+        expected_hash = (getattr(result.image_response, "metadata", {}) or {}).get("sha256", "")
+        actual_hash = hashlib.sha256(image_data).hexdigest()
+        if not expected_hash or expected_hash != actual_hash:
+            raise RuntimeError("Image asset provenance hash is missing or invalid")
         result.metadata["provider"] = provider_name
         result.metadata["model"] = getattr(result.image_response, "model", "")
         result.metadata["asset_sha256"] = (
