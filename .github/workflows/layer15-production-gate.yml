@@ -14,8 +14,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: layer15-production-gate-${{ github.ref }}
-  cancel-in-progress: true
+  # Each certification run must finish against its exact commit; never cancel a run because another layer changed main.
+  group: layer15-production-gate-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   layer15:
