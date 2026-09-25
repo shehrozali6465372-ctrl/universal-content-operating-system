@@ -10,7 +10,7 @@ VALID_PLATFORMS = {"facebook", "instagram", "twitter", "linkedin", "youtube", "t
 VALID_TONES = {"friendly", "professional", "casual", "informative", "humorous",
                "inspiring", "enthusiastic", "warm", "conversational", "playful"}
 VALID_LENGTHS = {"short", "medium", "long"}
-VALID_CONTENT_TYPES = {"post", "story", "reel", "carousel", "thread", "article", "live"}
+VALID_CONTENT_TYPES = {"post", "story", "reel", "carousel", "thread", "tweet", "article", "newsletter", "live", "video", "short", "community_post"}
 VALID_CTAS = {"engage", "share", "comment", "visit", "subscribe", "learn_more"}
 VALID_STRATEGIES = {"educational", "storytelling", "debate", "news", "tutorial",
                     "comparison", "case_study", "opinion", "listicle", "qa"}
