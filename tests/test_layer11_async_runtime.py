@@ -594,7 +594,7 @@ class TestAsyncRuntime:
         assert runtime.metrics["failed"] == 1
         runtime.stop()
 
-    def test_thread_pool(self):
+    def test_pause_rejects_new_coroutines(self):\n        runtime = AsyncRuntime()\n        runtime.start()\n        runtime.pause()\n        try:\n            runtime.run_coroutine(asyncio_sleep_result())\n        except RuntimeError as exc:\n            assert "paused" in str(exc)\n        else:\n            raise AssertionError("paused runtime must reject new coroutines")\n        runtime.resume()\n        assert runtime.run_coroutine(asyncio_sleep_result()) == "ok"\n        runtime.stop()\n\n    def test_thread_pool(self):
         runtime = AsyncRuntime(max_workers=2)
         runtime.start()
         assert runtime.submit_to_thread(lambda x: x + 1, 4) == 5
