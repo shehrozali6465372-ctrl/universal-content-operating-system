@@ -50,5 +50,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: Layer 10 Lint
+        shell: bash
         run: |
-          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402
+          set -o pipefail
+          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402 2>&1 | tee layer10-lint-output.txt
+
+      - name: Upload Layer 10 Lint Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer10-lint-output
+          path: layer10-lint-output.txt
+          if-no-files-found: ignore
