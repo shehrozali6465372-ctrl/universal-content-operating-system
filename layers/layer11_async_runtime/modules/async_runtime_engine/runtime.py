@@ -6,7 +6,7 @@ import inspect
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from layers.layer11_async_runtime.modules.async_task_manager.models import TaskState
@@ -40,6 +40,7 @@ class AsyncRuntime:
         max_workers: int = 10,
         max_tracked_tasks: int = 10_000,
         task_timeout: Optional[float] = 300.0,
+        shutdown_timeout: float = 30.0,
     ) -> None:
         if isinstance(max_workers, bool) or not isinstance(max_workers, int) or max_workers < 1:
             raise ValueError("max_workers must be >= 1")
@@ -55,6 +56,10 @@ class AsyncRuntime:
         self._max_workers = max_workers
         self._max_tracked_tasks = max_tracked_tasks
         self._task_timeout = float(task_timeout) if task_timeout is not None else None
+        if (isinstance(shutdown_timeout, bool) or not isinstance(shutdown_timeout, (int, float)) or shutdown_timeout <= 0):
+            raise ValueError("shutdown_timeout must be > 0")
+        self._shutdown_timeout = float(shutdown_timeout)
+        self._thread_futures: set[Future[Any]] = set()
         self._thread_pool: Optional[ThreadPoolExecutor] = None
         self._tasks: Dict[str, AsyncTask] = {}
         self._running = False
@@ -74,24 +79,40 @@ class AsyncRuntime:
         with self._lock:
             if self._running:
                 return
+            if self._thread_futures:
+                raise RuntimeError("async runtime worker pool is still draining")
             if self._thread_pool is None:
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
             self._stopped = False
             self._running = True
             self._accepting = True
 
-    def stop(self) -> None:
-        """Stop the runtime and wait for worker threads to finish."""
+    def stop(self, timeout: Optional[float] = None) -> None:
+        """Stop admission and drain blocking workers within a bounded timeout."""
+        if timeout is None:
+            timeout = self._shutdown_timeout
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+            raise ValueError("timeout must be > 0")
         with self._lock:
-            if not self._running and self._stopped:
+            if not self._running and self._stopped and not self._thread_futures:
                 return
             self._running = False
             self._accepting = False
             pool = self._thread_pool
             self._thread_pool = None
             self._stopped = True
+            futures = list(self._thread_futures)
         if pool is not None:
-            pool.shutdown(wait=True, cancel_futures=True)
+            pool.shutdown(wait=False, cancel_futures=True)
+        deadline = time.monotonic() + float(timeout)
+        while True:
+            pending = [future for future in futures if not future.done()]
+            if not pending:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("async runtime worker shutdown timed out")
+            time.sleep(min(0.01, remaining))
 
     @property
     def is_running(self) -> bool:
@@ -263,6 +284,8 @@ class AsyncRuntime:
             if self._thread_pool is None:
                 raise RuntimeError("async runtime worker pool is unavailable")
             future = self._thread_pool.submit(fn, *args, **kwargs)
+            self._thread_futures.add(future)
+            future.add_done_callback(self._forget_thread_future)
         return future.result(timeout=timeout)
 
     async def submit_to_thread_async(
@@ -277,8 +300,15 @@ class AsyncRuntime:
             pool = self._thread_pool
             if pool is None:
                 raise RuntimeError("async runtime worker pool is unavailable")
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(pool, lambda: fn(*args, **kwargs))
+        future = pool.submit(fn, *args, **kwargs)
+        with self._lock:
+            self._thread_futures.add(future)
+            future.add_done_callback(self._forget_thread_future)
+        return await asyncio.wrap_future(future)
+
+    def _forget_thread_future(self, future: Future[Any]) -> None:
+        with self._lock:
+            self._thread_futures.discard(future)
 
     def health(self) -> Dict[str, Any]:
         with self._lock:
@@ -286,7 +316,9 @@ class AsyncRuntime:
                 "running": self._running,
                 "accepting": self._accepting,
                 "task_timeout": self._task_timeout,
+                "shutdown_timeout": self._shutdown_timeout,
                 "max_workers": self._max_workers,
+                "thread_jobs_draining": sum(1 for future in self._thread_futures if not future.done()),
                 "tasks_tracked": len(self._tasks),
                 "metrics": dict(self._metrics),
             }
