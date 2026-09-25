@@ -28,10 +28,14 @@ class LoopManager:
 
     def remove_loop(self, loop_id: str) -> bool:
         with self._lock:
-            loop = self._loops.pop(loop_id, None)
+            loop = self._loops.get(loop_id)
         if loop is None:
             return False
-        return loop.stop()
+        if not loop.stop():
+            return False
+        with self._lock:
+            self._loops.pop(loop_id, None)
+        return True
 
     def get_all(self) -> List[AsyncEventLoop]:
         with self._lock:
