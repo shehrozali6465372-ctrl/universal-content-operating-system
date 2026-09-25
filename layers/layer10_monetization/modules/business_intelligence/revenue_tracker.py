@@ -2,7 +2,7 @@
 from __future__ import annotations
 import itertools
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 _RT_COUNTER = itertools.count(1)
 REVENUE_TYPES = ("ad_revenue", "affiliate", "sponsorship", "subscription",
