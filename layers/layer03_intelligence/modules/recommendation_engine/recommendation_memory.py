@@ -37,28 +37,34 @@ class RecommendationMemory:
     def record_outcome(self, topic: str, outcome: str) -> bool:
         with self._lock:
             for r in reversed(self._records):
-            if r.topic == topic:
+                if r.topic == topic:
                 r.outcome = outcome
                 return True
         return False
 
     def get_successful(self) -> List[RecRecord]:
-        return [r for r in self._records if r.outcome == "success"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._records if r.outcome == "success"])
 
     def get_failed(self) -> List[RecRecord]:
-        return [r for r in self._records if r.outcome == "failure"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._records if r.outcome == "failure"])
 
     def get_success_rate(self) -> float:
-        done = [r for r in self._records if r.outcome != "pending"]
+        with self._lock:
+            done = [r for r in self._records if r.outcome != "pending"]
         if not done: return 0.0
         return sum(1 for r in done if r.outcome == "success") / len(done)
 
     def was_recommended(self, topic: str) -> bool:
-        return any(r.topic.lower() == topic.lower() for r in self._records)
+        with self._lock:
+            return any(r.topic.lower() == topic.lower() for r in self._records)
 
     def count(self) -> int:
-        return len(self._records)
+        with self._lock:
+            return len(self._records)
 
     def to_dict(self) -> Dict:
-        return {"count": self.count(), "success_rate": round(self.get_success_rate(), 3),
-                "records": [r.to_dict() for r in self._records[-20:]]}
+        with self._lock:
+            return {"count": len(self._records), "success_rate": round(self.get_success_rate(), 3),
+                    "records": [r.to_dict() for r in self._records[-20:]]}
