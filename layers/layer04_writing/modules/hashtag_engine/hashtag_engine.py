@@ -72,7 +72,8 @@ class HashtagEngine:
 
         # Keywords
         result.keywords = self._extract_keywords(text)
-        self._gen_count += 1
+        with self._lock:
+            self._gen_count += 1
         return result
 
     def generate_seo(self, text: str, focus_keyword: str = "") -> HashtagResult:
@@ -82,7 +83,8 @@ class HashtagEngine:
         if focus_keyword and focus_keyword not in result.keywords:
             result.keywords.insert(0, focus_keyword)
         result.hashtags = []
-        self._gen_count += 1
+        with self._lock:
+            self._gen_count += 1
         return result
 
     def _extract_from_text(self, text: str) -> List[str]:
