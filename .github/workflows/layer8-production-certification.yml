@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - layer8-final-certification-20260925
+      - layer8-certification-latest-main-20260925
   pull_request:
     branches:
       - main
@@ -50,3 +51,5 @@ jobs:
         run: ruff check layers/layer08_analytics tests/test_layer8_production_gate.py --select F
       - name: Layer 8 production gate
         run: python -m pytest tests/test_layer8_production_gate.py -q --tb=short
+      - name: Layer 8 full module regression suite
+        run: python -m pytest tests/layer08_analytics/test_layer08.py -q --tb=short
