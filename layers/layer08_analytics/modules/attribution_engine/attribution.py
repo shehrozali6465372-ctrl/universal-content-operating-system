@@ -51,7 +51,7 @@ class AttributionEngine:
         for touchpoints in customers.values():
             if not touchpoints: continue
             revenue = sum(tp.revenue for tp in touchpoints)
-            weights = self._position_weights(len(touchpoints))
+            weights = self._position_weights(len(touchpoints)) if model == "weighted" else []
             for index, tp in enumerate(touchpoints):
                 result = data.setdefault(tp.channel, AttributionResult(tp.channel))
                 result.touchpoint_count += 1
@@ -70,6 +70,7 @@ class AttributionEngine:
     @staticmethod
     def _position_weights(length: int) -> List[float]:
         if length <= 1: return [1.0]
+        if length == 2: return [0.3, 0.7]
         weights = [0.3] + [0.3 / (length - 2)] * (length - 2) + [0.4]
         total = sum(weights)
         return [w / total for w in weights]
