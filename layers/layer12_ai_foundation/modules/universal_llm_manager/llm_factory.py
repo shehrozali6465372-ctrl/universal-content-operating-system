@@ -29,8 +29,8 @@ class LLMFactory:
             "enable_cache": True,
         },
         "production": {
-            "default_provider": "openai",
-            "default_model": "gpt-5.6-luna",
+            "default_provider": "deepseek",
+            "default_model": "deepseek-flash",
             "budget_limit": 100.0,
             "enable_streaming": False,
         },
