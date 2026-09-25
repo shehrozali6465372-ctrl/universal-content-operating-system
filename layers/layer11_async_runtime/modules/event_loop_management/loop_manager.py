@@ -31,7 +31,7 @@ class LoopManager:
             loop = self._loops.get(loop_id)
         if loop is None:
             return False
-        if not loop.stop():
+        if loop.is_running() and not loop.stop():
             return False
         with self._lock:
             self._loops.pop(loop_id, None)
