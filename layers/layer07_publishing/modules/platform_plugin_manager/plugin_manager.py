@@ -102,7 +102,7 @@ class PluginManager:
     def get_capabilities(self, platform: str) -> PlatformCapabilities:
         return self._get_or_raise(platform).get_capabilities()
 
-    def get_all_capabilities(self) -> Dict[str, PlatformCapabilities]:
+    def get_all_capabilities(self) -> Dict[str, Dict[str, Any]]:
         return self.registry.list_capabilities()
 
     def supports(self, platform: str, feature: str) -> bool:
