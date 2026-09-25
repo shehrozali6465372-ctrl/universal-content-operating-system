@@ -73,8 +73,13 @@ class MemorySearcher:
             store = self._stores.get(store_name)
             if store is None:
                 continue
-            if hasattr(store, "get_by_category"):
-                for entry in store.get_by_category(""):
+            if hasattr(store, "get_all"):
+                entries = store.get_all()
+            elif hasattr(store, "get_by_category"):
+                entries = store.get_by_category("")
+            else:
+                entries = []
+            for entry in entries:
                     if hasattr(entry, "confidence") and entry.confidence >= min_confidence:
                         results.append(SearchResult(entry=entry, relevance=entry.confidence, match_type=store_name))
         return results
