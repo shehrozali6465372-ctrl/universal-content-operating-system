@@ -81,7 +81,7 @@ class PostgreSQLVerification:
         t0 = time.time()
         try:
             from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool, ConnectionConfig
-            config = ConnectionConfig()
+            config = ConnectionConfig.from_env()
             pool = ConnectionPool(config)
             pg_available = pool.initialize()
 
