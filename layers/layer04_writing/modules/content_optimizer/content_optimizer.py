@@ -90,7 +90,8 @@ class ContentOptimizer:
         # Overall score
         result.score = (result.readability_score * 0.4 + result.seo_score * 0.3 +
                         max(0, 100 - len(result.issues) * 10) * 0.3)
-        self._opt_count += 1
+        with self._lock:
+            self._opt_count += 1
         return result
 
     def optimize_seo(self, text: str, focus_keyword: str,
