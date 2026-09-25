@@ -225,7 +225,7 @@ class TestCampaignManager:
 
     def test_get_active(self):
         c1 = self.cm.create("Active 1")
-        c2 = self.cm.create("Active 2")
+        _c2 = self.cm.create("Active 2")
         self.cm.update_status(c1.campaign_id, "active")
         active = self.cm.get_active()
         assert len(active) == 1
@@ -456,7 +456,7 @@ class TestOpportunityDetector:
         assert self.od.mark_accepted("opp_99999") is False
 
     def test_get_pending(self):
-        opp = self.od.detect("affiliate", "Pending")
+        _opp = self.od.detect("affiliate", "Pending")
         pending = self.od.get_pending()
         assert len(pending) == 1
 
