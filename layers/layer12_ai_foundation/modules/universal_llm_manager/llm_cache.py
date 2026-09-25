@@ -10,12 +10,12 @@ class LLMCache:
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._hits = 0; self._misses = 0
 
-    def _make_key(self, prompt: str, model: str) -> str:
-        raw = f"{model}:{prompt}"
-        return hashlib.sha256(raw.encode()).hexdigest()[:32]
+    def _make_key(self, prompt: str, model: str, provider: str = "", system_prompt: str = "", temperature: float = 0.7, max_tokens: int = 4096) -> str:
+        raw = repr((provider, model, system_prompt, temperature, max_tokens, prompt))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def get(self, prompt: str, model: str) -> Optional[str]:
-        key = self._make_key(prompt, model)
+    def get(self, prompt: str, model: str, provider: str = "", system_prompt: str = "", temperature: float = 0.7, max_tokens: int = 4096) -> Optional[str]:
+        key = self._make_key(prompt, model, provider, system_prompt, temperature, max_tokens)
         entry = self._cache.get(key)
         if entry and time.time() - entry["time"] < self._ttl:
             entry["hits"] = entry.get("hits", 0) + 1
@@ -24,11 +24,11 @@ class LLMCache:
         self._misses += 1
         return None
 
-    def set(self, prompt: str, model: str, response: str) -> None:
+    def set(self, prompt: str, model: str, response: str, provider: str = "", system_prompt: str = "", temperature: float = 0.7, max_tokens: int = 4096) -> None:
         if len(self._cache) >= self._max:
             oldest = min(self._cache, key=lambda k: self._cache[k]["time"])
             del self._cache[oldest]
-        key = self._make_key(prompt, model)
+        key = self._make_key(prompt, model, provider, system_prompt, temperature, max_tokens)
         self._cache[key] = {"response": response, "time": time.time(), "hits": 0}
 
     def clear(self) -> int:
