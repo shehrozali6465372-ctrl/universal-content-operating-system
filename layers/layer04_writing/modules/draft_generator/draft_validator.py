@@ -102,7 +102,8 @@ class DraftValidator:
             result.severity = "medium"
 
         result.is_valid = result.score >= 50
-        self._check_count += 1
+        with self._lock:
+            self._check_count += 1
         return result
 
     def _find_repeated_words(self, words: List[str]) -> List[str]:
