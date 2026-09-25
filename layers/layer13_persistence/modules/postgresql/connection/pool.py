@@ -118,11 +118,16 @@ class ConnectionPool:
                 )
                 self._pg_available = True
                 self._initialized = True
+                self._active_conns = 0
+                self._idle_conns = self._config.min_connections
+                self._last_error = None
                 self._last_success_time = time.time()
                 return True
             except ImportError as exc:
                 self._pg_available = False
                 self._initialized = True
+                self._active_conns = 0
+                self._idle_conns = 0
                 self._last_error = f"PostgreSQL driver unavailable: {exc}"
                 if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
                     raise RuntimeError("PostgreSQL driver is unavailable in production") from exc
@@ -130,6 +135,8 @@ class ConnectionPool:
             except Exception as exc:
                 self._pg_available = False
                 self._initialized = True
+                self._active_conns = 0
+                self._idle_conns = 0
                 self._last_error = str(exc)
                 if os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}:
                     raise RuntimeError("PostgreSQL initialization failed in production") from exc
@@ -180,15 +187,32 @@ class ConnectionPool:
                 self._active_conns += 1
         try:
             yield conn
+        except BaseException:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
         finally:
             with self._lock:
                 if pg_available:
-                    self._pg_conn_pool.putconn(conn)
-                    self._active_conns = max(0, self._active_conns - 1)
-                    self._idle_conns += 1
+                    close_conn = False
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        close_conn = True
+                    try:
+                        self._pg_conn_pool.putconn(conn, close=close_conn)
+                    finally:
+                        self._active_conns = max(0, self._active_conns - 1)
+                        if not close_conn:
+                            self._idle_conns += 1
                 else:
-                    conn.close()
-                    self._active_conns = max(0, self._active_conns - 1)
+                    try:
+                        conn.rollback()
+                    finally:
+                        conn.close()
+                        self._active_conns = max(0, self._active_conns - 1)
 
     def _record_latency(self, latency_ms: float) -> None:
         with self._lock:
@@ -197,12 +221,32 @@ class ConnectionPool:
             self._query_latencies.append(latency_ms)
             self._total_latency_ms += latency_ms
 
-    def _execute_with_retry(self, fn, *args, **kwargs):
-        """Execute a function with bounded retry attempts."""
-        max_attempts = self._config.max_retries
+    @staticmethod
+    def _is_retryable_error(exc: Exception) -> bool:
+        """Return True only for transient connection failures."""
+        try:
+            from psycopg2 import InterfaceError, OperationalError
+            if isinstance(exc, (OperationalError, InterfaceError)):
+                return True
+        except ImportError:
+            pass
+        if isinstance(exc, (ConnectionError, TimeoutError)):
+            return True
+        if exc.__class__.__module__.startswith("sqlite3") and exc.__class__.__name__ == "OperationalError":
+            message = str(exc).lower()
+            return "locked" in message or "busy" in message
+        return False
+
+    def _execute_with_retry(self, fn, *args, retry: bool = True, **kwargs):
+        """Retry only transient read-safe operations.
+
+        Mutating operations opt out because a transport failure after commit
+        can make a blind retry duplicate the side effect.
+        """
+        max_attempts = self._config.max_retries if retry else 1
         if not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or max_attempts < 1:
             raise ValueError("max_retries must be a positive integer")
-        last_error = None
+        last_error: Optional[Exception] = None
         for attempt in range(max_attempts):
             try:
                 result = fn(*args, **kwargs)
@@ -212,24 +256,16 @@ class ConnectionPool:
             except Exception as exc:
                 last_error = exc
                 self._consecutive_failures += 1
-                self._total_retries += 1
                 self._last_error = str(exc)
-
+                if not retry or not self._is_retryable_error(exc):
+                    self._failed_queries += 1
+                    raise
                 if attempt < max_attempts - 1:
+                    self._total_retries += 1
                     delay = self._config.retry_delays[min(attempt, len(self._config.retry_delays) - 1)]
                     time.sleep(delay)
-
-                # Auto-reconnect after max retries
-                if attempt == max_attempts - 1 and self._consecutive_failures >= 3:
-                    self._auto_reconnect()
-                    try:
-                        result = fn(*args, **kwargs)
-                        self._consecutive_failures = 0
-                        self._last_success_time = time.time()
-                        return result
-                    except Exception:
-                        pass
-
+                    if self._active_conns == 0:
+                        self._auto_reconnect()
         self._failed_queries += 1
         raise last_error
 
@@ -242,7 +278,7 @@ class ConnectionPool:
                 cursor.execute(exec_sql, params)
                 conn.commit()
                 return cursor.rowcount
-        return self._execute_with_retry(_do)
+        return self._execute_with_retry(_do, retry=False)
 
     def execute_and_fetch(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Execute query and fetch all results (with retry)."""
@@ -337,7 +373,7 @@ class ConnectionPool:
                 cursor.executemany(sql, data)
                 conn.commit()
                 return len(rows)
-        return self._execute_with_retry(_do)
+        return self._execute_with_retry(_do, retry=False)
 
     def update(self, table: str, data: Dict[str, Any], where: str, where_params: tuple = ()) -> int:
         """Update rows and return affected count (with retry)."""
@@ -354,7 +390,7 @@ class ConnectionPool:
                 cursor.execute(exec_sql, list(data.values()) + list(where_params))
                 conn.commit()
                 return cursor.rowcount
-        return self._execute_with_retry(_do)
+        return self._execute_with_retry(_do, retry=False)
 
     def delete(self, table: str, where: str, where_params: tuple = ()) -> int:
         """Delete rows and return affected count (with retry)."""
