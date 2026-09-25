@@ -51,6 +51,17 @@ class IntelligenceCache:
             entry.last_accessed = time.monotonic()
             return copy.deepcopy(entry.data)
 
+    def get_ref(self, key: str) -> Optional[Any]:
+        """Return the cached object by reference for explicit identity-sensitive caches."""
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None or entry.expires_at <= time.monotonic():
+                self._cache.pop(key, None)
+                return None
+            entry.hit_count += 1
+            entry.last_accessed = time.monotonic()
+            return entry.data
+
     def has(self, key: str) -> bool:
         return self.get(key) is not None
 
