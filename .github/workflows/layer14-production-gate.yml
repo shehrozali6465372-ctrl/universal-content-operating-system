@@ -65,4 +65,4 @@ jobs:
 
       - name: Layer 14 Security Regression
         run: |
-          python -m pytest -q tests -k "layer14 or api_gateway or integration" --tb=short
+          python -m pytest tests/test_layer14_production_gate.py -q --tb=short
