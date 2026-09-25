@@ -1,6 +1,8 @@
 """Production contract tests for Layer 5 orchestration."""
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from layers.layer05_image.modules.image_orchestrator.image_orchestrator import ImageOrchestrator
@@ -26,7 +28,7 @@ class ConfiguredProvider(BaseImageProvider):
         response.image_data = data
         response.provider = self.provider_name
         response.model = "test-model"
-        response.metadata["sha256"] = __import__("hashlib").sha256(data).hexdigest()
+        response.metadata["sha256"] = hashlib.sha256(data).hexdigest()
         return response
 
 
