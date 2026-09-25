@@ -504,7 +504,7 @@ class TestTaskPause:
         tp.resume("t1")
         assert tp.is_paused("t1") is False
 
-from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncRuntime, TaskState
+from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncRuntime
 
 
 class TestAsyncRuntime:
