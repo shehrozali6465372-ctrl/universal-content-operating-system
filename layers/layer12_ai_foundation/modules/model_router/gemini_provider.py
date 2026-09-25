@@ -46,7 +46,7 @@ class GeminiProvider:
     - Image understanding (generateContent with image)
     - Streaming (streamGenerateContent)
 
-    Falls back to simulated response when:
+    Returns an explicit failure when:
     - No network available
     - API key invalid
     - Rate limited on all keys
@@ -96,10 +96,10 @@ class GeminiProvider:
                 break
             attempted.add(key_id_used)
 
-            # Test/dummy credentials must never hit the network.
+            # Synthetic credentials are never accepted as successful generation.
             if api_key.startswith("AIzaSy_FAKE_"):
-                result = self._simulated_response(prompt, model)
-                result["simulated"] = True
+                self._last_error = "Synthetic credential rejected"
+                result = None
             else:
                 result = self._real_api_call(
                     prompt, model, api_key, system_prompt, **kwargs
@@ -161,10 +161,8 @@ class GeminiProvider:
             attempted.add(key_id_used)
 
             if api_key.startswith("AIzaSy_FAKE_"):
-                result = self._simulated_response(
-                    json.dumps(messages, ensure_ascii=False), model
-                )
-                result["simulated"] = True
+                self._last_error = "Synthetic credential rejected"
+                result = None
             else:
                 result = self._real_chat_call(messages, model, api_key, **kwargs)
 
@@ -358,21 +356,6 @@ class GeminiProvider:
         except (json.JSONDecodeError, KeyError, IndexError) as exc:
             self._last_error = f"Gemini response parse error: {type(exc).__name__}"
             return None
-
-    def _simulated_response(self, prompt: str, model: str) -> Dict[str, Any]:
-        """Simulated response — jab real API available nahi ho."""
-        return {
-            "content": (
-                f"[SIMULATED/Gemini/{model}] "
-                f"Response for: {prompt[:80]}... "
-                f"(Set GEMINI_API_KEY env var for real responses)"
-            ),
-            "model": model,
-            "provider": "gemini_simulated",
-            "tokens_used": len(prompt.split()) * 2,
-            "finish_reason": "SIMULATED",
-            "simulated": True,
-        }
 
     def count_tokens(self, text: str) -> int:
         """Approximate Gemini token count."""
