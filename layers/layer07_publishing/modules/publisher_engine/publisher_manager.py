@@ -17,6 +17,7 @@ from layers.layer07_publishing.modules.publisher_engine.publish_audit import Pub
 from layers.layer07_publishing.modules.publisher_engine.publish_result import PublisherResult
 from layers.layer07_publishing.modules.publisher_engine.publisher_metrics import PublisherMetrics
 from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
+from layers.layer07_publishing.modules.publishing_policies.policy_manager import PolicyManager
 
 _MANAGER_COUNTER = itertools.count(1)
 
@@ -30,7 +31,8 @@ class PublisherManager:
                  parser: Optional[ResponseParser] = None,
                  audit: Optional[PublishAudit] = None,
                  metrics: Optional[PublisherMetrics] = None,
-                 repetition_guard: Optional[ContentRepetitionGuard] = None) -> None:
+                 repetition_guard: Optional[ContentRepetitionGuard] = None,
+                 policy_manager: Optional[PolicyManager] = None) -> None:
         self.plugin_manager = plugin_manager or PluginManager()
         self.executor = executor or PublishExecutor()
         self.uploader = uploader or UploadCoordinator()
@@ -38,6 +40,7 @@ class PublisherManager:
         self.audit = audit or PublishAudit()
         self.metrics = metrics or PublisherMetrics()
         self.repetition_guard = repetition_guard or ContentRepetitionGuard()
+        self.policy_manager = policy_manager or PolicyManager()
         self._events: List[Dict[str, Any]] = []
         self._request_count = 0
 
@@ -63,6 +66,20 @@ class PublisherManager:
             tracker.update("failed", "Validation failed")
             self._record_event("publish_failed", request, result)
             return result
+
+        # Enforce policy rules for known production platforms.
+        if request.platform.strip().lower() in self.policy_manager.get_all_platforms():
+            policy = self.policy_manager.validate_content(
+                request.platform,
+                request.content,
+                image_count=sum(1 for asset in request.media_assets if asset.is_image()),
+                brand_id=request.metadata.get("brand_id", ""),
+            )
+            if not policy.passed:
+                result.set_error("; ".join(policy.violations), "policy")
+                tracker.update("failed", "Policy validation failed")
+                self._record_event("publish_rejected_policy", request, result)
+                return result
 
         account_id = request.metadata.get("account_id")
         if account_id and not request.metadata.get("repetition_reserved_by_pipeline"):
@@ -106,6 +123,8 @@ class PublisherManager:
                     if reservation_id is not None:
                         guard.finalize(reservation_id, pub_result.post_id)
                         reservation_id = None
+                    if request.platform.strip().lower() in self.policy_manager.get_all_platforms():
+                        self.policy_manager.record_publish(request.platform)
                 else:
                     result.set_error(pub_result.error_message, self.parser.classify_error(pub_result.error_message))
                     tracker.update("failed", pub_result.error_message[:100])
