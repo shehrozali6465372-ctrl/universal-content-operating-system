@@ -1,6 +1,8 @@
 """Reasoning Manager - Orchestrator for Reasoning Engine Module."""
 from __future__ import annotations
 import time
+from threading import RLock
+from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.reasoning_engine.rule_engine import RuleEngine
@@ -97,11 +99,15 @@ class ReasoningManager:
         self.confidence_tracker = ConfidenceEvolutionTracker()
         self.replay_store = ReplayStore()
         self.multi_objective = MultiObjectiveOptimizer()
+        self._lock = RLock()
 
     def reason(self, topic: str, data: Dict) -> ReasoningResult:
+        with self._lock:
+            return self._reason_locked(topic, data)
+
+    def _reason_locked(self, topic: str, data: Dict) -> ReasoningResult:
         result = ReasoningResult(topic)
-        import time as _time
-        replay = DecisionReplay(topic, f"replay_{int(_time.time())}")
+        replay = DecisionReplay(topic, f"replay_{uuid4().hex}")
 
         # Decision making
         options_data = data.get("options", [])
@@ -196,7 +202,8 @@ class ReasoningManager:
         return result
 
     def get_health(self) -> Dict:
-        return {
+        with self._lock:
+            return {
             "modules": [
                 "RuleEngine", "DecisionEngine", "StrategySelector",
                 "ConstraintSolver", "TradeoffAnalyzer", "HypothesisEngine",
