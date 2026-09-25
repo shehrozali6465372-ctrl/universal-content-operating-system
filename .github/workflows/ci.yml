@@ -25,6 +25,7 @@ jobs:
           POSTGRES_DB: aios
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ports:
           - 5432:5432
         options: >-
@@ -101,9 +102,8 @@ jobs:
           ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
 
       - name: Run Layer 5 Real Gemini Smoke Test
-        if: ${{ secrets.GEMINI_API_KEY != '' }}
+        if: env.GEMINI_API_KEY != ''
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
           python - <<'PY'
