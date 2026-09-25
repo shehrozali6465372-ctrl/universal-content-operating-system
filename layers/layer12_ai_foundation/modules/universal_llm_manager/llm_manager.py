@@ -45,6 +45,7 @@ from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_report impor
     LLMReportGenerator,
 )
 from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import ProviderResponse
+from layers.layer12_ai_foundation.modules.ai_cost_optimizer.price_calculator import PriceCalculator
 
 
 class LLMManager:
@@ -169,8 +170,9 @@ class LLMManager:
             response.metadata["usage_estimated"] = True
             response.metadata["cost_estimated"] = True
 
+        cost = self._calculate_cost(model, response.usage)
         self.metrics.record_request(
-            provider, model, response.total_tokens, 0.001,
+            provider, model, response.total_tokens, cost,
             response.latency_ms, True
         )
         self.cost_tracker.record(
@@ -178,7 +180,7 @@ class LLMManager:
             model,
             response.usage["prompt_tokens"],
             response.usage["completion_tokens"],
-            0.001,
+            cost,
         )
 
         if self.config.enable_cache:
@@ -193,6 +195,20 @@ class LLMManager:
             )
 
         return response
+
+    def _calculate_cost(self, model: str, usage: Dict[str, Any]) -> float:
+        prompt_tokens = int(usage.get("prompt_tokens", 0))
+        completion_tokens = int(usage.get("completion_tokens", 0))
+        try:
+            return PriceCalculator.calculate(
+                model, prompt_tokens, completion_tokens
+            )
+        except ValueError as exc:
+            if os.getenv("UCOS_ENV", "").strip().lower() == "production":
+                raise RuntimeError(
+                    f"No production pricing configured for model: {model}"
+                ) from exc
+            return 0.0
 
     def generate_stream(self, prompt: str, model: str = "", on_chunk=None):
         if not self.config.enable_streaming:
