@@ -80,6 +80,11 @@ jobs:
           python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py -q --tb=short
           ruff check layers/layer10_monetization tests/layer10_monetization --select E,F,W --ignore E501,E402
 
+      - name: Run Layer 15 Production Gate
+        run: |
+          python -m pytest tests/test_layer15_production_gate.py -q --tb=short
+          ruff check layers/layer15_async_runtime tests/test_layer15_production_gate.py --select E,F,W --ignore E501,E402
+
       - name: Run Integration Contract Tests
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
       - name: Run Layer 5 Production Gate Tests

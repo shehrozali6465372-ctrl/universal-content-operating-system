@@ -1,15 +1,21 @@
-"""CoroutineManager — manage lifecycle of async coroutines."""
+"""Production-safe coroutine lifecycle manager."""
 from __future__ import annotations
+
 import asyncio
+import inspect
 import time
 import uuid
-from typing import Any, Callable, Coroutine, Dict, List, Optional
 from enum import Enum
+from typing import Any, Callable
 
 
 class CoroutineState(str, Enum):
-    CREATED = "created"; RUNNING = "running"; SUSPENDED = "suspended"
-    COMPLETED = "completed"; FAILED = "failed"; CANCELLED = "cancelled"
+    CREATED = "created"
+    RUNNING = "running"
+    SUSPENDED = "suspended"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ManagedCoroutine:
@@ -17,87 +23,99 @@ class ManagedCoroutine:
                  "result", "error", "task", "created_at", "started_at",
                  "finished_at", "metadata")
 
-    def __init__(self, name: str, coro_fn: Callable, args: tuple = (),
-                 kwargs: Optional[Dict] = None) -> None:
-        self.coro_id = str(uuid.uuid4())[:12]
+    def __init__(self, name: str, coro_fn: Callable[..., Any], args: tuple[Any, ...] = (),
+                 kwargs: dict[str, Any] | None = None) -> None:
+        self.coro_id = str(uuid.uuid4())
         self.name = name
         self.coro_fn = coro_fn
         self.args = args
         self.kwargs = kwargs or {}
         self.state = CoroutineState.CREATED
         self.result: Any = None
-        self.error: Optional[str] = None
-        self.task: Optional[asyncio.Task] = None
+        self.error: str | None = None
+        self.task: asyncio.Task[Any] | None = None
         self.created_at = time.time()
-        self.started_at: float = 0.0
-        self.finished_at: float = 0.0
-        self.metadata: Dict[str, Any] = {}
+        self.started_at = 0.0
+        self.finished_at = 0.0
+        self.metadata: dict[str, Any] = {}
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {"coro_id": self.coro_id, "name": self.name,
-                "state": self.state.value, "created_at": self.created_at}
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "coro_id": self.coro_id, "name": self.name,
+            "state": self.state.value, "created_at": self.created_at,
+            "started_at": self.started_at, "finished_at": self.finished_at,
+            "error": self.error,
+        }
 
 
 class CoroutineManager:
     def __init__(self) -> None:
-        self._coroutines: Dict[str, ManagedCoroutine] = {}
-        self._history: List[Dict[str, Any]] = []
+        self._coroutines: dict[str, ManagedCoroutine] = {}
+        self._history: list[dict[str, Any]] = []
 
-    def create(self, name: str, coro_fn: Callable, *args: Any,
+    def create(self, name: str, coro_fn: Callable[..., Any], *args: Any,
                **kwargs: Any) -> ManagedCoroutine:
+        if not callable(coro_fn):
+            raise TypeError("coro_fn must be callable")
         coro = ManagedCoroutine(name, coro_fn, args, kwargs)
         self._coroutines[coro.coro_id] = coro
         return coro
 
-    async def start(self, coro_id: str) -> Dict[str, Any]:
-        coro = self._coroutines.get(coro_id)
-        if not coro:
-            return {"error": "not_found"}
+    async def _run(self, coro: ManagedCoroutine) -> dict[str, Any]:
         coro.state = CoroutineState.RUNNING
         coro.started_at = time.time()
         try:
             result = coro.coro_fn(*coro.args, **coro.kwargs)
-            if asyncio.iscoroutine(result):
-                coro.result = await result
-            else:
-                coro.result = result
+            coro.result = await result if inspect.isawaitable(result) else result
             coro.state = CoroutineState.COMPLETED
         except asyncio.CancelledError:
             coro.state = CoroutineState.CANCELLED
+            raise
         except Exception as exc:
             coro.state = CoroutineState.FAILED
-            coro.error = str(exc)
-        coro.finished_at = time.time()
-        entry = coro.to_dict()
-        self._history.append(entry)
-        return entry
+            coro.error = f"{type(exc).__name__}: {exc}"
+        finally:
+            coro.finished_at = time.time()
+            self._history.append(coro.to_dict())
+        return coro.to_dict()
 
-    async def start_all(self) -> List[Dict[str, Any]]:
+    async def start(self, coro_id: str) -> dict[str, Any]:
+        coro = self._coroutines.get(coro_id)
+        if coro is None:
+            raise KeyError(f"coroutine not found: {coro_id}")
+        if coro.state not in (CoroutineState.CREATED, CoroutineState.SUSPENDED):
+            return coro.to_dict()
+        coro.task = asyncio.current_task()
+        return await self._run(coro)
+
+    async def start_all(self) -> list[dict[str, Any]]:
         tasks = []
-        for coro_id in self._coroutines:
-            if self._coroutines[coro_id].state == CoroutineState.CREATED:
-                tasks.append(self.start(coro_id))
-        return await asyncio.gather(*tasks, return_exceptions=False)
+        for coro in self._coroutines.values():
+            if coro.state == CoroutineState.CREATED:
+                task = asyncio.create_task(self.start(coro.coro_id))
+                coro.task = task
+                tasks.append(task)
+        return await asyncio.gather(*tasks)
 
     def cancel(self, coro_id: str) -> bool:
         coro = self._coroutines.get(coro_id)
-        if coro and coro.task and not coro.task.done():
-            coro.task.cancel()
+        if coro is None:
+            return False
+        if coro.state == CoroutineState.CREATED:
             coro.state = CoroutineState.CANCELLED
             return True
-        if coro and coro.state == CoroutineState.CREATED:
-            coro.state = CoroutineState.CANCELLED
-            return True
+        if coro.state == CoroutineState.RUNNING and coro.task is not None:
+            return coro.task.cancel()
         return False
 
-    def get(self, coro_id: str) -> Optional[ManagedCoroutine]:
+    def get(self, coro_id: str) -> ManagedCoroutine | None:
         return self._coroutines.get(coro_id)
 
-    def list_coroutines(self) -> List[Dict[str, Any]]:
+    def list_coroutines(self) -> list[dict[str, Any]]:
         return [c.to_dict() for c in self._coroutines.values()]
 
     def count(self) -> int:
         return len(self._coroutines)
 
-    def get_history(self) -> List[Dict[str, Any]]:
+    def get_history(self) -> list[dict[str, Any]]:
         return list(self._history)
