@@ -1,7 +1,7 @@
 # Image & Visual
 
 **Layer:** layer 05 image
-**Status:** 🔜 Planned
+**Status:** 🟡 Hardened — Not Production Certified
 **Version:** See [VERSION](../../VERSION)
 
 ## Description
@@ -12,7 +12,7 @@ Image & Visual module for AI Self-Improving Facebook Agent.
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| *(Coming Soon)* | | 🔜 |
+| Planning, prompt, layout, provider orchestration, optimization, memory | Implemented | 🟡 |
 
 ## Usage
 
@@ -23,5 +23,5 @@ from layers.layer05_image import *
 ## Tests
 
 ```bash
-pytest layers/layer05_image/tests/ -v
+pytest tests/unit/layer05_image -q
 ```
