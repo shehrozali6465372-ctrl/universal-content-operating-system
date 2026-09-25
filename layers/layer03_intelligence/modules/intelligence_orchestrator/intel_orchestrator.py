@@ -165,7 +165,7 @@ class IntelligenceOrchestrator:
         # Cache check
         fingerprint = hashlib.sha256(f"{topic}\0{text}\0{trend_history or []}\0{domain}".encode("utf-8")).hexdigest()
         cache_key = f"intel_{fingerprint}"
-        cached = self.cache.get(cache_key)
+        cached = self.cache.get_ref(cache_key)
         if cached is not None:
             cached.metadata["cached"] = True
             return cached
