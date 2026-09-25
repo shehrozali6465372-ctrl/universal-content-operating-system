@@ -47,7 +47,10 @@ class OpenAIProvider(BaseProvider):
         if not isinstance(content,str) or not content.strip():self._metrics["errors"]+=1;raise RuntimeError("OpenAI response contained empty content")
         usage=body.get("usage") or {};response=ProviderResponse(content,model,"openai");response.request_id=str(body.get("id") or f"openai_{uuid.uuid4().hex}");response.usage={"prompt_tokens":int(usage.get("prompt_tokens",0)),"completion_tokens":int(usage.get("completion_tokens",0)),"total_tokens":int(usage.get("total_tokens",0))};response.finish_reason=str(choices[0].get("finish_reason") or "stop");response.latency_ms=(time.time()-start)*1000;self._metrics["requests"]+=1;self._metrics["total_tokens"]+=response.usage["total_tokens"];return response
     def generate(self,request:ProviderRequest)->ProviderResponse:
-        if not self._is_initialized:raise RuntimeError("OpenAI provider is not initialized")
+        if not self._is_initialized:
+            if not self._api_key:
+                raise RuntimeError("OpenAI API key is not configured")
+            raise RuntimeError("OpenAI provider is not initialized")
         model=request.model or "gpt-4o-mini";messages=[]
         if request.system_prompt:messages.append({"role":"system","content":request.system_prompt})
         messages.extend(request.messages or [{"role":"user","content":request.prompt}]);return self._call(messages,model,request)

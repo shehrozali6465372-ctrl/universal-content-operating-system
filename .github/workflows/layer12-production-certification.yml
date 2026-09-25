@@ -2,22 +2,10 @@ name: Layer 12 Production Certification
 on:
   push:
     branches: [main]
-    paths:
-      - "layers/layer12_ai_foundation/**"
-      - "tests/test_layer12_ai_foundation.py"
-      - "tests/test_layer12_production_contracts.py"
-      - "tests/test_layer12_production_gate.py"
-      - ".github/workflows/layer12-production-certification.yml"
-      - "requirements.txt"
+    paths: ["layers/layer12_ai_foundation/**","tests/test_layer12_ai_foundation.py","tests/test_layer12_production_contracts.py","tests/test_layer12_production_gate.py",".github/workflows/layer12-production-certification.yml","requirements.txt"]
   pull_request:
     branches: [main]
-    paths:
-      - "layers/layer12_ai_foundation/**"
-      - "tests/test_layer12_ai_foundation.py"
-      - "tests/test_layer12_production_contracts.py"
-      - "tests/test_layer12_production_gate.py"
-      - ".github/workflows/layer12-production-certification.yml"
-      - "requirements.txt"
+    paths: ["layers/layer12_ai_foundation/**","tests/test_layer12_ai_foundation.py","tests/test_layer12_production_contracts.py","tests/test_layer12_production_gate.py",".github/workflows/layer12-production-certification.yml","requirements.txt"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +18,7 @@ jobs:
     timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}
+      UCOS_ENV: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
