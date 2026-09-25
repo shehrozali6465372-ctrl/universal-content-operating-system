@@ -16,9 +16,9 @@ HOOK_TYPES = {
     },
     "statistic": {
         "templates": [
-            "{stat}% of people don't realize {topic}.",
-            "Only {stat}% understand the power of {topic}.",
-            "Here's a shocking fact about {topic}:",
+            "Here's a surprising fact about {topic}:",
+            "One fact about {topic} is easy to overlook:",
+            "A useful fact about {topic}:",
         ],
         "best_for": ["educate", "promote"],
     },
@@ -98,7 +98,7 @@ class HookEngine:
         result.hook_type = selected_type
         templates = HOOK_TYPES[selected_type]["templates"]
         template = random.choice(templates)
-        result.hook = template.replace("{topic}", topic).replace("{stat}", str(random.randint(60, 95)))
+        result.hook = template.replace("{topic}", topic)
 
         # Alternatives
         for alt_type in HOOK_TYPES:
