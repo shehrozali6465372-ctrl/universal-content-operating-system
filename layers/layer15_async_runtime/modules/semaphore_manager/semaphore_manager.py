@@ -71,8 +71,12 @@ class SemaphoreManager:
         sem.released_count += 1
         return True
 
-    async def acquire_sync(self, name: str) -> bool:
-        return await self.acquire(name)
+    def acquire_sync(self, name: str, timeout: float | None = None) -> bool:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.acquire(name, timeout))
+        raise RuntimeError("acquire_sync cannot block a running event loop; use await acquire()")
 
     def release_sync(self, name: str) -> bool:
         return self.release(name)
