@@ -98,7 +98,10 @@ class RecommendationManager:
         candidates = div_result.selected if div_result.selected else ranked
 
         # Take top N
-        max_n = data.get("max_results", 5)\n        if not isinstance(max_n, int) or isinstance(max_n, bool) or max_n < 1:\n            raise ValueError("max_results must be a positive integer")\n        top = candidates[:max_n]
+        max_n = data.get("max_results", 5)
+        if not isinstance(max_n, int) or isinstance(max_n, bool) or max_n < 1:
+            raise ValueError("max_results must be a positive integer")
+        top = candidates[:max_n]
 
         # Build recommendations with explanations
         for c in top:
