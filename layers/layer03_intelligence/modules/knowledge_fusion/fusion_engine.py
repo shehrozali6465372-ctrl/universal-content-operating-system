@@ -1,6 +1,7 @@
 """Fusion Engine - Combines knowledge from multiple intelligence sources."""
 from __future__ import annotations
 from typing import Any, Dict, List
+import math
 
 
 class UnifiedIntelligence:
@@ -40,6 +41,8 @@ class ConflictResolver:
     def resolve(self, values: Dict[str, float]) -> Dict:
         if not values:
             return {"resolved": 0.0, "method": "none", "agreement": 0.0}
+        if any(not isinstance(v, (int, float)) or not math.isfinite(float(v)) for v in values.values()):
+            raise ValueError("all source values must be finite numbers")
         mean_val = sum(values.values()) / len(values)
         if len(values) == 1:
             return {"resolved": mean_val, "method": "single", "agreement": 1.0}
@@ -78,7 +81,10 @@ class FusionEngine:
                 score = d.get("overall_score", d.get("score", d.get("confidence", 0.5)))
             else:
                 score = 0.5
-            scores[name] = float(score)
+            score = float(score)
+            if not math.isfinite(score):
+                raise ValueError(f"non-finite score from source: {name}")
+            scores[name] = min(1.0, max(0.0, score))
 
         # Resolve conflicts
         resolution = self.resolver.resolve(scores)
