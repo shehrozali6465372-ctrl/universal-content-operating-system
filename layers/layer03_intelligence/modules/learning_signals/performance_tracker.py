@@ -1,6 +1,8 @@
 """Performance Tracker - Tracks content performance over time."""
 from __future__ import annotations
 import time
+import copy
+from threading import RLock
 from typing import Dict, List
 
 
@@ -19,33 +21,44 @@ class PerformanceSnapshot:
 
 class PerformanceTracker:
     def __init__(self, max_snapshots: int = 500) -> None:
+        if max_snapshots < 1:
+            raise ValueError("max_snapshots must be >= 1")
         self._snapshots: List[PerformanceSnapshot] = []
         self._max = max_snapshots
+        self._lock = RLock()
 
     def record(self, post_id: str, metrics: Dict[str, float]) -> PerformanceSnapshot:
         snap = PerformanceSnapshot(post_id)
         snap.metrics = dict(metrics)
         snap.cumulative_score = sum(metrics.values()) / max(len(metrics), 1)
-        self._snapshots.append(snap)
-        if len(self._snapshots) > self._max:
-            self._snapshots = self._snapshots[-self._max:]
-        return snap
+        with self._lock:
+            self._snapshots.append(snap)
+            if len(self._snapshots) > self._max:
+                self._snapshots = self._snapshots[-self._max:]
+            return copy.deepcopy(snap)
 
     def get_for_post(self, post_id: str) -> List[PerformanceSnapshot]:
-        return [s for s in self._snapshots if s.post_id == post_id]
+        with self._lock:
+            return copy.deepcopy([s for s in self._snapshots if s.post_id == post_id])
 
     def get_best_performing(self, n: int = 5) -> List[PerformanceSnapshot]:
-        return sorted(self._snapshots, key=lambda s: s.cumulative_score, reverse=True)[:n]
+        if n < 0: raise ValueError("n must be >= 0")
+        with self._lock:
+            return copy.deepcopy(sorted(self._snapshots, key=lambda s: s.cumulative_score, reverse=True)[:n])
 
     def get_worst_performing(self, n: int = 5) -> List[PerformanceSnapshot]:
-        return sorted(self._snapshots, key=lambda s: s.cumulative_score)[:n]
+        if n < 0: raise ValueError("n must be >= 0")
+        with self._lock:
+            return copy.deepcopy(sorted(self._snapshots, key=lambda s: s.cumulative_score)[:n])
 
     def get_average_score(self) -> float:
-        if not self._snapshots: return 0.0
-        return sum(s.cumulative_score for s in self._snapshots) / len(self._snapshots)
+        with self._lock:
+            if not self._snapshots: return 0.0
+            return sum(s.cumulative_score for s in self._snapshots) / len(self._snapshots)
 
     def get_trend(self) -> str:
-        if len(self._snapshots) < 3: return "insufficient_data"
+        with self._lock:
+            if len(self._snapshots) < 3: return "insufficient_data"
         recent = [s.cumulative_score for s in self._snapshots[-3:]]
         older = [s.cumulative_score for s in self._snapshots[:-3]] or [0]
         r_avg = sum(recent) / len(recent)
@@ -55,4 +68,5 @@ class PerformanceTracker:
         return "stable"
 
     def count(self) -> int:
-        return len(self._snapshots)
+        with self._lock:
+            return len(self._snapshots)
