@@ -24,6 +24,7 @@ class ImageResponse:
             "provider": self.provider,
             "model": self.model,
             "latency_ms": round(self.latency_ms, 2),
+            "metadata": self.metadata,
         }
 
 
