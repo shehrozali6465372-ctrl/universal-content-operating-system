@@ -115,7 +115,7 @@ class TestLLMConfig:
     def test_defaults(self):
         cfg = LLMConfig()
         assert cfg.default_provider == "openai"
-        assert cfg.default_model == "gpt-4o-mini"
+        assert cfg.default_model == "gpt-5.6-luna"
         assert cfg.budget_limit == 100.0
 
     def test_to_dict(self):
@@ -2230,7 +2230,7 @@ class TestMultiModelMonitor:
 class TestMultiModelOptimizer:
     def test_optimize_selection(self):
         o = MultiModelOptimizer()
-        models = o.optimize_model_selection(["gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash", "gpt-4o-mini"], "generation")
+        models = o.optimize_model_selection(["gpt-4o", "claude-sonnet-4-20250514", "gemini-2.0-flash", "gpt-5.6-luna"], "generation")
         assert len(models) >= 2
 
     def test_optimize_creative(self):
@@ -4844,9 +4844,9 @@ class TestPriceCalculator:
         assert cost > 0
 
     def test_compare(self):
-        costs = PriceCalculator.compare_models(1000, 500, ["gpt-4o", "gpt-4o-mini"])
+        costs = PriceCalculator.compare_models(1000, 500, ["gpt-4o", "gpt-5.6-luna"])
         assert "gpt-4o" in costs
-        assert costs["gpt-4o-mini"] < costs["gpt-4o"]
+        assert costs["gpt-5.6-luna"] < costs["gpt-4o"]
 
 
 class TestCostMemory:
@@ -4886,7 +4886,7 @@ class TestCostOptimizer:
     def test_find_cheapest(self):
         o = CostOptimizer()
         cheapest = o.find_cheapest(1000, 500)
-        assert cheapest in ["gemini-2.0-flash", "gpt-4o-mini", "deepseek-chat"]
+        assert cheapest in ["gemini-2.0-flash", "gpt-5.6-luna", "deepseek-chat"]
 
     def test_suggest(self):
         o = CostOptimizer()
@@ -5012,9 +5012,9 @@ class TestCostConfig:
 class TestCostRanker:
     def test_rank(self):
         r = CostRanker()
-        ranked = r.rank(1000, 500, ["gpt-4o", "gpt-4o-mini"])
+        ranked = r.rank(1000, 500, ["gpt-4o", "gpt-5.6-luna"])
         assert ranked[0]["rank"] == 1
-        assert ranked[0]["model"] == "gpt-4o-mini"
+        assert ranked[0]["model"] == "gpt-5.6-luna"
 
 
 class TestCostFallback:
@@ -5058,7 +5058,7 @@ class TestCostOrchestrator:
     def test_find_best(self):
         o = CostOrchestrator()
         model = o.find_best_model(1000, 500, "low")
-        assert model in ["gemini-2.0-flash", "gpt-4o-mini", "deepseek-chat"]
+        assert model in ["gemini-2.0-flash", "gpt-5.6-luna", "deepseek-chat"]
 
     def test_stats(self):
         o = CostOrchestrator()
