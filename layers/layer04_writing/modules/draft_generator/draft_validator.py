@@ -124,4 +124,5 @@ class DraftValidator:
 
     @property
     def check_count(self) -> int:
-        return self._check_count
+        with self._lock:
+            return self._check_count
