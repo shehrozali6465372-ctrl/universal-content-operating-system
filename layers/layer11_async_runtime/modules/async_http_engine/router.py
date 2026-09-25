@@ -28,7 +28,7 @@ class HttpRouter:
             return {
                 "status": "accepted",
                 "processed": False,
-                "queued": True,
+                "queued": False,
                 "entries": len(self._data),
             }
 
