@@ -1,5 +1,6 @@
 """Multi-objective Optimizer - Finds optimal solutions across competing objectives."""
 from __future__ import annotations
+import math
 from typing import Dict, List, Optional
 
 
@@ -11,8 +12,10 @@ class Objective:
                  direction: str = "maximize", target_value: float = 1.0,
                  min_value: float = 0.0):
         self.name = name
-        if weight < 0:
-            raise ValueError("objective weight must be non-negative")
+        if not math.isfinite(weight) or weight < 0:
+            raise ValueError("objective weight must be finite and non-negative")
+        if not math.isfinite(target_value) or not math.isfinite(min_value):
+            raise ValueError("objective targets must be finite")
         if direction not in {"maximize", "minimize"}:
             raise ValueError("objective direction must be maximize or minimize")
         self.weight = weight
@@ -87,7 +90,9 @@ class MultiObjectiveOptimizer:
         # Build solutions
         solutions = []
         for name, scores in candidates.items():
-            sol = ParetoSolution(name, scores)
+            if any(not math.isfinite(value) for value in scores.values()):
+                raise ValueError(f"candidate '{name}' contains non-finite score")
+            sol = ParetoSolution(name, dict(scores))
             solutions.append(sol)
 
         # Calculate Pareto ranks
