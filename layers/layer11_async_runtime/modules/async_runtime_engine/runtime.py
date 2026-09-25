@@ -39,7 +39,7 @@ class AsyncRuntime:
             raise ValueError("max_tracked_tasks must be >= 1")
         self._max_workers = max_workers
         self._max_tracked_tasks = max_tracked_tasks
-        self._thread_pool = ThreadPoolExecutor(max_workers=max_workers)
+        self._thread_pool: Optional[ThreadPoolExecutor] = None
         self._tasks: Dict[str, AsyncTask] = {}
         self._running = False
         self._stopped = False
@@ -57,9 +57,9 @@ class AsyncRuntime:
         with self._lock:
             if self._running:
                 return
-            if self._stopped:
+            if self._thread_pool is None:
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
-                self._stopped = False
+            self._stopped = False
             self._running = True
 
     def stop(self) -> None:
@@ -69,8 +69,10 @@ class AsyncRuntime:
                 return
             self._running = False
             pool = self._thread_pool
+            self._thread_pool = None
             self._stopped = True
-        pool.shutdown(wait=True, cancel_futures=True)
+        if pool is not None:
+            pool.shutdown(wait=True, cancel_futures=True)
 
     @property
     def is_running(self) -> bool:
@@ -156,6 +158,15 @@ class AsyncRuntime:
 
     def run_parallel(self, *coros: Coroutine[Any, Any, Any]) -> List[Any]:
         """Run multiple coroutines concurrently from synchronous code."""
+        if not coros:
+            return []
+        with self._lock:
+            running = self._running
+        if not running:
+            for coro in coros:
+                if inspect.iscoroutine(coro):
+                    coro.close()
+            raise RuntimeError("async runtime is not running")
         return self.run_coroutine(self._gather(coros))
 
     async def _gather(self, coros: tuple[Coroutine[Any, Any, Any], ...]) -> List[Any]:
@@ -169,6 +180,8 @@ class AsyncRuntime:
         with self._lock:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
+            if self._thread_pool is None:
+                raise RuntimeError("async runtime worker pool is unavailable")
             future = self._thread_pool.submit(fn, *args, **kwargs)
         return future.result(timeout=timeout)
 
@@ -181,6 +194,8 @@ class AsyncRuntime:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
             pool = self._thread_pool
+            if pool is None:
+                raise RuntimeError("async runtime worker pool is unavailable")
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(pool, lambda: fn(*args, **kwargs))
 
