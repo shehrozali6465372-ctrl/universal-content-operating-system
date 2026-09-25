@@ -14,7 +14,7 @@ class AuthToken:
     """An authentication token record."""
 
     def __init__(self, user_id: str = "", role: str = "user") -> None:
-        self.token_id = secrets.token_urlsafe(32)
+        self.token_id = f"tok_{secrets.token_urlsafe(32)}"
         self.user_id = user_id
         self.role = role if role in ROLES else "user"
         self.permissions: List[str] = []
