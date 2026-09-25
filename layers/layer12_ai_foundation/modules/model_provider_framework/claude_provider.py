@@ -18,7 +18,7 @@ class ClaudeProvider(BaseProvider):
         self._api_key = str(cfg.get("api_key") or os.getenv("ANTHROPIC_API_KEY") or "")
         self._base_url = str(cfg.get("base_url") or "https://api.anthropic.com/v1").rstrip("/")
         self._timeout = float(cfg.get("timeout", 60.0))
-        self._supported_models = list(cfg.get("supported_models") or ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"])
+        self._supported_models = list(cfg.get("supported_models") or ["claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"])
 
     def initialize(self) -> bool:
         self._is_initialized = bool(self._api_key)
@@ -58,12 +58,12 @@ class ClaudeProvider(BaseProvider):
         return response
 
     def generate(self, request: ProviderRequest) -> ProviderResponse:
-        model = request.model or "claude-sonnet-4-20250514"
+        model = request.model or "claude-sonnet-4-6"
         messages = list(request.messages or [{"role": "user", "content": request.prompt}])
         return self._call(messages, model, request)
 
     def chat(self, messages: List[Dict[str, str]], model: str = "") -> ProviderResponse:
-        request = ProviderRequest("", model or "claude-sonnet-4-20250514", "claude")
+        request = ProviderRequest("", model or "claude-sonnet-4-6", "claude")
         request.messages = list(messages)
         return self._call(request.messages, request.model, request)
 
