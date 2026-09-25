@@ -112,13 +112,15 @@ class TestDecisionMatrix:
 
     def test_risk_reward(self):
         opt = self.dm.add_option("a")
-        opt.set_score("impact", 0.8); opt.set_score("risk", 0.3)
+        opt.set_score("impact", 0.8)
+        opt.set_score("risk", 0.3)
         rr = self.dm.risk_reward_analysis(opt)
         assert "risk" in rr and "reward" in rr
 
     def test_cost_benefit(self):
         opt = self.dm.add_option("a")
-        opt.set_score("impact", 0.8); opt.set_score("cost", 0.3)
+        opt.set_score("impact", 0.8)
+        opt.set_score("cost", 0.3)
         cb = self.dm.cost_benefit(opt)
         assert cb["net"] == 0.5
 
