@@ -1,36 +1,31 @@
-"""AuthenticationManager — API keys, tokens, roles, permissions, sessions."""
+"""AuthenticationManager — non-predictable credentials with expiry and revocation."""
 from __future__ import annotations
-import itertools
+import hashlib
+import hmac
+import secrets
 import time
 from typing import Any, Dict, List, Optional
-
-_AM_COUNTER = itertools.count(1)
 
 ROLES = ("admin", "user", "viewer", "api_only", "limited")
 
 
 class AuthToken:
-    """An authentication token."""
-
-    __slots__ = ("token_id", "user_id", "role", "permissions",
-                 "created_at", "expires_at", "active")
+    """An authentication token record."""
 
     def __init__(self, user_id: str = "", role: str = "user") -> None:
-        self.token_id: str = f"tok_{next(_AM_COUNTER)}"
+        self.token_id = secrets.token_urlsafe(32)
         self.user_id = user_id
         self.role = role if role in ROLES else "user"
         self.permissions: List[str] = []
-        self.created_at: float = time.time()
-        self.expires_at: float = time.time() + 86400
-        self.active: bool = True
+        self.created_at = time.time()
+        self.expires_at = self.created_at + 86400
+        self.active = True
 
     def is_valid(self) -> bool:
         return self.active and time.time() < self.expires_at
 
     def has_permission(self, permission: str) -> bool:
-        if self.role == "admin":
-            return True
-        return permission in self.permissions
+        return self.role == "admin" or permission in self.permissions
 
     def to_dict(self) -> Dict[str, Any]:
         return {"token_id": self.token_id, "user_id": self.user_id,
@@ -38,19 +33,23 @@ class AuthToken:
 
 
 class AuthenticationManager:
-    """Manage API keys, tokens, roles, permissions, and sessions."""
+    """Manage tokens, API keys, and expiring sessions."""
 
     def __init__(self) -> None:
         self._tokens: Dict[str, AuthToken] = {}
         self._api_keys: Dict[str, str] = {}
         self._sessions: Dict[str, Dict[str, Any]] = {}
 
-    def create_token(self, user_id: str, role: str = "user",
-                     permissions: Optional[List[str]] = None,
-                     ttl_hours: int = 24) -> AuthToken:
+    def create_token(
+        self, user_id: str, role: str = "user",
+        permissions: Optional[List[str]] = None, ttl_hours: int = 24,
+    ) -> AuthToken:
+        if not user_id:
+            raise ValueError("user_id is required")
+        if ttl_hours <= 0:
+            raise ValueError("ttl_hours must be positive")
         token = AuthToken(user_id, role)
-        if permissions:
-            token.permissions = list(permissions)
+        token.permissions = list(permissions or [])
         token.expires_at = time.time() + ttl_hours * 3600
         self._tokens[token.token_id] = token
         return token
@@ -61,36 +60,60 @@ class AuthenticationManager:
 
     def revoke_token(self, token_id: str) -> bool:
         token = self._tokens.get(token_id)
-        if token:
-            token.active = False
-            return True
-        return False
+        if token is None:
+            return False
+        token.active = False
+        return True
 
     def create_api_key(self, name: str) -> str:
-        import hashlib
-        key = hashlib.sha256(f"{name}_{time.time()}".encode()).hexdigest()[:32]
-        self._api_keys[key] = name
-        return key
+        if not name:
+            raise ValueError("name is required")
+        raw = secrets.token_urlsafe(32)
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        self._api_keys[digest] = name
+        return raw
 
     def validate_api_key(self, key: str) -> bool:
-        return key in self._api_keys
+        if not key:
+            return False
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        return any(hmac.compare_digest(stored, digest) for stored in self._api_keys)
 
-    def create_session(self, user_id: str) -> str:
-        import hashlib
-        session_id = hashlib.sha256(f"{user_id}_{time.time()}".encode()).hexdigest()[:16]
-        self._sessions[session_id] = {"user_id": user_id, "created_at": time.time()}
+    def revoke_api_key(self, key: str) -> bool:
+        if not key:
+            return False
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        return self._api_keys.pop(digest, None) is not None
+
+    def create_session(self, user_id: str, ttl_hours: int = 24) -> str:
+        if not user_id or ttl_hours <= 0:
+            raise ValueError("valid user_id and positive ttl_hours are required")
+        session_id = secrets.token_urlsafe(24)
+        now = time.time()
+        self._sessions[hashlib.sha256(session_id.encode()).hexdigest()] = {
+            "user_id": user_id, "created_at": now, "expires_at": now + ttl_hours * 3600,
+        }
         return session_id
 
     def validate_session(self, session_id: str) -> bool:
-        return session_id in self._sessions
+        if not session_id:
+            return False
+        record = self._sessions.get(hashlib.sha256(session_id.encode()).hexdigest())
+        return record is not None and time.time() < record["expires_at"]
 
     def destroy_session(self, session_id: str) -> bool:
-        return self._sessions.pop(session_id, None) is not None
+        if not session_id:
+            return False
+        return self._sessions.pop(hashlib.sha256(session_id.encode()).hexdigest(), None) is not None
 
     def get_token(self, token_id: str) -> Optional[AuthToken]:
         return self._tokens.get(token_id)
 
     def get_stats(self) -> Dict[str, Any]:
-        active = sum(1 for t in self._tokens.values() if t.is_valid())
+        now = time.time()
+        active = sum(1 for token in self._tokens.values()
+                     if token.active and token.expires_at > now)
+        sessions = sum(1 for record in self._sessions.values()
+                       if record["expires_at"] > now)
         return {"total_tokens": len(self._tokens), "active_tokens": active,
-                "api_keys": len(self._api_keys), "sessions": len(self._sessions)}
+                "api_keys": len(self._api_keys), "sessions": sessions}
