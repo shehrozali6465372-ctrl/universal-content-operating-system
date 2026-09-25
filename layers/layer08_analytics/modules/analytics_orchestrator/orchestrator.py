@@ -59,7 +59,7 @@ class AnalyticsOrchestrator:
 
     def run_pipeline(self, collect: bool = True, calculate: bool = True,
                      detect_trends: bool = True) -> AnalyticsResult:
-        start = time.monotonic(); result = AnalyticsResult()
+        start = time.monotonic(); result = AnalyticsResult(); points: List[DataPoint] = []
         if collect:
             points = self.collector.collect_all()
             result.data_points_collected = len(points)
@@ -71,6 +71,12 @@ class AnalyticsOrchestrator:
             for metric_name in self.trend_detector.get_all_metrics():
                 if self.trend_detector.detect(metric_name) is not None:
                     result.trends_detected += 1
+        if points:
+            totals: Dict[str, float] = {}
+            for point in points:
+                totals[point.metric_name] = totals.get(point.metric_name, 0.0) + point.value
+            self.report_generator.generate_summary_report(result.pipeline_id, totals)
+            result.report_generated = True
         result.duration_ms = (time.monotonic() - start) * 1000
         result.insights = self._generate_insights(result)
         with self._lock:
