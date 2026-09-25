@@ -61,6 +61,8 @@ class CaptionEngine:
         # Apply style formatting
         caption = self._apply_style(caption, style, platform)
 
+        if len(caption) > max_len:
+            caption = caption[:max_len - 3].rstrip() + "..."
         result = CaptionResult(caption=caption, platform=platform)
         result.style = style
         self._gen_count += 1
