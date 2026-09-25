@@ -63,6 +63,8 @@ class WritingMemory:
     """Stores brand voice and past content for consistency."""
 
     def __init__(self, max_size: int = 500) -> None:
+        if max_size < 1:
+            raise ValueError("max_size must be >= 1")
         self._voices: Dict[str, BrandVoice] = {}
         self._records: List[DraftRecord] = []
         self._max_size = max_size
@@ -85,7 +87,8 @@ class WritingMemory:
 
     def get_voice(self, name: str) -> Optional[BrandVoice]:
         with self._lock:
-            return self._voices.get(name)
+            voice = self._voices.get(name)
+            return self._copy_voice(voice) if voice else None
 
     def store_draft(self, platform: str, topic: str, text: str,
                     tone: str = "", brand_voice: str = "",
@@ -108,7 +111,7 @@ class WritingMemory:
             return []
         with self._lock:
             idxs = self._platform_index.get(platform, [])
-            return [self._records[i] for i in idxs if i < len(self._records)][:limit]
+            return [self._copy_record(self._records[i]) for i in idxs if i < len(self._records)][:limit]
 
     def get_history(self, account_id: str = "default", platform: Optional[str] = None, limit: int = 50) -> List[DraftRecord]:
         if limit < 1:
@@ -116,13 +119,13 @@ class WritingMemory:
         with self._lock:
             records = [r for r in self._records if r.account_id == account_id and
                    (platform is None or r.platform == platform)]
-            return list(records[-limit:])
+            return [self._copy_record(r) for r in records[-limit:]]
 
     def get_recent(self, limit: int = 10) -> List[DraftRecord]:
         if limit < 1:
             return []
         with self._lock:
-            return list(self._records[-limit:])
+            return [self._copy_record(r) for r in self._records[-limit:]]
 
     def check_consistency(self, text: str, voice_name: str) -> Dict[str, Any]:
         """Check if text matches brand voice."""
@@ -135,6 +138,28 @@ class WritingMemory:
             if dont.lower() in text.lower():
                 issues.append(f"Contains prohibited: '{dont}'")
         return {"consistent": len(issues) == 0, "issues": issues}
+
+    @staticmethod
+    def _copy_record(record: DraftRecord) -> DraftRecord:
+        copy = DraftRecord(record.platform, record.topic, record.text, record.account_id)
+        copy.record_id = record.record_id
+        copy.tone = record.tone
+        copy.brand_voice = record.brand_voice
+        copy.tokens_used = record.tokens_used
+        copy.created_at = record.created_at
+        return copy
+
+    @staticmethod
+    def _copy_voice(voice: BrandVoice) -> BrandVoice:
+        copy = BrandVoice(voice.name)
+        copy.tone = voice.tone
+        copy.vocabulary_level = voice.vocabulary_level
+        copy.personality = list(voice.personality)
+        copy.dos = list(voice.dos)
+        copy.donts = list(voice.donts)
+        copy.platform_profiles = {k: dict(v) for k, v in voice.platform_profiles.items()}
+        copy.created_at = voice.created_at
+        return copy
 
     def _rebuild_index_locked(self) -> None:
         self._platform_index = {}
