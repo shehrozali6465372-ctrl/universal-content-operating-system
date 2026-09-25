@@ -7,16 +7,8 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
-
-
-class TaskState(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+from layers.layer11_async_runtime.modules.async_task_manager.models import TaskState
 
 
 class AsyncTask:
