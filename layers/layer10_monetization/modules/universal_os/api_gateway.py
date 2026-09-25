@@ -1,6 +1,7 @@
 """APIGateway — bounded, rate-limited request dispatch with middleware."""
 from __future__ import annotations
 import itertools
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -53,9 +54,10 @@ class APIResponse:
 class APIGateway:
     """Universal API gateway with middleware and a per-client sliding-window limit."""
 
-    def __init__(self, rate_limit: int = 1000, window_seconds: int = 60) -> None:
-        if rate_limit <= 0 or window_seconds <= 0:
-            raise ValueError("rate_limit and window_seconds must be positive")
+    def __init__(self, rate_limit: int = 1000, window_seconds: int = 60,
+                 max_history: int = 10000, max_clients: int = 10000) -> None:
+        if rate_limit <= 0 or window_seconds <= 0 or max_history <= 0 or max_clients <= 0:
+            raise ValueError("rate_limit, window_seconds, max_history and max_clients must be positive")
         self._handlers: Dict[str, Callable[[APIRequest], Any]] = {}
         self._requests: List[APIRequest] = []
         self._middleware: List[Callable[[APIRequest], Optional[APIResponse]]] = []
@@ -63,6 +65,9 @@ class APIGateway:
         self._window_seconds = window_seconds
         self._request_times: Dict[str, List[float]] = {}
         self._request_count = 0
+        self._max_history = max_history
+        self._max_clients = max_clients
+        self._lock = threading.RLock()
 
     def register_handler(self, endpoint: str, handler: Callable[[APIRequest], Any]) -> None:
         if not endpoint or not callable(handler):
@@ -85,23 +90,31 @@ class APIGateway:
         request = APIRequest(endpoint)
         request.body = dict(body or {})
         request.params = dict(params or {})
-        self._requests.append(request)
-        self._request_count += 1
-        response = APIResponse()
+        with self._lock:
+            self._requests.append(request)
+            if len(self._requests) > self._max_history:
+                del self._requests[:-self._max_history]
+            self._request_count += 1
+            response = APIResponse()
 
-        now = time.time()
-        times = [t for t in self._request_times.get(client_id, [])
-                 if now - t < self._window_seconds]
-        if len(times) >= self._rate_limit:
+            now = time.time()
+            times = [t for t in self._request_times.get(client_id, [])
+                     if now - t < self._window_seconds]
+            if len(times) >= self._rate_limit:
+                self._request_times[client_id] = times
+                response.status_code = 429
+                response.error = "Rate limit exceeded"
+                response.latency_ms = (time.time() - start) * 1000
+                return response
+            if client_id not in self._request_times and len(self._request_times) >= self._max_clients:
+                response.status_code = 429
+                response.error = "Client limit exceeded"
+                response.latency_ms = (time.time() - start) * 1000
+                return response
+            times.append(now)
             self._request_times[client_id] = times
-            response.status_code = 429
-            response.error = "Rate limit exceeded"
-            response.latency_ms = (time.time() - start) * 1000
-            return response
-        times.append(now)
-        self._request_times[client_id] = times
 
-        try:
+            try:
             for middleware in self._middleware:
                 middleware_response = middleware(request)
                 if middleware_response is not None:
@@ -118,8 +131,8 @@ class APIGateway:
             response.status_code = 500
             response.error = "Internal server error"
         finally:
-            response.latency_ms = (time.time() - start) * 1000
-        return response
+                response.latency_ms = (time.time() - start) * 1000
+            return response
 
     def get_endpoints(self) -> List[str]:
         return list(self._handlers)
