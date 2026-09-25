@@ -61,3 +61,9 @@ def test_orchestrator_rejects_mock_provider_result() -> None:
     orchestrator = ImageOrchestrator(provider=MockResultProvider())
     with pytest.raises(RuntimeError, match="Mock image providers"):
         orchestrator.run("topic")
+
+
+def test_optimizer_counter_is_thread_safe() -> None:
+    orchestrator = ImageOrchestrator(provider=ConfiguredProvider())
+    orchestrator.run("counter topic")
+    assert orchestrator.optimizer.optimization_count == 1
