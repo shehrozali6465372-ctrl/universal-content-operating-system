@@ -87,7 +87,7 @@ class BaseLLMProvider(ABC):
 class MockLLMProvider(BaseLLMProvider):
     """Mock LLM provider for testing."""
 
-    def __init__(self, response: str = "Mock draft content.", **kwargs: Any) -> None:
+    def __init__(self, response: str = "Mock draft content. " * 40, **kwargs: Any) -> None:
         super().__init__(provider_name="mock", **kwargs)
         self._mock_response = response
         self._responses: List[str] = []
