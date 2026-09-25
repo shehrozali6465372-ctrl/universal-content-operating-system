@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 from typing import Any, Dict, List, Optional
+from threading import RLock
 
 from layers.layer03_intelligence.modules.content_understanding.content_analyzer import ContentAnalyzer
 from layers.layer03_intelligence.modules.trend_intelligence.trend_predictor import TrendPredictor
@@ -147,6 +148,8 @@ class IntelligenceOrchestrator:
         self._total_analyses = 0
         self._total_events = 0
         self._last_events: List[PipelineEvent] = []
+        self._lock = RLock()
+        self._last_events: List[PipelineEvent] = []
 
     def analyze(
         self,
@@ -243,26 +246,31 @@ class IntelligenceOrchestrator:
         event = PipelineEvent(event_type="module_start", module=name)
         start = time.time()
 
-        metrics = self._metrics.setdefault(name, ModuleMetrics(name))
-        metrics.execution_count += 1
+        with self._lock:
+            metrics = self._metrics.setdefault(name, ModuleMetrics(name))
+            metrics.execution_count += 1
 
         try:
             result = fn()
             event.duration_ms = (time.time() - start) * 1000
             event.event_type = "module_complete"
             event.data = {"success": True}
-            metrics.total_time_ms += event.duration_ms
-            metrics.success_count += 1
-            self._last_events.append(event)
-            self._total_events += 1
+            with self._lock:
+                metrics.total_time_ms += event.duration_ms
+                metrics.success_count += 1
+            with self._lock:
+                self._last_events.append(event)
+                self._total_events += 1
             return result
         except Exception as e:
             event.duration_ms = (time.time() - start) * 1000
             event.event_type = "module_error"
             event.data = {"error": str(e)}
-            metrics.failure_count += 1
-            self._last_events.append(event)
-            self._total_events += 1
+            with self._lock:
+                metrics.failure_count += 1
+            with self._lock:
+                self._last_events.append(event)
+                self._total_events += 1
             return None
 
     def get_metrics(self) -> Dict[str, Any]:
