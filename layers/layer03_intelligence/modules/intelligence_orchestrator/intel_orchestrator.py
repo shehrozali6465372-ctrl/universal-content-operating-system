@@ -148,7 +148,6 @@ class IntelligenceOrchestrator:
         self._total_analyses = 0
         self._total_events = 0
         self._lock = RLock()
-        self._last_events: List[PipelineEvent] = []
 
     def analyze(
         self,
