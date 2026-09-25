@@ -624,8 +624,6 @@ class TestAsyncRuntime:
         runtime.stop()
 
     def test_thread_pool_jobs_are_tracked_and_drained(self):
-        import time
-
         runtime = AsyncRuntime(max_workers=1, shutdown_timeout=1.0)
         runtime.start()
         assert runtime.submit_to_thread(lambda: "done") == "done"
