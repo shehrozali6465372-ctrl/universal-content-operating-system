@@ -11,7 +11,7 @@ Tests:
 from __future__ import annotations
 import time
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class TransactionRecovery:
