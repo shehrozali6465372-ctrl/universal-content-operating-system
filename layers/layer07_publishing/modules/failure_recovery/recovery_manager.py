@@ -77,6 +77,7 @@ class RecoveryManager:
         metrics: Optional[RecoveryMetrics] = None,
         failure_memory: Optional[FailureMemory] = None,
         retry_strategy: Optional[RetryStrategy] = None,
+        sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         self.detector = detector or FailureDetector()
         self.classifier = classifier or ErrorClassifier()
@@ -86,6 +87,7 @@ class RecoveryManager:
         self.metrics = metrics or RecoveryMetrics()
         self.failure_memory = failure_memory or FailureMemory()
         self.retry_strategy = retry_strategy or RetryStrategy()
+        self._sleep = sleep_fn
         self._events: List[Dict[str, Any]] = []
         self._recovery_count = 0
 
@@ -195,7 +197,7 @@ class RecoveryManager:
         attempt = 0
         while self.retry_strategy.should_retry(attempt):
             delay = self.retry_strategy.get_delay(attempt)
-            time.sleep(delay)
+            self._sleep(delay)
             try:
                 success = publish_fn()
                 self.retry_strategy.record_attempt(attempt, success=success)
