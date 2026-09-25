@@ -29,7 +29,9 @@ class BrandVisualProfile:
 
 
 class ImageMemory:
-    """Stores visual brand profiles and image history."""
+    """Stores visual brand profiles and bounded image history."""
+
+    MAX_HISTORY = 1000
 
     def __init__(self) -> None:
         self._profiles: Dict[str, BrandVisualProfile] = {}
@@ -37,11 +39,15 @@ class ImageMemory:
 
     def set_profile(self, name: str, colors: Optional[List[str]] = None,
                     style: str = "modern", mood: str = "professional") -> BrandVisualProfile:
-        p = BrandVisualProfile(name=name)
-        p.primary_colors = colors or []
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("profile name must not be empty")
+        if colors is not None and not isinstance(colors, list):
+            raise ValueError("colors must be a list")
+        p = BrandVisualProfile(name=name.strip())
+        p.primary_colors = list(colors or [])
         p.style = style
         p.mood = mood
-        self._profiles[name] = p
+        self._profiles[p.name] = p
         return p
 
     def get_profile(self, name: str) -> Optional[BrandVisualProfile]:
@@ -49,12 +55,24 @@ class ImageMemory:
 
     def store_image(self, platform: str, topic: str, url: str,
                     profile_name: str = "") -> Dict[str, Any]:
-        record = {"platform": platform, "topic": topic, "url": url,
+        if not isinstance(platform, str) or not platform.strip():
+            raise ValueError("platform must not be empty")
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("topic must not be empty")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("url must not be empty")
+        if profile_name and profile_name not in self._profiles:
+            raise ValueError("Unknown visual profile: " + profile_name)
+        record = {"platform": platform.strip(), "topic": topic.strip(), "url": url.strip(),
                   "profile": profile_name, "timestamp": time.time()}
         self._history.append(record)
+        if len(self._history) > self.MAX_HISTORY:
+            del self._history[:-self.MAX_HISTORY]
         return record
 
     def get_history(self, platform: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        if limit < 1 or limit > self.MAX_HISTORY:
+            raise ValueError(f"limit must be between 1 and {self.MAX_HISTORY}")
         if platform:
             return [r for r in self._history if r["platform"] == platform][-limit:]
         return self._history[-limit:]
