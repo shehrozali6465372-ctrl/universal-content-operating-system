@@ -12,7 +12,9 @@ from layers.layer06_quality.modules.safety_policy_checker.safety_report import S
 
 CATEGORY_PATTERNS: Dict[str, Dict[str, List[re.Pattern]]] = {
     "hate": {
-        "slurs": [re.compile(r'\b(?:slur_words)\b', re.IGNORECASE)],
+        # Slur lexicons are deployment-configurable; never ship a fake
+        # placeholder token that would create a false-positive safety flag.
+        "slurs": [],
         "dehumanization": [
             re.compile(r'\b(?:animals?|vermin|parasites?|cockroaches?|rats?)\s+(?:deserve|need)\s+(?:to\s+)?(?:die|be\s+(?:killed|eliminated))', re.IGNORECASE),
         ],
