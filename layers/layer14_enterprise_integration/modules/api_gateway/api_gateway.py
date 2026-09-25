@@ -1,3 +1,4 @@
+# Layer 8 certification branch: preserve the valid API gateway source while current main is being integrated.
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
 import hashlib, hmac, json, os, time, threading, glob
