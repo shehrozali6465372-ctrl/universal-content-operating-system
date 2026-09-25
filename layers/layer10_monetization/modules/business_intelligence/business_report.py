@@ -66,7 +66,7 @@ class BusinessReportGenerator:
         report = BusinessReport(report_type)
         if data:
             report.data = dict(data)
-        self._reports.append(report)
+        self._reports.append(report)\n        if len(self._reports) > self._max_reports:\n            del self._reports[:-self._max_reports]
         return report
 
     def generate_insight(self, report_type: str, insight: str) -> BusinessReport:
