@@ -75,6 +75,11 @@ jobs:
             exit 1
           fi
 
+      - name: Run Layer 11 Production Gate
+        run: |
+          python -m pytest tests/test_layer11_async_runtime.py -q --tb=short
+          ruff check layers/layer11_async_runtime tests/test_layer11_async_runtime.py --select E,F,W --ignore E501,E402
+
       - name: Run Layer 10 Production Gate
         run: |
           python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py -q --tb=short
