@@ -42,9 +42,12 @@ class TrendEventBus:
         self._handlers: Dict[str, List[Callable]] = {}
         self._event_log: List[TrendEvent] = []
         self._max_log = 1000
+        self._handler_errors = 0
 
     def subscribe(self, event_type: str, handler: Callable) -> None:
-        self._handlers.setdefault(event_type, []).append(handler)
+        handlers = self._handlers.setdefault(event_type, [])
+        if handler not in handlers:
+            handlers.append(handler)
 
     def unsubscribe(self, event_type: str, handler: Callable) -> None:
         if event_type in self._handlers:
@@ -60,7 +63,7 @@ class TrendEventBus:
             try:
                 handler(event)
             except Exception:
-                pass  # Don't let handler errors break the bus
+                self._handler_errors += 1
 
     def publish_batch(self, events: List[TrendEvent]) -> None:
         for event in events:
@@ -78,6 +81,9 @@ class TrendEventBus:
     def clear(self) -> None:
         self._event_log.clear()
 
+    def get_handler_error_count(self) -> int:
+        return self._handler_errors
+
 
 class TrendEventEmitter:
     """Emits appropriate events based on trend analysis changes."""
@@ -85,6 +91,7 @@ class TrendEventEmitter:
     def __init__(self, event_bus: TrendEventBus) -> None:
         self._bus = event_bus
         self._previous_state: Dict[str, Dict] = {}
+        self._max_topics = 5000
 
     def analyze_and_emit(self, topic: str, analysis: Any) -> None:
         """Analyze changes and emit events."""
@@ -147,6 +154,10 @@ class TrendEventEmitter:
             "score": score, "lifecycle": lifecycle,
             "momentum": momentum, "virality": virality,
         }
+
+        if len(self._previous_state) > self._max_topics:
+            oldest_topic = next(iter(self._previous_state))
+            self._previous_state.pop(oldest_topic, None)
 
         # Emit all events
         for event in events:
