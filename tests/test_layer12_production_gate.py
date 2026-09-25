@@ -70,3 +70,13 @@ def test_orchestrator_rejects_non_dict_component_result(monkeypatch: pytest.Monk
     result = orchestrator.process("test-task", {})
     assert result["success"] is False
     assert result["error_code"] == "TASK_EXECUTION_FAILED"
+
+
+def test_openai_rejects_invalid_timeout() -> None:
+    with pytest.raises(ValueError, match="timeout"):
+        OpenAIProvider({"api_key": "test-key", "timeout": 0})
+
+
+def test_openai_accepts_bounded_timeout() -> None:
+    provider = OpenAIProvider({"api_key": "test-key", "timeout": 30})
+    assert provider.initialize() is True
