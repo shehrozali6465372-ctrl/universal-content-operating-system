@@ -48,6 +48,7 @@ class GoalAnalyzer:
 
     def __init__(self) -> None:
         self._goal_history: List[str] = []
+        self._max_history = 200
 
     def analyze(
         self,
@@ -82,6 +83,8 @@ class GoalAnalyzer:
         result.content_direction = self._build_direction(result, topic)
 
         self._goal_history.append(result.primary_goal)
+        if len(self._goal_history) > self._max_history:
+            self._goal_history = self._goal_history[-self._max_history:]
         return result
 
     def _detect_goal(self, topic: str, intel: Optional[Dict]) -> Dict[str, Any]:
