@@ -60,7 +60,7 @@ from layers.layer12_ai_foundation.modules.model_provider_framework.provider_anal
 
 class TestLLMManager:
     def setup_method(self):
-        self.manager = LLMManager()
+        self.manager = LLMManager(generator=lambda **kwargs: "mock provider response")
 
     def test_start_stop(self):
         assert self.manager.start() is True
@@ -344,27 +344,23 @@ class TestProviderBase:
 
     def test_provider_initialize(self):
         p = OpenAIProvider()
-        assert p.initialize() is True
-        assert p.is_initialized
+        assert p.initialize() is False
+        assert p.is_initialized is False
 
     def test_provider_generate(self):
         p = OpenAIProvider()
-        p.initialize()
-        req = ProviderRequest("Hello", "gpt-4o", "openai")
-        resp = p.generate(req)
-        assert resp.content
-        assert resp.provider == "openai"
+        with pytest.raises(RuntimeError, match="API key is not configured"):
+            p.generate(ProviderRequest("Hello", "gpt-4o", "openai"))
 
     def test_provider_chat(self):
         p = OpenAIProvider()
-        p.initialize()
-        resp = p.chat([{"role": "user", "content": "Hi"}])
-        assert resp.content
+        with pytest.raises(RuntimeError, match="API key is not configured"):
+            p.chat([{"role": "user", "content": "Hi"}])
 
     def test_provider_is_available(self):
         p = OpenAIProvider()
         p.initialize()
-        assert p.is_available()
+        assert p.is_available() is False
 
     def test_provider_stats(self):
         p = OpenAIProvider()
@@ -392,12 +388,9 @@ class TestAllProviders:
     def _test_provider(self, cls, name, model):
         p = cls()
         assert p.name == name
-        p.initialize()
-        req = ProviderRequest("Test", model, name)
-        resp = p.generate(req)
-        assert resp.content
-        assert resp.provider == name
-        return resp
+        assert p.initialize() is False
+        with pytest.raises(RuntimeError):
+            p.generate(ProviderRequest("Test", model, name))
 
     def test_claude(self):
         self._test_provider(ClaudeProvider, "claude", "claude-sonnet-4-20250514")
