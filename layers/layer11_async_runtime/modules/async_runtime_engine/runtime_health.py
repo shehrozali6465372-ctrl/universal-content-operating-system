@@ -1,6 +1,7 @@
 """RuntimeHealth — Health checking for the runtime."""
 from __future__ import annotations
 import time
+import threading
 from typing import Any, Dict, List
 
 
@@ -26,13 +27,19 @@ class RuntimeHealth:
     def __init__(self) -> None:
         self._checks: Dict[str, Any] = {}
         self._results: List[HealthCheck] = []
+        self._lock = threading.RLock()
 
     def register_check(self, name: str, check_fn: Any) -> None:
-        self._checks[name] = check_fn
+        if not name or not callable(check_fn):
+            raise ValueError("name must be non-empty and check_fn must be callable")
+        with self._lock:
+            self._checks[name] = check_fn
 
     def run_checks(self) -> List[HealthCheck]:
         results = []
-        for name, check_fn in self._checks.items():
+        with self._lock:
+            checks = list(self._checks.items())
+        for name, check_fn in checks:
             start = time.time()
             hc = HealthCheck(name)
             try:
@@ -43,19 +50,23 @@ class RuntimeHealth:
                 hc.message = str(e)
             hc.latency_ms = (time.time() - start) * 1000
             results.append(hc)
-        self._results = results
+        with self._lock:
+            self._results = results
         return results
 
     def is_healthy(self) -> bool:
-        if not self._results:
-            return True
-        return all(r.healthy for r in self._results)
+        with self._lock:
+            if not self._results:
+                return True
+            return all(r.healthy for r in self._results)
 
     def get_results(self) -> List[HealthCheck]:
-        return list(self._results)
+        with self._lock:
+            return list(self._results)
 
     def get_unhealthy(self) -> List[HealthCheck]:
-        return [r for r in self._results if not r.healthy]
+        with self._lock:
+            return [r for r in self._results if not r.healthy]
 
     def get_stats(self) -> Dict[str, Any]:
         return {"total_checks": len(self._checks),
