@@ -1,6 +1,7 @@
 """Writing Plan — Core data model for content planning."""
 from __future__ import annotations
 import time
+from uuid import uuid4
 from typing import Any, Dict
 
 
@@ -19,7 +20,7 @@ class WritingPlan:
     )
 
     def __init__(self, topic: str = "") -> None:
-        self.plan_id = f"plan_{int(time.time() * 1000) % 10000000}"
+        self.plan_id = f"plan_{uuid4().hex}"
         self.topic = topic
         self.goal = "educate"         # educate, entertain, inspire, promote, engage
         self.platform = "facebook"
