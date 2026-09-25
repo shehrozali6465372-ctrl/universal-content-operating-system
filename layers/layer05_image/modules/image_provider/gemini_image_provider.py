@@ -52,6 +52,7 @@ class GeminiImageProvider(BaseImageProvider):
         self._timeout = 60
         self._history: List[Dict[str, Any]] = []
         self._max_history = 1000
+        self._max_history = 1000
 
     def generate(self, prompt: str, size: str = "1024x1024",
                  style: str = "photorealistic", **kwargs: Any) -> ImageResponse:
