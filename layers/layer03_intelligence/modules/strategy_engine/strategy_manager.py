@@ -1,6 +1,7 @@
 """Strategy Manager — Central orchestrator for Strategy Engine Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.strategy_engine.strategy_generator import StrategyGenerator
@@ -74,6 +75,7 @@ class StrategyManager:
         self.memory = memory or StrategyMemory()
         self.explainer = explainer or StrategyExplainer()
         self._pipeline_count = 0
+        self._lock = RLock()
 
     def run_pipeline(
         self,
@@ -88,6 +90,12 @@ class StrategyManager:
         goal_configs: Optional[List[Dict]] = None,
     ) -> StrategyManagerResult:
         """Run the full strategy pipeline."""
+        if not topic:
+            raise ValueError("topic must not be empty")
+        with self._lock:
+            return self._run_pipeline_locked(topic, score, intent, trend_data, audience_data, competitor_data, content_data, horizon, goal_configs)
+
+    def _run_pipeline_locked(self, topic: str, score: float, intent: str, trend_data: Optional[Dict], audience_data: Optional[Dict], competitor_data: Optional[Dict], content_data: Optional[Dict], horizon: str, goal_configs: Optional[List[Dict]]) -> StrategyManagerResult:
         start = time.time()
         result = StrategyManagerResult(topic=topic)
 
@@ -184,4 +192,5 @@ class StrategyManager:
 
     @property
     def pipeline_count(self) -> int:
-        return self._pipeline_count
+        with self._lock:
+            return self._pipeline_count
