@@ -1,6 +1,6 @@
 """Infographic Engine — Plan data visualization images."""
 from __future__ import annotations
-import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 
@@ -13,7 +13,7 @@ class InfographicPlan:
                  "title", "subtitle", "dimensions", "color_scheme")
 
     def __init__(self, topic: str = "") -> None:
-        self.plan_id = f"info_{int(time.time() * 1000) % 10000000}"
+        self.plan_id = f"info_{uuid.uuid4().hex}"
         self.topic = topic
         self.chart_type = "bar"
         self.data_points: List[Dict[str, Any]] = []
@@ -42,6 +42,10 @@ class InfographicEngine:
     def plan(self, topic: str, data: Optional[List[Dict[str, Any]]] = None,
              chart_type: str = "bar", platform: str = "pinterest") -> InfographicPlan:
         """Plan an infographic."""
+        if not topic or not topic.strip():
+            raise ValueError("topic must not be empty")
+        if chart_type not in CHART_TYPES:
+            raise ValueError(f"Unsupported chart type: {chart_type}")
         ip = InfographicPlan(topic=topic)
         ip.chart_type = chart_type
         ip.title = topic
