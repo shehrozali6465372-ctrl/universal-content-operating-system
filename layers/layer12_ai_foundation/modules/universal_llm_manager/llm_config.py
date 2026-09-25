@@ -10,7 +10,7 @@ class LLMConfig:
 
     def __init__(self) -> None:
         self.default_provider: str = "openai"
-        self.default_model: str = "gpt-4o-mini"
+        self.default_model: str = "gpt-5.6-luna"
         self.default_temperature: float = 0.7
         self.default_max_tokens: int = 4096
         self.default_timeout: float = 60.0
