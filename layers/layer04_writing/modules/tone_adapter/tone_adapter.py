@@ -56,9 +56,13 @@ class ToneAdapter:
     def adapt(self, text: str, source_platform: str = "facebook",
               target_platform: str = "linkedin") -> ToneAdaptResult:
         """Adapt text from one platform tone to another."""
+        if source_platform not in PLATFORM_TONE_DEFAULTS:
+            raise ValueError(f"Unsupported source platform: {source_platform}")
+        if target_platform not in PLATFORM_TONE_DEFAULTS:
+            raise ValueError(f"Unsupported target platform: {target_platform}")
         result = ToneAdaptResult()
-        result.original_tone = PLATFORM_TONE_DEFAULTS.get(source_platform, "conversational")
-        result.target_tone = PLATFORM_TONE_DEFAULTS.get(target_platform, "conversational")
+        result.original_tone = PLATFORM_TONE_DEFAULTS[source_platform]
+        result.target_tone = PLATFORM_TONE_DEFAULTS[target_platform]
         result.platform = target_platform
 
         adapted = text
