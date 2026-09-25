@@ -934,13 +934,13 @@ class TestUniversalOSOrchestrator:
         assert self.orch.start() is True
         assert self.orch.stop() is True
 
-    def test_run_pipeline(self):
+    def test_run_pipeline_requires_explicit_stage_configuration(self):
+        self.orch.start()
         result = self.orch.run_pipeline("Grow audience on LinkedIn")
         assert "pipeline_id" in result
         assert "stages" in result
-        assert result["stages"]["observe"]["status"] == "completed"
-        assert result["stages"]["publish"]["status"] == "completed"
-        assert result["stages"]["learn"]["status"] == "completed"
+        assert result["stages"]["observe"]["status"] == "not_configured"
+        assert result["status"] == "not_configured"
         assert "duration_ms" in result
 
     def test_health(self):
@@ -954,11 +954,13 @@ class TestUniversalOSOrchestrator:
         assert "security" in health
 
     def test_pipeline_runs_tracked(self):
+        self.orch.start()
         self.orch.run_pipeline("Task A")
         self.orch.run_pipeline("Task B")
         assert len(self.orch._pipeline_runs) == 2
 
     def test_context_stored(self):
+        self.orch.start()
         self.orch.run_pipeline("Test goal", {"platform": "linkedin"})
         ctx = self.orch.context.get("goal",
                                      list(self.orch.context._index.keys())[0].split(":")[1])
