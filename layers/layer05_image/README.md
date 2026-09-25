@@ -12,7 +12,7 @@ Image & Visual module for AI Self-Improving Facebook Agent.
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| Planning, prompt, layout, provider orchestration, optimization, memory | Implemented | 🟡 |
+| Planning, prompt, layout, provider orchestration, optimization, memory | Hardened | 🟡 |
 
 ## Usage
 
@@ -20,8 +20,20 @@ Image & Visual module for AI Self-Improving Facebook Agent.
 from layers.layer05_image import *
 ```
 
+## Real Providers
+
+- **Gemini:** `GeminiImageProvider` using `GEMINI_API_KEY_1` / `GEMINI_API_KEY`.
+- **OpenRouter:** `OpenRouterImageProvider` using `OPENROUTER_API_KEY`; temporary real-image smoke provider for certification.
+- OpenRouter default model: `bytedance-seed/seedream-4.5`.
+- Production boundary rejects mock providers and requires nonempty image bytes plus SHA-256 provenance.
+
+## Certification Gates
+
+The layer remains **Not Production Certified** until the CI gate verifies targeted tests, a real provider smoke test, persisted nonempty image bytes, SHA-256 provenance, and the remaining Layer 5 cross-layer/failure/concurrency gates.
+
 ## Tests
 
 ```bash
 pytest tests/unit/layer05_image -q
 ```
+
