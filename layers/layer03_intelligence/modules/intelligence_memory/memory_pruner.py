@@ -26,6 +26,10 @@ class MemoryPruner:
     """Prunes memories based on age, value, and staleness."""
 
     def __init__(self, max_age_days: int = 90, min_value: float = 0.1) -> None:
+        if max_age_days < 1:
+            raise ValueError("max_age_days must be >= 1")
+        if not 0.0 <= min_value <= 1.0:
+            raise ValueError("min_value must be between 0 and 1")
         self._max_age_seconds = max_age_days * 86400
         self._min_value = min_value
 
@@ -34,8 +38,11 @@ class MemoryPruner:
         result: List[Dict[str, Any]] = []
         now = time.time()
         for e in entries:
-            age = now - e.get("timestamp", now)
+            timestamp = e.get("timestamp", now)
             value = e.get("value", 0.5)
+            if not isinstance(timestamp, (int, float)) or not isinstance(value, (int, float)):
+                continue
+            age = now - timestamp
             if age > self._max_age_seconds:
                 continue
             if value < self._min_value:
@@ -48,8 +55,13 @@ class MemoryPruner:
         pr = PruningResult()
         now = time.time()
         for e in entries:
-            age = now - e.get("timestamp", now)
+            timestamp = e.get("timestamp", now)
             value = e.get("value", 0.5)
+            if not isinstance(timestamp, (int, float)) or not isinstance(value, (int, float)):
+                pr.removed_count += 1
+                pr.pruning_reasons["invalid"] = pr.pruning_reasons.get("invalid", 0) + 1
+                continue
+            age = now - timestamp
             if age > self._max_age_seconds:
                 pr.removed_count += 1
                 pr.pruning_reasons["expired"] = pr.pruning_reasons.get("expired", 0) + 1
