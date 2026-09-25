@@ -15,7 +15,6 @@ from layers.layer08_analytics.modules.funnel_analyzer.analyzer import FunnelAnal
 from layers.layer08_analytics.modules.attribution_engine.attribution import AttributionEngine
 from layers.layer08_analytics.modules.dashboard_service.dashboard import DashboardService
 from layers.layer08_analytics.modules.analytics_persistence import AnalyticsPersistence
-from layers.layer08_analytics.modules.exceptions import DataCollectionError
 
 
 class AnalyticsResult:
