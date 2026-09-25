@@ -13,7 +13,9 @@ class AsyncEventLoop:
     def __init__(self, loop_id: str = "main", startup_timeout: float = 5.0) -> None:
         if not isinstance(loop_id, str) or not loop_id:
             raise ValueError("loop_id must be non-empty")
-        if startup_timeout <= 0:
+        if isinstance(startup_timeout, bool) or not isinstance(
+            startup_timeout, (int, float)
+        ) or startup_timeout <= 0:
             raise ValueError("startup_timeout must be > 0")
         self.loop_id = loop_id
         self._startup_timeout = startup_timeout
