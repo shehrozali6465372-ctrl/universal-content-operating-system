@@ -89,7 +89,8 @@ class DraftManager:
         variant_generator: Optional[VariantGenerator] = None,
         memory: Optional[DraftMemory] = None,
     ) -> None:
-        if provider is None and os.getenv("UCOS_ENV", os.getenv("APP_ENV", "development")).lower() in {"production", "prod"}:
+        production = os.getenv("UCOS_ENV", os.getenv("APP_ENV", "development")).lower() in {"production", "prod"}
+        if production and (provider is None or isinstance(provider, MockLLMProvider)):
             raise RuntimeError("A real LLM provider is required in production")
         self.provider = provider or MockLLMProvider()
         self._lock = RLock()
