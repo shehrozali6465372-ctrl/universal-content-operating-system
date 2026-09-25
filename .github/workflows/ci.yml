@@ -75,8 +75,32 @@ jobs:
             exit 1
           fi
 
+      - name: Run Layer 11 Production Gate
+        run: |
+          python -m pytest tests/test_layer11_async_runtime.py -q --tb=short
+          ruff check layers/layer11_async_runtime tests/test_layer11_async_runtime.py --select E,F,W --ignore E501,E402
+
+      - name: Run Layer 10 Production Gate
+        run: |
+          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py tests/test_layer10_production_gate.py -q --tb=short
+          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402
+
+      - name: Run Layer 15 Production Gate
+        run: |
+          python -m pytest tests/test_layer15_production_gate.py -q --tb=short
+          ruff check layers/layer15_async_runtime tests/test_layer15_production_gate.py --select E,F,W --ignore E501,E402
+
       - name: Run Integration Contract Tests
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+
+      - name: Run Layer 4 Production Gate Tests
+        run: python -m pytest tests/layer04_writing/test_production_hardening.py tests/layer04_writing/test_modules_3_10.py -q --tb=short
+
+      - name: Run Layer 5 Production Gate Tests
+        run: python -m pytest tests/unit/layer05_image/test_gemini_image_provider.py -q --tb=short
+        
+      - name: Run Layer 14 Production Gate
+        run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
 
       - name: Run Layer 1 Production Gate Tests
         run: python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py -q --tb=short
