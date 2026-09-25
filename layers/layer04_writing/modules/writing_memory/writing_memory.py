@@ -83,7 +83,7 @@ class WritingMemory:
         voice.donts = list(donts or [])
         with self._lock:
             self._voices[name] = voice
-        return voice
+            return self._copy_voice(voice)
 
     def get_voice(self, name: str) -> Optional[BrandVoice]:
         with self._lock:
