@@ -1,6 +1,7 @@
 """GlobalMemory — bounded system memory with index consistency."""
 from __future__ import annotations
 import itertools
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -33,6 +34,7 @@ class GlobalMemory:
         self._max_entries = max_entries
         self._entries: List[MemoryEntry] = []
         self._index: Dict[str, MemoryEntry] = {}
+        self._lock = threading.RLock()
 
     def store(self, memory_type: str, key: str, data: Any,
               confidence: float = 0.5, tags: Optional[List[str]] = None,
@@ -40,6 +42,7 @@ class GlobalMemory:
         if not key:
             raise ValueError("key is required")
         idx_key = f"{memory_type}:{key}"
+        with self._lock:
         existing = self._index.get(idx_key)
         if existing is not None:
             existing.data = data
@@ -48,16 +51,16 @@ class GlobalMemory:
             existing.tags = list(tags or [])
             existing.last_accessed = time.time()
             return existing
-        entry = MemoryEntry(memory_type, key, data)
-        entry.confidence = max(0.0, min(1.0, confidence))
-        entry.importance = importance
-        entry.tags = list(tags or [])
-        self._entries.append(entry)
-        self._index[idx_key] = entry
-        while len(self._entries) > self._max_entries:
-            evicted = self._entries.pop(0)
-            self._index.pop(f"{evicted.memory_type}:{evicted.key}", None)
-        return entry
+            entry = MemoryEntry(memory_type, key, data)
+            entry.confidence = max(0.0, min(1.0, confidence))
+            entry.importance = importance
+            entry.tags = list(tags or [])
+            self._entries.append(entry)
+            self._index[idx_key] = entry
+            while len(self._entries) > self._max_entries:
+                evicted = self._entries.pop(0)
+                self._index.pop(f"{evicted.memory_type}:{evicted.key}", None)
+            return entry
 
     def retrieve(self, memory_type: str, key: str) -> Any:
         entry = self._index.get(f"{memory_type}:{key}")
