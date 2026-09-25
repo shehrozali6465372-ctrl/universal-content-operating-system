@@ -1,6 +1,8 @@
 """Draft Memory — Store and retrieve past drafts."""
 from __future__ import annotations
 import time
+from threading import RLock
+from uuid import uuid4
 from typing import Any, Dict, List
 
 
@@ -10,7 +12,7 @@ class DraftRecord:
                  "provider", "model", "tokens_used", "metadata", "created_at")
 
     def __init__(self, plan_id: str = "", topic: str = "", text: str = "") -> None:
-        self.record_id = f"drec_{int(time.time() * 1000) % 10000000}"
+        self.record_id = f"drec_{uuid4().hex}"
         self.plan_id = plan_id
         self.topic = topic
         self.text = text
@@ -40,6 +42,7 @@ class DraftMemory:
         self._records: List[DraftRecord] = []
         self._max_size = max_size
         self._topic_index: Dict[str, List[int]] = {}
+        self._lock = RLock()
 
     def store(self, plan_id: str, topic: str, text: str, variant_type: str = "original",
               provider: str = "", model: str = "", tokens: int = 0) -> DraftRecord:
@@ -50,28 +53,42 @@ class DraftMemory:
         rec.model = model
         rec.tokens_used = tokens
 
-        if len(self._records) >= self._max_size:
-            self._records.pop(0)
-
-        idx = len(self._records)
-        self._records.append(rec)
-        self._topic_index.setdefault(topic.lower(), []).append(idx)
+        with self._lock:
+            if len(self._records) >= self._max_size:
+                self._records.pop(0)
+            self._rebuild_index_locked()
+            self._records.append(rec)
+            self._rebuild_index_locked()
         return rec
 
     def get_by_topic(self, topic: str, limit: int = 5) -> List[DraftRecord]:
-        idxs = self._topic_index.get(topic.lower(), [])
-        return [self._records[i] for i in idxs if i < len(self._records)][:limit]
+        if limit < 1:
+            return []
+        with self._lock:
+            idxs = self._topic_index.get(topic.lower(), [])
+            return [self._records[i] for i in idxs if i < len(self._records)][:limit]
 
     def get_by_plan(self, plan_id: str) -> List[DraftRecord]:
-        return [r for r in self._records if r.plan_id == plan_id]
+        with self._lock:
+            return [r for r in self._records if r.plan_id == plan_id]
 
     def get_recent(self, limit: int = 10) -> List[DraftRecord]:
-        return self._records[-limit:]
+        if limit < 1:
+            return []
+        with self._lock:
+            return list(self._records[-limit:])
+
+    def _rebuild_index_locked(self) -> None:
+        self._topic_index = {}
+        for idx, record in enumerate(self._records):
+            self._topic_index.setdefault(record.topic.lower(), []).append(idx)
 
     @property
     def count(self) -> int:
-        return len(self._records)
+        with self._lock:
+            return len(self._records)
 
     @property
     def total_tokens(self) -> int:
-        return sum(r.tokens_used for r in self._records)
+        with self._lock:
+            return sum(r.tokens_used for r in self._records)
