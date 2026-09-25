@@ -79,7 +79,7 @@ class AutonomousPlanningManager:
                     layers.append(task["layer"])
 
         scenario = self.simulator.create_scenario("primary_plan",
-            [{"layer": l, "action": "execute"} for l in layers])
+            [{"layer": layer, "action": "execute"} for layer in layers])
         self.simulator.simulate(scenario.scenario_id)
         results["stages"]["simulation"] = scenario.to_dict()
 
