@@ -11,7 +11,7 @@ class DeepSeekProvider(OpenAIProvider):
         cfg = dict(config or {})
         cfg.setdefault("api_key", os.getenv("DEEPSEEK_API_KEY", ""))
         cfg.setdefault("base_url", "https://api.deepseek.com")
-        cfg.setdefault("supported_models", ["deepseek-chat", "deepseek-reasoner"])
+        cfg.setdefault("supported_models", ["deepseek-flash", "deepseek-v4-pro"])
         super().__init__(cfg)
         self._name = "deepseek"
 
@@ -21,8 +21,8 @@ class DeepSeekProvider(OpenAIProvider):
         return response
 
     def generate(self, request: Any):
-        request.model = request.model or "deepseek-chat"
+        request.model = request.model or "deepseek-flash"
         return super().generate(request)
 
     def chat(self, messages: List[Dict[str, str]], model: str = ""):
-        return super().chat(messages, model or "deepseek-chat")
+        return super().chat(messages, model or "deepseek-flash")
