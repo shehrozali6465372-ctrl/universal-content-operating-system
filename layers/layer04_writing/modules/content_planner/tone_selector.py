@@ -51,6 +51,7 @@ class ToneSelector:
 
     def __init__(self) -> None:
         self._selection_history: List[ToneSelection] = []
+        self._max_history = 200
 
     def select(
         self,
@@ -69,6 +70,8 @@ class ToneSelector:
             result.profile = TONE_PROFILES[override]
             result.alternatives = [t for t in self.GOAL_TONE_MAP.get(goal, ["friendly"]) if t != override]
             self._selection_history.append(result)
+            if len(self._selection_history) > self._max_history:
+                self._selection_history = self._selection_history[-self._max_history:]
             return result
 
         # Get candidates from goal
@@ -92,6 +95,8 @@ class ToneSelector:
         result.alternatives = [c for c in candidates if c != result.selected_tone]
 
         self._selection_history.append(result)
+        if len(self._selection_history) > self._max_history:
+            self._selection_history = self._selection_history[-self._max_history:]
         return result
 
     def get_profile(self, tone: str) -> Dict[str, Any]:
