@@ -85,10 +85,7 @@ class BusinessOrchestrator:
         )
         results["stages"]["memory"] = self.memory.get_stats()
 
-        previous = self.metrics.get_latest()
-        growth = 0.0
-        if previous and previous.get("profit") is not None and previous.get("profit") != 0:
-            growth = (revenue - float(previous.get("profit", 0.0))) / abs(float(previous["profit"]))
+        growth = float(campaign_data.get("revenue_growth", 0.0))
         self.metrics.record(revenue_growth=growth, profit=revenue - cost, roi=snapshot.roi)
         results["stages"]["metrics"] = self.metrics.get_stats()
 
