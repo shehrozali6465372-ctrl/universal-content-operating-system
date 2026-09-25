@@ -1,6 +1,6 @@
 """Thumbnail Engine — Generate eye-catching thumbnail plans."""
 from __future__ import annotations
-import time
+import uuid
 from typing import Any, Dict
 
 
@@ -10,7 +10,7 @@ class ThumbnailPlan:
                  "color_scheme", "face_position", "cta_overlay")
 
     def __init__(self, topic: str = "") -> None:
-        self.plan_id = f"thumb_{int(time.time() * 1000) % 10000000}"
+        self.plan_id = f"thumb_{uuid.uuid4().hex}"
         self.topic = topic
         self.style = "bold"
         self.text = ""
@@ -39,6 +39,8 @@ class ThumbnailEngine:
     def plan(self, topic: str, platform: str = "youtube",
              style: str = "bold") -> ThumbnailPlan:
         """Create a thumbnail plan."""
+        if not topic or not topic.strip():
+            raise ValueError("topic must not be empty")
         tp = ThumbnailPlan(topic=topic)
         tp.style = style
         tp.text = topic[:40]
