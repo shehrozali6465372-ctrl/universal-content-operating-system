@@ -1,43 +1,28 @@
-"""deepseek_provider.py — DeepSeek provider implementation."""
+"""DeepSeek provider implementation with real HTTP transport."""
 from __future__ import annotations
-import time
-import itertools
+import os
 from typing import Any, Dict, List, Optional
-from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import BaseProvider, ProviderRequest, ProviderResponse
+from layers.layer12_ai_foundation.modules.model_provider_framework.openai_provider import OpenAIProvider
 
-_REQUEST_ID = itertools.count(1)
-
-
-class DeepSeekProvider(BaseProvider):
-    """DeepSeek AI provider (cost-effective reasoning models)."""
+class DeepSeekProvider(OpenAIProvider):
+    """DeepSeek uses an OpenAI-compatible chat-completions API."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
-        super().__init__("deepseek", config)
-        self._supported_models = ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"]
-        self._api_key = (config or {}).get("api_key", "")
+        cfg = dict(config or {})
+        cfg.setdefault("api_key", os.getenv("DEEPSEEK_API_KEY", ""))
+        cfg.setdefault("base_url", "https://api.deepseek.com")
+        cfg.setdefault("supported_models", ["deepseek-chat", "deepseek-reasoner"])
+        super().__init__(cfg)
+        self._name = "deepseek"
 
-    def initialize(self) -> bool:
-        self._is_initialized = True
-        self._health_status = "healthy"
-        return True
+    def _call(self, messages: List[Dict[str, str]], model: str, request: Any):
+        response = super()._call(messages, model, request)
+        response.provider = "deepseek"
+        return response
 
-    def generate(self, request: ProviderRequest) -> ProviderResponse:
-        start = time.time()
-        req_id = f"deepseek_{next(_REQUEST_ID)}"
-        content = f"[DeepSeek/{request.model}] Generated for: {request.prompt[:100]}..."
-        tokens = max(10, len(request.prompt.split()) * 2)
-        resp = ProviderResponse(content, request.model or "deepseek-chat", "deepseek")
-        resp.request_id = req_id
-        resp.usage = {"prompt_tokens": tokens, "completion_tokens": tokens * 2, "total_tokens": tokens * 3}
-        resp.latency_ms = (time.time() - start) * 1000
-        self._metrics["requests"] += 1
-        self._metrics["total_tokens"] += resp.usage["total_tokens"]
-        return resp
+    def generate(self, request: Any):
+        request.model = request.model or "deepseek-chat"
+        return super().generate(request)
 
-    def chat(self, messages: List[Dict[str, str]], model: str = "") -> ProviderResponse:
-        prompt = messages[-1]["content"] if messages else ""
-        req = ProviderRequest(prompt, model or "deepseek-chat", "deepseek")
-        return self.generate(req)
-
-    def is_available(self) -> bool:
-        return self._is_initialized
+    def chat(self, messages: List[Dict[str, str]], model: str = ""):
+        return super().chat(messages, model or "deepseek-chat")
