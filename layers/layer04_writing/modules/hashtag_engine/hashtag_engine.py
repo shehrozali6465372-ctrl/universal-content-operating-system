@@ -45,6 +45,7 @@ class HashtagEngine:
 
     def __init__(self) -> None:
         self._gen_count = 0
+        self._lock = RLock()
 
     def generate(self, text: str, platform: str = "facebook",
                  categories: Optional[List[str]] = None,
