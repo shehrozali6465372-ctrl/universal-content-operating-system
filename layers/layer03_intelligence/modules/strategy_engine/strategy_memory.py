@@ -2,6 +2,7 @@
 from __future__ import annotations
 import copy
 import math
+import time
 from threading import RLock
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -19,7 +20,7 @@ class StrategyRecord:
         self.outcome = "unknown"
         self.performance_score = 0.0
         self.lessons: List[str] = []
-        self.timestamp = __import__("time").time()
+        self.timestamp = time.time()
         self.tags: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
