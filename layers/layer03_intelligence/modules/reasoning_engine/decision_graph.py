@@ -1,5 +1,6 @@
 """Decision Graph - Tracks decision dependencies and causal chains."""
 from __future__ import annotations
+import math
 import time
 from typing import Any, Dict, List, Optional, Set
 
@@ -51,24 +52,50 @@ class DecisionGraph:
         self._edges: List[DecisionEdge] = []
 
     def add_node(self, node: DecisionNode) -> None:
+        if not node.node_id:
+            raise ValueError("node_id must not be empty")
+        if node.node_id in self._nodes:
+            raise ValueError(f"duplicate node_id: {node.node_id}")
+        if not math.isfinite(node.confidence) or not 0.0 <= node.confidence <= 1.0:
+            raise ValueError("node confidence must be finite and between 0 and 1")
         self._nodes[node.node_id] = node
 
     def create_node(self, node_id: str, label: str, decision: str = "",
                     confidence: float = 0.0, stage: str = "",
                     dependencies: Optional[List[str]] = None) -> DecisionNode:
+        if not node_id:
+            raise ValueError("node_id must not be empty")
+        if any(dep_id == node_id for dep_id in (dependencies or [])):
+            raise ValueError("a node cannot depend on itself")
         node = DecisionNode(node_id, label)
         node.decision = decision
         node.confidence = confidence
         node.stage = stage
-        node.dependencies = dependencies or []
+        node.dependencies = list(dependencies or [])
         self.add_node(node)
         for dep_id in node.dependencies:
+            if dep_id not in self._nodes:
+                self._nodes.pop(node_id, None)
+                raise ValueError(f"unknown dependency: {dep_id}")
             self._edges.append(DecisionEdge(dep_id, node_id, "depends_on"))
+        if self._has_cycle():
+            self._remove_node(node_id)
+            raise ValueError("dependency cycle detected")
         return node
 
     def add_edge(self, from_id: str, to_id: str, edge_type: str = "depends_on",
                  weight: float = 1.0) -> None:
-        self._edges.append(DecisionEdge(from_id, to_id, edge_type, weight))
+        if from_id not in self._nodes or to_id not in self._nodes:
+            raise ValueError("edge endpoints must exist")
+        if from_id == to_id:
+            raise ValueError("self-edges are not allowed")
+        if not math.isfinite(weight):
+            raise ValueError("edge weight must be finite")
+        edge = DecisionEdge(from_id, to_id, edge_type, weight)
+        self._edges.append(edge)
+        if edge_type == "depends_on" and self._has_cycle():
+            self._edges.pop()
+            raise ValueError("dependency cycle detected")
 
     def get_node(self, node_id: str) -> Optional[DecisionNode]:
         return self._nodes.get(node_id)
@@ -110,16 +137,46 @@ class DecisionGraph:
     def _dfs(self, node_id: str, visited: Set[str]) -> List[DecisionNode]:
         if node_id in visited:
             return []
-        visited.add(node_id)
         node = self._nodes.get(node_id)
         if not node:
             return []
+        next_visited = visited | {node_id}
         result = [node]
         dependents = self.get_dependents(node_id)
         if dependents:
-            longest = max(self._dfs(d.node_id, visited) for d in dependents)
+            longest = max(
+                (self._dfs(d.node_id, next_visited) for d in dependents),
+                key=len,
+            )
             result.extend(longest)
         return result
+
+    def _has_cycle(self) -> bool:
+        visiting: Set[str] = set()
+        visited: Set[str] = set()
+
+        def visit(node_id: str) -> bool:
+            if node_id in visiting:
+                return True
+            if node_id in visited:
+                return False
+            visiting.add(node_id)
+            for edge in self._edges:
+                if edge.edge_type == "depends_on" and edge.from_node == node_id:
+                    if visit(edge.to_node):
+                        return True
+            visiting.remove(node_id)
+            visited.add(node_id)
+            return False
+
+        return any(visit(node_id) for node_id in self._nodes)
+
+    def _remove_node(self, node_id: str) -> None:
+        self._nodes.pop(node_id, None)
+        self._edges = [
+            edge for edge in self._edges
+            if edge.from_node != node_id and edge.to_node != node_id
+        ]
 
     def find_weak_link(self) -> Optional[DecisionNode]:
         """Find the node with lowest confidence on the critical path."""
