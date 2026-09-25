@@ -114,8 +114,8 @@ class TestLLMManager:
 class TestLLMConfig:
     def test_defaults(self):
         cfg = LLMConfig()
-        assert cfg.default_provider == "openai"
-        assert cfg.default_model == "gpt-5.6-luna"
+        assert cfg.default_provider == "deepseek"
+        assert cfg.default_model == "deepseek-flash"
         assert cfg.budget_limit == 100.0
 
     def test_to_dict(self):
