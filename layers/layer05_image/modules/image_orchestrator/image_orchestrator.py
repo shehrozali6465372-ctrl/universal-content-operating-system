@@ -67,7 +67,7 @@ class ImageOrchestrator:
     def run(self, topic: str, platform: str = "facebook",
             image_type: str = "photo", style: str = "modern") -> ImageOrchestratorResult:
         """Full pipeline: topic → planned image."""
-        start = time.time()
+        start = time.monotonic()
         result = ImageOrchestratorResult(topic=topic)
         result.platform = platform
 
@@ -123,7 +123,7 @@ class ImageOrchestrator:
             url=result.image_response.image_url if result.image_response else "",
         )
 
-        result.pipeline_time_ms = (time.time() - start) * 1000
+        result.pipeline_time_ms = (time.monotonic() - start) * 1000
         self._run_count += 1
         return result
 
