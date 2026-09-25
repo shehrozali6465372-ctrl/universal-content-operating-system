@@ -9,7 +9,7 @@ import time
 import threading
 import traceback
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -116,7 +116,6 @@ class ConnectionLeakDetector:
         """Get leak detector statistics."""
         with self._lock:
             active = sum(1 for t in self._connections.values() if not t.released)
-            released = sum(1 for t in self._connections.values() if t.released)
             durations = [t.duration_ms for t in self._connections.values() if t.released and t.duration_ms]
             avg_duration = sum(durations) / len(durations) if durations else 0.0
 
