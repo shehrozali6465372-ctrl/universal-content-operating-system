@@ -94,7 +94,7 @@ class IntelMemoryManager:
     def recall(self, entry_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve an entry from cache or store."""
         cached = self.cache.get(entry_id)
-        if cached:
+        if cached is not None:
             return cached
         entry = self.store.get(entry_id)
         if entry:
