@@ -87,6 +87,13 @@ class AsyncEventLoop:
     def run_until_complete(self, coro: Coroutine[Any, Any, Any]) -> Any:
         if not asyncio.iscoroutine(coro):
             raise TypeError("coro must be a coroutine")
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            coro.close()
+            raise RuntimeError("cannot run_until_complete from a running event loop")
         if self._active_loop is not None and self._active_loop.is_running():
             coro.close()
             raise RuntimeError("cannot run_until_complete while the active loop is running")
