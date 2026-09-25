@@ -97,18 +97,31 @@ class RuntimeManager:
 
     def pause(self) -> bool:
         with self._lock:
+            if self.state.current != RuntimeState.RUNNING:
+                return False
+            try:
+                self.runtime.pause()
+            except Exception:
+                return False
             if not self.state.transition(RuntimeState.PAUSED):
+                self.runtime.resume()
                 return False
             self.events.publish("runtime_paused", "manager")
             return True
 
     def resume(self) -> bool:
         with self._lock:
+            if self.state.current != RuntimeState.PAUSED:
+                return False
+            try:
+                self.runtime.resume()
+            except Exception:
+                return False
             if not self.state.transition(RuntimeState.RUNNING):
+                self.runtime.pause()
                 return False
             self.events.publish("runtime_resumed", "manager")
             return True
-
     def restart(self) -> bool:
         with self._lock:
             current = self.state.current
