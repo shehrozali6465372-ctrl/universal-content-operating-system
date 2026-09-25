@@ -99,8 +99,9 @@ class QueueOrchestrator:
         else:
             self.retry.record_failure(job, job.last_error)
             if self.retry.should_retry(job):
-                job.status = "scheduled"
+                job.status = "pending"
                 job.scheduled_time = time.time() + self.retry.get_next_delay(job)
+                job.metadata["retry_scheduled"] = True
                 self.queue.enqueue(job)
                 self._events.append({"event": "job_retrying", "job_id": job.job_id, "attempt": job.attempts})
             else:
