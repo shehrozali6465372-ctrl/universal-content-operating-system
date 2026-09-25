@@ -1,6 +1,7 @@
 """Writing Orchestrator — One input → multiple platform outputs."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
@@ -89,6 +90,7 @@ class WritingOrchestrator:
         self.optimizer = ContentOptimizer()
         self.memory = WritingMemory()
         self._run_count = 0
+        self._lock = RLock()
 
     def run(
         self,
@@ -100,14 +102,22 @@ class WritingOrchestrator:
     ) -> OrchestratorResult:
         """Full pipeline: one topic → multiple platform outputs."""
         start = time.time()
+        if not topic or not topic.strip():
+            raise ValueError("topic must be non-empty")
+        target_platforms = list(platforms) if platforms is not None else ["facebook", "instagram", "twitter", "linkedin"]
+        if not target_platforms or any(not isinstance(p, str) or not p.strip() for p in target_platforms):
+            raise ValueError("platforms must contain at least one non-empty platform")
+        if len(set(target_platforms)) != len(target_platforms):
+            raise ValueError("platforms must not contain duplicates")
         result = OrchestratorResult(topic=topic)
-        target_platforms = platforms or ["facebook", "instagram", "twitter", "linkedin"]
+
 
         # 1. Plan
         plan_result = self.planner.create_plan(
             topic=topic, user_goal=goal, audience_hint=audience
         )
         result.plan = plan_result.plan
+        result.plan.language = language
 
         # 2. Generate draft
         draft_result = self.draft_manager.generate(plan_result.plan)
@@ -157,9 +167,10 @@ class WritingOrchestrator:
                 tone=po.adapted_tone, tokens=draft_result.total_tokens,
             )
 
-        result.platforms = target_platforms
+        result.platforms = list(target_platforms)
         result.pipeline_time_ms = (time.time() - start) * 1000
-        self._run_count += 1
+        with self._lock:
+            self._run_count += 1
         return result
 
     def get_history(self, platform: str = "", limit: int = 10) -> List[Dict[str, Any]]:
@@ -169,4 +180,5 @@ class WritingOrchestrator:
 
     @property
     def run_count(self) -> int:
-        return self._run_count
+        with self._lock:
+            return self._run_count
