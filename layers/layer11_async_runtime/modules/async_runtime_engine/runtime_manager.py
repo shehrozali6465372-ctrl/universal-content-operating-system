@@ -38,6 +38,7 @@ class RuntimeManager:
             max_workers=self.config.max_workers,
             max_tracked_tasks=self.config.max_tasks,
             task_timeout=self.config.task_timeout,
+            shutdown_timeout=self.config.shutdown_timeout,
         )
         self._lock = threading.RLock()
         self.health.register_check("config", self._config_health)
