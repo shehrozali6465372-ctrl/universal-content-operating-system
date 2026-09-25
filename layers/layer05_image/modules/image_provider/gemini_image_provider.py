@@ -1,7 +1,7 @@
 """GeminiImageProvider — Real image generation via Gemini API.
 
 Uses Gemini's generateContent with image output capabilities.
-Falls back to mock when API keys not available.
+Fails closed when API credentials or generation responses are unavailable.
 
 Architecture:
     ImageOrchestrator → GeminiImageProvider → KeyManager → Gemini API
@@ -37,9 +37,6 @@ class GeminiImageProvider(BaseImageProvider):
     - Receives image data in response
     - Returns ImageResponse with image_data
 
-    When API not available:
-    - Returns enhanced prompt with style guidance
-    - Logs the prompt for manual generation
     """
 
     GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
