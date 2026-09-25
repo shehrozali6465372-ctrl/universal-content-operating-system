@@ -44,15 +44,15 @@ class BusinessReport:
         lines = [f"# Business Report: {self.report_type}",
                  f"**Report ID**: {self.report_id}"]
         if self.insights:
-            lines.append("\\n## Insights")
+            lines.append("\n## Insights")
             for i in self.insights:
                 lines.append(f"- {i}")
         if self.recommendations:
-            lines.append("\\n## Recommendations")
+            lines.append("\n## Recommendations")
             for r in self.recommendations:
                 lines.append(f"- {r}")
-        lines.append(f"\\n**Score**: {self.score:.2f}")
-        return "\\n".join(lines)
+        lines.append(f"\n**Score**: {self.score:.2f}")
+        return "\n".join(lines)
 
 
 class BusinessReportGenerator:
