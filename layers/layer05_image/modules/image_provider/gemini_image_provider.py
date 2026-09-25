@@ -49,7 +49,7 @@ class GeminiImageProvider(BaseImageProvider):
         "gemini-2.5-flash-image",
     ]
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash") -> None:
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3.1-flash-image") -> None:
         super().__init__(provider_name="gemini_image", api_key=api_key)
         self._model = model
         self._timeout = 60
