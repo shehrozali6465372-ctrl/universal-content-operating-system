@@ -5,7 +5,7 @@ Tracks total queries, slow count, average latency, p95, p99.
 from __future__ import annotations
 import time
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class SlowQueryLogger:
