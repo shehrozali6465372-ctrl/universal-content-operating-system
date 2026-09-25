@@ -87,6 +87,8 @@ class UniversalOSOrchestrator:
 
         started = time.time()
         pipeline_id = f"pipe_{uuid4().hex}"
+        with self._lock:
+            stage_handlers = dict(self._stage_handlers)
         ctx = dict(context or {})
         self.context.set("goal", pipeline_id, {"goal": goal, "context": ctx})
         pipeline: Dict[str, Any] = {
@@ -95,7 +97,7 @@ class UniversalOSOrchestrator:
         }
 
         for stage in STAGES:
-            handler = self._stage_handlers.get(stage)
+            handler = stage_handlers.get(stage)
             stage_started = time.time()
             if handler is None:
                 pipeline["stages"][stage] = {
@@ -142,5 +144,6 @@ class UniversalOSOrchestrator:
             "backup": self.backup.get_stats(), "version": self.version.get_stats(),
             "pipeline_runs": len(self._pipeline_runs),
             "configured_stages": sorted(self._stage_handlers),
+
             "max_pipeline_history": self._max_pipeline_history,
         }
