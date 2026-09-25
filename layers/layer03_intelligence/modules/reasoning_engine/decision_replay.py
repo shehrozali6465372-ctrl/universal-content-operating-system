@@ -35,7 +35,9 @@ class ReplayStep:
 class DecisionReplay:
     """Records and replays a complete decision sequence."""
 
-    def __init__(self, topic: str = "", replay_id: str = "") -> None:
+    def __init__(self, topic: str = "", replay_id: str = "", max_steps: int = 100) -> None:
+        if max_steps < 1:
+            raise ValueError("max_steps must be >= 1")
         self.topic = topic
         self.replay_id = replay_id
         self.steps: List[ReplayStep] = []
