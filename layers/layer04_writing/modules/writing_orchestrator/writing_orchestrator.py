@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
 from layers.layer04_writing.modules.draft_generator.draft_manager import DraftManager
-from layers.layer04_writing.modules.draft_generator.llm_provider import BaseLLMProvider, MockLLMProvider
+from layers.layer04_writing.modules.draft_generator.llm_provider import BaseLLMProvider
 from layers.layer04_writing.modules.caption_engine.caption_engine import CaptionEngine
 from layers.layer04_writing.modules.hashtag_engine.hashtag_engine import HashtagEngine
 from layers.layer04_writing.modules.tone_adapter.tone_adapter import ToneAdapter
@@ -81,7 +81,7 @@ class WritingOrchestrator:
 
     def __init__(self, provider: Optional[BaseLLMProvider] = None) -> None:
         self.planner = PlannerManager()
-        self.draft_manager = DraftManager(provider=provider or MockLLMProvider())
+        self.draft_manager = DraftManager(provider=provider)
         self.caption_engine = CaptionEngine()
         self.hashtag_engine = HashtagEngine()
         self.hook_engine = HookEngine()
