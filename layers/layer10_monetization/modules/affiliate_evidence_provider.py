@@ -4,7 +4,11 @@ UCOS does not invent products. Configure UCOS_AFFILIATE_SEARCH_URL to an approve
 affiliate/catalog service that returns a JSON array of verified candidates.
 """
 from __future__ import annotations
-import json, os, urllib.parse, urllib.request, urllib.error
+import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List
 from layers.layer10_monetization.modules.product_affiliate_selector import ProductAffiliateSelector, ProductCandidate
 
