@@ -111,8 +111,13 @@ class UniversalAIOS:
         with self._lock:
             unhealthy = []
             for name, svc in self._services.items():
-                if hasattr(svc, "is_healthy") and not svc.is_healthy():
-                    unhealthy.append(name)
+                if hasattr(svc, "is_healthy"):
+                    try:
+                        healthy = bool(svc.is_healthy())
+                    except Exception:
+                        healthy = False
+                    if not healthy:
+                        unhealthy.append(name)
             return {
                 "healthy": self._state == SystemState.RUNNING and not unhealthy,
                 "state": self._state,
