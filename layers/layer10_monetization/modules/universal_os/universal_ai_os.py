@@ -109,20 +109,22 @@ class UniversalAIOS:
 
     def health(self) -> Dict[str, Any]:
         with self._lock:
-            unhealthy = []
-            for name, svc in self._services.items():
-                if hasattr(svc, "is_healthy"):
-                    try:
-                        healthy = bool(svc.is_healthy())
-                    except Exception:
-                        healthy = False
-                    if not healthy:
-                        unhealthy.append(name)
-            return {
-                "healthy": self._state == SystemState.RUNNING and not unhealthy,
-                "state": self._state,
-                "unhealthy_services": unhealthy,
-            }
+            state = self._state
+            services = list(self._services.items())
+        unhealthy = []
+        for name, svc in services:
+            if hasattr(svc, "is_healthy"):
+                try:
+                    healthy = bool(svc.is_healthy())
+                except Exception:
+                    healthy = False
+                if not healthy:
+                    unhealthy.append(name)
+        return {
+            "healthy": state == SystemState.RUNNING and not unhealthy,
+            "state": state,
+            "unhealthy_services": unhealthy,
+        }
 
     def register_component(self, name: str, component: Any) -> None:
         if not name:
