@@ -1,5 +1,6 @@
 """UniversalOSOrchestrator — explicit stage execution without fabricated success."""
 from __future__ import annotations
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
@@ -51,6 +52,8 @@ class UniversalOSOrchestrator:
         self.backup = BackupManager()
         self.version = VersionManager()
         self._pipeline_runs: List[Dict[str, Any]] = []
+        self._max_pipeline_history = 10000
+        self._lock = threading.RLock()
         self._stage_handlers: Dict[str, StageHandler] = {}
 
     def start(self) -> bool:
@@ -72,7 +75,8 @@ class UniversalOSOrchestrator:
             raise ValueError(f"Unknown pipeline stage: {stage}")
         if not callable(handler):
             raise ValueError("handler must be callable")
-        self._stage_handlers[stage] = handler
+        with self._lock:
+            self._stage_handlers[stage] = handler
 
     def run_pipeline(self, goal: str,
                      context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -115,7 +119,10 @@ class UniversalOSOrchestrator:
             pipeline["status"] = "completed"
 
         pipeline["duration_ms"] = round((time.time() - started) * 1000, 1)
-        self._pipeline_runs.append(pipeline)
+        with self._lock:
+            self._pipeline_runs.append(pipeline)
+            if len(self._pipeline_runs) > self._max_pipeline_history:
+                del self._pipeline_runs[:-self._max_pipeline_history]
         event_type = "pipeline_completed" if pipeline["status"] == "completed" else "pipeline_failed"
         self.events.publish(event_type, "orchestrator",
                             {"pipeline_id": pipeline_id, "status": pipeline["status"]})
@@ -135,4 +142,5 @@ class UniversalOSOrchestrator:
             "backup": self.backup.get_stats(), "version": self.version.get_stats(),
             "pipeline_runs": len(self._pipeline_runs),
             "configured_stages": sorted(self._stage_handlers),
+            "max_pipeline_history": self._max_pipeline_history,
         }
