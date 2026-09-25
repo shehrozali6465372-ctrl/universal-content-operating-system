@@ -34,8 +34,6 @@ class MemorySearcher:
         """Search across registered stores."""
         if limit < 1:
             return []
-        if not 0.0 <= min_confidence <= 1.0:
-            raise ValueError("min_confidence must be between 0 and 1")
         results: List[SearchResult] = []
         target_stores = stores or list(self._stores.keys())
 
@@ -70,6 +68,8 @@ class MemorySearcher:
     def search_by_confidence(self, min_confidence: float = 0.7,
                              stores: Optional[List[str]] = None) -> List[SearchResult]:
         """Search for high-confidence entries."""
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be between 0 and 1")
         results: List[SearchResult] = []
         target_stores = stores or list(self._stores.keys())
 
