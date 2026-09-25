@@ -77,7 +77,11 @@ class HarmfulContentDetector:
         self._check_count = 0
 
     def detect(self, text: str) -> List[SafetyFlag]:
-        """Detect all harmful content categories in text."""
+        """Detect all configured harmful-content patterns."""
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+        if not text.strip():
+            return []
         flags: List[SafetyFlag] = []
         text_lower = text.lower()
 
