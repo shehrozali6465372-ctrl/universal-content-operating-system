@@ -639,6 +639,43 @@ class TestAsyncRuntime:
         else:
             raise AssertionError("non-positive shutdown timeout must be rejected")
 
+    def test_shutdown_timeout_marks_runtime_stopped_and_blocks_restart(self):
+        runtime = AsyncRuntime(max_workers=1, shutdown_timeout=0.01)
+        runtime.start()
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_job():
+            started.set()
+            release.wait(1)
+            return "done"
+
+        future = runtime._thread_pool.submit(blocking_job)
+        with runtime._lock:
+            runtime._thread_futures.add(future)
+            future.add_done_callback(runtime._forget_thread_future)
+        assert started.wait(1)
+        try:
+            runtime.stop()
+        except TimeoutError:
+            pass
+        else:
+            raise AssertionError("shutdown must time out while a worker is blocked")
+        assert runtime.is_running is False
+        try:
+            runtime.start()
+        except RuntimeError as exc:
+            assert "still draining" in str(exc)
+        else:
+            raise AssertionError("runtime must not restart over a draining worker")
+        release.set()
+        assert future.result(timeout=1) == "done"
+        deadline = time.monotonic() + 1
+        while runtime.health()["thread_jobs_draining"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+        runtime.start()
+        runtime.stop()
+
     def test_thread_pool(self):
         runtime = AsyncRuntime(max_workers=2)
         runtime.start()
