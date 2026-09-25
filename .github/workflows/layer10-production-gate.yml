@@ -37,7 +37,7 @@ jobs:
 
       - name: Layer 10 Production Tests
         run: |
-          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py tests/test_layer10_production_gate.py -q --tb=short
+          python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short
 
       - name: Layer 10 Lint
         run: |
