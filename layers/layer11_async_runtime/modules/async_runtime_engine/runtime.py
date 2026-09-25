@@ -32,7 +32,7 @@ class AsyncTask:
 class AsyncRuntime:
     """Thread-safe runtime for coroutine and blocking work."""
 
-    def __init__(self, max_workers: int = 10, max_tracked_tasks: int = 10_000) -> None:
+    def __init__(self, max_workers: int = 10, max_tracked_tasks: int = 10_000,\n                 task_timeout: Optional[float] = 300.0) -> None:
         if max_workers < 1:
             raise ValueError("max_workers must be >= 1")
         if max_tracked_tasks < 1:
@@ -90,7 +90,7 @@ class AsyncRuntime:
                 raise RuntimeError("async runtime is not running")
             task = AsyncTask(name)
             task.state = TaskState.RUNNING
-            task.started_at = time.time()
+            task.started_at = time.monotonic()
             self._tasks[task.task_id] = task
             self._metrics["total_tasks"] += 1
             self._prune_tasks_locked()
