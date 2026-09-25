@@ -36,8 +36,18 @@ jobs:
         run: python -m compileall -q layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py
 
       - name: Layer 10 Production Tests
+        shell: bash
         run: |
-          python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short
+          set -o pipefail
+          python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short 2>&1 | tee layer10-test-output.txt
+
+      - name: Upload Layer 10 Test Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer10-test-output
+          path: layer10-test-output.txt
+          if-no-files-found: ignore
 
       - name: Layer 10 Lint
         run: |
