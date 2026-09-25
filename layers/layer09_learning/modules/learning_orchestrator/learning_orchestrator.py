@@ -7,6 +7,7 @@ actual outcomes for stages that claim to learn from performance.
 from __future__ import annotations
 
 import itertools
+import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +73,7 @@ from layers.layer09_learning.modules.learning_orchestrator.exceptions import (
 )
 
 _LO_COUNTER = itertools.count(1)
+_LOGGER = logging.getLogger(__name__)
 
 
 class LearningOrchestrator:
@@ -174,6 +176,7 @@ class LearningOrchestrator:
                         self._record_failure(report, stage, str(exc))
                         failed.add(stage)
                     except Exception as exc:
+                        _LOGGER.exception("Layer 9 stage failed: %s", stage.value)
                         self._record_failure(report, stage, f"{type(exc).__name__}: {exc}")
                         failed.add(stage)
 
