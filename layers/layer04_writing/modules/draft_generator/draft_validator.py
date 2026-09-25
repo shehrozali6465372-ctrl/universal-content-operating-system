@@ -60,7 +60,7 @@ class DraftValidator:
         min_words = MIN_WORDS_PER_LENGTH.get(length, 100)
         if result.word_count < min_words:
             result.issues.append(f"Too short: {result.word_count} words (minimum {min_words})")
-            result.score -= 20
+            result.score -= 60
 
         # Check max words
         max_words = MAX_WORDS_PER_LENGTH.get(length, 800)
