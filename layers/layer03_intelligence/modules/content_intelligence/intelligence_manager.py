@@ -1,6 +1,7 @@
 """Content Intelligence Manager - Orchestrator for Content Intelligence Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.content_intelligence.quality_estimator import QualityEstimator
@@ -68,9 +69,17 @@ class IntelligenceManager:
         self.cta = CTAAnalyzer()
         self.optimizer = ContentOptimizer()
         self.confidence = ContentConfidence()
+        self._lock = RLock()
 
     def analyze(self, content: str, audience: Optional[Dict] = None,
                 existing_content: Optional[List[str]] = None) -> ContentAnalysisResult:
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must be a non-empty string")
+        with self._lock:
+            return self._analyze_locked(content, audience, existing_content)
+
+    def _analyze_locked(self, content: str, audience: Optional[Dict] = None,
+                        existing_content: Optional[List[str]] = None) -> ContentAnalysisResult:
         result = ContentAnalysisResult(content)
         audience = audience or {}
 
@@ -106,7 +115,8 @@ class IntelligenceManager:
         return result
 
     def get_health(self) -> Dict:
-        return {
+        with self._lock:
+            return {
             "modules": ["QualityEstimator", "ReadabilityAnalyzer", "EmotionalAnalyzer",
                        "ContentViralityPredictor", "AudienceFitAnalyzer", "NoveltyDetector",
                        "RedundancyDetector", "HookAnalyzer", "CTAAnalyzer",
