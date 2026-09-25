@@ -14,6 +14,7 @@ from layers.layer04_writing.modules.tone_adapter.tone_adapter import ToneAdapter
 from layers.layer04_writing.modules.hook_engine.hook_engine import HookEngine
 from layers.layer04_writing.modules.cta_engine.cta_engine import CTAGenerator
 from layers.layer04_writing.modules.content_optimizer.content_optimizer import ContentOptimizer
+from layers.layer04_writing.modules.content_planner.platform_planner import PlatformPlanner
 from layers.layer04_writing.modules.writing_memory.writing_memory import WritingMemory
 
 
@@ -124,6 +125,9 @@ class WritingOrchestrator:
         )
         result.plan = plan_result.plan
         result.plan.language = language
+        plan_validation = self.planner.validate_plan(result.plan)
+        if not plan_validation.is_valid:
+            raise ValueError("Writing plan became invalid after language update: " + "; ".join(plan_validation.errors))
 
         # 2. Generate draft
         draft_context = intelligence_data or {}
@@ -172,6 +176,20 @@ class WritingOrchestrator:
             # Optimize
             optimized = self.optimizer.optimize(po.optimized_text, platform=platform)
             po.optimized_text = optimized.optimized_text
+
+            # Final platform contract: the returned publishable text must obey the
+            # platform length limit after every transformation.
+            final_constraints = PlatformPlanner().get_constraints(platform)
+            if len(po.optimized_text) > final_constraints.max_length:
+                raise RuntimeError(
+                    f"Platform output exceeds {platform} max length after optimization"
+                )
+            po.metadata = {
+                "plan_id": result.plan.plan_id,
+                "draft_id": draft_result.draft.draft_id,
+                "provider": draft_result.draft.provider,
+                "platform_max_length": final_constraints.max_length,
+            }
 
             result.outputs.append(po)
 
