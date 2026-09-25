@@ -32,6 +32,8 @@ class MemoryConsolidator:
     """Consolidates similar memory entries into unified representations."""
 
     def __init__(self, similarity_threshold: float = 0.7) -> None:
+        if not 0.0 <= similarity_threshold <= 1.0:
+            raise ValueError("similarity_threshold must be between 0 and 1")
         self._threshold = similarity_threshold
 
     def consolidate(self, entries: List[Dict[str, Any]]) -> List[ConsolidatedEntry]:
@@ -75,8 +77,8 @@ class MemoryConsolidator:
         return overlap >= self._threshold
 
     def _avg_confidence(self, group: List[Dict]) -> float:
-        confs = [e.get("confidence", 0.5) for e in group]
-        return sum(confs) / max(len(confs), 1)
+        confs = [e.get("confidence", 0.5) for e in group if isinstance(e.get("confidence", 0.5), (int, float))]
+        return max(0.0, min(1.0, sum(confs) / max(len(confs), 1)))
 
     def _merge_data(self, group: List[Dict]) -> Dict[str, Any]:
         merged: Dict[str, Any] = {}
