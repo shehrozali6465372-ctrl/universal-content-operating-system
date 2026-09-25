@@ -1,4 +1,4 @@
-"""RuntimeBuilder — Fluent builder for RuntimeManager."""
+"""RuntimeBuilder — validated fluent builder for RuntimeManager."""
 from __future__ import annotations
 
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_config import RuntimeConfig
@@ -6,7 +6,7 @@ from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_manager i
 
 
 class RuntimeBuilder:
-    """Fluent builder for creating configured RuntimeManager instances."""
+    """Fluent builder that validates configuration at build time."""
 
     def __init__(self) -> None:
         self._config = RuntimeConfig()
@@ -40,4 +40,5 @@ class RuntimeBuilder:
         return self
 
     def build(self) -> RuntimeManager:
+        self._config.validate()
         return RuntimeManager(self._config)
