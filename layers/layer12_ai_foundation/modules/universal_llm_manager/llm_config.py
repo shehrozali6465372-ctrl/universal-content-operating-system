@@ -9,8 +9,8 @@ class LLMConfig:
                  "budget_limit", "metadata")
 
     def __init__(self) -> None:
-        self.default_provider: str = "openai"
-        self.default_model: str = "gpt-5.6-luna"
+        self.default_provider: str = "deepseek"
+        self.default_model: str = "deepseek-flash"
         self.default_temperature: float = 0.7
         self.default_max_tokens: int = 4096
         self.default_timeout: float = 60.0
