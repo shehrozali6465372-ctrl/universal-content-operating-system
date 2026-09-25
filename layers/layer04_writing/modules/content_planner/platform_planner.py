@@ -1,5 +1,6 @@
 """Platform Planner — Platform-specific content constraints and recommendations."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -71,8 +72,10 @@ class PlatformConstraints:
                  "content_types", "best_practices", "algorithm_favors")
 
     def __init__(self, platform: str = "facebook") -> None:
+        if platform not in PLATFORM_SPECS:
+            raise ValueError(f"Unsupported platform: {platform}")
         self.platform = platform
-        spec = PLATFORM_SPECS.get(platform, PLATFORM_SPECS["facebook"])
+        spec = PLATFORM_SPECS[platform]
         self.max_length = spec["max_length"]
         self.recommended_length = spec["recommended_length"]
         self.max_hashtags = spec["max_hashtags"]
@@ -101,12 +104,14 @@ class PlatformPlanner:
 
     def __init__(self) -> None:
         self._constraints_cache: Dict[str, PlatformConstraints] = {}
+        self._lock = RLock()
 
     def get_constraints(self, platform: str) -> PlatformConstraints:
         """Get constraints for a platform."""
-        if platform not in self._constraints_cache:
-            self._constraints_cache[platform] = PlatformConstraints(platform)
-        return self._constraints_cache[platform]
+        with self._lock:
+            if platform not in self._constraints_cache:
+                self._constraints_cache[platform] = PlatformConstraints(platform)
+            return self._constraints_cache[platform]
 
     def recommend(self, platform: str, goal: str = "educate") -> Dict[str, Any]:
         """Recommend content parameters for a platform and goal."""
