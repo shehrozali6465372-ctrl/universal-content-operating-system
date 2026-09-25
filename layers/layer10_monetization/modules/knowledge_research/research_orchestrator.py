@@ -72,7 +72,7 @@ class ResearchOrchestrator:
         results["stages"]["market"] = {"insights": len(insights)}
 
         # Stage 5: Knowledge graph
-        entity = self.knowledge_graph.add_entity(topic, "topic")
+        self.knowledge_graph.add_entity(topic, "topic")
         for t in trends:
             self.knowledge_graph.add_entity(t.topic, "trend")
             self.knowledge_graph.add_relationship(topic, t.topic, "has_trend")
