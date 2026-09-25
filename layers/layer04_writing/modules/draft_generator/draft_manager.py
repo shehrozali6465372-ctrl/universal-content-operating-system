@@ -188,11 +188,12 @@ class DraftManager:
                 draft.validation = self.validator.validate(draft.text, length=plan.length, platform=plan.platform)
                 total_tokens += draft.tokens_used
 
-                self.memory.store(
-                    plan_id=plan.plan_id, topic=plan.topic, text=draft.text,
-                    variant_type=v.variant_type, provider=draft.provider,
-                    tokens=draft.tokens_used,
-                )
+                if draft.validation.is_valid:
+                    self.memory.store(
+                        plan_id=plan.plan_id, topic=plan.topic, text=draft.text,
+                        variant_type=v.variant_type, provider=draft.provider,
+                        tokens=draft.tokens_used,
+                    )
                 generated.append(draft)
 
         result.variants = generated
