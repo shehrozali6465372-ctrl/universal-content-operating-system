@@ -74,8 +74,8 @@ class OpenRouterImageProvider(BaseImageProvider):
         except json.JSONDecodeError as exc:
             raise RuntimeError("OpenRouter returned invalid JSON") from exc
 
-        images = body.get("data") or []
-        if not images or not isinstance(images[0], dict):
+        images = body.get("data")
+        if not isinstance(images, list) or not images or not isinstance(images[0], dict):
             raise RuntimeError("OpenRouter returned no image data")
         encoded = images[0].get("b64_json")
         if not isinstance(encoded, str) or not encoded:
@@ -87,9 +87,11 @@ class OpenRouterImageProvider(BaseImageProvider):
         if not image_bytes:
             raise RuntimeError("OpenRouter returned empty image bytes")
 
-        mime_type = str(images[0].get("media_type") or "image/png")
+        mime_type = str(images[0].get("media_type") or "").strip().lower()
         if not mime_type.startswith("image/"):
             raise RuntimeError("OpenRouter returned a non-image media type")
+        if not image_bytes.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"RIFF")):
+            raise RuntimeError("OpenRouter returned bytes that do not match a supported image signature")
 
         digest = hashlib.sha256(image_bytes).hexdigest()
         result = ImageResponse()
