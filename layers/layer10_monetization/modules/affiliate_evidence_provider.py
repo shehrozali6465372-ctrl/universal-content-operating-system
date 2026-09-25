@@ -9,7 +9,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List
+from typing import List
 from layers.layer10_monetization.modules.product_affiliate_selector import ProductAffiliateSelector, ProductCandidate
 
 class AffiliateEvidenceProvider:
