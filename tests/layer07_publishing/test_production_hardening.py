@@ -52,3 +52,23 @@ def test_circuit_breaker_allows_only_one_half_open_probe():
     assert breaker.can_execute("facebook") is False
     breaker.record_failure("facebook")
     assert breaker.get_state("facebook") == STATE_OPEN
+
+
+def test_url_only_platform_does_not_send_local_media_paths():
+    from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
+    from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+    from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
+    from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
+    from tests.layer07_publishing.test_publisher_engine import MockPublisher
+
+    registry = PluginManager()
+    registry.register("instagram", MockPublisher)
+    request = PublishRequest(platform="instagram", content="hello")
+    request.media_assets = [MediaAsset("/local/image.png")]
+
+    manager = PublisherManager(plugin_manager=registry)
+    result = manager.publish(request)
+
+    assert result.success is False
+    assert result.error_category in {"validation", "unknown"}
+    assert "public media URL" in result.error_message
