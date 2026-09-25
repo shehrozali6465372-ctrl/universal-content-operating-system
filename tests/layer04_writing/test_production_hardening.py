@@ -94,3 +94,29 @@ def test_writing_memory_returns_defensive_voice_copy():
     voice = memory.set_voice("brand", personality=["expert"])
     voice.personality.append("mutated")
     assert memory.get_voice("brand").personality == ["expert"]
+
+
+def test_planner_rejects_immutable_plan_fields():
+    from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
+    manager = PlannerManager()
+    plan = WritingPlan("AI")
+    original_id = plan.plan_id
+    original_version = plan.version
+    with pytest.raises(ValueError, match="immutable"):
+        manager.update_plan(plan, {"plan_id": "attacker-controlled"})
+    assert plan.plan_id == original_id
+    assert plan.version == original_version
+
+
+def test_optimizer_seo_score_uses_percent_scale():
+    from layers.layer04_writing.modules.content_optimizer.content_optimizer import ContentOptimizer
+    result = ContentOptimizer().optimize("AI content", platform="facebook")
+    assert result.seo_score == 50.0
+
+
+def test_optimizer_count_is_consistent():
+    from layers.layer04_writing.modules.content_optimizer.content_optimizer import ContentOptimizer
+    optimizer = ContentOptimizer()
+    optimizer.optimize("AI content")
+    optimizer.optimize("More AI content")
+    assert optimizer.optimization_count == 2
