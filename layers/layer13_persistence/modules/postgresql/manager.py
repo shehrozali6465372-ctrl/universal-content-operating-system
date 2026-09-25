@@ -13,13 +13,12 @@ Features:
 """
 from __future__ import annotations
 import os
-import json
 from typing import Any, Dict, List, Optional
 from threading import RLock
 from datetime import datetime, timezone
 
 from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool, ConnectionConfig
-from layers.layer13_persistence.modules.postgresql.migrations.schema import TABLES, get_create_table_sql, get_all_indexes_sql
+from layers.layer13_persistence.modules.postgresql.migrations.schema import TABLES, get_all_indexes_sql
 from layers.layer13_persistence.modules.postgresql.repositories.repositories import (
     ConfigRepository, MemoryRepository, LogRepository,
     PostRepository, AnalyticsRepository, LearningRepository, JobRepository,
@@ -154,7 +153,6 @@ class PostgreSQLManager:
     def get_db_status(self) -> Dict[str, Any]:
         """Get comprehensive database status — for --db-status command."""
         pool_metrics = self._pool.get_pool_metrics() if self._pool else {}
-        health = self.health_checker.check() if self.health_checker else {}
         slow_stats = self.slow_query_logger.get_stats() if self.slow_query_logger else {}
         leak_stats = self.leak_detector.get_stats() if self.leak_detector else {}
 
