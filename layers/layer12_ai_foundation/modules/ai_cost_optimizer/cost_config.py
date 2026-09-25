@@ -1,6 +1,8 @@
 """CostConfig — configuration for the cost optimizer."""
 from __future__ import annotations
+
 from typing import Any, Dict
+
 
 class CostConfig:
     def __init__(self, **kwargs: Any) -> None:
@@ -11,7 +13,12 @@ class CostConfig:
         self.enable_forecasting: bool = kwargs.get("enable_forecasting", True)
         self.enable_optimization: bool = kwargs.get("enable_optimization", True)
         self.enable_switching: bool = kwargs.get("enable_switching", True)
-        self.default_model: str = kwargs.get("default_model", "gpt-4o-mini")
-        self.fallback_model: str = kwargs.get("fallback_model", "gemini-2.0-flash")
+        self.default_model: str = kwargs.get("default_model", "gpt-5.6-luna")
+        self.fallback_model: str = kwargs.get("fallback_model", "gemini-3.8-flash")
+
     def to_dict(self) -> Dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
+        return {
+            key: value
+            for key, value in self.__dict__.items()
+            if not key.startswith("_")
+        }
