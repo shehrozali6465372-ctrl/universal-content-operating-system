@@ -78,9 +78,9 @@ class WritingMemory:
         """Set or update brand voice."""
         voice = BrandVoice(name=name)
         voice.tone = tone
-        voice.personality = personality or []
-        voice.dos = dos or []
-        voice.donts = donts or []
+        voice.personality = list(personality or [])
+        voice.dos = list(dos or [])
+        voice.donts = list(donts or [])
         with self._lock:
             self._voices[name] = voice
         return voice
@@ -97,6 +97,8 @@ class WritingMemory:
         rec = DraftRecord(platform=platform, topic=topic, text=text, account_id=account_id)
         rec.tone = tone
         rec.brand_voice = brand_voice
+        if tokens < 0:
+            raise ValueError("tokens must be non-negative")
         rec.tokens_used = tokens
         with self._lock:
             if len(self._records) >= self._max_size:
