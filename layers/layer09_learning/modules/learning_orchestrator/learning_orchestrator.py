@@ -367,7 +367,7 @@ class LearningOrchestrator:
         )
         return {
             "improvements_applied": result.actions_completed,
-            "mistakes": result.mistakes_found,
+            "mistakes_found": result.mistakes_found,
             "actions_created": result.actions_created,
             "observed_outcomes": result.actions_completed,
         }
