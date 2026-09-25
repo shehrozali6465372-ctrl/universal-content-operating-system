@@ -46,11 +46,11 @@ class ImageOptimizer:
         """Get optimization recommendations for an image."""
         if width < 1 or height < 1:
             raise ValueError("width and height must be positive")
-        if platform not in PLATFORM_IMAGE_CONFIG:
+        config = PLATFORM_IMAGE_CONFIG.get(platform)
+        if config is None:
             raise ValueError(f"Unsupported image platform: {platform}")
         result = OptimizationResult()
         result.platform = platform
-        config = PLATFORM_IMAGE_CONFIG.get(platform, PLATFORM_IMAGE_CONFIG["facebook"])
         result.format = config["formats"][0]
         result.dimensions = (width, height)
 
