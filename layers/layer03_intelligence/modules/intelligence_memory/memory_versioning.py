@@ -1,5 +1,6 @@
 """Memory Versioning — Version memory entries for rollback and history."""
 from __future__ import annotations
+import copy
 import itertools
 import time
 from typing import Any, Dict, List, Optional
@@ -13,7 +14,7 @@ class MemoryVersion:
     def __init__(self, entry_id: str = "", data: Optional[Dict] = None, version_number: int = 1) -> None:
         self.version_id = f"ver_{next(_VER_COUNTER)}_{version_number}"
         self.entry_id = entry_id
-        self.data = data or {}
+        self.data = copy.deepcopy(data or {})
         self.version_number = version_number
         self.change_summary = ""
         self.created_at = time.time()
@@ -44,7 +45,7 @@ class MemoryVersioner:
         """Create a new version for an entry."""
         versions = self._versions.get(entry_id, [])
         vnum = len(versions) + 1
-        mv = MemoryVersion(entry_id=entry_id, data=data, version_number=vnum)
+        mv = MemoryVersion(entry_id=entry_id, data=copy.deepcopy(data), version_number=vnum)
         mv.change_summary = change_summary
         if versions:
             mv.parent_version = versions[-1].version_id
