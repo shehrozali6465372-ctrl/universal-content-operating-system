@@ -1,0 +1,92 @@
+name: Layer 13 PostgreSQL Production Certification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer13_persistence/**"
+      - "tests/layer13_persistence/**"
+      - "tests/unit/test_layer13_postgresql_production_hardening.py"
+      - "requirements.txt"
+      - ".github/workflows/layer13-production-certification.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "layers/layer13_persistence/**"
+      - "tests/layer13_persistence/**"
+      - "tests/unit/test_layer13_postgresql_production_hardening.py"
+      - "requirements.txt"
+      - ".github/workflows/layer13-production-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer13-production-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-certification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aios"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      APP_ENV: production
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+
+      - name: Compile Layer 13
+        run: |
+          python -m compileall -q layers/layer13_persistence tests/layer13_persistence tests/unit/test_layer13_postgresql_production_hardening.py
+
+      - name: Static Layer 13 Audit
+        run: |
+          ruff check layers/layer13_persistence tests/layer13_persistence tests/unit/test_layer13_postgresql_production_hardening.py --select E,F,W --ignore E501,E402
+
+      - name: Unit Hardening Tests
+        run: |
+          python -m pytest tests/unit/test_layer13_postgresql_production_hardening.py -q --tb=short
+
+      - name: Real PostgreSQL Production Tests
+        run: |
+          python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py -q --tb=short
+
+      - name: PostgreSQL Verification
+        run: |
+          python - <<'PY'
+          from layers.layer13_persistence.modules.postgresql.verification import PostgreSQLVerification
+          report = PostgreSQLVerification().run_all()
+          failed = [item for item in report.get("results", []) if item.get("status") != "PASS"]
+          if failed or report.get("overall") != "PASS":
+              raise SystemExit(f"Layer 13 verification failed: {failed or report}")
+          print("Layer 13 PostgreSQL verification: PASS")
+          PY
