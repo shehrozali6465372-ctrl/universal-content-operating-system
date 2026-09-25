@@ -13,12 +13,15 @@ Supports:
 - Style control
 """
 from __future__ import annotations
+import base64
+import hashlib
 import json
 import os
+import tempfile
 import time
-import urllib.request
 import urllib.error
-from typing import Any, Dict, List, Optional
+import urllib.request
+from typing import Any, Dict, List, Optional, Tuple
 
 from .image_provider import BaseImageProvider, ImageResponse
 
@@ -40,7 +43,11 @@ class GeminiImageProvider(BaseImageProvider):
     """
 
     GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-    SUPPORTED_MODELS = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
+    SUPPORTED_MODELS = [
+        "gemini-3.1-flash-image",
+        "gemini-3-pro-image-preview",
+        "gemini-2.5-flash-image",
+    ]
 
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash") -> None:
         super().__init__(provider_name="gemini_image", api_key=api_key)
@@ -50,58 +57,28 @@ class GeminiImageProvider(BaseImageProvider):
 
     def generate(self, prompt: str, size: str = "1024x1024",
                  style: str = "photorealistic", **kwargs: Any) -> ImageResponse:
-        """Generate image via Gemini API.
-
-        Strategy:
-        1. Enhance prompt with style and size details
-        2. Send to Gemini generateContent
-        3. Parse response for image data or enhanced prompt
-        4. Return ImageResponse
-        """
-        start = time.time()
-        self._call_count += 1
-
-        # Build enhanced prompt
-        enhanced_prompt = self._enhance_prompt(prompt, size, style, **kwargs)
-
-        # Try real API call
+        """Generate a real image; never return a synthetic success."""
+        if not prompt or not prompt.strip():
+            raise ValueError("Image generation prompt must not be empty")
         api_key = self._get_api_key()
-        if api_key:
+        if not api_key or self._model not in self.SUPPORTED_MODELS:
+            raise RuntimeError("Gemini image provider is not configured")
+        start = time.monotonic()
+        self._call_count += 1
+        enhanced_prompt = self._enhance_prompt(prompt, size, style, **kwargs)
+        try:
             result = self._real_generate(enhanced_prompt, api_key, size)
-            if result is not None:
-                result.latency_ms = (time.time() - start) * 1000
-                self._history.append({
-                    "prompt": prompt[:100],
-                    "size": size,
-                    "style": style,
-                    "status": "success",
-                    "latency_ms": result.latency_ms,
-                    "time": time.time(),
-                })
-                return result
-
-        # Fallback: return enhanced prompt for manual/external generation
-        result = ImageResponse()
-        result.image_url = ""
-        result.provider = "gemini_image_prompt"
-        result.model = self._model
-        result.revised_prompt = enhanced_prompt
-        result.metadata = {
-            "enhanced": True,
-            "size": size,
-            "style": style,
-            "original_prompt": prompt[:200],
-            "note": "Set GEMINI_API_KEY_1 for actual image generation",
-        }
-        result.latency_ms = (time.time() - start) * 1000
-        self._history.append({
-            "prompt": prompt[:100],
-            "size": size,
-            "style": style,
-            "status": "prompt_enhanced",
-            "latency_ms": result.latency_ms,
-            "time": time.time(),
-        })
+        except Exception as exc:
+            self._history.append({"status": "error", "error_type": type(exc).__name__,
+                                  "latency_ms": (time.monotonic() - start) * 1000})
+            raise RuntimeError("Gemini image generation failed") from exc
+        if result is None or not result.image_data:
+            raise RuntimeError("Gemini returned no image data")
+        result.latency_ms = (time.monotonic() - start) * 1000
+        self._history.append({"status": "success", "provider": result.provider,
+                              "model": result.model, "bytes": len(result.image_data),
+                              "sha256": result.metadata.get("sha256", ""),
+                              "latency_ms": result.latency_ms})
         return result
 
     def generate_with_reference(self, prompt: str, reference_url: str = "",
@@ -148,81 +125,82 @@ class GeminiImageProvider(BaseImageProvider):
 
     def _real_generate(self, prompt: str, api_key: str,
                        size: str = "1024x1024") -> Optional[ImageResponse]:
-        """Real Gemini API call for image generation.
-
-        Uses generateContent with image generation config.
-        """
-        url = (
-            f"{self.GEMINI_API_BASE}/models/{self._model}"
-            f":generateContent?key={api_key}"
-        )
-
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseModalities": ["TEXT", "IMAGE"],
-                "temperature": 0.4,
-            }
-        }
-
+        """Call Gemini's image-capable generateContent endpoint."""
+        width, height = self._parse_size(size)
+        url = f"{self.GEMINI_API_BASE}/models/{self._model}:generateContent"
+        payload = {"contents": [{"parts": [{"text": prompt}]}],
+                   "generationConfig": {
+                       "responseModalities": ["IMAGE"],
+                       "imageConfig": {"aspectRatio": self._aspect_ratio(width, height)}}}
+        req = urllib.request.Request(
+            url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST")
         try:
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                url, data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
-
-            candidates = body.get("candidates", [])
-            if not candidates:
-                return None
-
-            parts = candidates[0].get("content", {}).get("parts", [])
-
-            result = ImageResponse()
-            result.provider = "gemini"
-            result.model = self._model
-
-            # Check for image data in response
-            for part in parts:
-                if "inlineData" in part:
-                    mime_type = part["inlineData"].get("mimeType", "")
-                    data_b64 = part["inlineData"].get("data", "")
-                    if data_b64:
-                        import base64
-                        result.image_data = base64.b64decode(data_b64)
-                        result.metadata["mime_type"] = mime_type
-                        result.metadata["has_image"] = True
-                        # Save to file
-                        ext = "png" if "png" in mime_type else "jpg"
-                        filename = f"generated_{int(time.time())}.{ext}"
-                        output_dir = os.path.join("output", "images")
-                        os.makedirs(output_dir, exist_ok=True)
-                        filepath = os.path.join(output_dir, filename)
-                        with open(filepath, "wb") as f:
-                            f.write(result.image_data)
-                        result.image_url = filepath
-                        break
-                elif "text" in part:
-                    result.revised_prompt = part["text"]
-
-            # Save usage metadata
-            usage = body.get("usageMetadata", {})
-            result.metadata["tokens"] = usage.get("totalTokenCount", 0)
-
-            return result
-
         except urllib.error.HTTPError as exc:
             if exc.code == 429:
-                # Rate limited — log but don't crash
+                raise RuntimeError("Gemini rate limit exceeded") from exc
+            if exc.code in (401, 403):
+                raise RuntimeError("Gemini authentication/authorization failed") from exc
+            raise RuntimeError(f"Gemini HTTP request failed ({exc.code})") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise RuntimeError("Gemini transport failed") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Gemini returned invalid JSON") from exc
+
+        result = ImageResponse()
+        result.provider = "gemini"
+        result.model = self._model
+        for candidate in body.get("candidates", []):
+            for part in candidate.get("content", {}).get("parts", []):
+                inline = part.get("inlineData")
+                if not inline or not inline.get("data"):
+                    continue
+                try:
+                    image_bytes = base64.b64decode(inline["data"], validate=True)
+                except (ValueError, TypeError) as exc:
+                    raise RuntimeError("Gemini returned invalid image encoding") from exc
+                mime_type = inline.get("mimeType", "")
+                if not image_bytes or not mime_type.startswith("image/"):
+                    continue
+                result.image_data = image_bytes
+                result.metadata["mime_type"] = mime_type
+                result.metadata["sha256"] = hashlib.sha256(image_bytes).hexdigest()
+                result.image_url = self._persist_image(image_bytes, mime_type)
+                return result
+        return None
+
+    @staticmethod
+    def _aspect_ratio(width: int, height: int) -> str:
+        ratio = width / height
+        choices = {"1:1": 1.0, "3:2": 1.5, "2:3": 2/3, "3:4": .75,
+                   "4:3": 4/3, "4:5": .8, "5:4": 1.25, "9:16": 9/16,
+                   "16:9": 16/9, "21:9": 21/9}
+        return min(choices, key=lambda key: abs(choices[key] - ratio))
+
+    def _persist_image(self, image_bytes: bytes, mime_type: str) -> str:
+        output_dir = os.environ.get("UCOS_IMAGE_OUTPUT_DIR", os.path.join("output", "images"))
+        os.makedirs(output_dir, exist_ok=True)
+        ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}.get(
+            mime_type.lower(), ".bin")
+        digest = hashlib.sha256(image_bytes).hexdigest()[:24]
+        fd, temp_path = tempfile.mkstemp(prefix=".image-", suffix=ext, dir=output_dir)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(image_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            final_path = os.path.join(output_dir, f"{digest}{ext}")
+            os.replace(temp_path, final_path)
+            return final_path
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except OSError:
                 pass
-            return None
-        except (urllib.error.URLError, TimeoutError, OSError):
-            return None
-        except (json.JSONDecodeError, KeyError, IndexError):
-            return None
+            raise
 
     def _get_api_key(self) -> str:
         """Get Gemini API key from environment."""
@@ -230,17 +208,19 @@ class GeminiImageProvider(BaseImageProvider):
             return self.api_key
         return os.environ.get("GEMINI_API_KEY_1", "")
 
-    def _parse_size(self, size: str) -> tuple:
-        """Parse size string like '1024x1024' to (width, height)."""
+    def _parse_size(self, size: str) -> Tuple[int, int]:
+        """Parse and validate a WIDTHxHEIGHT size."""
         try:
-            parts = size.split("x")
-            return (int(parts[0]), int(parts[1]))
-        except (ValueError, IndexError):
-            return (1024, 1024)
+            width, height = (int(part) for part in size.lower().split("x", 1))
+        except (ValueError, TypeError):
+            raise ValueError("Image size must use WIDTHxHEIGHT notation") from None
+        if not (256 <= width <= 4096 and 256 <= height <= 4096):
+            raise ValueError("Image dimensions must be between 256 and 4096 pixels")
+        return width, height
 
     def is_configured(self) -> bool:
         """Check if Gemini API key is available."""
-        return bool(self._get_api_key())
+        return bool(self._get_api_key()) and self._model in self.SUPPORTED_MODELS
 
     def get_stats(self) -> Dict[str, Any]:
         """Get provider statistics."""
