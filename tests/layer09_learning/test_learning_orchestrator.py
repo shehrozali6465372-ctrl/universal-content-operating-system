@@ -1,6 +1,6 @@
 """Tests for Layer 9 Module 10 — Learning Orchestrator Engine."""
 from layers.layer09_learning.modules.learning_orchestrator.exceptions import (
-    LearningOrchestratorError, PipelineError, ModuleExecutionError, AggregationError,
+    LearningOrchestratorError, PipelineError, ModuleExecutionError, AggregationError, ProductionLearningDataRequired,
 )
 from layers.layer09_learning.modules.learning_orchestrator.learning_pipeline import (
     PipelineStage, PipelineDefinition, PIPELINE_DEPENDENCIES,
@@ -541,7 +541,7 @@ class TestLearningOrchestrator:
         )
 
     def test_orchestrate_requires_observed_signals(self):
-        with pytest.raises(Exception, match="learning_signals"):
+        with pytest.raises(ProductionLearningDataRequired, match="learning_signals"):
             self.orchestrator.orchestrate("content", platform="facebook")
 
     def test_orchestrate_basic(self):
