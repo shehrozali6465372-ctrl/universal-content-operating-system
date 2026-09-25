@@ -48,10 +48,11 @@ class TestPipelineStage:
         assert result is False
         assert "test error" in s.error
 
-    def test_execute_no_handler(self):
+    def test_execute_no_handler_fails_closed(self):
         s = PipelineStage("noop", "no handler", 1)
         result = s.execute({})
-        assert result is True
+        assert result is False
+        assert "no handler" in s.error.lower()
 
     def test_to_dict(self):
         s = PipelineStage("test", "desc", 1, True)
