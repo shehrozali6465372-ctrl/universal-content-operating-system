@@ -49,3 +49,5 @@ def test_orchestrator_contains_no_synthetic_stage_success_literals():
     )
     for literal in forbidden:
         assert literal not in source
+
+# Certification revision: repository-wide compile and regression gates are required.
