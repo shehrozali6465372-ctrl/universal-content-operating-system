@@ -584,6 +584,8 @@ class TestSelfHealingEngine:
     def test_heal_api_failure(self):
         event = self.he.heal("api_failure", "facebook_api")
         assert event.action == "retry"
+        assert event.success is False
+        assert self.he.record_result(event.event_id, True) is True
         assert event.success is True
 
     def test_heal_plugin_failure(self):
@@ -600,6 +602,7 @@ class TestSelfHealingEngine:
         self.he.register_strategy("custom", ["skip", "alert"])
         event = self.he.heal("custom", "test")
         assert event.action == "skip"
+        assert event.success is False
 
     def test_reset_counts(self):
         self.he.heal("api_failure", "api")
@@ -840,14 +843,20 @@ class TestMigrationManager:
         assert mig.from_version == "1.0"
 
     def test_apply(self):
-        mig = self.mm.register("1.0", "2.0")
+        applied = []
+        mig = self.mm.register("1.0", "2.0", apply_func=lambda: applied.append(True))
         assert self.mm.apply(mig.migration_id) is True
+        assert applied == [True]
         assert mig.status == "applied"
 
     def test_rollback(self):
-        mig = self.mm.register("1.0", "2.0")
+        rolled_back = []
+        mig = self.mm.register("1.0", "2.0",
+                                apply_func=lambda: None,
+                                rollback_func=lambda: rolled_back.append(True))
         self.mm.apply(mig.migration_id)
         assert self.mm.rollback(mig.migration_id) is True
+        assert rolled_back == [True]
         assert mig.status == "rolled_back"
 
     def test_get_pending(self):
@@ -1072,3 +1081,9 @@ class TestLayer10ProductionHardening:
         assert result["stages"]["observe"]["status"] == "completed"
         assert result["stages"]["research"]["status"] == "not_configured"
         assert result["status"] == "not_configured"
+
+
+    def test_migration_without_action_is_not_claimed_applied(self):
+        mig = self.mm.register("1.0", "2.0")
+        assert self.mm.apply(mig.migration_id) is False
+        assert mig.status == "pending"
