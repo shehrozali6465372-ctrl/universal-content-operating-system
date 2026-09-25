@@ -1,6 +1,8 @@
 """Recommendation Memory - Stores past recommendations and their outcomes."""
 from __future__ import annotations
 import time
+import copy
+from threading import RLock
 from typing import Dict, List
 
 
@@ -20,16 +22,21 @@ class RecRecord:
 
 class RecommendationMemory:
     def __init__(self, max_records: int = 500) -> None:
+        if max_records < 1:
+            raise ValueError("max_records must be >= 1")
         self._records: List[RecRecord] = []
         self._max = max_records
+        self._lock = RLock()
 
     def store(self, record: RecRecord) -> None:
-        self._records.append(record)
-        if len(self._records) > self._max:
-            self._records = self._records[-self._max:]
+        with self._lock:
+            self._records.append(copy.deepcopy(record))
+            if len(self._records) > self._max:
+                self._records = self._records[-self._max:]
 
     def record_outcome(self, topic: str, outcome: str) -> bool:
-        for r in reversed(self._records):
+        with self._lock:
+            for r in reversed(self._records):
             if r.topic == topic:
                 r.outcome = outcome
                 return True
