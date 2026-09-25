@@ -51,6 +51,7 @@ class GeminiImageProvider(BaseImageProvider):
         self._model = model
         self._timeout = 60
         self._history: List[Dict[str, Any]] = []
+        self._max_history = 1000
 
     def generate(self, prompt: str, size: str = "1024x1024",
                  style: str = "photorealistic", **kwargs: Any) -> ImageResponse:
@@ -66,13 +67,13 @@ class GeminiImageProvider(BaseImageProvider):
         try:
             result = self._real_generate(enhanced_prompt, api_key, size)
         except Exception as exc:
-            self._history.append({"status": "error", "error_type": type(exc).__name__,
+            self._record_history({"status": "error", "error_type": type(exc).__name__,
                                   "latency_ms": (time.monotonic() - start) * 1000})
             raise RuntimeError("Gemini image generation failed") from exc
         if result is None or not result.image_data:
             raise RuntimeError("Gemini returned no image data")
         result.latency_ms = (time.monotonic() - start) * 1000
-        self._history.append({"status": "success", "provider": result.provider,
+        self._record_history({"status": "success", "provider": result.provider,
                               "model": result.model, "bytes": len(result.image_data),
                               "sha256": result.metadata.get("sha256", ""),
                               "latency_ms": result.latency_ms})
@@ -259,5 +260,12 @@ class GeminiImageProvider(BaseImageProvider):
             "history_size": len(self._history),
         }
 
+    def _record_history(self, record: Dict[str, Any]) -> None:
+        self._history.append(record)
+        if len(self._history) > self._max_history:
+            del self._history[:-self._max_history]
+
     def get_history(self, limit: int = 20) -> List[Dict[str, Any]]:
-        return self._history[-limit:]
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= self._max_history:
+            raise ValueError(f"limit must be between 1 and {self._max_history}")
+        return [dict(item) for item in self._history[-limit:]]
