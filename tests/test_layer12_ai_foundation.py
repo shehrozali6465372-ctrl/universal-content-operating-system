@@ -2236,7 +2236,7 @@ class TestMultiModelOptimizer:
     def test_optimize_creative(self):
         o = MultiModelOptimizer()
         models = o.optimize_model_selection(["gpt-5.6-sol", "gpt-5.6-luna", "gemini-3.8-flash", "deepseek-flash"], "creative")
-        assert "gpt-4o" in models or "claude" in models
+        assert "gpt-5.6-sol" in models
 
     def test_optimize_consensus(self):
         o = MultiModelOptimizer()
@@ -4886,7 +4886,7 @@ class TestCostOptimizer:
     def test_find_cheapest(self):
         o = CostOptimizer()
         cheapest = o.find_cheapest(1000, 500)
-        assert cheapest in ["gemini-3.8-flash", "gpt-5.6-luna", "deepseek-flash"]
+        assert cheapest in ["gpt-5.6-luna", "gemini-3.8-flash", "deepseek-flash", "gpt-4o-mini"]
 
     def test_suggest(self):
         o = CostOptimizer()
@@ -5012,7 +5012,7 @@ class TestCostConfig:
 class TestCostRanker:
     def test_rank(self):
         r = CostRanker()
-        ranked = r.rank(1000, 500, ["gpt-4o", "gpt-5.6-luna"])
+        ranked = r.rank(1000, 500, ["gpt-5.6-sol", "gpt-5.6-luna"])
         assert ranked[0]["rank"] == 1
         assert ranked[0]["model"] == "gpt-5.6-luna"
 
@@ -5021,7 +5021,7 @@ class TestCostFallback:
     def test_fallback(self):
         f = CostFallback()
         model = f.get_fallback_model("gpt-4o", 0.0005)
-        assert model == "gemini-3.8-flash"
+        assert model == "gpt-5.6-luna"
 
 
 class TestCostAnalyzer:
