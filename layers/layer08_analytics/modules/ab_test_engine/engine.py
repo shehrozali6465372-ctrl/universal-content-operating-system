@@ -82,13 +82,14 @@ class ABTestEngine:
     def record_impression(self, test_id: str, variant_id: str) -> bool:
         with self._lock:
             test = self._tests.get(test_id); variant = test.get_variant(variant_id) if test else None
-            if not test or not variant or test.status != "running": return False
+            if not test or not variant or test.status == "ended": return False
             variant.impressions += 1; return True
     def record_conversion(self, test_id: str, variant_id: str, revenue: float = 0.0) -> bool:
         if revenue < 0 or not math.isfinite(float(revenue)): raise ValueError("revenue must be finite and non-negative")
         with self._lock:
             test = self._tests.get(test_id); variant = test.get_variant(variant_id) if test else None
-            if not test or not variant or test.status != "running" or variant.conversions >= variant.impressions: return False
+            if not test or not variant or test.status == "ended": return False
+            if variant.impressions > 0 and variant.conversions >= variant.impressions: return False
             variant.conversions += 1; variant.revenue += float(revenue); return True
     def analyze(self, test_id: str) -> Optional[ABTestResult]:
         with self._lock: test = self._tests.get(test_id)
