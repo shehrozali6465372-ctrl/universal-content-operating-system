@@ -1,13 +1,14 @@
-"""RuntimeFactory — Factory for creating runtime components."""
+"""RuntimeFactory — safe creation of predefined runtime configurations."""
 from __future__ import annotations
+
 from typing import Any, Dict
 
-from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_manager import RuntimeManager
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_config import RuntimeConfig
+from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_manager import RuntimeManager
 
 
 class RuntimeFactory:
-    """Factory for creating RuntimeManager with predefined configurations."""
+    """Factory for RuntimeManager instances with explicit presets."""
 
     PRESETS = {
         "development": {"max_workers": 2, "task_timeout": 60, "enable_profiling": True},
@@ -18,15 +19,14 @@ class RuntimeFactory:
 
     @classmethod
     def create(cls, preset: str = "production") -> RuntimeManager:
-        config_dict = cls.PRESETS.get(preset, cls.PRESETS["production"])
-        config = RuntimeConfig.from_dict(config_dict)
-        return RuntimeManager(config)
+        if not isinstance(preset, str) or preset not in cls.PRESETS:
+            raise ValueError(f"unknown runtime preset: {preset!r}")
+        return RuntimeManager(RuntimeConfig.from_dict(cls.PRESETS[preset]))
 
     @classmethod
     def create_custom(cls, config_dict: Dict[str, Any]) -> RuntimeManager:
-        config = RuntimeConfig.from_dict(config_dict)
-        return RuntimeManager(config)
+        return RuntimeManager(RuntimeConfig.from_dict(config_dict))
 
     @classmethod
     def get_presets(cls) -> Dict[str, Dict[str, Any]]:
-        return dict(cls.PRESETS)
+        return {name: dict(values) for name, values in cls.PRESETS.items()}
