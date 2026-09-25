@@ -102,4 +102,5 @@ class HashtagEngine:
 
     @property
     def generation_count(self) -> int:
-        return self._gen_count
+        with self._lock:
+            return self._gen_count
