@@ -62,10 +62,10 @@ class LayerDependencies:
     def get_ready_layers(self, completed: List[str],
                           layers: Optional[List[str]] = None) -> List[str]:
         layers = layers or list(self.LAYER_ORDER)
-        remaining = [l for layer in layers if layer not in completed]
+        remaining = [layer for layer in layers if layer not in completed]
         return [
             layer for layer in remaining
-            if all(d in completed for d in self.get_dependencies(l))
+            if all(d in completed for d in self.get_dependencies(layer))
         ]
 
     def is_satisfied(self, completed: List[str], layer: str) -> bool:
