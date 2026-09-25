@@ -158,7 +158,6 @@ class IntelligenceOrchestrator:
     ) -> IntelligenceResult:
         """Run full intelligence analysis on a topic."""
         start = time.time()
-        self._last_events = []
         result = IntelligenceResult(topic)
         request_events: List[PipelineEvent] = []
 
@@ -271,7 +270,7 @@ class IntelligenceOrchestrator:
         except Exception as e:
             event.duration_ms = (time.time() - start) * 1000
             event.event_type = "module_error"
-            event.data = {"error": str(e)}
+            event.data = {"error_type": type(e).__name__}
             with self._lock:
                 metrics.failure_count += 1
             with self._lock:
@@ -285,23 +284,28 @@ class IntelligenceOrchestrator:
             return {name: m.to_dict() for name, m in self._metrics.items()}
 
     def get_health(self) -> HealthStatus:
-        """Check health of all modules."""
-        self._health = HealthStatus()
-        for name, m in self._metrics.items():
-            if m.execution_count > 0 and m.success_rate < 0.5:
-                self._health.module_health[name] = "degraded"
-                self._health.issues.append(f"{name}: low success rate ({m.success_rate:.0%})")
-            else:
-                self._health.module_health[name] = "healthy"
-        if self._health.issues:
-            self._health.status = "degraded"
-        self._health.last_check = time.time()
-        return self._health
+        """Check health of all modules from a consistent metrics snapshot."""
+        with self._lock:
+            health = HealthStatus()
+            for name, metrics in self._metrics.items():
+                if metrics.execution_count > 0 and metrics.success_rate < 0.5:
+                    health.module_health[name] = "degraded"
+                    health.issues.append(
+                        f"{name}: low success rate ({metrics.success_rate:.0%})"
+                    )
+                else:
+                    health.module_health[name] = "healthy"
+            if health.issues:
+                health.status = "degraded"
+            self._health = health
+            return health
 
     @property
     def total_analyses(self) -> int:
-        return self._total_analyses
+        with self._lock:
+            return self._total_analyses
 
     @property
     def total_events(self) -> int:
-        return self._total_events
+        with self._lock:
+            return self._total_events
