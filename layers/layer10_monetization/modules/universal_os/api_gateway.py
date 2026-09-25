@@ -1,30 +1,34 @@
-"""APIGateway — Universal API for create, publish, analyze, learn, optimize, research, revenue."""
+"""APIGateway — bounded, rate-limited request dispatch with middleware."""
 from __future__ import annotations
 import itertools
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _AG_COUNTER = itertools.count(1)
-
-API_ENDPOINTS = (
-    "create", "publish", "analyze", "learn", "optimize",
-    "research", "revenue", "status", "health",
-)
 
 
 class APIRequest:
     """An API request."""
 
-    __slots__ = ("request_id", "endpoint", "method", "body",
-                 "params", "created_at")
+    __slots__ = ("request_id", "endpoint", "method", "body", "params", "created_at")
 
     def __init__(self, endpoint: str = "", method: str = "POST") -> None:
-        self.request_id: str = f"req_{next(_AG_COUNTER)}"
+        self.request_id = f"req_{next(_AG_COUNTER)}"
         self.endpoint = endpoint
         self.method = method
         self.body: Dict[str, Any] = {}
         self.params: Dict[str, Any] = {}
-        self.created_at: float = time.time()
+        self.created_at = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "endpoint": self.endpoint,
+            "method": self.method,
+            "body": dict(self.body),
+            "params": dict(self.params),
+            "created_at": self.created_at,
+        }
 
 
 class APIResponse:
@@ -36,7 +40,7 @@ class APIResponse:
         self.status_code = status_code
         self.data: Dict[str, Any] = {}
         self.error: Optional[str] = None
-        self.latency_ms: float = 0.0
+        self.latency_ms = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         result = {"status_code": self.status_code, "data": self.data,
@@ -47,56 +51,97 @@ class APIResponse:
 
 
 class APIGateway:
-    """Universal API gateway — all endpoints go through here."""
+    """Universal API gateway with middleware and a per-client sliding-window limit."""
 
-    def __init__(self) -> None:
-        self._handlers: Dict[str, Any] = {}
+    def __init__(self, rate_limit: int = 1000, window_seconds: int = 60) -> None:
+        if rate_limit <= 0 or window_seconds <= 0:
+            raise ValueError("rate_limit and window_seconds must be positive")
+        self._handlers: Dict[str, Callable[[APIRequest], Any]] = {}
         self._requests: List[APIRequest] = []
-        self._middleware: List[Any] = []
-        self._rate_limit: int = 1000
-        self._request_count: int = 0
+        self._middleware: List[Callable[[APIRequest], Optional[APIResponse]]] = []
+        self._rate_limit = rate_limit
+        self._window_seconds = window_seconds
+        self._request_times: Dict[str, List[float]] = {}
+        self._request_count = 0
 
-    def register_handler(self, endpoint: str, handler: Any) -> None:
+    def register_handler(self, endpoint: str, handler: Callable[[APIRequest], Any]) -> None:
+        if not endpoint or not callable(handler):
+            raise ValueError("endpoint and callable handler are required")
         self._handlers[endpoint] = handler
 
-    def handle(self, endpoint: str, body: Dict[str, Any] = None,
-               params: Dict[str, Any] = None) -> APIResponse:
+    def add_middleware(self, middleware: Callable[[APIRequest], Optional[APIResponse]]) -> None:
+        if not callable(middleware):
+            raise ValueError("middleware must be callable")
+        self._middleware.append(middleware)
+
+    def handle(
+        self,
+        endpoint: str,
+        body: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        client_id: str = "anonymous",
+    ) -> APIResponse:
         start = time.time()
         request = APIRequest(endpoint)
-        if body:
-            request.body = dict(body)
-        if params:
-            request.params = dict(params)
+        request.body = dict(body or {})
+        request.params = dict(params or {})
         self._requests.append(request)
         self._request_count += 1
         response = APIResponse()
-        handler = self._handlers.get(endpoint)
-        if handler is None:
-            response.status_code = 404
-            response.error = f"Endpoint '{endpoint}' not found"
-        else:
-            try:
+
+        now = time.time()
+        times = [t for t in self._request_times.get(client_id, [])
+                 if now - t < self._window_seconds]
+        if len(times) >= self._rate_limit:
+            self._request_times[client_id] = times
+            response.status_code = 429
+            response.error = "Rate limit exceeded"
+            response.latency_ms = (time.time() - start) * 1000
+            return response
+        times.append(now)
+        self._request_times[client_id] = times
+
+        try:
+            for middleware in self._middleware:
+                middleware_response = middleware(request)
+                if middleware_response is not None:
+                    response = middleware_response
+                    return response
+            handler = self._handlers.get(endpoint)
+            if handler is None:
+                response.status_code = 404
+                response.error = f"Endpoint '{endpoint}' not found"
+            else:
                 result = handler(request)
                 response.data = result if isinstance(result, dict) else {"result": result}
-            except Exception as e:
-                response.status_code = 500
-                response.error = str(e)
-        response.latency_ms = (time.time() - start) * 1000
+        except Exception:
+            response.status_code = 500
+            response.error = "Internal server error"
+        finally:
+            response.latency_ms = (time.time() - start) * 1000
         return response
 
     def get_endpoints(self) -> List[str]:
-        return list(self._handlers.keys())
+        return list(self._handlers)
 
     def get_requests(self, count: int = 10) -> List[Dict[str, Any]]:
-        return [r.__dict__ for r in self._requests[-count:]]
+        if count <= 0:
+            return []
+        return [request.to_dict() for request in self._requests[-count:]]
 
     def set_rate_limit(self, limit: int) -> None:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
         self._rate_limit = limit
 
     def get_stats(self) -> Dict[str, Any]:
         endpoints: Dict[str, int] = {}
-        for r in self._requests:
-            endpoints[r.endpoint] = endpoints.get(r.endpoint, 0) + 1
-        return {"total_requests": self._request_count,
-                "registered_endpoints": len(self._handlers),
-                "by_endpoint": endpoints, "rate_limit": self._rate_limit}
+        for request in self._requests:
+            endpoints[request.endpoint] = endpoints.get(request.endpoint, 0) + 1
+        return {
+            "total_requests": self._request_count,
+            "registered_endpoints": len(self._handlers),
+            "by_endpoint": endpoints,
+            "rate_limit": self._rate_limit,
+            "window_seconds": self._window_seconds,
+        }
