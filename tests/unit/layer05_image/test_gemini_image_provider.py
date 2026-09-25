@@ -19,6 +19,11 @@ def test_provider_fails_closed_without_credentials() -> None:
             provider.generate("a product photo")
 
 
+def test_deprecated_or_unsupported_models_are_rejected() -> None:
+    provider = GeminiImageProvider(api_key="test", model="gemini-3-pro-image-preview")
+    assert provider.is_configured() is False
+
+
 def test_invalid_size_is_rejected() -> None:
     provider = GeminiImageProvider(api_key="test", model="gemini-3.1-flash-image")
     with pytest.raises(ValueError, match="WIDTHxHEIGHT"):
@@ -92,7 +97,7 @@ def test_gemini_request_uses_current_image_response_format(tmp_path: Path) -> No
         ):
             provider.generate("a product photo", size="1200x1500")
 
-    assert captured["url"].endswith("/v1/models/gemini-3.1-flash-image:generateContent")
+    assert captured["url"].endswith("/v1beta/models/gemini-3.1-flash-image:generateContent")
     assert captured["payload"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     response_format = captured["payload"]["generationConfig"]["responseFormat"]
     assert response_format["image"]["aspectRatio"] == "4:5"
