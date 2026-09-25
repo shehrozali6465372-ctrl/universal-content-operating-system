@@ -181,8 +181,14 @@ class PlannerManager:
         return plan.to_dict()
 
     def import_plan(self, data: Dict[str, Any]) -> WritingPlan:
-        """Import a plan from dictionary."""
-        return WritingPlan.from_dict(data)
+        """Import and fail closed on an invalid writing plan."""
+        if not isinstance(data, dict):
+            raise TypeError("plan data must be a dictionary")
+        plan = WritingPlan.from_dict(data)
+        validation = self.validator.validate(plan)
+        if not validation.is_valid:
+            raise ValueError(f"Imported writing plan failed validation: {validation.errors}")
+        return plan
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Get planning history."""
