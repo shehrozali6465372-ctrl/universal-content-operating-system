@@ -1,6 +1,7 @@
 """Variant Generator — Generate A/B test variants of drafts."""
 from __future__ import annotations
 import time
+from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
@@ -25,7 +26,7 @@ class DraftVariant:
                  "score", "metadata", "created_at")
 
     def __init__(self, variant_type: str = "original") -> None:
-        self.variant_id = f"var_{int(time.time() * 1000) % 10000000}"
+        self.variant_id = f"var_{uuid4().hex}"
         self.variant_type = variant_type
         self.prompt_set = None
         self.draft_text = ""
@@ -55,7 +56,12 @@ class VariantGenerator:
         variant_types: Optional[List[str]] = None,
     ) -> List[DraftVariant]:
         """Generate multiple variants from a plan."""
-        types = variant_types or ["original", "alternative", "bold"]
+        types = list(variant_types) if variant_types is not None else ["original", "alternative", "bold"]
+        if not types:
+            raise ValueError("variant_types must not be empty")
+        unknown = [v for v in types if v not in VARIANT_TYPES]
+        if unknown:
+            raise ValueError(f"Unsupported variant types: {unknown}")
         variants: List[DraftVariant] = []
 
         for vt in types:
