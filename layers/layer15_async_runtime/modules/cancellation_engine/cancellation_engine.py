@@ -7,7 +7,8 @@ from enum import Enum
 
 
 class CancellationTokenState(str, Enum):
-    ACTIVE = "active"; CANCELLED = "cancelled"
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
 
 
 class CancellationToken:
