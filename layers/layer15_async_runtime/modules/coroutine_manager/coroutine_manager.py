@@ -51,7 +51,7 @@ class ManagedCoroutine:
 class CoroutineManager:
     def __init__(self) -> None:
         self._coroutines: dict[str, ManagedCoroutine] = {}
-        self._history: list[dict[str, Any]] = {}
+        self._history: list[dict[str, Any]] = []
 
     def create(self, name: str, coro_fn: Callable[..., Any], *args: Any,
                **kwargs: Any) -> ManagedCoroutine:
