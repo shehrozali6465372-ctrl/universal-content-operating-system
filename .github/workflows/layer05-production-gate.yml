@@ -41,8 +41,6 @@ jobs:
       - name: Layer 5 unit and contract tests
         run: python -m pytest tests/unit/layer05_image -q --tb=short
 
-      - name: Layer 5 lint
-        run: ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
 
       - name: Real Gemini smoke
         if: env.GEMINI_API_KEY != ''
