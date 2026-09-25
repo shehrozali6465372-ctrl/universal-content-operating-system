@@ -49,8 +49,10 @@ class CaptionEngine:
     def generate(self, draft: str, platform: str = "facebook",
                  style_override: Optional[str] = None) -> CaptionResult:
         """Generate an optimized caption from draft content."""
-        spec = PLATFORM_CAPTION_STYLE.get(platform, {})
-        max_len = spec.get("max_length", 2000)
+        if platform not in PLATFORM_CAPTION_STYLE:
+            raise ValueError(f"Unsupported platform: {platform}")
+        spec = PLATFORM_CAPTION_STYLE[platform]
+        max_len = spec["max_length"]
         style = style_override or spec.get("style", "generic")
 
         # Truncate if needed
