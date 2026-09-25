@@ -13,7 +13,9 @@ Version: 4.0.0
 """
 
 from __future__ import annotations
+import copy
 import time
+from threading import RLock
 from typing import Dict, List
 
 
@@ -65,13 +67,18 @@ class BatchProcessor:
         print(processor.get_metrics())
     """
 
-    def __init__(self, analyzer=None) -> None:
+    def __init__(self, analyzer=None, max_cache_size: int = 500) -> None:
+        if max_cache_size < 1:
+            raise ValueError("max_cache_size must be >= 1")
         if analyzer is None:
             from layers.layer03_intelligence.modules.content_understanding.semantic_analyzer import SemanticAnalyzer
             analyzer = SemanticAnalyzer()
         self._analyzer = analyzer
         self._cache: Dict[str, object] = {}
-        self._metrics = BatchMetrics()
+        self._max_cache_size = max_cache_size
+        with self._lock:
+            self._metrics = BatchMetrics()
+        self._lock = RLock()
 
     def analyze_many(self, texts: List[str], domain: str = "general") -> list:
         """Analyze multiple texts in batch.
@@ -89,20 +96,23 @@ class BatchProcessor:
         """Analyze a single text with cache check."""
         cache_key = f"{text.strip().lower()}:{domain}"
 
-        # Check cache
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            self._metrics.record(0.0, cached=True)
-            return cached
+        # Check cache under lock and return an isolated copy.
+        with self._lock:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                self._metrics.record(0.0, cached=True)
+                return copy.deepcopy(cached)
 
-        # Analyze
         start = time.time()
         result = self._analyzer.analyze(text)
         elapsed_ms = (time.time() - start) * 1000
 
-        # Store in cache
-        self._cache[cache_key] = result
-        self._metrics.record(elapsed_ms, cached=False)
+        with self._lock:
+            if len(self._cache) >= self._max_cache_size and cache_key not in self._cache:
+                oldest_key = next(iter(self._cache))
+                self._cache.pop(oldest_key, None)
+            self._cache[cache_key] = copy.deepcopy(result)
+            self._metrics.record(elapsed_ms, cached=False)
 
         return result
 
@@ -110,10 +120,12 @@ class BatchProcessor:
         return self._metrics.to_dict()
 
     def cache_size(self) -> int:
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)
 
     def clear_cache(self) -> None:
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
     def reset_metrics(self) -> None:
         self._metrics = BatchMetrics()
