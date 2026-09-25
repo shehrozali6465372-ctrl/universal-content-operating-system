@@ -62,7 +62,9 @@ class ContentOptimizer:
         result.seo_score = self._calculate_seo(text, keywords or [])
 
         # Platform-specific optimizations
-        spec = PLATFORM_OPTIMIZATIONS.get(platform, PLATFORM_OPTIMIZATIONS["facebook"])
+        if platform not in PLATFORM_OPTIMIZATIONS:
+            raise ValueError(f"Unsupported platform: {platform}")
+        spec = PLATFORM_OPTIMIZATIONS[platform]
         if len(text) > spec["max_length"]:
             optimized = optimized[:spec["max_length"] - 3] + "..."
             result.improvements.append("Truncated to platform limit")
