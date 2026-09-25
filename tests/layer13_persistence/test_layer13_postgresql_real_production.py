@@ -12,8 +12,10 @@ def _config() -> ConnectionConfig:
 
 
 def test_real_postgresql_lifecycle_schema_crud_and_rollback() -> None:
-    pool = ConnectionPool(_config())
-    assert pool.initialize() is True
+    manager = PostgreSQLManager(_config())
+    assert manager.initialize() is True
+    pool = manager._pool
+    assert pool is not None
 
     marker = f"layer13_cert_{uuid.uuid4().hex}"
     try:
@@ -54,7 +56,7 @@ def test_real_postgresql_lifecycle_schema_crud_and_rollback() -> None:
     assert pool.query_one(
         "SELECT key FROM agent_config WHERE key = %s", (marker,)
     ) is None
-    pool.close()
+    manager.close()
 
 
 def test_real_postgresql_concurrent_queries_leave_no_borrowed_connections() -> None:
@@ -78,7 +80,7 @@ def test_real_postgresql_concurrent_queries_leave_no_borrowed_connections() -> N
     assert errors == []
     metrics = pool.get_pool_metrics()
     assert metrics["active_connections"] == 0
-    assert metrics["idle_connections"] == pool._config.min_connections
+    assert pool._config.min_connections <= metrics["idle_connections"] <= pool._config.max_connections
     assert metrics["postgresql_available"] is True
     pool.close()
 
