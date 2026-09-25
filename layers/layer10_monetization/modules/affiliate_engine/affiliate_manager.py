@@ -1,6 +1,5 @@
 """AffiliateManager — Manages affiliate programs, IDs, links, and commission tracking."""
 from __future__ import annotations
-import hashlib
 import threading
 import time
 import uuid
@@ -259,13 +258,13 @@ class AffiliateManager:
         return self._links.get(link_id)
 
     def get_links_by_niche(self, niche: str) -> List[AffiliateLink]:
-        return [l for l in self._links.values() if l.niche == niche and l.status == "active"]
+        return [link for link in self._links.values() if link.niche == niche and link.status == "active"]
 
     def get_links_by_program(self, program_id: str) -> List[AffiliateLink]:
-        return [l for l in self._links.values() if l.program_id == program_id]
+        return [link for link in self._links.values() if link.program_id == program_id]
 
     def get_links_by_category(self, category: str) -> List[AffiliateLink]:
-        return [l for l in self._links.values() if l.category == category and l.status == "active"]
+        return [link for link in self._links.values() if link.category == category and link.status == "active"]
 
     def record_click(self, link_id: str, source: str = "",
                      platform: str = "") -> Optional[Dict[str, Any]]:
@@ -321,7 +320,7 @@ class AffiliateManager:
             "total_programs": len(self._programs),
             "active_programs": sum(1 for p in self._programs.values() if p.status == "active"),
             "total_links": len(self._links),
-            "active_links": sum(1 for l in self._links.values() if l.status == "active"),
+            "active_links": sum(1 for link in self._links.values() if link.status == "active"),
             "total_clicks": total_clicks,
             "total_conversions": total_conversions,
             "total_revenue": round(total_revenue, 2),
