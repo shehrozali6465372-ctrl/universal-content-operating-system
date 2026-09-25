@@ -19,10 +19,14 @@ class LayoutSpec:
     __slots__ = ("layout_type", "width", "height", "elements", "guidelines")
 
     def __init__(self, layout_type: str = "centered", width: int = 1080, height: int = 1080) -> None:
+        if layout_type not in LAYOUT_PRESETS:
+            raise ValueError(f"Unsupported layout type: {layout_type}")
+        if width < 1 or height < 1:
+            raise ValueError("width and height must be positive")
         self.layout_type = layout_type
         self.width = width
         self.height = height
-        preset = LAYOUT_PRESETS.get(layout_type, LAYOUT_PRESETS["centered"])
+        preset = LAYOUT_PRESETS[layout_type]
         self.elements = preset["elements"]
         self.guidelines: Dict[str, Any] = {"safe_margin": 50, "text_area_pct": 30}
 
