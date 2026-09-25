@@ -97,7 +97,7 @@ class AsyncRuntime:
         with self._lock:
             return dict(self._metrics)
 
-    def _begin_task(self, name: str) -> AsyncTask:
+    def pause(self) -> None:\n        """Stop admitting new coroutine tasks while retaining the runtime."""\n        with self._lock:\n            if not self._running:\n                raise RuntimeError("async runtime is not running")\n            self._accepting = False\n\n    def resume(self) -> None:\n        """Resume admission of new coroutine tasks."""\n        with self._lock:\n            if not self._running:\n                raise RuntimeError("async runtime is not running")\n            self._accepting = True\n\n    @property\n    def is_accepting(self) -> bool:\n        with self._lock:\n            return self._running and self._accepting\n\n    def _begin_task(self, name: str) -> AsyncTask:
         with self._lock:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
