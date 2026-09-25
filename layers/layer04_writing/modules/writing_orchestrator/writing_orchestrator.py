@@ -92,7 +92,7 @@ class WritingOrchestrator:
         self._run_count = 0
         self._lock = RLock()
 
-    def run(
+    def _run_locked(
         self,
         topic: str,
         platforms: Optional[List[str]] = None,
@@ -172,9 +172,21 @@ class WritingOrchestrator:
 
         result.platforms = list(target_platforms)
         result.pipeline_time_ms = (time.time() - start) * 1000
-        with self._lock:
-            self._run_count += 1
+        self._run_count += 1
         return result
+
+    def run(
+        self,
+        topic: str,
+        platforms: Optional[List[str]] = None,
+        goal: str = "educate",
+        audience: str = "general",
+        language: str = "english",
+        intelligence_data: Optional[Dict[str, Any]] = None,
+    ) -> OrchestratorResult:
+        """Run the writing pipeline under the orchestrator state lock."""
+        with self._lock:
+            return self._run_locked(topic, platforms, goal, audience, language, intelligence_data)
 
     def get_history(self, platform: str = "", limit: int = 10) -> List[Dict[str, Any]]:
         if platform:
