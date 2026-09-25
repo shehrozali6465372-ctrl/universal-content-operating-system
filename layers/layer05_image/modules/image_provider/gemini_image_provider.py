@@ -21,6 +21,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from threading import RLock
 from typing import Any, Dict, List, Optional, Tuple
 
 from .image_provider import BaseImageProvider, ImageResponse
@@ -52,7 +53,7 @@ class GeminiImageProvider(BaseImageProvider):
         self._timeout = 60
         self._history: List[Dict[str, Any]] = []
         self._max_history = 1000
-        self._max_history = 1000
+        self._history_lock = RLock()
 
     def generate(self, prompt: str, size: str = "1024x1024",
                  style: str = "photorealistic", **kwargs: Any) -> ImageResponse:
@@ -262,11 +263,13 @@ class GeminiImageProvider(BaseImageProvider):
         }
 
     def _record_history(self, record: Dict[str, Any]) -> None:
-        self._history.append(record)
-        if len(self._history) > self._max_history:
-            del self._history[:-self._max_history]
+        with self._history_lock:
+            self._history.append(dict(record))
+            if len(self._history) > self._max_history:
+                del self._history[:-self._max_history]
 
     def get_history(self, limit: int = 20) -> List[Dict[str, Any]]:
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= self._max_history:
             raise ValueError(f"limit must be between 1 and {self._max_history}")
-        return [dict(item) for item in self._history[-limit:]]
+        with self._history_lock:
+            return [dict(item) for item in self._history[-limit:]]
