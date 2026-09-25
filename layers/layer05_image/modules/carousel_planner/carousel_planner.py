@@ -1,6 +1,6 @@
 """Carousel Planner — Plan multi-slide carousel content."""
 from __future__ import annotations
-import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 
@@ -33,7 +33,7 @@ class CarouselPlan:
     __slots__ = ("plan_id", "topic", "platform", "slides", "total_slides")
 
     def __init__(self, topic: str = "", platform: str = "instagram") -> None:
-        self.plan_id = f"carousel_{int(time.time() * 1000) % 10000000}"
+        self.plan_id = f"carousel_{uuid.uuid4().hex}"
         self.topic = topic
         self.platform = platform
         self.slides: List[CarouselSlide] = []
@@ -59,6 +59,10 @@ class CarouselPlanner:
              key_points: Optional[List[str]] = None,
              slide_count: int = 5) -> CarouselPlan:
         """Plan a carousel with slides."""
+        if not topic or not topic.strip():
+            raise ValueError("topic must not be empty")
+        if slide_count < 3 or slide_count > 20:
+            raise ValueError("slide_count must be between 3 and 20")
         cp = CarouselPlan(topic=topic, platform=platform)
         points = key_points or [f"Point {i+1} about {topic}" for i in range(slide_count - 2)]
 
