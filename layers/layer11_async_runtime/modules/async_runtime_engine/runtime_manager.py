@@ -1,6 +1,7 @@
 """RuntimeManager — Manage runtime lifecycle."""
 from __future__ import annotations
 from typing import Any, Dict, Optional
+import threading
 
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_config import RuntimeConfig
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_state import RuntimeState
@@ -30,25 +31,37 @@ class RuntimeManager:
         self.report_generator = RuntimeReportGenerator()
         self.validator = RuntimeValidator()
         self.monitor = RuntimeMonitor()
+        self._lock = threading.RLock()
+        self.health.register_check("config", self._config_health)
+        self.health.register_check("state", self._state_health)
+
+    def _config_health(self) -> bool:
+        self.config.validate()
+        return True
+
+    def _state_health(self) -> bool:
+        return self.state.current not in {RuntimeState.ERROR, RuntimeState.STOPPING}
 
     def start(self) -> bool:
-        if not self.state.transition(RuntimeState.STARTING):
+        with self._lock:
+            if not self.state.transition(RuntimeState.STARTING):
             return False
         self.events.publish("runtime_starting", "manager")
         self.metrics.increment("start_count")
-        self.state.transition(RuntimeState.RUNNING)
-        self.events.publish("runtime_started", "manager")
-        self.memory.save_checkpoint(RuntimeState.RUNNING)
-        return True
+            self.state.transition(RuntimeState.RUNNING)
+            self.events.publish("runtime_started", "manager")
+            self.memory.save_checkpoint(RuntimeState.RUNNING)
+            return True
 
     def stop(self) -> bool:
-        if not self.state.transition(RuntimeState.STOPPING):
+        with self._lock:
+            if not self.state.transition(RuntimeState.STOPPING):
             return False
         self.events.publish("runtime_stopping", "manager")
-        self.state.transition(RuntimeState.STOPPED)
-        self.events.publish("runtime_stopped", "manager")
-        self.memory.save_checkpoint(RuntimeState.STOPPED)
-        return True
+            self.state.transition(RuntimeState.STOPPED)
+            self.events.publish("runtime_stopped", "manager")
+            self.memory.save_checkpoint(RuntimeState.STOPPED)
+            return True
 
     def pause(self) -> bool:
         if self.state.transition(RuntimeState.PAUSED):
