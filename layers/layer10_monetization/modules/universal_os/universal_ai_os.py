@@ -1,5 +1,6 @@
 """UniversalAIOS — Main OS kernel for the entire system."""
 from __future__ import annotations
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -28,67 +29,83 @@ class UniversalAIOS:
         self._error_count: int = 0
         self._recovery_count: int = 0
         self._max_events = 10000
+        self._lock = threading.RLock()
 
     def start(self) -> bool:
-        if self._state == SystemState.RUNNING:
+        with self._lock:
+            if self._state == SystemState.RUNNING:
+                return True
+            if self._state in (
+                SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING
+            ):
+                return False
+            self._state = SystemState.STARTING
+            self._record_event("system_starting")
+            self._state = SystemState.RUNNING
+            self._started_at = time.time()
+            self._record_event("system_started")
             return True
-        if self._state in (SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING):
-            return False
-        self._state = SystemState.STARTING
-        self._record_event("system_starting")
-        self._state = SystemState.RUNNING
-        self._started_at = time.time()
-        self._record_event("system_started")
-        return True
 
     def stop(self) -> bool:
-        if self._state == SystemState.STOPPED:
+        with self._lock:
+            if self._state == SystemState.STOPPED:
+                return True
+            if self._state in (
+                SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING
+            ):
+                return False
+            self._state = SystemState.STOPPING
+            self._record_event("system_stopping")
+            self._state = SystemState.STOPPED
+            self._stopped_at = time.time()
+            self._record_event("system_stopped")
             return True
-        self._state = SystemState.STOPPING
-        self._record_event("system_stopping")
-        self._state = SystemState.STOPPED
-        self._stopped_at = time.time()
-        self._record_event("system_stopped")
-        return True
 
     def pause(self) -> bool:
-        if self._state != SystemState.RUNNING:
-            return False
-        self._state = SystemState.PAUSED
-        self._paused_at = time.time()
-        self._record_event("system_paused")
-        return True
+        with self._lock:
+            if self._state != SystemState.RUNNING:
+                return False
+            self._state = SystemState.PAUSED
+            self._paused_at = time.time()
+            self._record_event("system_paused")
+            return True
 
     def resume(self) -> bool:
-        if self._state != SystemState.PAUSED:
-            return False
-        self._state = SystemState.RUNNING
-        self._record_event("system_resumed")
-        return True
+        with self._lock:
+            if self._state != SystemState.PAUSED:
+                return False
+            self._state = SystemState.RUNNING
+            self._record_event("system_resumed")
+            return True
 
     def restart(self) -> bool:
-        if self._state in (SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING):
-            return False
-        if not self.stop():
-            return False
-        if not self.start():
-            return False
-        self._record_event("system_restarted")
-        return True
+        with self._lock:
+            if self._state in (
+                SystemState.STARTING, SystemState.STOPPING, SystemState.RECOVERING
+            ):
+                return False
+            if not self.stop() or not self.start():
+                return False
+            self._record_event("system_restarted")
+            return True
 
     def shutdown(self) -> bool:
         return self.stop()
 
     def status(self) -> Dict[str, Any]:
-        uptime = 0.0
+        with self._lock:
+            uptime = 0.0
         if self._started_at and self._state == SystemState.RUNNING:
             uptime = time.time() - self._started_at
-        return {"state": self._state, "uptime_seconds": round(uptime, 1),
+            return {
+                "state": self._state,
+                "uptime_seconds": round(uptime, 1),
                 "components": len(self._components),
                 "services": len(self._services),
                 "total_events": len(self._events),
                 "error_count": self._error_count,
-                "recovery_count": self._recovery_count}
+                "recovery_count": self._recovery_count,
+            }
 
     def health(self) -> Dict[str, Any]:
         unhealthy = []
