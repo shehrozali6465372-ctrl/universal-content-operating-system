@@ -41,20 +41,24 @@ class AsyncRuntime:
         max_tracked_tasks: int = 10_000,
         task_timeout: Optional[float] = 300.0,
     ) -> None:
-        if isinstance(max_workers, bool) or max_workers < 1:
+        if isinstance(max_workers, bool) or not isinstance(max_workers, int) or max_workers < 1:
             raise ValueError("max_workers must be >= 1")
-        if isinstance(max_tracked_tasks, bool) or max_tracked_tasks < 1:
+        if isinstance(max_tracked_tasks, bool) or not isinstance(max_tracked_tasks, int) or max_tracked_tasks < 1:
             raise ValueError("max_tracked_tasks must be >= 1")
         if task_timeout is not None and (
-            isinstance(task_timeout, bool) or task_timeout <= 0
+            isinstance(task_timeout, bool)
+            or not isinstance(task_timeout, (int, float))
+            or task_timeout <= 0
         ):
             raise ValueError("task_timeout must be > 0 or None")
+
         self._max_workers = max_workers
         self._max_tracked_tasks = max_tracked_tasks
-        self._task_timeout = task_timeout
+        self._task_timeout = float(task_timeout) if task_timeout is not None else None
         self._thread_pool: Optional[ThreadPoolExecutor] = None
         self._tasks: Dict[str, AsyncTask] = {}
         self._running = False
+        self._accepting = False
         self._stopped = False
         self._lock = threading.RLock()
         self._metrics = {
@@ -74,6 +78,7 @@ class AsyncRuntime:
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
             self._stopped = False
             self._running = True
+            self._accepting = True
 
     def stop(self) -> None:
         """Stop the runtime and wait for worker threads to finish."""
@@ -81,6 +86,7 @@ class AsyncRuntime:
             if not self._running and self._stopped:
                 return
             self._running = False
+            self._accepting = False
             pool = self._thread_pool
             self._thread_pool = None
             self._stopped = True
@@ -93,14 +99,35 @@ class AsyncRuntime:
             return self._running
 
     @property
+    def is_accepting(self) -> bool:
+        with self._lock:
+            return self._running and self._accepting
+
+    @property
     def metrics(self) -> Dict[str, Any]:
         with self._lock:
             return dict(self._metrics)
 
-    def pause(self) -> None:\n        """Stop admitting new coroutine tasks while retaining the runtime."""\n        with self._lock:\n            if not self._running:\n                raise RuntimeError("async runtime is not running")\n            self._accepting = False\n\n    def resume(self) -> None:\n        """Resume admission of new coroutine tasks."""\n        with self._lock:\n            if not self._running:\n                raise RuntimeError("async runtime is not running")\n            self._accepting = True\n\n    @property\n    def is_accepting(self) -> bool:\n        with self._lock:\n            return self._running and self._accepting\n\n    def _begin_task(self, name: str) -> AsyncTask:
+    def pause(self) -> None:
+        """Stop admitting new coroutine tasks while retaining the runtime."""
         with self._lock:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
+            self._accepting = False
+
+    def resume(self) -> None:
+        """Resume admission of new coroutine tasks."""
+        with self._lock:
+            if not self._running:
+                raise RuntimeError("async runtime is not running")
+            self._accepting = True
+
+    def _begin_task(self, name: str) -> AsyncTask:
+        with self._lock:
+            if not self._running:
+                raise RuntimeError("async runtime is not running")
+            if not self._accepting:
+                raise RuntimeError("async runtime is paused")
             task = AsyncTask(name)
             task.state = TaskState.RUNNING
             task.started_at = time.monotonic()
@@ -174,9 +201,7 @@ class AsyncRuntime:
             if self._task_timeout is None:
                 result = await coro
             else:
-                result = await asyncio.wait_for(
-                    coro, timeout=self._task_timeout
-                )
+                result = await asyncio.wait_for(coro, timeout=self._task_timeout)
             task.result = result
             self._finish_task(task, TaskState.COMPLETED)
             return result
@@ -223,7 +248,9 @@ class AsyncRuntime:
         """Run blocking work in the bounded worker pool."""
         if not callable(fn):
             raise TypeError("fn must be callable")
-        if timeout is not None and timeout <= 0:
+        if timeout is not None and (
+            isinstance(timeout, bool) or timeout <= 0
+        ):
             raise ValueError("timeout must be > 0 or None")
         with self._lock:
             if not self._running:
@@ -246,14 +273,13 @@ class AsyncRuntime:
             if pool is None:
                 raise RuntimeError("async runtime worker pool is unavailable")
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            pool, lambda: fn(*args, **kwargs)
-        )
+        return await loop.run_in_executor(pool, lambda: fn(*args, **kwargs))
 
     def health(self) -> Dict[str, Any]:
         with self._lock:
             return {
                 "running": self._running,
+                "accepting": self._accepting,
                 "task_timeout": self._task_timeout,
                 "max_workers": self._max_workers,
                 "tasks_tracked": len(self._tasks),
