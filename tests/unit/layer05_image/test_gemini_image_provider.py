@@ -103,3 +103,15 @@ def test_gemini_request_uses_current_image_response_format(tmp_path: Path) -> No
     assert response_format["image"]["aspectRatio"] == "4:5"
     assert response_format["image"]["imageSize"] == "2K"
     assert "responseFormat" not in captured["payload"]
+
+
+def test_history_is_bounded_and_limit_is_validated() -> None:
+    provider = GeminiImageProvider(api_key="test")
+    for index in range(1005):
+        provider._record_history({"index": index})
+    assert len(provider.get_history(1000)) == 1000
+    assert provider.get_history(1)[0]["index"] == 1004
+    with pytest.raises(ValueError, match="between 1 and 1000"):
+        provider.get_history(0)
+    with pytest.raises(ValueError, match="between 1 and 1000"):
+        provider.get_history(1001)
