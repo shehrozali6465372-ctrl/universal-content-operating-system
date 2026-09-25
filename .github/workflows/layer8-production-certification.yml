@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - layer8-final-certification-20260925
+      - layer8-certification-latest-main-20260925
   pull_request:
     branches:
       - main
