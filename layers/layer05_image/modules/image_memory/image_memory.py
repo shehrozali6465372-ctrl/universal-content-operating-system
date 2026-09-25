@@ -1,6 +1,7 @@
 """Image Memory — Brand visual consistency across platforms."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -36,6 +37,7 @@ class ImageMemory:
     def __init__(self) -> None:
         self._profiles: Dict[str, BrandVisualProfile] = {}
         self._history: List[Dict[str, Any]] = []
+        self._lock = RLock()
 
     def set_profile(self, name: str, colors: Optional[List[str]] = None,
                     style: str = "modern", mood: str = "professional") -> BrandVisualProfile:
@@ -47,11 +49,13 @@ class ImageMemory:
         p.primary_colors = list(colors or [])
         p.style = style
         p.mood = mood
-        self._profiles[p.name] = p
+        with self._lock:
+            self._profiles[p.name] = p
         return p
 
     def get_profile(self, name: str) -> Optional[BrandVisualProfile]:
-        return self._profiles.get(name)
+        with self._lock:
+            return self._profiles.get(name)
 
     def store_image(self, platform: str, topic: str, url: str,
                     profile_name: str = "") -> Dict[str, Any]:
@@ -65,22 +69,28 @@ class ImageMemory:
             raise ValueError("Unknown visual profile: " + profile_name)
         record = {"platform": platform.strip(), "topic": topic.strip(), "url": url.strip(),
                   "profile": profile_name, "timestamp": time.time()}
-        self._history.append(record)
-        if len(self._history) > self.MAX_HISTORY:
-            del self._history[:-self.MAX_HISTORY]
-        return record
+        with self._lock:
+            self._history.append(record)
+            if len(self._history) > self.MAX_HISTORY:
+                del self._history[:-self.MAX_HISTORY]
+        return dict(record)
 
     def get_history(self, platform: str = "", limit: int = 10) -> List[Dict[str, Any]]:
         if limit < 1 or limit > self.MAX_HISTORY:
             raise ValueError(f"limit must be between 1 and {self.MAX_HISTORY}")
-        if platform:
-            return [r for r in self._history if r["platform"] == platform][-limit:]
-        return self._history[-limit:]
+        with self._lock:
+            if platform:
+                records = [r for r in self._history if r["platform"] == platform][-limit:]
+            else:
+                records = self._history[-limit:]
+            return [dict(record) for record in records]
 
     @property
     def profile_count(self) -> int:
-        return len(self._profiles)
+        with self._lock:
+            return len(self._profiles)
 
     @property
     def history_count(self) -> int:
-        return len(self._history)
+        with self._lock:
+            return len(self._history)
