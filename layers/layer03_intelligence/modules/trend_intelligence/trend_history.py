@@ -87,9 +87,7 @@ class TopicHistory:
 class TrendHistory:
     """Stores historical snapshots of all tracked trends."""
 
-    def __init__(self, max_snapshots_per_topic: int = 100) -> None:
-        self._topics: Dict[str, TopicHistory] = {}
-        self._max = max_snapshots_per_topic
+    def __init__(self, max_snapshots_per_topic: int = 100, max_topics: int = 5000) -> None:\n        if max_snapshots_per_topic < 1 or max_topics < 1:\n            raise ValueError("history limits must be positive")\n        self._topics: Dict[str, TopicHistory] = {}\n        self._max = max_snapshots_per_topic\n        self._max_topics = max_topics
 
     def record(self, topic: str, score: float = 0.0, momentum: float = 0.0,
                lifecycle_stage: str = "unknown", virality_score: float = 0.0,
@@ -104,8 +102,7 @@ class TrendHistory:
         snapshot.confidence = confidence
         snapshot.metadata = metadata or {}
 
-        if topic not in self._topics:
-            self._topics[topic] = TopicHistory(topic)
+        if topic not in self._topics:\n            if len(self._topics) >= self._max_topics:\n                oldest_topic = min(self._topics.values(), key=lambda h: h.last_updated or h.first_seen).topic\n                self._topics.pop(oldest_topic, None)\n            self._topics[topic] = TopicHistory(topic)
 
         history = self._topics[topic]
         history.add_snapshot(snapshot)
@@ -162,8 +159,7 @@ class TrendHistory:
     def get_declining_topics(self) -> List[str]:
         result = []
         for topic, history in self._topics.items():
-            if history.lifecycle_stage == "declining" or len(history.snapshots) > 2:
-                scores = history.get_score_history()
+            latest = history.get_latest()\n            lifecycle_declining = latest is not None and latest.lifecycle_stage == "declining"\n            if lifecycle_declining or len(history.snapshots) > 2:\n                scores = history.get_score_history()
                 if len(scores) >= 3 and scores[-1] < scores[-3] * 0.8:
                     result.append(topic)
         return result
