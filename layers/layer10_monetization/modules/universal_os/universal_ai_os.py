@@ -95,8 +95,8 @@ class UniversalAIOS:
     def status(self) -> Dict[str, Any]:
         with self._lock:
             uptime = 0.0
-        if self._started_at and self._state == SystemState.RUNNING:
-            uptime = time.time() - self._started_at
+            if self._started_at and self._state == SystemState.RUNNING:
+                uptime = time.time() - self._started_at
             return {
                 "state": self._state,
                 "uptime_seconds": round(uptime, 1),
@@ -108,26 +108,39 @@ class UniversalAIOS:
             }
 
     def health(self) -> Dict[str, Any]:
-        unhealthy = []
-        for name, svc in self._services.items():
-            if hasattr(svc, "is_healthy") and not svc.is_healthy():
-                unhealthy.append(name)
-        return {"healthy": self._state == SystemState.RUNNING and len(unhealthy) == 0,
-                "state": self._state, "unhealthy_services": unhealthy}
+        with self._lock:
+            unhealthy = []
+            for name, svc in self._services.items():
+                if hasattr(svc, "is_healthy") and not svc.is_healthy():
+                    unhealthy.append(name)
+            return {
+                "healthy": self._state == SystemState.RUNNING and not unhealthy,
+                "state": self._state,
+                "unhealthy_services": unhealthy,
+            }
 
     def register_component(self, name: str, component: Any) -> None:
-        self._components[name] = component
+        if not name:
+            raise ValueError("component name is required")
+        with self._lock:
+            self._components[name] = component
 
     def register_service(self, name: str, service: Any) -> None:
-        self._services[name] = service
+        if not name:
+            raise ValueError("service name is required")
+        with self._lock:
+            self._services[name] = service
 
     def get_component(self, name: str) -> Any:
-        return self._components.get(name)
+        with self._lock:
+            return self._components.get(name)
 
     def get_service(self, name: str) -> Any:
-        return self._services.get(name)
+        with self._lock:
+            return self._services.get(name)
 
     def _record_event(self, event_type: str) -> None:
-        self._events.append({"type": event_type, "timestamp": time.time()})
-        if len(self._events) > self._max_events:
-            del self._events[:-self._max_events]
+        with self._lock:
+            self._events.append({"type": event_type, "timestamp": time.time()})
+            if len(self._events) > self._max_events:
+                del self._events[:-self._max_events]
