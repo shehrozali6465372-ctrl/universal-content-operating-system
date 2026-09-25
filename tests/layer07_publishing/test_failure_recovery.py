@@ -648,7 +648,7 @@ class TestRecoveryResult:
 
 class TestRecoveryManager:
     def setup_method(self):
-        self.manager = RecoveryManager()
+        self.manager = RecoveryManager(sleep_fn=lambda _: None)
 
     def test_handle_failure_retryable(self):
         record = FailureRecord("network", "Connection timeout")
