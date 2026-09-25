@@ -76,7 +76,6 @@ class StrategyManager:
         self.explainer = explainer or StrategyExplainer()
         self._pipeline_count = 0
         self._lock = RLock()
-        self._lock = RLock()
 
     def run_pipeline(
         self,
@@ -186,10 +185,12 @@ class StrategyManager:
         return self.adapter.adapt(strategy_data, signals=signals, constraints=constraints)
 
     def get_memory_stats(self) -> Dict[str, Any]:
-        return self.memory.stats()
+        with self._lock:
+            return self.memory.stats()
 
     def get_lessons(self, topic: str = "") -> List[str]:
-        return self.memory.get_lessons(topic=topic)
+        with self._lock:
+            return self.memory.get_lessons(topic=topic)
 
     @property
     def pipeline_count(self) -> int:
