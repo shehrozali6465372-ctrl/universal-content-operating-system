@@ -107,6 +107,8 @@ class DraftManager:
     ) -> DraftManagerResult:
         """Generate a draft from a WritingPlan."""
         start = time.time()
+        if not isinstance(plan, WritingPlan):
+            raise TypeError("plan must be a WritingPlan")
         result = DraftManagerResult()
         result.plan_id = plan.plan_id
 
@@ -160,6 +162,8 @@ class DraftManager:
     ) -> DraftManagerResult:
         """Generate multiple variants from a plan."""
         start = time.time()
+        if not isinstance(plan, WritingPlan):
+            raise TypeError("plan must be a WritingPlan")
         result = DraftManagerResult()
         result.plan_id = plan.plan_id
 
