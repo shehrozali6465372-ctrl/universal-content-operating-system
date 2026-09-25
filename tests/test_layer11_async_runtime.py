@@ -503,3 +503,72 @@ class TestTaskPause:
         assert tp.is_paused("t1") is True
         tp.resume("t1")
         assert tp.is_paused("t1") is False
+
+from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncRuntime, TaskState
+
+
+class TestAsyncRuntime:
+    def test_lifecycle_and_restart(self):
+        runtime = AsyncRuntime(max_workers=2)
+        assert runtime.is_running is False
+        runtime.start()
+        assert runtime.is_running is True
+        runtime.stop()
+        assert runtime.is_running is False
+        runtime.start()
+        assert runtime.run_coroutine(asyncio_sleep_result()) == "ok"
+        runtime.stop()
+
+    def test_parallel_execution(self):
+        runtime = AsyncRuntime(max_workers=2)
+        runtime.start()
+        assert runtime.run_parallel(asyncio_sleep_result("a"), asyncio_sleep_result("b")) == ["a", "b"]
+        assert runtime.metrics["completed"] == 2
+        runtime.stop()
+
+    def test_failure_and_cancellation_metrics(self):
+        runtime = AsyncRuntime()
+        runtime.start()
+        try:
+            runtime.run_coroutine(asyncio_failure())
+        except ValueError:
+            pass
+        assert runtime.metrics["failed"] == 1
+        runtime.stop()
+
+    def test_thread_pool(self):
+        runtime = AsyncRuntime(max_workers=2)
+        runtime.start()
+        assert runtime.submit_to_thread(lambda x: x + 1, 4) == 5
+        runtime.stop()
+
+    def test_requires_running_runtime(self):
+        runtime = AsyncRuntime()
+        try:
+            runtime.run_coroutine(asyncio_sleep_result())
+        except RuntimeError as exc:
+            assert "not running" in str(exc)
+        else:
+            raise AssertionError("runtime must reject execution before start")
+
+    def test_task_ids_are_unique(self):
+        runtime = AsyncRuntime()
+        ids = {AsyncRuntimeTaskId() for _ in range(100)}
+        assert len(ids) == 100
+
+
+def AsyncRuntimeTaskId():
+    from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncTask
+    return AsyncTask().task_id
+
+
+async def asyncio_sleep_result(value="ok"):
+    import asyncio
+    await asyncio.sleep(0)
+    return value
+
+
+async def asyncio_failure():
+    import asyncio
+    await asyncio.sleep(0)
+    raise ValueError("boom")
