@@ -81,7 +81,14 @@ class PublisherManager:
             reservation_id = decision.reservation_id
 
         try:
-            media_paths = self._resolve_media_paths(request)
+            try:
+                media_paths = self._resolve_media_paths(request)
+            except (OSError, ValueError) as exc:
+                result.set_error(str(exc), "media")
+                tracker.update("failed", str(exc)[:100])
+                self._record_event("publish_failed", request, result)
+                return result
+
             if request.has_media():
                 tracker.update("uploading", f"Preparing {len(media_paths)} media assets")
 
