@@ -1,0 +1,52 @@
+name: Layer 8 Production Certification
+
+on:
+  push:
+    branches:
+      - layer8-final-certification-20260925
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "layers/layer08_analytics/**"
+      - "tests/test_layer8_production_gate.py"
+      - ".github/workflows/layer8-production-certification.yml"
+
+jobs:
+  layer8-certification:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aios"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      APP_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install --break-system-packages -r requirements.txt
+      - name: Compile Layer 8
+        run: python -m compileall -q layers/layer08_analytics tests/test_layer8_production_gate.py
+      - name: Ruff Layer 8
+        run: ruff check layers/layer08_analytics tests/test_layer8_production_gate.py --select F
+      - name: Layer 8 production gate
+        run: python -m pytest tests/test_layer8_production_gate.py -q --tb=short

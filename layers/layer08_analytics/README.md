@@ -1,27 +1,27 @@
-# Analytics & Tracking
+# Layer 8 — Analytics & Tracking
 
-**Layer:** layer 08 analytics
-**Status:** 🔜 Planned
-**Version:** See [VERSION](../../VERSION)
+**Layer:** 08  
+**Scope:** analytics ingestion, metrics, trends/anomalies, A/B experiments, funnels, attribution, reporting, dashboard state, and the Layer 13 persistence boundary.
 
-## Description
+## Production boundary
 
-Analytics & Tracking module for AI Self-Improving Facebook Agent.
+Layer 8 never creates or closes a Layer 13 database pool. Production callers must inject a durable `AnalyticsPersistence` implementation. The supplied `PostgreSQLAnalyticsPersistence` adapter delegates to the Layer 13 `AnalyticsRepository`.
 
-## Modules
+`AnalyticsOrchestrator(production=True)` fails closed when durable persistence is absent.
 
-| Module | Description | Status |
-|--------|-------------|--------|
-| *(Coming Soon)* | | 🔜 |
+## Data integrity rules
 
-## Usage
+- Every observation has source, metric name, timestamp, dimensions, and finite numeric value.
+- Source failures are raised instead of silently becoming false success.
+- Metric formulas are validated and aggregation honors the requested formula.
+- Trend detection is deterministic and does not double-run a metric.
+- A/B conversions cannot exceed recorded impressions and significance is calculated from observed proportions.
+- Attribution models conserve observed revenue.
+- Funnel counts reject impossible negative/exceeding values.
+- IDs use UUIDs rather than time modulo counters.
 
-```python
-from layers.layer08_analytics import *
-```
+## Verification
 
-## Tests
+Run the dedicated Layer 8 gate and the full suite.
 
-```bash
-pytest layers/layer08_analytics/tests/ -v
-```
+The layer is **not production-certified until the current commit passes the dedicated Layer 8 gate, the complete CI suite, and post-merge main-branch verification with the real Layer 13 PostgreSQL path.**
