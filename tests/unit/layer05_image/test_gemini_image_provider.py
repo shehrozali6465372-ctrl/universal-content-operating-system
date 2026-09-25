@@ -94,5 +94,7 @@ def test_gemini_request_uses_current_image_response_format(tmp_path: Path) -> No
 
     assert captured["url"].endswith("/v1/models/gemini-3.1-flash-image:generateContent")
     assert captured["payload"]["generationConfig"]["responseModalities"] == ["IMAGE"]
-    assert captured["payload"]["responseFormat"]["image"]["aspectRatio"] == "4:5"
-    assert captured["payload"]["responseFormat"]["image"]["imageSize"] == "2K"
+    response_format = captured["payload"]["generationConfig"]["responseFormat"]
+    assert response_format["image"]["aspectRatio"] == "4:5"
+    assert response_format["image"]["imageSize"] == "2K"
+    assert "responseFormat" not in captured["payload"]
