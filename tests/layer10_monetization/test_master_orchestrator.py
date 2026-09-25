@@ -345,7 +345,8 @@ class TestSystemEventBus:
         assert len(received) == 1
 
     def test_unsubscribe(self):
-        handler = lambda e: None
+        def handler(e):
+            pass
         self.bus.subscribe("test", handler)
         result = self.bus.unsubscribe("test", handler)
         assert result is True
@@ -479,19 +480,19 @@ class TestWorkflowEngine:
 
     def test_execute_step(self):
         wf = self.engine.create_workflow(["layer04_writing"])
-        step = self.engine.execute_step(wf.workflow_id, 0, lambda l: {"draft": "text"})
+        step = self.engine.execute_step(wf.workflow_id, 0, lambda layer: {"draft": "text"})
         assert step.status == "completed"
         assert step.result == {"draft": "text"}
 
     def test_execute_step_failure(self):
         wf = self.engine.create_workflow(["layer04_writing"])
-        step = self.engine.execute_step(wf.workflow_id, 0, lambda l: 1/0)
+        step = self.engine.execute_step(wf.workflow_id, 0, lambda layer: 1/0)
         assert step.status == "failed"
         assert step.error is not None
 
     def test_execute_step_workflow_not_found(self):
         try:
-            self.engine.execute_step("nonexistent", 0, lambda l: None)
+            self.engine.execute_step("nonexistent", 0, lambda layer: None)
             assert False
         except ValueError:
             pass
@@ -504,18 +505,18 @@ class TestWorkflowEngine:
 
     def test_rollback(self):
         wf = self.engine.create_workflow(["layer01", "layer02", "layer03"])
-        self.engine.execute_step(wf.workflow_id, 0, lambda l: "ok")
+        self.engine.execute_step(wf.workflow_id, 0, lambda layer: "ok")
         count = self.engine.rollback(wf.workflow_id)
         assert count >= 1
 
     def test_workflow_is_complete(self):
         wf = self.engine.create_workflow(["layer01"])
-        self.engine.execute_step(wf.workflow_id, 0, lambda l: "ok")
+        self.engine.execute_step(wf.workflow_id, 0, lambda layer: "ok")
         assert wf.is_complete is True
 
     def test_workflow_has_failures(self):
         wf = self.engine.create_workflow(["layer01"])
-        self.engine.execute_step(wf.workflow_id, 0, lambda l: 1/0)
+        self.engine.execute_step(wf.workflow_id, 0, lambda layer: 1/0)
         assert wf.has_failures is True
 
     def test_get_workflow(self):
