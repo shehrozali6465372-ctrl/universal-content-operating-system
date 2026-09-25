@@ -76,7 +76,7 @@ class TestLLMManager:
 
     def test_generate_with_model(self):
         resp = self.manager.generate("Test prompt", model="gpt-5.6-luna")
-        assert resp.model == "gpt-4o"
+        assert resp.model == "gpt-5.6-luna"
 
     def test_generate_with_provider(self):
         resp = self.manager.generate("Test", provider="claude")
