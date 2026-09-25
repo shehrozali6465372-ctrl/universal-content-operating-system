@@ -39,7 +39,7 @@ class GeminiImageProvider(BaseImageProvider):
 
     """
 
-    GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+    GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1"
     SUPPORTED_MODELS = [
         "gemini-3.1-flash-image",
         "gemini-3-pro-image-preview",
@@ -81,9 +81,17 @@ class GeminiImageProvider(BaseImageProvider):
     def generate_with_reference(self, prompt: str, reference_url: str = "",
                                 size: str = "1024x1024",
                                 **kwargs: Any) -> ImageResponse:
-        """Generate image with reference image guidance."""
-        enhanced = f"{prompt}\nReference style: similar to {reference_url}" if reference_url else prompt
-        return self.generate(enhanced, size=size, **kwargs)
+        """Generate with reference guidance only when a real reference is supplied.
+
+        URL text is not a valid image reference input to Gemini. Until the provider
+        accepts actual image bytes/parts, fail closed instead of pretending that a
+        URL was supplied to the model as visual context.
+        """
+        if reference_url:
+            raise NotImplementedError(
+                "Gemini reference generation requires actual image bytes; URL-only reference input is unsupported"
+            )
+        return self.generate(prompt, size=size, **kwargs)
 
     def generate_batch(self, prompts: List[str], size: str = "1024x1024",
                        **kwargs: Any) -> List[ImageResponse]:
@@ -125,10 +133,16 @@ class GeminiImageProvider(BaseImageProvider):
         """Call Gemini's image-capable generateContent endpoint."""
         width, height = self._parse_size(size)
         url = f"{self.GEMINI_API_BASE}/models/{self._model}:generateContent"
-        payload = {"contents": [{"parts": [{"text": prompt}]}],
-                   "generationConfig": {
-                       "responseModalities": ["IMAGE"],
-                       "imageConfig": {"aspectRatio": self._aspect_ratio(width, height)}}}
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["IMAGE"]},
+            "responseFormat": {
+                "image": {
+                    "aspectRatio": self._aspect_ratio(width, height),
+                    "imageSize": self._image_size(width, height),
+                }
+            },
+        }
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
@@ -168,6 +182,16 @@ class GeminiImageProvider(BaseImageProvider):
                 result.image_url = self._persist_image(image_bytes, mime_type)
                 return result
         return None
+
+    @staticmethod
+    def _image_size(width: int, height: int) -> str:
+        """Map requested canvas dimensions to Gemini's supported output tiers."""
+        pixels = width * height
+        if pixels <= 1024 * 1024:
+            return "1K"
+        if pixels <= 2048 * 2048:
+            return "2K"
+        return "4K"
 
     @staticmethod
     def _aspect_ratio(width: int, height: int) -> str:
