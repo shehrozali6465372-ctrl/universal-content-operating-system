@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 
 PLATFORM_OPTIMIZATIONS = {
+    "blog": {"max_length": 100000, "optimal_length": 1000, "emoji_ok": True, "cta_required": False},
     "facebook": {"max_length": 63206, "optimal_length": 400, "emoji_ok": True, "cta_required": True},
     "instagram": {"max_length": 2200, "optimal_length": 200, "emoji_ok": True, "cta_required": True},
     "twitter": {"max_length": 280, "optimal_length": 200, "emoji_ok": True, "cta_required": False},
