@@ -147,7 +147,6 @@ class IntelligenceOrchestrator:
         self._health = HealthStatus()
         self._total_analyses = 0
         self._total_events = 0
-        self._last_events: List[PipelineEvent] = []
         self._lock = RLock()
         self._last_events: List[PipelineEvent] = []
 
@@ -162,6 +161,7 @@ class IntelligenceOrchestrator:
         start = time.time()
         self._last_events = []
         result = IntelligenceResult(topic)
+        request_events: List[PipelineEvent] = []
 
         # Cache check
         fingerprint = hashlib.sha256(f"{topic}\0{text}\0{trend_history or []}\0{domain}".encode("utf-8")).hexdigest()\n        cache_key = f"intel_{fingerprint}"
@@ -173,32 +173,32 @@ class IntelligenceOrchestrator:
         # 1. Content Understanding
         if text:
             result.content_understanding = self._run_module(
-                "content_understanding", lambda: self.content_analyzer.analyze(text, domain)
+                "content_understanding", lambda: self.content_analyzer.analyze(text, domain), request_events
             )
 
         # 2. Trend Intelligence
         result.trend_prediction = self._run_module(
-            "trend_prediction", lambda: self.trend_predictor.predict(topic, history)
+            "trend_prediction", lambda: self.trend_predictor.predict(topic, history), request_events
         )
         result.momentum = self._run_module(
-            "momentum", lambda: self.momentum_analyzer.analyze(history)
+            "momentum", lambda: self.momentum_analyzer.analyze(history), request_events
         )
         result.lifecycle = self._run_module(
-            "lifecycle", lambda: self.lifecycle_detector.detect(history)
+            "lifecycle", lambda: self.lifecycle_detector.detect(history), request_events
         )
 
         # 3. Quality & Virality
         if text:
             result.quality = self._run_module(
-                "quality", lambda: self.quality_estimator.estimate(text)
+                "quality", lambda: self.quality_estimator.estimate(text), request_events
             )
             result.virality = self._run_module(
-                "virality", lambda: self.virality_predictor.predict(text)
+                "virality", lambda: self.virality_predictor.predict(text), request_events
             )
 
         # 4. Strategy Selection
         result.strategy = self._run_module(
-            "strategy", lambda: self.strategy_selector.select({})
+            "strategy", lambda: self.strategy_selector.select({}), request_events
         )
 
         # 5. Recommendations
@@ -221,7 +221,7 @@ class IntelligenceOrchestrator:
         # Timing
         elapsed = (time.time() - start) * 1000
         result.processing_time_ms = elapsed
-        result.events = list(self._last_events)
+        result.events = list(request_events)
         result.metadata = {"cached": False, "domain": domain}
 
         # Cache
@@ -241,7 +241,7 @@ class IntelligenceOrchestrator:
             results.append(self.analyze(name, text, history, domain))
         return results
 
-    def _run_module(self, name: str, fn: Any) -> Any:
+    def _run_module(self, name: str, fn: Any, events: List[PipelineEvent]) -> Any:
         """Run a module function with metrics and event tracking."""
         event = PipelineEvent(event_type="module_start", module=name)
         start = time.time()
@@ -259,7 +259,7 @@ class IntelligenceOrchestrator:
                 metrics.total_time_ms += event.duration_ms
                 metrics.success_count += 1
             with self._lock:
-                self._last_events.append(event)
+                events.append(event)
                 self._total_events += 1
             return result
         except Exception as e:
