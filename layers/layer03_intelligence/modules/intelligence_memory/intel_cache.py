@@ -30,7 +30,7 @@ class IntelligenceCache:
         self._ttl = ttl_seconds
         self._lock = RLock()
 
-    def store(self, key: str, data: Any) -> None:
+    def store(self, key: str, data: Any, *, copy_data: bool = True) -> None:
         if not key:
             raise ValueError("cache key must not be empty")
         with self._lock:
@@ -39,7 +39,20 @@ class IntelligenceCache:
             if key not in self._cache and len(self._cache) >= self._max_size:
                 oldest = min(self._cache.values(), key=lambda c: c.last_accessed)
                 self._cache.pop(oldest.key, None)
-            self._cache[key] = CachedResult(key, data, self._ttl)
+            self._cache[key] = CachedResult(key, data if copy_data else data, self._ttl)
+            if not copy_data:
+                self._cache[key].data = data
+
+    def get_reference(self, key: str) -> Optional[Any]:
+        """Return the cached object by reference for explicit identity-sensitive caches."""
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None or entry.expires_at <= time.monotonic():
+                self._cache.pop(key, None)
+                return None
+            entry.hit_count += 1
+            entry.last_accessed = time.monotonic()
+            return entry.data
 
     def get(self, key: str) -> Optional[Any]:
         with self._lock:
