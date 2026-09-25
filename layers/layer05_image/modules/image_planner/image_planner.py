@@ -35,11 +35,15 @@ class ImagePlan:
                  "style", "text_overlay", "color_scheme", "priority", "metadata")
 
     def __init__(self, image_type: str = "photo", platform: str = "facebook") -> None:
+        if image_type not in IMAGE_TYPES:
+            raise ValueError(f"Unsupported image type: {image_type}")
+        if platform not in PLATFORM_IMAGE_SPECS:
+            raise ValueError(f"Unsupported image platform: {platform}")
         self.plan_id = f"imgplan_{uuid.uuid4().hex}"
         self.image_type = image_type
         self.description = ""
         self.platform = platform
-        self.dimensions = PLATFORM_IMAGE_SPECS.get(platform, {}).get("feed", (1080, 1080))
+        self.dimensions = PLATFORM_IMAGE_SPECS[platform].get("feed") or next(iter(PLATFORM_IMAGE_SPECS[platform].values()))
         self.style = "modern"
         self.text_overlay = ""
         self.color_scheme = ""
@@ -80,7 +84,7 @@ class ImagePlanner:
         for _ in range(count):
             ip = ImagePlan(image_type=image_type, platform=platform)
             ip.description = f"{image_type} image about {topic}"
-            ip.dimensions = PLATFORM_IMAGE_SPECS.get(platform, {}).get("feed", (1080, 1080))
+            ip.dimensions = PLATFORM_IMAGE_SPECS[platform].get("feed") or next(iter(PLATFORM_IMAGE_SPECS[platform].values()))
             plans.append(ip)
         self._plan_count += len(plans)
         return plans
