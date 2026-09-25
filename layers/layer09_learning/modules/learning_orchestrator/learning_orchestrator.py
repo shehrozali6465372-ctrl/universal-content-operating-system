@@ -180,6 +180,12 @@ class LearningOrchestrator:
                         self._record_failure(report, stage, f"{type(exc).__name__}: {exc}")
                         failed.add(stage)
 
+            stage_order = [
+                stage.value
+                for batch in self.pipeline.get_execution_order()
+                for stage in batch
+            ]
+            report.modules_executed.sort(key=stage_order.index)
             success = not failed
             report.compute_learning_score()
             report.compute_confidence()
