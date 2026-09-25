@@ -103,6 +103,7 @@ class UniversalOSOrchestrator:
                 pipeline["stages"][stage] = {
                     "status": "not_configured", "timestamp": stage_started,
                 }
+                pipeline["status"] = "not_configured"
                 break
             try:
                 result = handler(goal, ctx)
