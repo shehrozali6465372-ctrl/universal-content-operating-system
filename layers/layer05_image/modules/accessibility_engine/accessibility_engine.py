@@ -73,8 +73,8 @@ class AccessibilityEngine:
 
     def _relative_luminance(self, hex_color: str) -> float:
         h = hex_color.lstrip("#")
-        if len(h) != 6:
-            return 0.5
+        if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
+            raise ValueError("color must be a six-digit hexadecimal value")
         r, g, b = [int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4)]
         r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
         g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
