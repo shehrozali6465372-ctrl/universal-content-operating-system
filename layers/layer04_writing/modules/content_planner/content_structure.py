@@ -1,5 +1,7 @@
 """Content Structure — Define content structure templates."""
 from __future__ import annotations
+from threading import RLock
+from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 
@@ -42,7 +44,7 @@ class ContentStructure:
 
     def __init__(self, template_name: str = "educational_post") -> None:
         self.template_name = template_name
-        template = STRUCTURE_TEMPLATES.get(template_name, STRUCTURE_TEMPLATES["educational_post"])
+        template = deepcopy(STRUCTURE_TEMPLATES.get(template_name, STRUCTURE_TEMPLATES["educational_post"]))
         self.sections = list(template["sections"])
         self.estimated_words = dict(template["estimated_words"])
         self.total_estimated_words = sum(self.estimated_words.values())
@@ -70,7 +72,7 @@ class ContentStructureBuilder:
     }
 
     def __init__(self) -> None:
-        pass
+        self._lock = RLock()
 
     def build(self, goal: str = "educate", content_type: str = "post",
               custom_sections: Optional[List[str]] = None) -> ContentStructure:
@@ -88,13 +90,21 @@ class ContentStructureBuilder:
         return structure
 
     def get_available_templates(self) -> List[str]:
-        return list(STRUCTURE_TEMPLATES.keys())
+        with self._lock:
+            return list(STRUCTURE_TEMPLATES.keys())
 
     def add_custom_template(self, name: str, sections: List[str],
                             words: Optional[Dict[str, int]] = None) -> None:
         """Register a custom template."""
-        words = words or {s: 50 for s in sections}
-        STRUCTURE_TEMPLATES[name] = {
-            "sections": sections,
-            "estimated_words": words,
-        }
+        if not name or not name.strip():
+            raise ValueError("template name must be non-empty")
+        if not sections or any(not isinstance(s, str) or not s.strip() for s in sections):
+            raise ValueError("sections must contain non-empty names")
+        words = dict(words or {s: 50 for s in sections})
+        if set(words) != set(sections) or any(not isinstance(v, int) or v < 0 for v in words.values()):
+            raise ValueError("words must contain non-negative integer estimates for every section")
+        with self._lock:
+            STRUCTURE_TEMPLATES[name] = {
+                "sections": list(sections),
+                "estimated_words": words,
+            }
