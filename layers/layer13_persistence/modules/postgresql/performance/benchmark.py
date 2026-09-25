@@ -45,7 +45,6 @@ class PerformanceBenchmark:
         self._pool.delete("agent_config", f"category = {self._ph}", ("benchmark",))
 
         elapsed_ms = sum(latencies) if latencies else 0
-        sorted_lats = sorted(latencies)
         return {
             "test": "insert_benchmark",
             "count": inserted,
