@@ -70,7 +70,7 @@ jobs:
     steps:
       - name: Verify DeepSeek production credential is configured
         run: |
-          test -n "$OPENAI_API_KEY"
+          test -n "$DEEPSEEK_API_KEY"
 
       - name: Verify configured DeepSeek production model is discoverable
         run: |
