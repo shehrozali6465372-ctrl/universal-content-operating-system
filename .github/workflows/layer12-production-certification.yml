@@ -1,0 +1,41 @@
+name: Layer 12 Production Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "layers/layer12_ai_foundation/**"
+      - "tests/test_layer12_production_gate.py"
+      - ".github/workflows/layer12-production-certification.yml"
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer12_ai_foundation/**"
+      - "tests/test_layer12_production_gate.py"
+      - ".github/workflows/layer12-production-certification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  layer12-production-gate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+      - name: Compile Layer 12
+        run: python -m compileall -q layers/layer12_ai_foundation
+      - name: Layer 12 production tests
+        run: python -m pytest tests/test_layer12_production_gate.py -q --tb=short
+      - name: Layer 12 lint
+        run: ruff check layers/layer12_ai_foundation tests/test_layer12_production_gate.py --select E,F,W --ignore E501,E402
