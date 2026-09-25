@@ -1,6 +1,7 @@
 """Recommendation Manager - Orchestrator for Recommendation Engine Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.recommendation_engine.candidate_generator import CandidateGenerator
@@ -10,7 +11,7 @@ from layers.layer03_intelligence.modules.recommendation_engine.diversity_engine 
 from layers.layer03_intelligence.modules.recommendation_engine.novelty_engine import NoveltyEngine
 from layers.layer03_intelligence.modules.recommendation_engine.explanation_builder import ExplanationBuilder
 from layers.layer03_intelligence.modules.recommendation_engine.confidence_calculator import ConfidenceCalculator
-from layers.layer03_intelligence.modules.recommendation_engine.recommendation_memory import RecommendationMemory
+from layers.layer03_intelligence.modules.recommendation_engine.recommendation_memory import RecommendationMemory, RecRecord
 from layers.layer03_intelligence.modules.recommendation_engine.feedback_collector import FeedbackCollector
 
 
@@ -64,8 +65,15 @@ class RecommendationManager:
         self.confidence_calc = ConfidenceCalculator()
         self.memory = RecommendationMemory()
         self.feedback = FeedbackCollector()
+        self._lock = RLock()
 
     def recommend(self, data: Dict) -> RecommendationResult:
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dict")
+        with self._lock:
+            return self._recommend_locked(data)
+
+    def _recommend_locked(self, data: Dict) -> RecommendationResult:
         result = RecommendationResult()
 
         # Generate candidates
