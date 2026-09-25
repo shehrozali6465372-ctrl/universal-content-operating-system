@@ -99,6 +99,7 @@ class WritingOrchestrator:
         goal: str = "educate",
         audience: str = "general",
         language: str = "english",
+        intelligence_data: Optional[Dict[str, Any]] = None,
     ) -> OrchestratorResult:
         """Full pipeline: one topic → multiple platform outputs."""
         start = time.time()
@@ -114,7 +115,8 @@ class WritingOrchestrator:
 
         # 1. Plan
         plan_result = self.planner.create_plan(
-            topic=topic, user_goal=goal, audience_hint=audience
+            topic=topic, user_goal=goal, audience_hint=audience,
+            intelligence_data=intelligence_data,
         )
         result.plan = plan_result.plan
         result.plan.language = language
