@@ -209,7 +209,7 @@ class TestExecutionController:
 
     def test_sequential(self):
         stages = [WorkflowStage("layer01", 0), WorkflowStage("layer02", 1)]
-        results = self.controller.execute_sequential(stages, lambda l: {"ok": True})
+        results = self.controller.execute_sequential(stages, lambda layer: {"ok": True})
         assert len(results) == 2
         assert all(s.status == "completed" for s in results)
 
@@ -225,20 +225,20 @@ class TestExecutionController:
 
     def test_parallel(self):
         stages = [WorkflowStage("layer01", 0), WorkflowStage("layer02", 1)]
-        results = self.controller.execute_parallel(stages, lambda l: {"ok": True})
+        results = self.controller.execute_parallel(stages, lambda layer: {"ok": True})
         assert len(results) == 2
         assert all(s.status == "completed" for s in results)
 
     def test_conditional_skip(self):
         stage = WorkflowStage("layer01")
         result = self.controller.execute_conditional(
-            stage, lambda l: False, lambda l: {"ok": True})
+            stage, lambda layer: False, lambda layer: {"ok": True})
         assert result.status == "skipped"
 
     def test_conditional_execute(self):
         stage = WorkflowStage("layer01")
         result = self.controller.execute_conditional(
-            stage, lambda l: True, lambda l: {"ok": True})
+            stage, lambda layer: True, lambda layer: {"ok": True})
         assert result.status == "completed"
 
     def test_retry_success(self):
@@ -263,7 +263,7 @@ class TestExecutionController:
 
     def test_execution_stats(self):
         stages = [WorkflowStage("layer01", 0), WorkflowStage("layer02", 1)]
-        self.controller.execute_sequential(stages, lambda l: {"ok": True})
+        self.controller.execute_sequential(stages, lambda layer: {"ok": True})
         stats = self.controller.get_execution_stats()
         assert stats["total_executions"] == 2
         assert stats["successful"] == 2
@@ -481,7 +481,8 @@ class TestWorkflowEventBus:
         assert len(received) == 1
 
     def test_unsubscribe(self):
-        handler = lambda e: None
+        def handler(e):
+            pass
         self.bus.subscribe("test", handler)
         result = self.bus.unsubscribe("test", handler)
         assert result is True
@@ -611,13 +612,13 @@ class TestWorkflowCoordinator:
     def test_execute(self):
         wd = WorkflowDefinition("test", ["layer01", "layer02"])
         self.coordinator.start(wd)
-        report = self.coordinator.execute(lambda l: {"ok": True})
+        report = self.coordinator.execute(lambda layer: {"ok": True})
         assert report.success is True
         assert len(report.stages_executed) > 0
 
     def test_execute_no_workflow(self):
         try:
-            self.coordinator.execute(lambda l: {"ok": True})
+            self.coordinator.execute(lambda layer: {"ok": True})
             assert False
         except ValueError:
             pass
@@ -625,7 +626,7 @@ class TestWorkflowCoordinator:
     def test_execute_with_handler(self):
         wd = WorkflowDefinition("test", ["layer04_writing"])
         self.coordinator.start(wd)
-        report = self.coordinator.execute(lambda l: {"draft": "content"})
+        report = self.coordinator.execute(lambda layer: {"draft": "content"})
         assert report.success is True
 
     def test_execute_with_failure(self):
@@ -676,7 +677,7 @@ class TestWorkflowCoordinator:
         wd = WorkflowDefinition("test", ["layer01"])
         for _ in range(3):
             self.coordinator.start(wd)
-            self.coordinator.execute(lambda l: {"ok": True})
+            self.coordinator.execute(lambda layer: {"ok": True})
         reports = self.coordinator.get_recent_reports(2)
         assert len(reports) == 2
 
@@ -684,7 +685,7 @@ class TestWorkflowCoordinator:
         wd = WorkflowDefinition("test", ["layer01", "layer02", "layer03"])
         self.coordinator.start(wd)
         report = self.coordinator.execute(
-            lambda l: {"ok": True},
+            lambda layer: {"ok": True},
             parallel_stages=["layer01", "layer02"],
         )
         assert report.success is True
@@ -692,14 +693,14 @@ class TestWorkflowCoordinator:
     def test_event_bus_tracking(self):
         wd = WorkflowDefinition("test", ["layer01"])
         self.coordinator.start(wd)
-        self.coordinator.execute(lambda l: {"ok": True})
+        self.coordinator.execute(lambda layer: {"ok": True})
         events = self.coordinator.event_bus.get_events()
         assert len(events) > 0
 
     def test_checkpoint_created(self):
         wd = WorkflowDefinition("test", ["layer01", "layer02"])
         self.coordinator.start(wd)
-        self.coordinator.execute(lambda l: {"ok": True})
+        self.coordinator.execute(lambda layer: {"ok": True})
         cps = self.coordinator.checkpoint_manager.get_all(wd.workflow_id)
         assert len(cps) > 0
 
@@ -715,7 +716,7 @@ class TestWorkflowCoordinatorIntegration:
             "layer04_writing", "layer06_quality", "layer07_publishing",
         ])
         self.coordinator.start(wd)
-        report = self.coordinator.execute(lambda l: {"result": "ok", "layer": l})
+        report = self.coordinator.execute(lambda layer: {"result": "ok", "layer": l})
         assert report.success is True
         assert len(report.stages_executed) >= 4
         assert report.total_duration_ms > 0
@@ -725,7 +726,7 @@ class TestWorkflowCoordinatorIntegration:
         wd.dependencies["s2"] = ["s1"]
         wd.dependencies["s3"] = ["s2"]
         self.coordinator.start(wd)
-        report = self.coordinator.execute(lambda l: {"ok": True})
+        report = self.coordinator.execute(lambda layer: {"ok": True})
         assert report.success is True
 
     def test_workflow_with_failures_and_recovery(self):
@@ -759,14 +760,14 @@ class TestWorkflowCoordinatorIntegration:
         wd = WorkflowDefinition("metrics_test", ["layer01", "layer02"])
         for _ in range(3):
             self.coordinator.start(wd)
-            self.coordinator.execute(lambda l: {"ok": True})
+            self.coordinator.execute(lambda layer: {"ok": True})
         metrics = self.coordinator.metrics.get_summary()
         assert metrics["total_runs"] == 3
 
     def test_event_bus_full_lifecycle(self):
         wd = WorkflowDefinition("event_test", ["layer01"])
         self.coordinator.start(wd)
-        self.coordinator.execute(lambda l: {"ok": True})
+        self.coordinator.execute(lambda layer: {"ok": True})
         events = self.coordinator.event_bus.get_events()
         event_types = [e.event_type for e in events]
         assert "workflow_started" in event_types
