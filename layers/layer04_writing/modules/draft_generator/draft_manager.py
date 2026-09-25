@@ -137,7 +137,11 @@ class DraftManager:
                 draft.text, length=plan.length, platform=plan.platform
             )
 
-        # 5. Store in memory
+        # 5. Do not persist a failed validation result.
+        if validate and draft.validation is not None and not draft.validation.is_valid:
+            raise ValueError(f"Generated draft failed validation: {draft.validation.issues}")
+
+        # 6. Store in memory
         self.memory.store(
             plan_id=plan.plan_id, topic=plan.topic, text=draft.text,
             provider=draft.provider, model=llm_response.model,
