@@ -1,0 +1,41 @@
+name: Layer 15 Production Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "layers/layer15_async_runtime/**"
+      - "tests/test_layer15_production_gate.py"
+      - ".github/workflows/layer15-production-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer15-production-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layer15:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+      - name: Compile Layer 15
+        run: python -m compileall -q layers/layer15_async_runtime tests/test_layer15_production_gate.py
+      - name: Layer 15 Production Tests
+        run: python -m pytest tests/test_layer15_production_gate.py -q --tb=short
+      - name: Layer 15 Ruff
+        run: ruff check layers/layer15_async_runtime tests/test_layer15_production_gate.py --select E,F,W --ignore E501,E402
