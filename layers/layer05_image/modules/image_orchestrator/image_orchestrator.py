@@ -86,9 +86,25 @@ class ImageOrchestrator:
         # Never continue with an empty/mock asset.
         if not self.provider.is_configured():
             raise RuntimeError("Configured image provider is unavailable or not authenticated")
-        result.image_response = self.provider.generate(result.prompt.text)
-        if not result.image_response or not getattr(result.image_response, "image_url", ""):
-            raise RuntimeError("Image provider returned no real image asset")
+        result.image_response = self.provider.generate(
+            result.prompt.text,
+            size=f"{result.layout.width}x{result.layout.height}",
+            style=style,
+        )
+        if not result.image_response:
+            raise RuntimeError("Image provider returned no response")
+        provider_name = getattr(result.image_response, "provider", "")
+        image_url = getattr(result.image_response, "image_url", "")
+        image_data = getattr(result.image_response, "image_data", b"")
+        if provider_name.lower() == "mock":
+            raise RuntimeError("Mock image providers are forbidden in production")
+        if not image_url or not image_data:
+            raise RuntimeError("Image provider returned an incomplete real asset")
+        result.metadata["provider"] = provider_name
+        result.metadata["model"] = getattr(result.image_response, "model", "")
+        result.metadata["asset_sha256"] = (
+            getattr(result.image_response, "metadata", {}) or {}
+        ).get("sha256", "")
 
         # Optimize
         dims = result.layout
