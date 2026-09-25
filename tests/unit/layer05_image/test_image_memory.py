@@ -35,3 +35,11 @@ def test_image_memory_requires_existing_profile_when_named() -> None:
     memory.set_profile("brand")
     record = memory.store_image("instagram", "topic", "asset.png", profile_name="brand")
     assert record["profile"] == "brand"
+
+
+def test_image_memory_returns_copies_not_internal_records() -> None:
+    memory = ImageMemory()
+    memory.store_image("instagram", "topic", "asset.png")
+    record = memory.get_history(limit=1)[0]
+    record["topic"] = "mutated"
+    assert memory.get_history(limit=1)[0]["topic"] == "topic"
