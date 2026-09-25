@@ -82,8 +82,8 @@ jobs:
 
       - name: Run Layer 10 Production Gate
         run: |
-          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py -q --tb=short
-          ruff check layers/layer10_monetization tests/layer10_monetization --select E,F,W --ignore E501,E402
+          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py tests/test_layer10_production_gate.py -q --tb=short
+          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402
 
       - name: Run Layer 15 Production Gate
         run: |
