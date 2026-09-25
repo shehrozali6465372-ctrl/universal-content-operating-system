@@ -86,10 +86,10 @@ class MasterOrchestrator:
         # Deduplicate while preserving order
         seen = set()
         unique_layers = []
-        for l in layers:
-            if l not in seen:
-                seen.add(l)
-                unique_layers.append(l)
+        for layer in layers:
+            if layer not in seen:
+                seen.add(layer)
+                unique_layers.append(layer)
 
         # Resolve execution order
         ordered_layers = self.dependencies.resolve_order(unique_layers)
