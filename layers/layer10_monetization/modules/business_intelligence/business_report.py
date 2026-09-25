@@ -58,7 +58,10 @@ class BusinessReport:
 class BusinessReportGenerator:
     """Generate daily, weekly, monthly, quarterly, and annual business reports."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_reports: int = 1000) -> None:
+        if max_reports <= 0:
+            raise ValueError("max_reports must be positive")
+        self._max_reports = max_reports
         self._reports: List[BusinessReport] = []
 
     def generate(self, report_type: str = "daily",
@@ -67,6 +70,8 @@ class BusinessReportGenerator:
         if data:
             report.data = dict(data)
         self._reports.append(report)
+        if len(self._reports) > self._max_reports:
+            del self._reports[:-self._max_reports]
         return report
 
     def generate_insight(self, report_type: str, insight: str) -> BusinessReport:
