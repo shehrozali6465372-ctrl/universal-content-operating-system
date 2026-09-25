@@ -69,7 +69,6 @@ class ComplianceEngine:
         elapsed = time.time() - start_time
         report.statistics["check_time_ms"] = round(elapsed * 1000, 2)
 
-        self._check_count += 1
         return report
 
     def check_quick(self, content: str, platform: str = "facebook") -> Dict[str, Any]:
