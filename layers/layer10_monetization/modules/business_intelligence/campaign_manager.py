@@ -1,74 +1,64 @@
-"""CampaignManager — Manage marketing and sponsorship campaigns."""
+"""CampaignManager — validated campaign lifecycle and spend limits."""
 from __future__ import annotations
 import itertools
 import time
 from typing import Any, Dict, List, Optional
 
 _CM_COUNTER = itertools.count(1)
-
-CAMPAIGN_TYPES = (
-    "marketing", "sponsorship", "product_launch", "seasonal",
-    "cross_platform", "brand_awareness", "lead_gen", "retargeting",
-)
-
+CAMPAIGN_TYPES = ("marketing", "sponsorship", "product_launch", "seasonal",
+                  "cross_platform", "brand_awareness", "lead_gen", "retargeting")
 CAMPAIGN_STATUSES = ("draft", "planned", "active", "paused", "completed", "cancelled")
 
 
 class Campaign:
-    """A marketing or sponsorship campaign."""
-
-    __slots__ = ("campaign_id", "name", "campaign_type", "status",
-                 "platforms", "budget", "spent", "revenue",
-                 "start_date", "end_date", "goals", "metrics",
-                 "created_at")
-
     def __init__(self, name: str = "", campaign_type: str = "marketing") -> None:
-        self.campaign_id: str = f"camp_{next(_CM_COUNTER)}"
+        self.campaign_id = f"camp_{next(_CM_COUNTER)}"
         self.name = name
         self.campaign_type = campaign_type if campaign_type in CAMPAIGN_TYPES else "marketing"
-        self.status: str = "draft"
+        self.status = "draft"
         self.platforms: List[str] = []
-        self.budget: float = 0.0
-        self.spent: float = 0.0
-        self.revenue: float = 0.0
-        self.start_date: float = 0.0
-        self.end_date: float = 0.0
+        self.budget = 0.0
+        self.spent = 0.0
+        self.revenue = 0.0
+        self.start_date = 0.0
+        self.end_date = 0.0
         self.goals: List[str] = []
         self.metrics: Dict[str, Any] = {}
-        self.created_at: float = time.time()
+        self.created_at = time.time()
 
     def get_roi(self) -> float:
-        if self.spent == 0:
-            return 0.0
-        return round((self.revenue - self.spent) / self.spent, 4)
+        return round((self.revenue - self.spent) / self.spent, 4) if self.spent else 0.0
 
     def get_remaining_budget(self) -> float:
         return round(max(0.0, self.budget - self.spent), 2)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"campaign_id": self.campaign_id, "name": self.name,
-                "type": self.campaign_type, "status": self.status,
-                "platforms": self.platforms, "budget": self.budget,
-                "spent": self.spent, "revenue": self.revenue,
+        return {"campaign_id": self.campaign_id, "name": self.name, "type": self.campaign_type,
+                "status": self.status, "platforms": list(self.platforms),
+                "budget": self.budget, "spent": self.spent, "revenue": self.revenue,
                 "roi": self.get_roi()}
 
 
 class CampaignManager:
-    """Manage marketing, sponsorship, and cross-platform campaigns."""
-
-    def __init__(self) -> None:
+    def __init__(self, max_campaigns: int = 10000) -> None:
+        if max_campaigns <= 0:
+            raise ValueError("max_campaigns must be positive")
+        self._max_campaigns = max_campaigns
         self._campaigns: List[Campaign] = []
         self._campaign_index: Dict[str, Campaign] = {}
 
     def create(self, name: str, campaign_type: str = "marketing",
-               platforms: Optional[List[str]] = None,
-               budget: float = 0.0) -> Campaign:
+               platforms: Optional[List[str]] = None, budget: float = 0.0) -> Campaign:
+        if not name or budget < 0:
+            raise ValueError("name and non-negative budget are required")
         campaign = Campaign(name, campaign_type)
-        if platforms:
-            campaign.platforms = list(platforms)
-        campaign.budget = budget
+        campaign.platforms = list(platforms or [])
+        campaign.budget = float(budget)
         self._campaigns.append(campaign)
         self._campaign_index[campaign.campaign_id] = campaign
+        if len(self._campaigns) > self._max_campaigns:
+            old = self._campaigns.pop(0)
+            self._campaign_index.pop(old.campaign_id, None)
         return campaign
 
     def get(self, campaign_id: str) -> Optional[Campaign]:
@@ -76,16 +66,14 @@ class CampaignManager:
 
     def update_status(self, campaign_id: str, status: str) -> bool:
         campaign = self.get(campaign_id)
-        if campaign is None:
+        if campaign is None or status not in CAMPAIGN_STATUSES:
             return False
-        if status in CAMPAIGN_STATUSES:
-            campaign.status = status
-            return True
-        return False
+        campaign.status = status
+        return True
 
     def record_spend(self, campaign_id: str, amount: float) -> bool:
         campaign = self.get(campaign_id)
-        if campaign is None or amount < 0:
+        if campaign is None or amount < 0 or (campaign.budget and campaign.spent + amount > campaign.budget):
             return False
         campaign.spent += amount
         return True
@@ -107,7 +95,7 @@ class CampaignManager:
         return [c for c in self._campaigns if platform in c.platforms]
 
     def get_top_performing(self, count: int = 5) -> List[Campaign]:
-        return sorted(self._campaigns, key=lambda c: c.get_roi(), reverse=True)[:count]
+        return sorted(self._campaigns, key=lambda c: c.get_roi(), reverse=True)[:max(0, count)]
 
     def get_total_budget(self) -> float:
         return round(sum(c.budget for c in self._campaigns), 2)
@@ -121,9 +109,9 @@ class CampaignManager:
     def get_stats(self) -> Dict[str, Any]:
         statuses: Dict[str, int] = {}
         types: Dict[str, int] = {}
-        for c in self._campaigns:
-            statuses[c.status] = statuses.get(c.status, 0) + 1
-            types[c.campaign_type] = types.get(c.campaign_type, 0) + 1
-        return {"total": len(self._campaigns), "by_status": statuses,
-                "by_type": types, "total_budget": self.get_total_budget(),
-                "total_spent": self.get_total_spent()}
+        for campaign in self._campaigns:
+            statuses[campaign.status] = statuses.get(campaign.status, 0) + 1
+            types[campaign.campaign_type] = types.get(campaign.campaign_type, 0) + 1
+        return {"total": len(self._campaigns), "by_status": statuses, "by_type": types,
+                "total_budget": self.get_total_budget(), "total_spent": self.get_total_spent(),
+                "total_revenue": self.get_total_revenue()}
