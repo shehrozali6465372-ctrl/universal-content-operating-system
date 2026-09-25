@@ -25,7 +25,6 @@ jobs:
           POSTGRES_DB: aios
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ports:
           - 5432:5432
         options: >-
@@ -41,6 +40,7 @@ jobs:
       POSTGRES_DB: aios
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +98,7 @@ jobs:
 
       - name: Run Layer 5 Production Gate Tests
         run: |
-          python -m pytest tests/unit/layer05_image/test_gemini_image_provider.py -q --tb=short
+          python -m pytest tests/unit/layer05_image -q --tb=short
           ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
 
       - name: Run Layer 5 Real Gemini Smoke Test
