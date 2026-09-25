@@ -11,7 +11,7 @@ from layers.layer11_async_runtime.modules.async_task_manager.task import Task
 
 
 class TaskExecutor:
-    """Execute tasks without nesting event loops or hiding failures."""
+    """Execute tasks without nested loops and with deterministic task states."""
 
     def __init__(self) -> None:
         self._completed = 0
@@ -26,6 +26,14 @@ class TaskExecutor:
         if func is not None and not callable(func):
             raise TypeError("func must be callable")
 
+    @staticmethod
+    def _validate_timeout(timeout: Optional[float]) -> None:
+        if timeout is not None and (
+            isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise ValueError("timeout must be > 0 or None")
+
     def execute(
         self,
         task: Task,
@@ -35,33 +43,31 @@ class TaskExecutor:
     ) -> Dict[str, Any]:
         """Execute from synchronous code; reject calls from a running loop."""
         self._validate(task, func)
+        self._validate_timeout(timeout)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             pass
         else:
-            raise RuntimeError("execute cannot be called from a running event loop; use execute_async")
+            raise RuntimeError(
+                "execute cannot be called from a running event loop; use execute_async"
+            )
         start = time.monotonic()
         task.start()
         try:
             result = func() if func else None
             if inspect.isawaitable(result):
                 result = asyncio.run(self._await_with_timeout(result, timeout))
-            elif timeout is not None and timeout <= 0:
-                raise ValueError("timeout must be > 0")
             task.complete(result)
-            with self._lock:
-                self._completed += 1
+            self._record("completed")
             success = True
         except asyncio.CancelledError:
             task.cancel()
-            with self._lock:
-                self._cancelled += 1
+            self._record("cancelled")
             raise
         except Exception as exc:
             task.fail(str(exc))
-            with self._lock:
-                self._failed += 1
+            self._record("failed")
             success = False
         return {
             "task_id": task.id,
@@ -78,8 +84,7 @@ class TaskExecutor:
     ) -> Dict[str, Any]:
         """Execute from async code without creating a nested event loop."""
         self._validate(task, func)
-        if timeout is not None and timeout <= 0:
-            raise ValueError("timeout must be > 0")
+        self._validate_timeout(timeout)
         start = time.monotonic()
         task.start()
         try:
@@ -87,18 +92,15 @@ class TaskExecutor:
             if inspect.isawaitable(result):
                 result = await self._await_with_timeout(result, timeout)
             task.complete(result)
-            with self._lock:
-                self._completed += 1
+            self._record("completed")
             success = True
         except asyncio.CancelledError:
             task.cancel()
-            with self._lock:
-                self._cancelled += 1
+            self._record("cancelled")
             raise
         except Exception as exc:
             task.fail(str(exc))
-            with self._lock:
-                self._failed += 1
+            self._record("failed")
             success = False
         return {
             "task_id": task.id,
@@ -106,11 +108,23 @@ class TaskExecutor:
             "success": success,
         }
 
-    @staticmethod
-    async def _await_with_timeout(awaitable: Awaitable[Any], timeout: Optional[float]) -> Any:
+    async def _await_with_timeout(
+        self, awaitable: Awaitable[Any], timeout: Optional[float]
+    ) -> Any:
         if timeout is None:
             return await awaitable
         return await asyncio.wait_for(awaitable, timeout=timeout)
+
+    def _record(self, metric: str) -> None:
+        with self._lock:
+            if metric == "completed":
+                self._completed += 1
+            elif metric == "failed":
+                self._failed += 1
+            elif metric == "cancelled":
+                self._cancelled += 1
+            else:
+                raise ValueError(f"unknown task metric: {metric}")
 
     def get_stats(self) -> Dict[str, int]:
         with self._lock:
