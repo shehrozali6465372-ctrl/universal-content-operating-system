@@ -1,6 +1,7 @@
 """Writing Plan — Core data model for content planning."""
 from __future__ import annotations
 import time
+import copy
 from uuid import uuid4
 from typing import Any, Dict
 
@@ -55,9 +56,9 @@ class WritingPlan:
             "cta": self.cta,
             "hashtags": self.hashtags,
             "emoji_level": self.emoji_level,
-            "structure": self.structure,
-            "constraints": self.constraints,
-            "metadata": self.metadata,
+            "structure": copy.deepcopy(self.structure),
+            "constraints": copy.deepcopy(self.constraints),
+            "metadata": copy.deepcopy(self.metadata),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "version": self.version,
@@ -71,9 +72,9 @@ class WritingPlan:
             if field in data:
                 setattr(plan, field, data[field])
         plan.hashtags = data.get("hashtags", True)
-        plan.structure = data.get("structure", {})
-        plan.constraints = data.get("constraints", {})
-        plan.metadata = data.get("metadata", {})
+        plan.structure = copy.deepcopy(data.get("structure", {}))
+        plan.constraints = copy.deepcopy(data.get("constraints", {}))
+        plan.metadata = copy.deepcopy(data.get("metadata", {}))
         if "plan_id" in data:
             plan.plan_id = data["plan_id"]
         return plan
