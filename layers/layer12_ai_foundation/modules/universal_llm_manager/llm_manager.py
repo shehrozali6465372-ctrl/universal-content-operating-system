@@ -61,7 +61,7 @@ class LLMManager:
 
         cache_key = f"{provider}:{model}:{prompt[:200]}"
         if self.config.enable_cache:
-            cached = self.cache.get(prompt, model)
+            cached = self.cache.get(prompt, model, provider, system_prompt, temperature, max_tokens)
             if cached:
                 response = LLMResponse(cached, model, provider)
                 response.metadata["cached"] = True
@@ -98,7 +98,7 @@ class LLMManager:
                                   response.usage["completion_tokens"], 0.001)
 
         if self.config.enable_cache:
-            self.cache.set(prompt, model, response.content)
+            self.cache.set(prompt, model, response.content, provider, system_prompt, temperature, max_tokens)
 
         return response
 
@@ -108,8 +108,41 @@ class LLMManager:
 
     def chat(self, messages: List[Dict[str, str]], model: str = "",
              provider: str = "") -> LLMResponse:
-        prompt = messages[-1]["content"] if messages else ""
-        return self.generate(prompt, model, provider)
+        if not messages:
+            raise ValueError("messages must not be empty")
+        system_prompt = ""
+        conversation: List[Dict[str, str]] = []
+        for message in messages:
+            role = message.get("role")
+            content = message.get("content")
+            if not isinstance(role, str) or not isinstance(content, str):
+                raise ValueError("each message requires string role and content")
+            if role == "system":
+                system_prompt = content
+            else:
+                conversation.append({"role": role, "content": content})
+        if self._generator is None:
+            return self.generate(
+                conversation[-1]["content"] if conversation else "",
+                model,
+                provider,
+                system_prompt=system_prompt,
+            )
+        generated = self._generator(
+            messages=conversation,
+            model=model or self.config.default_model,
+            provider=provider or self.config.default_provider,
+            system_prompt=system_prompt,
+            temperature=self.config.default_temperature,
+            max_tokens=self.config.default_max_tokens,
+        )
+        if not isinstance(generated, str) or not generated.strip():
+            raise RuntimeError("AI generator returned empty or non-text chat output")
+        return LLMResponse(
+            generated,
+            model or self.config.default_model,
+            provider or self.config.default_provider,
+        )
 
     def batch_generate(self, prompts: List[str], model: str = "",
                        provider: str = "") -> List[LLMResponse]:
