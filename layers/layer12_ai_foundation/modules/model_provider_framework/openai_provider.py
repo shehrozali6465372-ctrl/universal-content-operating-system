@@ -36,7 +36,7 @@ class OpenAIProvider(BaseProvider):
             cfg.get("supported_models")
             or [
                 "gpt-4o",
-                "gpt-4o-mini",
+                "gpt-5.6-luna",
                 "gpt-4-turbo",
                 "gpt-4",
                 "gpt-3.5-turbo",
@@ -133,7 +133,7 @@ class OpenAIProvider(BaseProvider):
         return response
 
     def generate(self, request: ProviderRequest) -> ProviderResponse:
-        model = request.model or "gpt-4o-mini"
+        model = request.model or "gpt-5.6-luna"
         messages: List[Dict[str, str]] = []
         if request.system_prompt:
             messages.append({"role": "system", "content": request.system_prompt})
@@ -145,7 +145,7 @@ class OpenAIProvider(BaseProvider):
     def chat(
         self, messages: List[Dict[str, str]], model: str = ""
     ) -> ProviderResponse:
-        request = ProviderRequest("", model or "gpt-4o-mini", "openai")
+        request = ProviderRequest("", model or "gpt-5.6-luna", "openai")
         request.messages = list(messages)
         return self._call(request.messages, request.model, request)
 
