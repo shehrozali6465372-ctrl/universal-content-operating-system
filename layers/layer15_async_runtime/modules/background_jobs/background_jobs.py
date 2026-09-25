@@ -53,7 +53,7 @@ class BackgroundJob:
 class BackgroundJobs:
     def __init__(self) -> None:
         self._jobs: dict[str, BackgroundJob] = {}
-        self._history: list[dict[str, Any]] = {}
+        self._history: list[dict[str, Any]] = []
 
     def add_job(self, name: str, handler: Callable[..., Any], *args: Any,
                 interval_seconds: float = 0.0, max_retries: int = 0,
