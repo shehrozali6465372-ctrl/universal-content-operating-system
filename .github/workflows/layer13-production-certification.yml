@@ -86,7 +86,7 @@ jobs:
           from layers.layer13_persistence.modules.postgresql.verification import PostgreSQLVerification
           report = PostgreSQLVerification().run_all()
           failed = [item for item in report.get("results", []) if item.get("status") != "PASS"]
-          if failed or report.get("overall") != "PASS":
+          if failed or not report.get("certified", False):
               raise SystemExit(f"Layer 13 verification failed: {failed or report}")
           print("Layer 13 PostgreSQL verification: PASS")
           PY
