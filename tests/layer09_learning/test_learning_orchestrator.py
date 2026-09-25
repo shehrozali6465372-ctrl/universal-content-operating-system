@@ -1,4 +1,5 @@
 """Tests for Layer 9 Module 10 — Learning Orchestrator Engine."""
+import pytest
 from layers.layer09_learning.modules.learning_orchestrator.exceptions import (
     LearningOrchestratorError, PipelineError, ModuleExecutionError, AggregationError, ProductionLearningDataRequired,
 )
@@ -548,7 +549,7 @@ class TestLearningOrchestrator:
         report = self.run()
         assert report.report_id.startswith("lr_")
         assert report.duration_ms >= 0
-        assert not report.modules_failed
+        assert not report.modules_failed, report.mistakes
 
     def test_orchestrate_all_modules_executed(self):
         report = self.run()
