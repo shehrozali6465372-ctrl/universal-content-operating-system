@@ -1,5 +1,6 @@
 """Worker Manager — Manage worker pool for job execution."""
 from __future__ import annotations
+import threading
 from typing import Any, Dict, List, Optional
 
 from layers.layer07_publishing.modules.scheduler_queue.publish_job import PublishJob
@@ -20,28 +21,32 @@ class WorkerManager:
     def __init__(self, pool_size: int = 3) -> None:
         self._workers = [Worker(f"worker_{i}") for i in range(pool_size)]
         self._total_processed = 0
+        self._lock = threading.RLock()
 
     def get_idle_worker(self) -> Optional[Worker]:
-        for w in self._workers:
-            if not w.busy:
-                return w
-        return None
+        with self._lock:
+            for w in self._workers:
+                if not w.busy:
+                    return w
+            return None
 
     def assign_job(self, worker_id: str, job: PublishJob) -> bool:
-        for w in self._workers:
-            if w.worker_id == worker_id and not w.busy:
-                w.busy = True
-                w.current_job = job.job_id
-                return True
-        return False
+        with self._lock:
+            for w in self._workers:
+                if w.worker_id == worker_id and not w.busy:
+                    w.busy = True
+                    w.current_job = job.job_id
+                    return True
+            return False
 
     def complete_job(self, worker_id: str) -> None:
-        for w in self._workers:
-            if w.worker_id == worker_id:
-                w.busy = False
-                w.current_job = None
-                w.jobs_processed += 1
-                self._total_processed += 1
+        with self._lock:
+            for w in self._workers:
+                if w.worker_id == worker_id:
+                    w.busy = False
+                    w.current_job = None
+                    w.jobs_processed += 1
+                    self._total_processed += 1
 
     def get_workers(self) -> List[Dict[str, Any]]:
         return [w.to_dict() for w in self._workers]
