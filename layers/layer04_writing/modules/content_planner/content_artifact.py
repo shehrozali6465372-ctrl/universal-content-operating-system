@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 
@@ -38,9 +39,9 @@ class ContentArtifact:
             "title": self.title,
             "body": body if body is not None else self.body,
             "content_type": content_type or self.content_type,
-            "media": list(self.media),
-            "product": self.product,
-            "affiliate": self.affiliate,
+            "media": deepcopy(self.media),
+            "product": deepcopy(self.product),
+            "affiliate": deepcopy(self.affiliate),
             "policy_version": self.policy_version,
-            "metadata": {**self.metadata, **(metadata or {})},
+            "metadata": {**deepcopy(self.metadata), **deepcopy(metadata or {})},
         }
