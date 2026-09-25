@@ -214,6 +214,12 @@ class TestDraftMemory:
             self.dm.store(f"p{i}", "topic", f"text{i}")
         assert self.dm.count <= 5
 
+    def test_topic_index_survives_eviction(self):
+        for i in range(7):
+            self.dm.store(f"p{i}", "topic-a" if i % 2 == 0 else "topic-b", f"text{i}")
+        assert all(r.topic == "topic-a" for r in self.dm.get_by_topic("topic-a"))
+        assert all(r.topic == "topic-b" for r in self.dm.get_by_topic("topic-b"))
+
     def test_total_tokens(self):
         self.dm.store("p1", "AI", "text", tokens=100)
         self.dm.store("p2", "AI", "text", tokens=200)
