@@ -251,6 +251,12 @@ class TestWritingMemory:
             self.wm.store_draft("p", "topic", f"text{i}")
         assert self.wm.count <= 10
 
+    def test_platform_index_survives_eviction(self):
+        for i in range(12):
+            self.wm.store_draft("facebook" if i % 2 == 0 else "twitter", "topic", f"text{i}")
+        assert all(r.platform == "facebook" for r in self.wm.get_by_platform("facebook"))
+        assert all(r.platform == "twitter" for r in self.wm.get_by_platform("twitter"))
+
     def test_voice_count(self):
         self.wm.set_voice("a", "friendly")
         self.wm.set_voice("b", "professional")
@@ -321,6 +327,11 @@ class TestWritingOrchestrator:
         d = r.to_dict()
         assert "topic" in d
         assert "outputs" in d
+
+    def test_intelligence_data_reaches_planner(self):
+        result = self.wo.run("AI Jobs", platforms=["facebook"], intelligence_data={"intent": "educate", "evidence": ["verified fact"]})
+        assert result.plan is not None
+        assert result.outputs[0].optimized_text != ""
 
     def test_orchestrator_count(self):
         self.wo.run("A", platforms=["facebook"])
