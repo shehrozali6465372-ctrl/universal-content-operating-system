@@ -48,6 +48,7 @@ class ContentOptimizer:
 
     def __init__(self) -> None:
         self._opt_count = 0
+        self._lock = RLock()
 
     def optimize(self, text: str, platform: str = "facebook",
                  keywords: Optional[List[str]] = None) -> OptimizationResult:
