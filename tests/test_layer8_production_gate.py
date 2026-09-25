@@ -109,3 +109,13 @@ def test_orchestrator_does_not_create_layer13_pool():
     orchestrator = AnalyticsOrchestrator()
     assert orchestrator.persistence is None
     assert orchestrator.get_health()["durable_persistence"] is False
+
+
+def test_production_mode_fails_closed_without_durable_persistence():
+    with pytest.raises(RuntimeError):
+        AnalyticsOrchestrator(production=True)
+
+
+def test_production_mode_accepts_durable_persistence():
+    orchestrator = AnalyticsOrchestrator(persistence=Sink(), production=True)
+    assert orchestrator.get_health()["durable_persistence"] is True
