@@ -1001,3 +1001,72 @@ class TestExceptions:
             raise SystemError("System failure")
         except SystemError as e:
             assert "System failure" in str(e)
+
+
+# ─── Production regression tests ────────────────────────────────
+class TestLayer10ProductionHardening:
+    def test_api_request_serialization_and_rate_limit(self):
+        api = APIGateway(rate_limit=1, window_seconds=60)
+        api.register_handler("health", lambda request: {"ok": True})
+        first = api.handle("health", client_id="client")
+        second = api.handle("health", client_id="client")
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert api.get_requests()[0]["request_id"]
+
+    def test_auth_credentials_are_random_and_revocable(self):
+        auth = AuthenticationManager()
+        key = auth.create_api_key("service")
+        assert auth.validate_api_key(key) is True
+        assert auth.revoke_api_key(key) is True
+        assert auth.validate_api_key(key) is False
+
+    def test_memory_capacity_keeps_index_consistent(self):
+        mem = GlobalMemory(max_entries=1)
+        mem.store("business", "old", "one")
+        mem.store("business", "new", "two")
+        assert mem.retrieve("business", "old") is None
+        assert mem.retrieve("business", "new") == "two"
+        assert len(mem._index) == len(mem._entries) == 1
+
+    def test_resource_accounting_rejects_negative_release_and_double_capacity(self):
+        resources = ResourceManager()
+        assert resources.allocate("cpu", 80) is True
+        assert resources.allocate("cpu", 30) is False
+        assert resources.release("cpu", -1) is False
+        assert resources.get_available("cpu") == 20
+
+    def test_executor_runs_callable_and_records_failure(self):
+        executor = DistributedExecutor()
+        ok = executor.submit("ok", lambda: 42)
+        bad = executor.submit("bad", lambda: 1 / 0)
+        assert executor.execute_next() is ok
+        assert ok.result == 42
+        assert executor.execute_next() is bad
+        assert bad.status == "failed"
+        assert len(executor.get_failed()) == 1
+
+    def test_event_history_is_bounded_and_handler_errors_visible(self):
+        events = EventStream(max_events=2)
+        events.subscribe("x", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+        events.publish("x")
+        events.publish("x")
+        events.publish("x")
+        assert len(events.get_events()) == 2
+        assert events.get_events()[0].handler_errors == ["RuntimeError"]
+
+    def test_orchestrator_never_fabricates_stage_success(self):
+        orch = UniversalOSOrchestrator()
+        orch.start()
+        result = orch.run_pipeline("test goal")
+        assert result["status"] == "not_configured"
+        assert result["stages"]["observe"]["status"] == "not_configured"
+
+    def test_orchestrator_executes_registered_stage(self):
+        orch = UniversalOSOrchestrator()
+        orch.start()
+        orch.register_stage("observe", lambda goal, context: {"goal": goal})
+        result = orch.run_pipeline("test goal")
+        assert result["stages"]["observe"]["status"] == "completed"
+        assert result["stages"]["research"]["status"] == "not_configured"
+        assert result["status"] == "not_configured"
