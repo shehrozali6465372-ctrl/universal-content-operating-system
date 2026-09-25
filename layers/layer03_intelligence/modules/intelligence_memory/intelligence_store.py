@@ -1,5 +1,6 @@
 """Bounded, indexed intelligence store with safe eviction and updates."""
 from __future__ import annotations
+import copy
 import itertools
 import time
 from threading import RLock
@@ -10,7 +11,7 @@ class IntelligenceEntry:
     def __init__(self, category: str = "", data: Optional[Dict[str, Any]] = None) -> None:
         self.entry_id = f"ientry_{next(_ENTRY_COUNTER)}"
         self.category = category
-        self.data = dict(data or {})
+        self.data = copy.deepcopy(data or {})
         self.confidence = 0.5
         self.score = 0.0
         self.tags: List[str] = []
@@ -85,7 +86,7 @@ class IntelligenceStore:
                 return None
             if confidence is not None and not 0.0 <= confidence <= 1.0:
                 raise ValueError("confidence must be between 0 and 1")
-            if data is not None: entry.data = dict(data)
+            if data is not None: entry.data = copy.deepcopy(data)
             if confidence is not None: entry.confidence = confidence
             if score is not None: entry.score = score
             if source is not None: entry.source = source
