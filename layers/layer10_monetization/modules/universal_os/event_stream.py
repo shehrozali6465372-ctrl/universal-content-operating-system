@@ -1,4 +1,4 @@
-"""EventStream — Global event bus for system-wide event publishing and subscribing."""
+"""EventStream — bounded in-process event bus with observable handler failures."""
 from __future__ import annotations
 import itertools
 import time
@@ -6,80 +6,81 @@ from typing import Any, Callable, Dict, List
 
 _ES_COUNTER = itertools.count(1)
 
-EVENT_TYPES = (
-    "system_started", "system_stopped", "system_paused", "system_resumed",
-    "content_created", "content_published", "content_failed",
-    "quality_passed", "quality_failed",
-    "publishing_started", "publishing_completed", "publishing_failed",
-    "analytics_collected", "learning_completed", "optimization_applied",
-    "revenue_updated", "trend_found", "opportunity_detected",
-    "error_occurred", "recovery_triggered",
-)
-
 
 class Event:
     """A system event."""
 
-    __slots__ = ("event_id", "event_type", "source", "data",
-                 "timestamp", "handled")
-
-    def __init__(self, event_type: str = "", source: str = "") -> None:
-        self.event_id: str = f"evt_{next(_ES_COUNTER)}"
+    def __init__(self, event_type: str, source: str = "") -> None:
+        self.event_id = f"evt_{next(_ES_COUNTER)}"
         self.event_type = event_type
         self.source = source
         self.data: Dict[str, Any] = {}
-        self.timestamp: float = time.time()
-        self.handled: bool = False
+        self.timestamp = time.time()
+        self.handled = False
+        self.handler_errors: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {"event_id": self.event_id, "type": self.event_type,
-                "source": self.source, "timestamp": self.timestamp}
+                "source": self.source, "timestamp": self.timestamp,
+                "handled": self.handled, "handler_errors": list(self.handler_errors)}
 
 
 class EventStream:
-    """Global event bus — publish events, subscribe to event types."""
+    """Global event bus — publish events and retain only a bounded history."""
 
-    def __init__(self) -> None:
-        self._subscribers: Dict[str, List[Callable]] = {}
+    def __init__(self, max_events: int = 10000) -> None:
+        if max_events <= 0:
+            raise ValueError("max_events must be positive")
+        self._max_events = max_events
+        self._subscribers: Dict[str, List[Callable[[Event], None]]] = {}
         self._events: List[Event] = []
-        self._global_handlers: List[Callable] = []
+        self._global_handlers: List[Callable[[Event], None]] = []
 
     def publish(self, event_type: str, source: str = "",
                 data: Dict[str, Any] = None) -> Event:
         event = Event(event_type, source)
-        if data:
-            event.data = dict(data)
+        event.data = dict(data or {})
         self._events.append(event)
-        handlers = self._subscribers.get(event_type, [])
-        for handler in handlers + self._global_handlers:
+        if len(self._events) > self._max_events:
+            del self._events[:-self._max_events]
+        handlers = list(self._subscribers.get(event_type, []))
+        for handler in handlers + list(self._global_handlers):
             try:
                 handler(event)
                 event.handled = True
-            except Exception:
-                pass
+            except Exception as exc:
+                event.handler_errors.append(type(exc).__name__)
         return event
 
-    def subscribe(self, event_type: str, handler: Callable) -> None:
+    def subscribe(self, event_type: str, handler: Callable[[Event], None]) -> None:
+        if not callable(handler):
+            raise ValueError("handler must be callable")
         self._subscribers.setdefault(event_type, []).append(handler)
 
-    def subscribe_all(self, handler: Callable) -> None:
+    def subscribe_all(self, handler: Callable[[Event], None]) -> None:
+        if not callable(handler):
+            raise ValueError("handler must be callable")
         self._global_handlers.append(handler)
 
-    def unsubscribe(self, event_type: str, handler: Callable) -> bool:
+    def unsubscribe(self, event_type: str, handler: Callable[[Event], None]) -> bool:
         handlers = self._subscribers.get(event_type, [])
-        if handler in handlers:
-            handlers.remove(handler)
-            return True
-        return False
+        if handler not in handlers:
+            return False
+        handlers.remove(handler)
+        if not handlers:
+            self._subscribers.pop(event_type, None)
+        return True
 
     def get_events(self, event_type: str = "", count: int = 50) -> List[Event]:
-        events = self._events
-        if event_type:
-            events = [e for e in events if e.event_type == event_type]
-        return events[-count:]
+        if count <= 0:
+            return []
+        events = self._events if not event_type else [
+            event for event in self._events if event.event_type == event_type
+        ]
+        return list(events[-count:])
 
     def get_event_types(self) -> List[str]:
-        return list(set(e.event_type for e in self._events))
+        return sorted({event.event_type for event in self._events})
 
     def clear_events(self) -> int:
         count = len(self._events)
@@ -88,7 +89,10 @@ class EventStream:
 
     def get_stats(self) -> Dict[str, Any]:
         types: Dict[str, int] = {}
-        for e in self._events:
-            types[e.event_type] = types.get(e.event_type, 0) + 1
+        errors = 0
+        for event in self._events:
+            types[event.event_type] = types.get(event.event_type, 0) + 1
+            errors += len(event.handler_errors)
         return {"total_events": len(self._events), "by_type": types,
-                "subscriber_count": sum(len(h) for h in self._subscribers.values())}
+                "subscriber_count": sum(len(h) for h in self._subscribers.values()),
+                "handler_errors": errors}
