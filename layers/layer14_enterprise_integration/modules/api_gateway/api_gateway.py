@@ -56,7 +56,11 @@ class APIGateway:
                 if nonce in self._aios_nonces:
                     return False
                 self._aios_nonces[nonce]=now
-            canonical=(f"{method.upper()}\n{path}\n{timestamp}\n{nonce}\n"
+            canonical=(f"{method.upper()}
+{path}
+{timestamp}
+{nonce}
+"
                        f"{raw_body.decode('utf-8')}").encode()
             expected=hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
             return hmac.compare_digest(expected, signature)
@@ -97,7 +101,9 @@ class APIGateway:
             def log_message(self,format,*args): pass
         try:
             self._server=ThreadingHTTPServer((self._host,self._port),Handler); self._running=True; self._thread=threading.Thread(target=self._server.serve_forever,daemon=True); self._thread.start()
-        except OSError as exc:\n            logging.getLogger(__name__).exception("API Gateway failed to start on %s:%s", self._host, self._port)\n            self._running = False
+        except OSError as exc:
+            logging.getLogger(__name__).exception("API Gateway failed to start on %s:%s", self._host, self._port)
+            self._running = False
     def stop(self):
         if self._server: self._server.shutdown(); self._running=False
     def is_running(self): return self._running
