@@ -72,3 +72,20 @@ def test_url_only_platform_does_not_send_local_media_paths():
     assert result.success is False
     assert result.error_category == "media"
     assert "public media URL" in result.error_message
+
+
+def test_runtime_media_sanitizes_account_workspace(monkeypatch, tmp_path):
+    from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
+
+    monkeypatch.setenv("UCOS_ACCOUNT_WORKSPACES", str(tmp_path))
+    monkeypatch.setenv("UCOS_PUBLIC_MEDIA_BASE_URL", "https://media.example.test")
+    path = tmp_path / "safe" / "image.png"
+    path.parent.mkdir()
+    path.write_bytes(b"data")
+
+    url = RuntimeMedia.public_url(str(path))
+    assert url == "https://media.example.test/safe/image.png"
+
+    safe = RuntimeMedia._safe_account_id("../../escape")
+    assert "/" not in safe
+    assert "\\" not in safe
