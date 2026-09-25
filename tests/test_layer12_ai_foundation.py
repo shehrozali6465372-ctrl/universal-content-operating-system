@@ -1,3 +1,4 @@
+import pytest
 """Tests for Layer 12 — Enterprise AI Foundation."""
 from __future__ import annotations
 
@@ -430,9 +431,9 @@ class TestAllProviders:
                            (LlamaProvider, "llama"), (QwenProvider, "qwen"),
                            (OpenRouterProvider, "openrouter")]:
             p = cls()
-            p.initialize()
-            resp = p.chat([{"role": "user", "content": "Hi"}])
-            assert resp.provider == name
+            assert p.initialize() is False
+            with pytest.raises(RuntimeError):
+                p.chat([{"role": "user", "content": "Hi"}])
 
 
 class TestProviderRegistry:
@@ -460,7 +461,7 @@ class TestProviderRegistry:
         p = OpenAIProvider()
         p.initialize()
         r.register(p)
-        assert len(r.get_available()) >= 1
+        assert r.get_available() == []
 
     def test_alias(self):
         r = ProviderRegistry()
