@@ -353,3 +353,27 @@ class TestWritingOrchestrator:
         self.wo.run("A", platforms=["facebook"])
         self.wo.run("B", platforms=["facebook"])
         assert self.wo.run_count == 2
+
+
+def test_caption_rejects_unknown_platform():
+    import pytest
+    with pytest.raises(ValueError, match="Unsupported platform"):
+        CaptionEngine().generate("content", "unknown")
+
+
+def test_hashtag_rejects_unknown_platform():
+    import pytest
+    with pytest.raises(ValueError, match="Unsupported platform"):
+        HashtagEngine().generate("content", "unknown")
+
+
+def test_cta_rejects_unknown_platform():
+    import pytest
+    with pytest.raises(ValueError, match="Unsupported platform"):
+        CTAGenerator().generate("unknown")
+
+
+def test_tone_adapter_rejects_unknown_platform():
+    import pytest
+    with pytest.raises(ValueError, match="Unsupported target platform"):
+        ToneAdapter().adapt("content", target_platform="unknown")
