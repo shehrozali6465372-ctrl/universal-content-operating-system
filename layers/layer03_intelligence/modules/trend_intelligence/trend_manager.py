@@ -167,7 +167,8 @@ class TrendManager:
         return sorted(results, key=_score, reverse=True)
 
     def get_health(self) -> Dict:
-        return {
+        with self._lock:
+            return {
             "modules": [
                 "TrendCollector", "TrendNormalizer", "MomentumAnalyzer",
                 "LifecycleDetector", "SeasonalityAnalyzer", "ViralityPredictor",
