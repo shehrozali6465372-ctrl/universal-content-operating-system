@@ -117,7 +117,7 @@ class ContentOptimizer:
 
     def _calculate_seo(self, text: str, keywords: List[str]) -> float:
         if not keywords:
-            return 0.5
+            return 50.0
         text_lower = text.lower()
         found = sum(1 for kw in keywords if kw.lower() in text_lower)
         return round((found / max(len(keywords), 1)) * 100.0, 3)
