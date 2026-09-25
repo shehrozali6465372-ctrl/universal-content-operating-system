@@ -131,7 +131,7 @@ class InfographicGenerator:
                 "medium": ImageFont.truetype(f"{fd}DejaVuSans-Bold.ttf", 26),
                 "small": ImageFont.truetype(f"{fd}DejaVuSans.ttf", 20),
             }
-        except Exception:
+        except OSError:
             default = ImageFont.load_default()
             self._fonts = {"large": default, "medium": default, "small": default}
         return self._fonts
