@@ -1,6 +1,8 @@
 """Decision Memory - Stores and retrieves past decisions."""
 from __future__ import annotations
 import time
+import copy
+from threading import RLock
 from typing import Dict, List, Optional
 
 
@@ -11,7 +13,7 @@ class DecisionRecord:
 
     def __init__(self, decision_id: str = "", context: Optional[Dict] = None):
         self.decision_id = decision_id
-        self.context = context or {}
+        self.context = copy.deepcopy(context) if context is not None else {}
         self.chosen_option = ""
         self.alternatives: List[str] = []
         self.confidence = 0.0
@@ -31,13 +33,17 @@ class DecisionMemory:
     """Stores and retrieves past decisions for learning."""
 
     def __init__(self, max_records: int = 1000) -> None:
+        if max_records < 1:
+            raise ValueError("max_records must be >= 1")
         self._records: List[DecisionRecord] = []
         self._max = max_records
+        self._lock = RLock()
 
     def store(self, record: DecisionRecord) -> None:
-        self._records.append(record)
-        if len(self._records) > self._max:
-            self._records = self._records[-self._max:]
+        with self._lock:
+            self._records.append(copy.deepcopy(record))
+            if len(self._records) > self._max:
+                self._records = self._records[-self._max:]
 
     def create_and_store(self, decision_id: str, chosen: str, confidence: float,
                          context: Optional[Dict] = None) -> DecisionRecord:
@@ -48,36 +54,47 @@ class DecisionMemory:
         return record
 
     def get(self, decision_id: str) -> Optional[DecisionRecord]:
-        for r in self._records:
-            if r.decision_id == decision_id:
-                return r
+        with self._lock:
+            for r in self._records:
+                if r.decision_id == decision_id:
+                    return copy.deepcopy(r)
         return None
 
     def get_recent(self, n: int = 10) -> List[DecisionRecord]:
-        return self._records[-n:]
+        if n < 0: raise ValueError("n must be non-negative")
+        with self._lock:
+            return copy.deepcopy(self._records[-n:])
 
     def get_successful(self) -> List[DecisionRecord]:
-        return [r for r in self._records if r.outcome == "success"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._records if r.outcome == "success"])
 
     def get_failed(self) -> List[DecisionRecord]:
-        return [r for r in self._records if r.outcome == "failure"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._records if r.outcome == "failure"])
 
     def get_success_rate(self) -> float:
-        outcomes = [r.outcome for r in self._records if r.outcome != "pending"]
+        with self._lock:
+            outcomes = [r.outcome for r in self._records if r.outcome != "pending"]
         if not outcomes:
             return 0.0
         return sum(1 for o in outcomes if o == "success") / len(outcomes)
 
     def record_outcome(self, decision_id: str, outcome: str) -> bool:
-        for r in self._records:
-            if r.decision_id == decision_id:
-                r.outcome = outcome
-                return True
+        with self._lock:
+            for r in self._records:
+                if r.decision_id == decision_id:
+                    r.outcome = outcome
+                    return True
         return False
 
     def count(self) -> int:
-        return len(self._records)
+        with self._lock:
+            return len(self._records)
 
     def to_dict(self) -> Dict:
-        return {"count": self.count(), "success_rate": round(self.get_success_rate(), 3),
-                "records": [r.to_dict() for r in self._records[-20:]]}
+        with self._lock:
+            done = [r.outcome for r in self._records if r.outcome != "pending"]
+            rate = sum(1 for o in done if o == "success") / len(done) if done else 0.0
+            return {"count": len(self._records), "success_rate": round(rate, 3),
+                    "records": [r.to_dict() for r in self._records[-20:]]}
