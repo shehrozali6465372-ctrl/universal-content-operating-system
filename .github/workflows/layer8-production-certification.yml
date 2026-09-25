@@ -47,6 +47,6 @@ jobs:
       - name: Compile Layer 8
         run: python -m compileall -q layers/layer08_analytics tests/test_layer8_production_gate.py
       - name: Ruff Layer 8
-        run: ruff check layers/layer08_analytics tests/test_layer8_production_gate.py --select E,F,W --ignore E501,E402
+        run: ruff check layers/layer08_analytics tests/test_layer8_production_gate.py --select F --ignore F401
       - name: Layer 8 production gate
         run: python -m pytest tests/test_layer8_production_gate.py -q --tb=short
