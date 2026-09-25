@@ -56,7 +56,11 @@ class AsyncRuntime:
         self._max_workers = max_workers
         self._max_tracked_tasks = max_tracked_tasks
         self._task_timeout = float(task_timeout) if task_timeout is not None else None
-        if (isinstance(shutdown_timeout, bool) or not isinstance(shutdown_timeout, (int, float)) or shutdown_timeout <= 0):
+        if (
+            isinstance(shutdown_timeout, bool)
+            or not isinstance(shutdown_timeout, (int, float))
+            or shutdown_timeout <= 0
+        ):
             raise ValueError("shutdown_timeout must be > 0")
         self._shutdown_timeout = float(shutdown_timeout)
         self._thread_futures: set[Future[Any]] = set()
@@ -220,7 +224,6 @@ class AsyncRuntime:
         try:
             task = self._begin_task(getattr(coro, "__name__", "coroutine"))
         except Exception:
-            # Close caller-owned coroutine when admission fails.
             coro.close()
             raise
         try:
@@ -257,7 +260,18 @@ class AsyncRuntime:
                 if inspect.iscoroutine(coro):
                     coro.close()
             raise RuntimeError("async runtime is not running")
-        return self.run_coroutine(self._gather(coros))
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            for coro in coros:
+                if inspect.iscoroutine(coro):
+                    coro.close()
+            raise RuntimeError(
+                "run_parallel cannot be called from a running event loop"
+            )
+        return asyncio.run(self.gather(*coros))
 
     async def _gather(
         self, coros: tuple[Coroutine[Any, Any, Any], ...]
