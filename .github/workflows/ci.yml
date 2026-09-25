@@ -87,6 +87,9 @@ jobs:
 
       - name: Run Integration Contract Tests
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+      - name: Run Layer 4 Production Gate Tests
+        run: python -m pytest tests/layer04_writing/test_production_hardening.py tests/layer04_writing/test_modules_3_10.py -q --tb=short
+
       - name: Run Layer 5 Production Gate Tests
         run: python -m pytest tests/unit/layer05_image/test_gemini_image_provider.py -q --tb=short
         
