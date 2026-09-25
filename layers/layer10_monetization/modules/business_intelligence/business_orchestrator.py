@@ -101,9 +101,9 @@ class BusinessOrchestrator:
             del self._pipeline_runs[:-self._max_pipeline_runs]
         return results
 
-    def get_health(self) -> Dict[str, Any]:
+    def get_api(self) -> BusinessIntelligenceAPI:\n        return self.api\n\n    def get_health(self) -> Dict[str, Any]:
         return {
-            "running": self._is_running,
+            "running": self._is_running,\n            "is_running": self._is_running,
             "revenue_tracker": self.revenue_tracker.get_stats(),
             "roi_analyzer": self.roi_analyzer.get_stats(),
             "campaign_manager": self.campaign_manager.get_stats(),
@@ -111,7 +111,7 @@ class BusinessOrchestrator:
             "forecaster": self.forecaster.get_stats(),
             "opportunity_detector": self.opportunity_detector.get_stats(),
             "monetization_optimizer": self.monetization_optimizer.get_stats(),
-            "memory": self.memory.get_stats(),
+            "memory": self.memory.get_stats(),\n            "financial_memory": self.memory.get_stats(),
             "metrics": self.metrics.get_stats(),
             "reports": self.report_generator.get_stats(),
             "pipeline_runs": len(self._pipeline_runs),
