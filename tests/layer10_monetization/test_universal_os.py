@@ -864,7 +864,7 @@ class TestMigrationManager:
         assert len(self.mm.get_pending()) == 1
 
     def test_get_applied(self):
-        mig = self.mm.register("1.0", "2.0")
+        mig = self.mm.register("1.0", "2.0", apply_func=lambda: None)
         self.mm.apply(mig.migration_id)
         assert len(self.mm.get_applied()) == 1
 
@@ -1016,6 +1016,9 @@ class TestExceptions:
 
 # ─── Production regression tests ────────────────────────────────
 class TestLayer10ProductionHardening:
+    def setup_method(self):
+        self.mm = MigrationManager()
+
     def test_api_request_serialization_and_rate_limit(self):
         api = APIGateway(rate_limit=1, window_seconds=60)
         api.register_handler("health", lambda request: {"ok": True})
