@@ -104,17 +104,17 @@ class ContentOptimizer:
         sentences = max(text.count('.') + text.count('!') + text.count('?'), 1)
         avg_sentence_len = len(words) / sentences
         if avg_sentence_len < 15:
-            return 0.9
+            return 90.0
         if avg_sentence_len < 25:
-            return 0.7
-        return 0.5
+            return 70.0
+        return 50.0
 
     def _calculate_seo(self, text: str, keywords: List[str]) -> float:
         if not keywords:
             return 0.5
         text_lower = text.lower()
         found = sum(1 for kw in keywords if kw.lower() in text_lower)
-        return round(found / max(len(keywords), 1), 3)
+        return round((found / max(len(keywords), 1)) * 100.0, 3)
 
     @property
     def optimization_count(self) -> int:
