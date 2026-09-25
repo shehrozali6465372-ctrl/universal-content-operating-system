@@ -48,3 +48,25 @@ def test_provider_uses_live_transport_when_credentials_exist(monkeypatch: pytest
     assert provider.is_available() is True
     with pytest.raises(RuntimeError, match="OpenAI request failed"):
         provider.generate(ProviderRequest("hello", "gpt-4o-mini", "openai"))
+
+
+def test_orchestrator_rejects_invalid_linked_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    with pytest.raises(TypeError, match="must expose callable"):
+        AIOrchestrator().link_module("broken", object())
+
+
+def test_orchestrator_rejects_non_dict_component_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+
+    class Component:
+        def evaluate(self, _payload: str) -> str:
+            return "invalid"
+
+    orchestrator = AIOrchestrator()
+    orchestrator.router.register("test-task", "component")
+    orchestrator.link_module("component", Component())
+    orchestrator.start()
+    result = orchestrator.process("test-task", {})
+    assert result["success"] is False
+    assert result["error_code"] == "TASK_EXECUTION_FAILED"
