@@ -39,6 +39,8 @@ class DraftMemory:
     """Stores and retrieves past drafts."""
 
     def __init__(self, max_size: int = 200) -> None:
+        if max_size < 1:
+            raise ValueError("max_size must be >= 1")
         self._records: List[DraftRecord] = []
         self._max_size = max_size
         self._topic_index: Dict[str, List[int]] = {}
@@ -66,17 +68,29 @@ class DraftMemory:
             return []
         with self._lock:
             idxs = self._topic_index.get(topic.lower(), [])
-            return [self._records[i] for i in idxs if i < len(self._records)][:limit]
+            return [self._copy_record(self._records[i]) for i in idxs if i < len(self._records)][:limit]
 
     def get_by_plan(self, plan_id: str) -> List[DraftRecord]:
         with self._lock:
-            return [r for r in self._records if r.plan_id == plan_id]
+            return [self._copy_record(r) for r in self._records if r.plan_id == plan_id]
 
     def get_recent(self, limit: int = 10) -> List[DraftRecord]:
         if limit < 1:
             return []
         with self._lock:
-            return list(self._records[-limit:])
+            return [self._copy_record(r) for r in self._records[-limit:]]
+
+    @staticmethod
+    def _copy_record(record: DraftRecord) -> DraftRecord:
+        copy = DraftRecord(record.plan_id, record.topic, record.text)
+        copy.record_id = record.record_id
+        copy.variant_type = record.variant_type
+        copy.provider = record.provider
+        copy.model = record.model
+        copy.tokens_used = record.tokens_used
+        copy.metadata = dict(record.metadata)
+        copy.created_at = record.created_at
+        return copy
 
     def _rebuild_index_locked(self) -> None:
         self._topic_index = {}
