@@ -44,29 +44,28 @@ class BusinessReport:
         lines = [f"# Business Report: {self.report_type}",
                  f"**Report ID**: {self.report_id}"]
         if self.insights:
-            lines.append("
-## Insights")
+            lines.append("\\n## Insights")
             for i in self.insights:
                 lines.append(f"- {i}")
         if self.recommendations:
-            lines.append("
-## Recommendations")
+            lines.append("\\n## Recommendations")
             for r in self.recommendations:
                 lines.append(f"- {r}")
-        lines.append(f"
-**Score**: {self.score:.2f}")
-        return "
-".join(lines)
+        lines.append(f"\\n**Score**: {self.score:.2f}")
+        return "\\n".join(lines)
 
 
 class BusinessReportGenerator:
-    """Generate daily, weekly, monthly, quarterly, and annual business reports."""
+    """Generate and retain a bounded set of reports."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_reports: int = 1000) -> None:
+        if max_reports < 1:
+            raise ValueError("max_reports must be >= 1")
+        self._max_reports = max_reports
         self._reports: List[BusinessReport] = []
 
     def generate(self, report_type: str = "daily",
-                 data: Dict[str, Any] = None) -> BusinessReport:
+                 data: Optional[Dict[str, Any]] = None) -> BusinessReport:
         report = BusinessReport(report_type)
         if data:
             report.data = dict(data)
