@@ -205,8 +205,17 @@ class PipelineWiring:
 
     def _writing(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
         from layers.layer04_writing.modules.content_planner.planner_manager import PlannerManager
-        result = PlannerManager().create_plan(topic=req.topic, platform=req.platform, user_goal="educate",
-                                              audience_hint="general", tone_override=req.tone)
+        intelligence_data = {
+            "intent": ctx.get("intent"),
+            "keywords": list(ctx.get("keywords", []) or []),
+            "entities": list(ctx.get("entities", []) or []),
+            "intelligence": ctx.get("intelligence", {}),
+        }
+        result = PlannerManager().create_plan(
+            topic=req.topic, platform=req.platform, user_goal="educate",
+            audience_hint="general", tone_override=req.tone,
+            intelligence_data=intelligence_data,
+        )
         plan = getattr(result, "plan", None)
         ctx["writing_plan"] = plan
         return {"plan_id": getattr(plan, "plan_id", ""), "structure": getattr(plan, "structure", {})}
