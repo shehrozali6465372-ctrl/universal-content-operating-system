@@ -195,7 +195,7 @@ class RecoveryManager:
         attempt = 0
         while self.retry_strategy.should_retry(attempt):
             delay = self.retry_strategy.get_delay(attempt)
-            time.sleep(min(delay / 10, 0.5))  # simulated delay in tests
+            time.sleep(delay)
             try:
                 success = publish_fn()
                 self.retry_strategy.record_attempt(attempt, success=success)
