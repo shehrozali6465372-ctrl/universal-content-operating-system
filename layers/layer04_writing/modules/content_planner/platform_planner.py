@@ -44,6 +44,13 @@ PLATFORM_SPECS = {
         "best_practices": ["use_professional_tone", "share_insights", "use_data"],
         "algorithm_favors": ["comments", "reposts", "dwell_time"],
     },
+    "tiktok": {
+        "max_length": 2200, "recommended_length": 200, "max_hashtags": 8,
+        "recommended_hashtags": 5, "max_emojis_per_post": 8,
+        "content_types": ["video", "short"],
+        "best_practices": ["use_hook", "use_trends", "use_visual"],
+        "algorithm_favors": ["watch_time", "completion_rate", "shares"],
+    },
     "youtube": {
         "max_length": 5000,
         "recommended_length": 1000,
