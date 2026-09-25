@@ -1,6 +1,9 @@
 """Decision Replay - Records and replays decision sequences."""
 from __future__ import annotations
+import copy
+import math
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -36,6 +39,7 @@ class DecisionReplay:
         self.topic = topic
         self.replay_id = replay_id
         self.steps: List[ReplayStep] = []
+        self.max_steps = max_steps
         self.final_decision = ""
         self.final_confidence = 0.0
         self.outcome = "pending"
@@ -44,16 +48,24 @@ class DecisionReplay:
     def add_step(self, stage: str, decision: str = "", confidence: float = 0.0,
                  input_data: Optional[Dict] = None, output_data: Optional[Dict] = None,
                  duration_ms: float = 0.0) -> ReplayStep:
+        if len(self.steps) >= self.max_steps:
+            raise ValueError("replay step limit exceeded")
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence must be finite and between 0 and 1")
+        if not math.isfinite(duration_ms) or duration_ms < 0:
+            raise ValueError("duration_ms must be finite and non-negative")
         step = ReplayStep(len(self.steps) + 1, stage)
         step.decision = decision
         step.confidence = confidence
-        step.input_data = input_data or {}
-        step.output_data = output_data or {}
+        step.input_data = copy.deepcopy(input_data or {})
+        step.output_data = copy.deepcopy(output_data or {})
         step.duration_ms = duration_ms
         self.steps.append(step)
         return step
 
     def finalize(self, decision: str, confidence: float) -> None:
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence must be finite and between 0 and 1")
         self.final_decision = decision
         self.final_confidence = confidence
 
@@ -79,32 +91,44 @@ class ReplayStore:
     """Stores decision replays for analysis and learning."""
 
     def __init__(self, max_replays: int = 500) -> None:
+        if max_replays < 1:
+            raise ValueError("max_replays must be >= 1")
         self._replays: List[DecisionReplay] = []
         self._max = max_replays
+        self._lock = RLock()
 
     def record(self, replay: DecisionReplay) -> None:
-        self._replays.append(replay)
-        if len(self._replays) > self._max:
-            self._replays = self._replays[-self._max:]
+        with self._lock:
+            self._replays.append(copy.deepcopy(replay))
+            if len(self._replays) > self._max:
+                self._replays = self._replays[-self._max:]
 
     def get_by_topic(self, topic: str) -> List[DecisionReplay]:
-        return [r for r in self._replays if r.topic == topic]
+        with self._lock:
+            return copy.deepcopy([r for r in self._replays if r.topic == topic])
 
     def get_successful(self) -> List[DecisionReplay]:
-        return [r for r in self._replays if r.outcome == "success"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._replays if r.outcome == "success"])
 
     def get_failed(self) -> List[DecisionReplay]:
-        return [r for r in self._replays if r.outcome == "failure"]
+        with self._lock:
+            return copy.deepcopy([r for r in self._replays if r.outcome == "failure"])
 
     def get_common_paths(self) -> List[Dict]:
-        paths: Dict[str, int] = {}
-        for r in self._replays:
-            path = r.get_path()
-            paths[path] = paths.get(path, 0) + 1
-        return [{"path": p, "count": c} for p, c in sorted(paths.items(), key=lambda x: -x[1])]
+        with self._lock:
+            paths: Dict[str, int] = {}
+            for replay in self._replays:
+                path = replay.get_path()
+                paths[path] = paths.get(path, 0) + 1
+            return [
+                {"path": path, "count": count}
+                for path, count in sorted(paths.items(), key=lambda item: -item[1])
+            ]
 
     def count(self) -> int:
-        return len(self._replays)
+        with self._lock:
+            return len(self._replays)
 
     def to_dict(self) -> Dict:
         return {
