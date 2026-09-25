@@ -36,7 +36,7 @@ class RuntimeHealth:
     """Thread-safe registry and executor for synchronous health checks."""
 
     def __init__(self, check_timeout: Optional[float] = None) -> None:
-        if check_timeout is not None and check_timeout <= 0:
+        if check_timeout is not None and (isinstance(check_timeout, bool) or not isinstance(check_timeout, (int, float)) or check_timeout <= 0):
             raise ValueError("check_timeout must be > 0")
         self._checks: Dict[str, HealthCheckFn] = {}
         self._results: List[HealthCheck] = []
