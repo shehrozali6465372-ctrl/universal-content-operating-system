@@ -1,6 +1,6 @@
 """Image Prompt Builder — Build prompts for AI image generators."""
 from __future__ import annotations
-import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 STYLE_PRESETS = {
@@ -23,7 +23,7 @@ class ImagePrompt:
                  "parameters", "provider_hint")
 
     def __init__(self, text: str = "") -> None:
-        self.prompt_id = f"imgprompt_{int(time.time() * 1000) % 10000000}"
+        self.prompt_id = f"imgprompt_{uuid.uuid4().hex}"
         self.text = text
         self.negative_prompt = ""
         self.style = ""
@@ -52,6 +52,10 @@ class ImagePromptBuilder:
               platform: str = "facebook", image_type: str = "photo",
               extra_instructions: Optional[List[str]] = None) -> ImagePrompt:
         """Build an image generation prompt."""
+        if not description or not description.strip():
+            raise ValueError("description must not be empty")
+        if style not in STYLE_PRESETS:
+            raise ValueError(f"Unsupported image style: {style}")
         prompt = ImagePrompt()
         style_desc = STYLE_PRESETS.get(style, STYLE_PRESETS["modern"])
         prompt.style = style
