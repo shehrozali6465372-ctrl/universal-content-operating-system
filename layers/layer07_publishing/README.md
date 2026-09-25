@@ -22,3 +22,6 @@ pytest tests/layer07_publishing/ -v
 ```
 
 Layer 7 is not considered production-certified solely because a historical report says `certified: true`. Certification must be based on the current commit, current tests, current integration evidence, and production-gate checks.
+
+
+<!-- Layer 7 certification candidate: CI rerun after repository-wide compile gate remediation. -->
