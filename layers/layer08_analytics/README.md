@@ -25,3 +25,6 @@ Layer 8 never creates or closes a Layer 13 database pool. Production callers mus
 Run the dedicated Layer 8 gate and the full suite.
 
 The layer is **not production-certified until the current commit passes the dedicated Layer 8 gate, the complete CI suite, and post-merge main-branch verification with the real Layer 13 PostgreSQL path.**
+
+
+Current certification candidate commit: ec47d45cd9a31b792438e2abd5f95f11370fe8ef.
