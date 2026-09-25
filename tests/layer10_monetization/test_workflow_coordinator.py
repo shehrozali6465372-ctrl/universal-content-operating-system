@@ -716,7 +716,7 @@ class TestWorkflowCoordinatorIntegration:
             "layer04_writing", "layer06_quality", "layer07_publishing",
         ])
         self.coordinator.start(wd)
-        report = self.coordinator.execute(lambda layer: {"result": "ok", "layer": l})
+        report = self.coordinator.execute(lambda layer: {"result": "ok", "layer": layer})
         assert report.success is True
         assert len(report.stages_executed) >= 4
         assert report.total_duration_ms > 0
