@@ -1,6 +1,7 @@
 """Tests for Layer 11 — Enterprise Async Runtime Framework."""
 import asyncio
 import threading
+import time
 
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_config import RuntimeConfig
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_state import RuntimeState
@@ -219,7 +220,6 @@ class TestRuntimeProfiler:
     def test_profile(self):
         p = RuntimeProfiler()
         p.start("op1")
-        import time
         time.sleep(0.01)
         assert p.stop("op1") > 0
 
