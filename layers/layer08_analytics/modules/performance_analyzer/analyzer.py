@@ -11,7 +11,7 @@ class PerformanceDimension:
     def __init__(self, dimension_id: str = "", name: str = "") -> None:
         if not dimension_id.strip(): raise ValueError("dimension_id is required")
         self.dimension_id, self.name = dimension_id, name
-        self.values: List[float] = []; self.timestamps: List[float] = []; self.metadata: Dict[str, Any] = []
+        self.values: List[float] = []; self.timestamps: List[float] = []; self.metadata: Dict[str, Any] = {}
     def add_datapoint(self, value: float, timestamp: float = 0.0) -> None:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
             raise ValueError("performance value must be finite")
