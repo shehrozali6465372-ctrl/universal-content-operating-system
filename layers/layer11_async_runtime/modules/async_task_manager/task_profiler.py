@@ -9,6 +9,7 @@ class TaskProfiler:
     def get_slowest(self, count: int=10) -> List[Dict[str, Any]]:
         return sorted(self._profiles, key=lambda p: p["duration_ms"], reverse=True)[:count]
     def get_stats(self) -> Dict[str, Any]:
-        if not self._profiles: return {"count": 0, "avg_ms": 0.0}
+        if not self._profiles: return {"count": 0, "avg_ms":
+            0.0}
         avg = sum(p["duration_ms"] for p in self._profiles) / len(self._profiles)
         return {"count": len(self._profiles), "avg_ms": round(avg, 2)}
