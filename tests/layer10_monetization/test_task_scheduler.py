@@ -731,7 +731,7 @@ class TestTaskSchedulerIntegration:
 
         executed = []
         for _ in range(5):
-            result = self.scheduler.execute_next(lambda layer: {"layer": l, "ok": True})
+            result = self.scheduler.execute_next(lambda layer: {"layer": layer, "ok": True})
             if result:
                 executed.append(result)
 
