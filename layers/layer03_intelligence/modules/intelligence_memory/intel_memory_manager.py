@@ -81,7 +81,7 @@ class IntelMemoryManager:
                  tags: Optional[List[str]] = None, source: str = "") -> IntelMemoryResult:
         """Store a new intelligence entry with full pipeline."""
         entry = self.store.store(category, data, confidence=confidence, tags=tags, source=source)
-        self.cache.store(f"{category}_{entry.entry_id}", data)
+        self.cache.store(entry.entry_id, data)
         self.versioner.create_version(entry.entry_id, data, change_summary="initial creation")
         self.confidence.record(topic=category, module="memory", confidence=confidence)
 
@@ -140,7 +140,7 @@ class IntelMemoryManager:
     def prune(self) -> IntelMemoryResult:
         """Analyze what needs pruning."""
         all_entries = [{"id": e.entry_id, "timestamp": e.updated_at, "value": e.value}
-                       for e in self.store.get_by_category("")]
+                       for e in self.store.get_all()]
         analysis = self.pruner.analyze(all_entries)
         result = IntelMemoryResult(operation="prune")
         result.data = analysis.to_dict()
@@ -150,7 +150,7 @@ class IntelMemoryManager:
     def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search across all memory stores."""
         results = self.searcher.search(query, limit=limit)
-        return [{"relevance": r.relevance, "match_type": r.match_type} for r in results]
+        return [{"entry": r.entry.to_dict() if hasattr(r.entry, "to_dict") else r.entry, "relevance": r.relevance, "match_type": r.match_type} for r in results]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get overall memory statistics."""
