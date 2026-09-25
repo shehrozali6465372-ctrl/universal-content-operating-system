@@ -77,17 +77,20 @@ class ContentStructureBuilder:
     def build(self, goal: str = "educate", content_type: str = "post",
               custom_sections: Optional[List[str]] = None) -> ContentStructure:
         """Build a content structure."""
-        if content_type == "carousel":
-            template = "carousel"
-        elif content_type == "story":
-            template = "story"
-        else:
-            template = self.GOAL_TEMPLATE_MAP.get(goal, "educational_post")
+        if custom_sections is not None and any(not isinstance(s, str) or not s.strip() for s in custom_sections):
+            raise ValueError("custom_sections must contain non-empty strings")
+        with self._lock:
+            if content_type == "carousel":
+                template = "carousel"
+            elif content_type == "story":
+                template = "story"
+            else:
+                template = self.GOAL_TEMPLATE_MAP.get(goal, "educational_post")
 
-        structure = ContentStructure(template)
-        if custom_sections:
-            structure.custom_sections = [{"name": s, "words": 50} for s in custom_sections]
-        return structure
+            structure = ContentStructure(template)
+            if custom_sections:
+                structure.custom_sections = [{"name": s, "words": 50} for s in custom_sections]
+            return structure
 
     def get_available_templates(self) -> List[str]:
         with self._lock:
