@@ -76,6 +76,15 @@ class QueueOrchestrator:
 
         job.started_at = time.time()
         worker = self.workers.get_idle_worker()
+        if worker is None:
+            job.status = "scheduled"
+            job.scheduled_time = time.time()
+            return {"job_id": job.job_id, "status": job.status}
+
+        if not self.workers.assign_job(worker.worker_id, job):
+            job.status = "scheduled"
+            job.scheduled_time = time.time()
+            return {"job_id": job.job_id, "status": job.status}
 
         try:
             success = executor(job)
@@ -86,8 +95,6 @@ class QueueOrchestrator:
         if success:
             job.status = "completed"
             job.completed_at = time.time()
-            if worker:
-                self.workers.complete_job(worker.worker_id)
             self._events.append({"event": "job_completed", "job_id": job.job_id})
         else:
             self.retry.record_failure(job, job.last_error)
@@ -100,6 +107,7 @@ class QueueOrchestrator:
                 self.dead_letter.add(job, job.last_error)
                 self._events.append({"event": "job_dead", "job_id": job.job_id})
 
+        self.workers.complete_job(worker.worker_id)
         return {"job_id": job.job_id, "status": job.status}
 
     def process_batch(
@@ -120,14 +128,18 @@ class QueueOrchestrator:
                 job = self.queue.get_job(entry["job_id"])
                 if job:
                     self.retry.record_failure(job, job.last_error)
-                    if not self.retry.should_retry(job):
+                    if self.retry.should_retry(job):
+                        job.status = "scheduled"
+                        job.scheduled_time = time.time() + self.retry.get_next_delay(job)
+                        self._events.append({"event": "job_retrying", "job_id": job.job_id, "attempt": job.attempts})
+                    else:
                         self.dead_letter.add(job, job.last_error)
 
         return result.to_dict()
 
     def get_status(self) -> Dict[str, Any]:
         """Get overall queue status."""
-        all_jobs = list(self.queue._jobs.values())
+        all_jobs = self.queue.snapshot()
         return {
             "queue_size": self.queue.size,
             "pending": self.queue.count_by_status("pending"),
