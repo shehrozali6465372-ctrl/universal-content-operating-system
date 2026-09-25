@@ -1,6 +1,8 @@
 """LLM Provider — Base interface for LLM providers."""
 from __future__ import annotations
 import time
+from math import isfinite
+from threading import RLock
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
@@ -38,10 +40,15 @@ class BaseLLMProvider(ABC):
         self.api_key = api_key
         self.model = model
         self.max_tokens = max_tokens
+        if max_tokens < 1:
+            raise ValueError("max_tokens must be >= 1")
+        if not 0.0 <= temperature <= 2.0 or not isfinite(temperature):
+            raise ValueError("temperature must be finite and between 0 and 2")
         self.temperature = temperature
         self._call_count = 0
         self._total_tokens = 0
         self._total_latency_ms = 0.0
+        self._lock = RLock()
 
     @abstractmethod
     def generate(self, prompt: str, system_prompt: str = "",
@@ -59,18 +66,22 @@ class BaseLLMProvider(ABC):
         return [self.generate(p, system_prompt) for p in prompts]
 
     def _record_call(self, tokens: int, latency: float) -> None:
-        self._call_count += 1
-        self._total_tokens += tokens
-        self._total_latency_ms += latency
+        if tokens < 0 or latency < 0 or not isfinite(latency):
+            raise ValueError("tokens and latency must be non-negative finite values")
+        with self._lock:
+            self._call_count += 1
+            self._total_tokens += tokens
+            self._total_latency_ms += latency
 
     @property
     def stats(self) -> Dict[str, Any]:
-        return {
-            "provider": self.provider_name,
-            "calls": self._call_count,
-            "total_tokens": self._total_tokens,
-            "avg_latency_ms": round(self._total_latency_ms / max(self._call_count, 1), 2),
-        }
+        with self._lock:
+            return {
+                "provider": self.provider_name,
+                "calls": self._call_count,
+                "total_tokens": self._total_tokens,
+                "avg_latency_ms": round(self._total_latency_ms / max(self._call_count, 1), 2),
+            }
 
 
 class MockLLMProvider(BaseLLMProvider):
