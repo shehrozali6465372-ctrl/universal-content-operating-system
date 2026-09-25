@@ -594,6 +594,20 @@ class TestAsyncRuntime:
         assert runtime.metrics["failed"] == 1
         runtime.stop()
 
+    def test_manager_pause_blocks_runtime_admission(self):
+        manager = RuntimeManager()
+        assert manager.start() is True
+        assert manager.pause() is True
+        assert manager.runtime.is_accepting is False
+        try:
+            manager.runtime.run_coroutine(asyncio_sleep_result())
+        except RuntimeError as exc:
+            assert "paused" in str(exc)
+        else:
+            raise AssertionError("manager pause must block runtime admission")
+        assert manager.resume() is True
+        assert manager.runtime.is_accepting is True
+        assert manager.stop() is True
     def test_pause_rejects_new_coroutines(self):
         runtime = AsyncRuntime()
         runtime.start()
@@ -606,7 +620,9 @@ class TestAsyncRuntime:
             raise AssertionError("paused runtime must reject new coroutines")
         runtime.resume()
         assert runtime.run_coroutine(asyncio_sleep_result()) == "ok"
-        runtime.stop()\n\n    def test_thread_pool(self):
+        runtime.stop()
+
+    def test_thread_pool(self):
         runtime = AsyncRuntime(max_workers=2)
         runtime.start()
         assert runtime.submit_to_thread(lambda x: x + 1, 4) == 5
