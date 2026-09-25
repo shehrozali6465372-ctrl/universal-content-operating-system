@@ -1,6 +1,7 @@
 """Signal Manager - Orchestrator for Learning Signals Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.learning_signals.signal_collector import SignalCollector
@@ -40,8 +41,15 @@ class SignalManager:
         self.engagement = EngagementCalculator()
         self.feedback_analyzer = FeedbackAnalyzer()
         self.performance = PerformanceTracker()
+        self._lock = RLock()
 
     def analyze(self, data: Dict) -> LearningSignalsResult:
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dict")
+        with self._lock:
+            return self._analyze_locked(data)
+
+    def _analyze_locked(self, data: Dict) -> LearningSignalsResult:
         result = LearningSignalsResult()
 
         # Collect and normalize signals
@@ -90,7 +98,8 @@ class SignalManager:
         return result
 
     def get_health(self) -> Dict:
-        return {
+        with self._lock:
+            return {
             "modules": ["SignalCollector", "SignalNormalizer", "EngagementCalculator",
                        "FeedbackAnalyzer", "PerformanceTracker"],
             "status": "healthy",
