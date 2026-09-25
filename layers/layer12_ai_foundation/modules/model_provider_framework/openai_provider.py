@@ -28,7 +28,12 @@ class OpenAIProvider(BaseProvider):
         self._base_url = str(
             cfg.get("base_url") or "https://api.openai.com/v1"
         ).rstrip("/")
-        self._timeout = float(cfg.get("timeout", 60.0))
+        try:
+            self._timeout = float(cfg.get("timeout", 60.0))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("OpenAI timeout must be numeric") from exc
+        if self._timeout <= 0 or self._timeout > 300:
+            raise ValueError("OpenAI timeout must be greater than 0 and at most 300 seconds")
         self._supported_models = list(
             cfg.get("supported_models")
             or [
@@ -91,7 +96,11 @@ class OpenAIProvider(BaseProvider):
         }
         if request.stop:
             payload["stop"] = request.stop
-        data = json.dumps(payload).encode("utf-8")
+        try:
+            data = json.dumps(payload).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            self._metrics["errors"] += 1
+            raise RuntimeError("OpenAI request payload is not serializable") from exc
         http_request = urllib.request.Request(
             f"{self._base_url}/chat/completions",
             data=data,
