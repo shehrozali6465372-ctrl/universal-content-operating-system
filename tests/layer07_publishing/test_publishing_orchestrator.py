@@ -441,7 +441,8 @@ class TestPublishingOrchestrator:
         result = self.orch.publish("facebook", "Hello world")
         assert result["success"] is True
         assert result["platform"] == "facebook"
-        assert len(result["completed_stages"]) >= 5
+        assert result["post_id"] == "real-manager-post-1"
+        assert len(result["completed_stages"]) == 2
 
     def test_publish_multiple_platforms(self):
         r1 = self.orch.publish("facebook", "FB post")
