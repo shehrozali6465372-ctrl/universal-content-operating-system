@@ -135,12 +135,14 @@ class GeminiImageProvider(BaseImageProvider):
         url = f"{self.GEMINI_API_BASE}/models/{self._model}:generateContent"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseModalities": ["IMAGE"]},
-            "responseFormat": {
-                "image": {
+            "generationConfig": {
+                "responseModalities": ["IMAGE"],
+                "responseFormat": {
+                    "image": {
                     "aspectRatio": self._aspect_ratio(width, height),
                     "imageSize": self._image_size(width, height),
-                }
+                    }
+                },
             },
         }
         req = urllib.request.Request(
