@@ -36,7 +36,7 @@ class JobQueue:
         with self._lock:
             ready = [
                 job for job in self._jobs.values()
-                if job.is_ready() and (platform is None or job.platform == platform)
+                if (job.is_ready() or job.is_retry_ready()) and (platform is None or job.platform == platform)
             ]
             if not ready:
                 return None
