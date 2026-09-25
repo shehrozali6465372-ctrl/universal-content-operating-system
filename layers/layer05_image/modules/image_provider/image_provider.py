@@ -1,6 +1,7 @@
 """Image Provider — Abstract interface for AI image generation providers."""
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -35,6 +36,7 @@ class BaseImageProvider(ABC):
         self.provider_name = provider_name
         self.api_key = api_key
         self._call_count = 0
+        self._counter_lock = RLock()
 
     @abstractmethod
     def generate(self, prompt: str, size: str = "1024x1024",
@@ -53,7 +55,9 @@ class BaseImageProvider(ABC):
 
     @property
     def stats(self) -> Dict[str, Any]:
-        return {"provider": self.provider_name, "calls": self._call_count}
+        with self._counter_lock:
+            calls = self._call_count
+        return {"provider": self.provider_name, "calls": calls}
 
 
 class MockImageProvider(BaseImageProvider):
@@ -71,7 +75,8 @@ class MockImageProvider(BaseImageProvider):
         resp.model = "mock-v1"
         resp.revised_prompt = prompt
         resp.latency_ms = 1.0
-        self._call_count += 1
+        with self._counter_lock:
+            self._call_count += 1
         return resp
 
     def is_configured(self) -> bool:
