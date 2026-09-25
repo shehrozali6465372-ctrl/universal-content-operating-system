@@ -78,6 +78,8 @@ class PlannerManager:
         self.constraint_manager = constraint_manager or ConstraintManager()
         self.validator = validator or PlanValidator()
         self._plan_count = 0
+        self._history: List[Dict[str, Any]] = []
+        self._max_history = 200
         self._lock = RLock()
 
     def create_plan(
@@ -150,6 +152,9 @@ class PlannerManager:
         result.pipeline_time_ms = (time.time() - start) * 1000
         with self._lock:
             self._plan_count += 1
+            self._history.append(result.to_dict())
+            if len(self._history) > self._max_history:
+                self._history = self._history[-self._max_history:]
         return result
 
     def update_plan(self, plan: WritingPlan, updates: Dict[str, Any]) -> PlannerResult:
@@ -181,7 +186,8 @@ class PlannerManager:
 
     def get_history(self) -> List[Dict[str, Any]]:
         """Get planning history."""
-        return []
+        with self._lock:
+            return list(self._history)
 
     @property
     def plan_count(self) -> int:
