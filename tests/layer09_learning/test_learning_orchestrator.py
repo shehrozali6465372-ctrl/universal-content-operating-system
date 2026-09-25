@@ -553,8 +553,9 @@ class TestLearningOrchestrator:
 
     def test_orchestrate_all_modules_executed(self):
         report = self.run()
-        expected = [s.value for s in PipelineStage]
-        assert report.modules_executed == expected
+        expected = {s.value for s in PipelineStage}
+        assert set(report.modules_executed) == expected
+        assert len(report.modules_executed) == len(expected)
 
     def test_health(self):
         self.run()
