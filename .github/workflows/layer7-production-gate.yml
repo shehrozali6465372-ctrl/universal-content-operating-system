@@ -1,0 +1,75 @@
+name: Layer 7 Production Gate
+
+on:
+  push:
+    branches:
+      - certification/layer7-current-main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  layer7-gate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aios"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Compile Layer 7
+        run: python -m compileall -q layers/layer07_publishing tests/layer07_publishing
+      - name: Run Layer 7 tests
+        run: python -m pytest tests/layer07_publishing -q --tb=short
+      - name: Layer 7 production gate
+        run: |
+          python - <<'PY'
+          from layers.layer07_publishing.modules.failure_recovery.circuit_breaker import CircuitBreaker
+          from layers.layer07_publishing.modules.publisher_engine.publish_transaction import PublishTransaction
+          from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+          from layers.layer07_publishing.modules.publishing_orchestrator.publishing_orchestrator import PublishingOrchestrator
+          from layers.layer07_publishing.modules.scheduler_queue.job_queue import JobQueue
+          from layers.layer07_publishing.modules.scheduler_queue.worker_manager import WorkerManager
+
+          cb = CircuitBreaker()
+          assert cb.can_execute("production-gate")
+          tx = PublishTransaction("production-gate")
+          tx.add_step("prepare", lambda: True)
+          tx.add_step("commit", lambda: True)
+          assert tx.execute() and tx.is_completed
+          assert PublisherManager() is not None
+          assert PublishingOrchestrator().publisher_manager is not None
+          assert JobQueue().size == 0
+          assert WorkerManager().pool_size >= 1
+          print("LAYER7_PRODUCTION_GATE=PASS")
+          PY
