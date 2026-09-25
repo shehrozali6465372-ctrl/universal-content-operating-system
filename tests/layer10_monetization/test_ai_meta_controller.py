@@ -605,11 +605,11 @@ class TestMetaControllerIntegration:
     def test_full_workflow(self):
         self.mc.start()
         goal = self.gm.create_goal("Grow followers", priority="high")
-        plan = self.op.create_plan(goal.goal_id, "grow_followers")
+        _plan = self.op.create_plan(goal.goal_id, "grow_followers")
         self.cm.update({"platform": "linkedin", "topic": "AI"})
         self.ac.coordinate_batch(["writing_ai", "quality_ai"])
         decision = self.de.decide({"quality_score": 0.85, "risk_level": "low"})
-        policy = self.pa.check("Great professional post about AI!", {})
+        _policy = self.pa.check("Great professional post about AI!", {})
         self.mm.record_decision(correct=decision.action == "publish_now")
         self.gm.complete_goal(goal.goal_id)
         eval_result = self.mc.evaluate_system()
@@ -626,7 +626,7 @@ class TestMetaControllerIntegration:
 
     def test_context_driven_decision(self):
         self.cm.update({"platform": "instagram", "topic": "fashion"})
-        context = self.cm.get_all()
+        _context = self.cm.get_all()
         decision = self.de.decide({"quality_score": 0.9, "risk_level": "low"})
         assert decision.action == "publish_now"
 
