@@ -2,6 +2,7 @@
 from __future__ import annotations
 import time
 import copy
+import math
 from threading import RLock
 from typing import Dict, List
 
@@ -28,6 +29,10 @@ class PerformanceTracker:
         self._lock = RLock()
 
     def record(self, post_id: str, metrics: Dict[str, float]) -> PerformanceSnapshot:
+        if not post_id:
+            raise ValueError("post_id must not be empty")
+        if not isinstance(metrics, dict) or any(not isinstance(v, (int, float)) or not math.isfinite(float(v)) for v in metrics.values()):
+            raise ValueError("metrics must contain finite numeric values")
         snap = PerformanceSnapshot(post_id)
         snap.metrics = dict(metrics)
         snap.cumulative_score = sum(metrics.values()) / max(len(metrics), 1)
