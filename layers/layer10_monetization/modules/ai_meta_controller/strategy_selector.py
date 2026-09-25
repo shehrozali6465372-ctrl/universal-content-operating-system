@@ -34,7 +34,7 @@ class StrategySelector:
     def select(self, context: Dict[str, Any]) -> StrategyProfile:
         platform = context.get("platform", "").lower()
         goal = context.get("goal", "").lower()
-        content_type = context.get("content_type", "").lower()
+        
 
         candidates = list(self._strategies.values())
         if platform:
