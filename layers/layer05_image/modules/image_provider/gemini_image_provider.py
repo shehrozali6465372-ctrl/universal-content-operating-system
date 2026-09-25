@@ -64,7 +64,8 @@ class GeminiImageProvider(BaseImageProvider):
         if not api_key or self._model not in self.SUPPORTED_MODELS:
             raise RuntimeError("Gemini image provider is not configured")
         start = time.monotonic()
-        self._call_count += 1
+        with self._history_lock:
+            self._call_count += 1
         enhanced_prompt = self._enhance_prompt(prompt, size, style, **kwargs)
         try:
             result = self._real_generate(enhanced_prompt, api_key, size)
@@ -254,12 +255,15 @@ class GeminiImageProvider(BaseImageProvider):
 
     def get_stats(self) -> Dict[str, Any]:
         """Get provider statistics."""
+        with self._history_lock:
+            total_calls = self._call_count
+            history_size = len(self._history)
         return {
             "provider": "gemini_image",
             "model": self._model,
-            "total_calls": self._call_count,
+            "total_calls": total_calls,
             "is_configured": self.is_configured(),
-            "history_size": len(self._history),
+            "history_size": history_size,
         }
 
     def _record_history(self, record: Dict[str, Any]) -> None:
