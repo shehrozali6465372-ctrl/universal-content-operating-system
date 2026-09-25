@@ -96,11 +96,12 @@ class MockLLMProvider(BaseLLMProvider):
     def generate(self, prompt: str, system_prompt: str = "",
                  **kwargs: Any) -> LLMResponse:
         start = time.time()
-        if self._responses:
-            text = self._responses[self._call_index % len(self._responses)]
-            self._call_index += 1
-        else:
-            text = self._mock_response
+        with self._lock:
+            if self._responses:
+                text = self._responses[self._call_index % len(self._responses)]
+                self._call_index += 1
+            else:
+                text = self._mock_response
         latency = (time.time() - start) * 1000
         self._record_call(tokens=len(text.split()), latency=latency)
         resp = LLMResponse(text=text)
@@ -113,5 +114,8 @@ class MockLLMProvider(BaseLLMProvider):
         return True
 
     def set_responses(self, responses: List[str]) -> None:
-        self._responses = responses
-        self._call_index = 0
+        if any(not isinstance(item, str) for item in responses):
+            raise TypeError("mock responses must be strings")
+        with self._lock:
+            self._responses = list(responses)
+            self._call_index = 0
