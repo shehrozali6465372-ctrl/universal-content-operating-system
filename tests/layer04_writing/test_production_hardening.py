@@ -120,3 +120,26 @@ def test_optimizer_count_is_consistent():
     optimizer.optimize("AI content")
     optimizer.optimize("More AI content")
     assert optimizer.optimization_count == 2
+
+
+
+def test_writing_plan_serialization_is_defensive():
+    from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
+
+    plan = WritingPlan("topic")
+    plan.structure = {"sections": [{"name": "intro"}]}
+    exported = plan.to_dict()
+    exported["structure"]["sections"][0]["name"] = "mutated"
+    assert plan.structure["sections"][0]["name"] == "intro"
+
+
+def test_platform_constraints_are_defensive_copies():
+    from layers.layer04_writing.modules.content_planner.platform_planner import PlatformPlanner
+
+    planner = PlatformPlanner()
+    first = planner.get_constraints("instagram")
+    first.content_types.append("corrupt")
+    first.best_practices.clear()
+    second = planner.get_constraints("instagram")
+    assert "corrupt" not in second.content_types
+    assert second.best_practices
