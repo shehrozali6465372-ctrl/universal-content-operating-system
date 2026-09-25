@@ -1,6 +1,6 @@
 """Image Planner — Plans what images to create (independent of writing)."""
 from __future__ import annotations
-import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 
@@ -35,7 +35,7 @@ class ImagePlan:
                  "style", "text_overlay", "color_scheme", "priority", "metadata")
 
     def __init__(self, image_type: str = "photo", platform: str = "facebook") -> None:
-        self.plan_id = f"imgplan_{int(time.time() * 1000) % 10000000}"
+        self.plan_id = f"imgplan_{uuid.uuid4().hex}"
         self.image_type = image_type
         self.description = ""
         self.platform = platform
@@ -68,6 +68,14 @@ class ImagePlanner:
     def plan(self, topic: str, platform: str = "facebook",
              image_type: str = "photo", count: int = 1) -> List[ImagePlan]:
         """Create image plans for a topic."""
+        if not topic or not topic.strip():
+            raise ValueError("topic must not be empty")
+        if platform not in PLATFORM_IMAGE_SPECS:
+            raise ValueError(f"Unsupported image platform: {platform}")
+        if image_type not in IMAGE_TYPES:
+            raise ValueError(f"Unsupported image type: {image_type}")
+        if count < 1 or count > 100:
+            raise ValueError("count must be between 1 and 100")
         plans: List[ImagePlan] = []
         for _ in range(count):
             ip = ImagePlan(image_type=image_type, platform=platform)
