@@ -18,11 +18,14 @@ class LoopEvents:
         self._events: List[LoopEvent] = []
     def publish(self, event_type: str, data: Dict[str, Any] = None) -> LoopEvent:
         event = LoopEvent(event_type)
-        if data: event.data = dict(data)
+        if data:
+            event.data = dict(data)
         self._events.append(event)
         for h in self._subscribers.get(event_type, []):
-            try: h(event)
-            except Exception: pass
+            try:
+                h(event)
+            except Exception:
+                pass
         return event
     def subscribe(self, event_type: str, handler: Callable) -> None:
         self._subscribers.setdefault(event_type, []).append(handler)
