@@ -1,0 +1,44 @@
+name: Layer 10 Production Certification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer10-cert-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-gate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+
+      - name: Compile Layer 10
+        run: python -m compileall -q layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py
+
+      - name: Layer 10 Production Tests
+        run: |
+          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py tests/test_layer10_production_gate.py -q --tb=short
+
+      - name: Layer 10 Lint
+        run: |
+          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402
