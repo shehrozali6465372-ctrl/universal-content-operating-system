@@ -133,6 +133,7 @@ class WritingMemory:
         """Check if text matches brand voice."""
         with self._lock:
             voice = self._voices.get(voice_name)
+            voice = self._copy_voice(voice) if voice else None
         if not voice:
             return {"consistent": True, "reason": "No voice profile found"}
         issues: List[str] = []
