@@ -46,8 +46,10 @@ class RuntimeConfig:
         if not isinstance(data,Mapping):
             raise TypeError("data must be a mapping")
         unknown=set(data)-set(cls.__slots__)
-        if unknown: raise ValueError(f"unknown configuration keys:
-            {sorted(unknown)}")
+        if unknown:
+            raise ValueError(
+                f"unknown configuration keys: {sorted(unknown)}"
+            )
         config=cls()
         for key,value in data.items():
             setattr(config,key,value)
