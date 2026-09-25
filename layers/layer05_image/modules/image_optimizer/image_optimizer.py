@@ -1,5 +1,6 @@
 """Image Optimizer — Platform-specific image optimization."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -41,6 +42,7 @@ class ImageOptimizer:
 
     def __init__(self) -> None:
         self._opt_count = 0
+        self._counter_lock = RLock()
 
     def optimize(self, width: int, height: int, platform: str = "facebook") -> OptimizationResult:
         """Get optimization recommendations for an image."""
@@ -62,9 +64,11 @@ class ImageOptimizer:
         if platform == "instagram" and abs(aspect - 1.0) > 0.2:
             result.recommendations.append("Instagram prefers 1:1 or 4:5 ratio")
 
-        self._opt_count += 1
+        with self._counter_lock:
+            self._opt_count += 1
         return result
 
     @property
     def optimization_count(self) -> int:
-        return self._opt_count
+        with self._counter_lock:
+            return self._opt_count
