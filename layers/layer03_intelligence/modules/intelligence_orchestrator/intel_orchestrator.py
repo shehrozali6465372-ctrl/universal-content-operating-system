@@ -1,5 +1,6 @@
 """Intelligence Orchestrator — coordinates all Layer 3 modules with events, metrics, health monitoring."""
 from __future__ import annotations
+import hashlib
 import time
 from typing import Any, Dict, List, Optional
 
@@ -145,6 +146,7 @@ class IntelligenceOrchestrator:
         self._health = HealthStatus()
         self._total_analyses = 0
         self._total_events = 0
+        self._last_events: List[PipelineEvent] = []
 
     def analyze(
         self,
@@ -158,11 +160,9 @@ class IntelligenceOrchestrator:
         result = IntelligenceResult(topic)
 
         # Cache check
-        cache_key = f"intel_{topic}_{domain}"
+        fingerprint = hashlib.sha256(f"{topic}\0{text}\0{trend_history or []}\0{domain}".encode("utf-8")).hexdigest()\n        cache_key = f"intel_{fingerprint}"
         cached = self.cache.get(cache_key)
-        if cached:
-            cached.metadata["cached"] = True
-            return cached
+        if cached is not None:\n            cached.metadata["cached"] = True\n            return cached
 
         history = trend_history or [50.0]
 
@@ -198,12 +198,11 @@ class IntelligenceOrchestrator:
         )
 
         # 5. Recommendations
-        self.recommendation_engine.clear()
-        if result.trend_prediction:
-            self.recommendation_engine.generate_topic_recommendations(
+        # RecommendationEngine is shared by the orchestrator instance; isolate this request\n        # without clearing state owned by other callers by creating a request-local engine.\n        request_recommender = RecommendationEngine()\n        if result.trend_prediction:
+            request_recommender.generate_topic_recommendations(
                 [{"topic": topic, "overall_score": result.trend_prediction.predicted_score}]
             )
-        result.recommendations = [r.to_dict() for r in self.recommendation_engine.get_top(3)]
+        result.recommendations = [r.to_dict() for r in request_recommender.get_top(3)]
 
         # 6. Overall confidence
         confidences = []
@@ -240,7 +239,6 @@ class IntelligenceOrchestrator:
 
     def _run_module(self, name: str, fn: Any) -> Any:
         """Run a module function with metrics and event tracking."""
-        self._last_events: List[PipelineEvent] = []
         event = PipelineEvent(event_type="module_start", module=name)
         start = time.time()
 
