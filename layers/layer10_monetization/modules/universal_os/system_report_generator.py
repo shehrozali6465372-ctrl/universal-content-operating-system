@@ -1,4 +1,4 @@
-"""SystemReportGenerator — Daily, weekly, monthly, executive system reports."""
+"""SystemReportGenerator — bounded operational report history."""
 from __future__ import annotations
 import itertools
 import json
@@ -9,18 +9,13 @@ _SR_COUNTER = itertools.count(1)
 
 
 class SystemReport:
-    """A system report."""
-
-    __slots__ = ("report_id", "report_type", "data", "insights",
-                 "recommendations", "timestamp")
-
     def __init__(self, report_type: str = "daily") -> None:
-        self.report_id: str = f"srep_{next(_SR_COUNTER)}"
+        self.report_id = f"srep_{next(_SR_COUNTER)}"
         self.report_type = report_type
         self.data: Dict[str, Any] = {}
         self.insights: List[str] = []
         self.recommendations: List[str] = []
-        self.timestamp: float = time.time()
+        self.timestamp = time.time()
 
     def add_insight(self, insight: str) -> None:
         self.insights.append(insight)
@@ -40,37 +35,37 @@ class SystemReport:
         lines = [f"# System Report: {self.report_type}", f"**ID**: {self.report_id}"]
         if self.insights:
             lines.append("\n## Insights")
-            for i in self.insights:
-                lines.append(f"- {i}")
+            lines.extend(f"- {insight}" for insight in self.insights)
         if self.recommendations:
             lines.append("\n## Recommendations")
-            for r in self.recommendations:
-                lines.append(f"- {r}")
+            lines.extend(f"- {recommendation}" for recommendation in self.recommendations)
         return "\n".join(lines)
 
 
 class SystemReportGenerator:
-    """Generate daily, weekly, monthly, and executive reports."""
-
-    def __init__(self) -> None:
+    def __init__(self, max_reports: int = 1000) -> None:
+        if max_reports <= 0:
+            raise ValueError("max_reports must be positive")
+        self._max_reports = max_reports
         self._reports: List[SystemReport] = []
 
     def generate(self, report_type: str = "daily",
                  data: Dict[str, Any] = None) -> SystemReport:
         report = SystemReport(report_type)
-        if data:
-            report.data = dict(data)
+        report.data = dict(data or {})
         self._reports.append(report)
+        if len(self._reports) > self._max_reports:
+            del self._reports[:-self._max_reports]
         return report
 
     def get_recent(self, count: int = 5) -> List[SystemReport]:
-        return self._reports[-count:]
+        return list(self._reports[-max(0, count):])
 
     def get_by_type(self, report_type: str) -> List[SystemReport]:
-        return [r for r in self._reports if r.report_type == report_type]
+        return [report for report in self._reports if report.report_type == report_type]
 
     def get_stats(self) -> Dict[str, Any]:
         types: Dict[str, int] = {}
-        for r in self._reports:
-            types[r.report_type] = types.get(r.report_type, 0) + 1
+        for report in self._reports:
+            types[report.report_type] = types.get(report.report_type, 0) + 1
         return {"total": len(self._reports), "by_type": types}
