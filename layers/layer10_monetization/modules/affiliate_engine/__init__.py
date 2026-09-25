@@ -8,9 +8,9 @@ from .ai_monetization_optimizer import AIMonetizationOptimizer, get_monetization
 
 __all__ = [
     "AffiliateEngineManager", "get_affiliate_engine",
-    "AffiliateManager", "get_affiliate_manager",
-    "LinkIntelligence", "get_link_intelligence",
-    "RevenueAnalytics", "get_revenue_analytics",
-    "CampaignManager", "get_campaign_manager",
+    "AffiliateManager", "AffiliateProgram", "AffiliateLink", "get_affiliate_manager",
+    "LinkIntelligence", "TrackedLink", "get_link_intelligence",
+    "RevenueAnalytics", "PostRevenue", "get_revenue_analytics",
+    "CampaignManager", "Campaign", "get_campaign_manager",
     "AIMonetizationOptimizer", "get_monetization_optimizer",
 ]
