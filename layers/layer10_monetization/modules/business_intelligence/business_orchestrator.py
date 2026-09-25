@@ -1,7 +1,8 @@
-"""BusinessOrchestrator — Complete business intelligence pipeline."""
+"""BusinessOrchestrator — explicit, evidence-based monetization pipeline."""
 from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from layers.layer10_monetization.modules.business_intelligence.revenue_tracker import RevenueTracker
 from layers.layer10_monetization.modules.business_intelligence.roi_analyzer import ROIAnalyzer
@@ -17,13 +18,11 @@ from layers.layer10_monetization.modules.business_intelligence.business_intellig
 
 
 class BusinessOrchestrator:
-    """Complete business pipeline.
+    """Run monetization accounting from supplied evidence; never fabricate outcomes."""
 
-    Flow: Revenue → Analytics → ROI → Forecast → Opportunities →
-          Budget → Monetization → Campaigns → Memory → Reports → API
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, max_pipeline_runs: int = 10000) -> None:
+        if max_pipeline_runs <= 0:
+            raise ValueError("max_pipeline_runs must be positive")
         self.revenue_tracker = RevenueTracker()
         self.roi_analyzer = ROIAnalyzer()
         self.campaign_manager = CampaignManager()
@@ -37,6 +36,7 @@ class BusinessOrchestrator:
         self.api = BusinessIntelligenceAPI()
         self._is_running = False
         self._pipeline_runs: List[Dict[str, Any]] = []
+        self._max_pipeline_runs = max_pipeline_runs
 
     def start(self) -> bool:
         self._is_running = True
@@ -49,50 +49,61 @@ class BusinessOrchestrator:
     def run_pipeline(self, platform: str = "",
                      revenue_data: Optional[Dict[str, Any]] = None,
                      campaign_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if not self._is_running:
+            raise RuntimeError("business orchestrator must be running")
         start = time.time()
-        results: Dict[str, Any] = {"platform": platform, "stages": {}}
+        revenue_data = dict(revenue_data or {})
+        campaign_data = dict(campaign_data or {})
+        results: Dict[str, Any] = {
+            "pipeline_id": f"biz_{uuid4().hex}",
+            "platform": platform,
+            "stages": {},
+            "status": "running",
+        }
 
-        # Stage 1: Revenue Collection
-        if revenue_data:
-            for rt, amt in revenue_data.items():
-                self.revenue_tracker.record(rt, amt, platform)
+        for revenue_type, amount in revenue_data.items():
+            self.revenue_tracker.record(revenue_type, amount, platform)
+
         results["stages"]["revenue"] = self.revenue_tracker.get_stats()
+        revenue = sum(float(amount) for amount in revenue_data.values())
+        cost = float(campaign_data.get("cost", 0.0))
+        snapshot = self.roi_analyzer.calculate(platform, revenue, cost)
+        results["stages"]["roi"] = snapshot.to_dict()
 
-        # Stage 2: ROI Analysis
-        revenue = revenue_data.get("ad_revenue", 0.0) if revenue_data else 0.0
-        cost = campaign_data.get("cost", 0.0) if campaign_data else 0.0
-        snap = self.roi_analyzer.calculate(platform, revenue, cost)
-        results["stages"]["roi"] = snap.to_dict()
-
-        # Stage 3: Forecasting
-        forecast = self.forecaster.forecast_revenue("next_month", revenue, 0.1)
+        # Forecasting is explicitly marked as model output, not observed revenue.
+        forecast = self.forecaster.forecast_revenue("next_month", revenue, 0.0)
         results["stages"]["forecast"] = forecast.to_dict()
 
-        # Stage 4: Opportunity Detection
-        self.opportunity_detector.detect("trending_niche", f"Opportunity for {platform}",
-                                          platform, revenue * 0.5)
+        # No opportunity is invented from revenue alone. Caller must provide an estimate.
         results["stages"]["opportunities"] = self.opportunity_detector.get_stats()
 
-        # Stage 5: Memory Storage
-        self.memory.store("pipeline_run", f"{platform}_{time.time()}",
-                          {"revenue": revenue, "roi": snap.roi},
-                          confidence=snap.roi + 0.5)
+        confidence = max(0.0, min(1.0, 0.5 + snapshot.roi / 2))
+        self.memory.store(
+            "pipeline_run", results["pipeline_id"],
+            {"revenue": revenue, "roi": snapshot.roi},
+            confidence=confidence,
+        )
         results["stages"]["memory"] = self.memory.get_stats()
 
-        # Stage 6: Metrics
-        self.metrics.record(revenue_growth=0.1, profit=revenue - cost, roi=snap.roi)
+        previous = self.metrics.get_latest()
+        growth = 0.0
+        if previous and previous.get("profit") is not None and previous.get("profit") != 0:
+            growth = (revenue - float(previous.get("profit", 0.0))) / abs(float(previous["profit"]))
+        self.metrics.record(revenue_growth=growth, profit=revenue - cost, roi=snapshot.roi)
         results["stages"]["metrics"] = self.metrics.get_stats()
 
-        # Stage 7: Report
         report = self.report_generator.generate("daily", results)
         results["stages"]["report"] = report.to_dict()
-
+        results["status"] = "completed"
         results["duration_ms"] = round((time.time() - start) * 1000, 1)
         self._pipeline_runs.append(results)
+        if len(self._pipeline_runs) > self._max_pipeline_runs:
+            del self._pipeline_runs[:-self._max_pipeline_runs]
         return results
 
     def get_health(self) -> Dict[str, Any]:
         return {
+            "running": self._is_running,
             "revenue_tracker": self.revenue_tracker.get_stats(),
             "roi_analyzer": self.roi_analyzer.get_stats(),
             "campaign_manager": self.campaign_manager.get_stats(),
@@ -100,12 +111,8 @@ class BusinessOrchestrator:
             "forecaster": self.forecaster.get_stats(),
             "opportunity_detector": self.opportunity_detector.get_stats(),
             "monetization_optimizer": self.monetization_optimizer.get_stats(),
-            "financial_memory": self.memory.get_stats(),
-            "business_metrics": self.metrics.get_stats(),
-            "report_generator": self.report_generator.get_stats(),
+            "memory": self.memory.get_stats(),
+            "metrics": self.metrics.get_stats(),
+            "reports": self.report_generator.get_stats(),
             "pipeline_runs": len(self._pipeline_runs),
-            "is_running": self._is_running,
         }
-
-    def get_api(self) -> BusinessIntelligenceAPI:
-        return self.api
