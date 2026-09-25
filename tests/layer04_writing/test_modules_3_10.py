@@ -257,6 +257,17 @@ class TestWritingMemory:
         assert all(r.platform == "facebook" for r in self.wm.get_by_platform("facebook"))
         assert all(r.platform == "twitter" for r in self.wm.get_by_platform("twitter"))
 
+    def test_voice_is_defensively_copied(self):
+        self.wm.set_voice("brand", personality=["expert"])
+        voice = self.wm.get_voice("brand")
+        voice.personality.append("mutated")
+        assert self.wm.get_voice("brand").personality == ["expert"]
+
+    def test_invalid_max_size(self):
+        import pytest
+        with pytest.raises(ValueError):
+            WritingMemory(max_size=0)
+
     def test_voice_count(self):
         self.wm.set_voice("a", "friendly")
         self.wm.set_voice("b", "professional")
@@ -332,6 +343,11 @@ class TestWritingOrchestrator:
         result = self.wo.run("AI Jobs", platforms=["facebook"], intelligence_data={"intent": "educate", "evidence": ["verified fact"]})
         assert result.plan is not None
         assert result.outputs[0].optimized_text != ""
+
+    def test_orchestrator_rejects_duplicates(self):
+        import pytest
+        with pytest.raises(ValueError):
+            self.wo.run("A", platforms=["facebook", "facebook"])
 
     def test_orchestrator_count(self):
         self.wo.run("A", platforms=["facebook"])
