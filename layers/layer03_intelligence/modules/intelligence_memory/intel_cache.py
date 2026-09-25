@@ -1,5 +1,7 @@
 """Intelligence Cache — caches intelligence results for reuse."""
-from datetime import datetime, timezone
+import copy
+import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 class CachedResult:
@@ -14,7 +16,7 @@ class CachedResult:
 
 class IntelligenceCache:
     def __init__(self, max_size: int = 500, ttl_seconds: int = 3600):
-        self._cache: Dict[str, CachedResult] = {}
+        self._cache: Dict[str, CachedResult] = {}\n        self._lock = RLock()
         self._max_size = max_size
         self._ttl = ttl_seconds
     def store(self, key: str, data: Any):
@@ -29,7 +31,7 @@ class IntelligenceCache:
             return entry.data
         return None
     def has(self, key: str) -> bool:
-        return key in self._cache
+        return self.get(key) is not None
     def remove(self, key: str) -> bool:
         return self._cache.pop(key, None) is not None
     def size(self) -> int:
