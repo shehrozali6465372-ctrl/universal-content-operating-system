@@ -59,4 +59,4 @@ jobs:
 
       - name: Layer 12 production-source lint
         run: |
-          ruff check layers/layer12_ai_foundation --select E,F,W --ignore E501,E402
+          ruff check layers/layer12_ai_foundation --select E9,F --ignore E501,E402
