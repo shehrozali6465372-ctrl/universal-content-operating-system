@@ -115,22 +115,18 @@ class APIGateway:
             if len(self._requests) > self._max_history:
                 del self._requests[:-self._max_history]
             self._request_count += 1
-
-            response = APIResponse()
             now = time.time()
             times = [
-                t
-                for t in self._request_times.get(client_id, [])
+                t for t in self._request_times.get(client_id, [])
                 if now - t < self._window_seconds
             ]
-
+            response = APIResponse()
             if len(times) >= self._rate_limit:
                 self._request_times[client_id] = times
                 response.status_code = 429
                 response.error = "Rate limit exceeded"
                 response.latency_ms = (time.time() - start) * 1000
                 return response
-
             if (
                 client_id not in self._request_times
                 and len(self._request_times) >= self._max_clients
@@ -139,32 +135,31 @@ class APIGateway:
                 response.error = "Client limit exceeded"
                 response.latency_ms = (time.time() - start) * 1000
                 return response
-
             times.append(now)
             self._request_times[client_id] = times
+            middleware = list(self._middleware)
+            handler = self._handlers.get(endpoint)
 
-            try:
-                for middleware in list(self._middleware):
-                    middleware_response = middleware(request)
-                    if middleware_response is not None:
-                        response = middleware_response
-                        return response
-
-                handler = self._handlers.get(endpoint)
-                if handler is None:
-                    response.status_code = 404
-                    response.error = f"Endpoint '{endpoint}' not found"
-                else:
-                    result = handler(request)
-                    response.data = (
-                        result if isinstance(result, dict) else {"result": result}
-                    )
-            except Exception:
-                response.status_code = 500
-                response.error = "Internal server error"
-            finally:
-                response.latency_ms = (time.time() - start) * 1000
-            return response
+        try:
+            for middleware_handler in middleware:
+                middleware_response = middleware_handler(request)
+                if middleware_response is not None:
+                    response = middleware_response
+                    return response
+            if handler is None:
+                response.status_code = 404
+                response.error = f"Endpoint '{endpoint}' not found"
+            else:
+                result = handler(request)
+                response.data = (
+                    result if isinstance(result, dict) else {"result": result}
+                )
+        except Exception:
+            response.status_code = 500
+            response.error = "Internal server error"
+        finally:
+            response.latency_ms = (time.time() - start) * 1000
+        return response
 
     def get_endpoints(self) -> List[str]:
         with self._lock:
