@@ -1,5 +1,6 @@
 """Draft Validator — Validate generated drafts for quality and compliance."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
