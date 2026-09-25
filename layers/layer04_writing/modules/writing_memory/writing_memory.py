@@ -1,6 +1,8 @@
 """Writing Memory — Brand voice consistency across all platforms."""
 from __future__ import annotations
 import time
+from threading import RLock
+from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
 
@@ -37,7 +39,7 @@ class DraftRecord:
                  "brand_voice", "tokens_used", "created_at")
 
     def __init__(self, platform: str = "", topic: str = "", text: str = "", account_id: str = "default") -> None:
-        self.record_id = f"wm_{int(time.time() * 1000) % 10000000}"
+        self.record_id = f"wm_{uuid4().hex}"
         self.account_id = account_id
         self.platform = platform
         self.topic = topic
@@ -65,6 +67,7 @@ class WritingMemory:
         self._records: List[DraftRecord] = []
         self._max_size = max_size
         self._platform_index: Dict[str, List[int]] = {}
+        self._lock = RLock()
 
     def set_voice(self, name: str, tone: str = "friendly",
                   personality: Optional[List[str]] = None,
@@ -76,11 +79,13 @@ class WritingMemory:
         voice.personality = personality or []
         voice.dos = dos or []
         voice.donts = donts or []
-        self._voices[name] = voice
+        with self._lock:
+            self._voices[name] = voice
         return voice
 
     def get_voice(self, name: str) -> Optional[BrandVoice]:
-        return self._voices.get(name)
+        with self._lock:
+            return self._voices.get(name)
 
     def store_draft(self, platform: str, topic: str, text: str,
                     tone: str = "", brand_voice: str = "",
@@ -90,28 +95,39 @@ class WritingMemory:
         rec.tone = tone
         rec.brand_voice = brand_voice
         rec.tokens_used = tokens
-        if len(self._records) >= self._max_size:
-            self._records.pop(0)
-        idx = len(self._records)
-        self._records.append(rec)
-        self._platform_index.setdefault(platform, []).append(idx)
+        with self._lock:
+            if len(self._records) >= self._max_size:
+                self._records.pop(0)
+            self._rebuild_index_locked()
+            self._records.append(rec)
+            self._rebuild_index_locked()
         return rec
 
     def get_by_platform(self, platform: str, limit: int = 10) -> List[DraftRecord]:
-        idxs = self._platform_index.get(platform, [])
-        return [self._records[i] for i in idxs if i < len(self._records)][:limit]
+        if limit < 1:
+            return []
+        with self._lock:
+            idxs = self._platform_index.get(platform, [])
+            return [self._records[i] for i in idxs if i < len(self._records)][:limit]
 
     def get_history(self, account_id: str = "default", platform: Optional[str] = None, limit: int = 50) -> List[DraftRecord]:
-        records = [r for r in self._records if r.account_id == account_id and
+        if limit < 1:
+            return []
+        with self._lock:
+            records = [r for r in self._records if r.account_id == account_id and
                    (platform is None or r.platform == platform)]
-        return records[-max(1, limit):]
+            return list(records[-limit:])
 
     def get_recent(self, limit: int = 10) -> List[DraftRecord]:
-        return self._records[-limit:]
+        if limit < 1:
+            return []
+        with self._lock:
+            return list(self._records[-limit:])
 
     def check_consistency(self, text: str, voice_name: str) -> Dict[str, Any]:
         """Check if text matches brand voice."""
-        voice = self._voices.get(voice_name)
+        with self._lock:
+            voice = self._voices.get(voice_name)
         if not voice:
             return {"consistent": True, "reason": "No voice profile found"}
         issues: List[str] = []
@@ -120,10 +136,17 @@ class WritingMemory:
                 issues.append(f"Contains prohibited: '{dont}'")
         return {"consistent": len(issues) == 0, "issues": issues}
 
+    def _rebuild_index_locked(self) -> None:
+        self._platform_index = {}
+        for idx, record in enumerate(self._records):
+            self._platform_index.setdefault(record.platform, []).append(idx)
+
     @property
     def count(self) -> int:
-        return len(self._records)
+        with self._lock:
+            return len(self._records)
 
     @property
     def voice_count(self) -> int:
-        return len(self._voices)
+        with self._lock:
+            return len(self._voices)
