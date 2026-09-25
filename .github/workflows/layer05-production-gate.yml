@@ -1,0 +1,71 @@
+name: Layer 5 Production Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer05_image/**"
+      - "tests/unit/layer05_image/**"
+      - ".github/workflows/layer05-production-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer05-production-gate
+  cancel-in-progress: false
+
+jobs:
+  layer05:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+
+      - name: Compile Layer 5
+        run: python -m compileall -q layers/layer05_image
+
+      - name: Layer 5 unit and contract tests
+        run: python -m pytest tests/unit/layer05_image -q --tb=short
+
+      - name: Layer 5 lint
+        run: ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
+
+      - name: Real Gemini smoke
+        if: env.GEMINI_API_KEY != ''
+        env:
+          UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
+          provider = GeminiImageProvider(model="gemini-3.1-flash-image")
+          if not provider.is_configured():
+              raise SystemExit("Gemini provider is not configured")
+          result = provider.generate(
+              "Create a simple professional abstract geometric marketing background",
+              size="512x512",
+          )
+          if not result.image_data:
+              raise SystemExit("Gemini returned empty image bytes")
+          digest = result.metadata.get("sha256")
+          if not digest:
+              raise SystemExit("Missing SHA-256 provenance")
+          path = Path(result.image_url)
+          if not path.is_file() or path.stat().st_size == 0:
+              raise SystemExit("Persisted image is missing or empty")
+          print(f"REAL_GEMINI_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
+          PY
