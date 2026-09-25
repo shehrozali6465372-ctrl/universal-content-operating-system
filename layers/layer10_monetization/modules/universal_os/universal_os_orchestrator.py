@@ -1,7 +1,8 @@
-"""UniversalOSOrchestrator — Final orchestrator: Observe → Learn → Evolve loop."""
+"""UniversalOSOrchestrator — explicit stage execution without fabricated success."""
 from __future__ import annotations
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
 from layers.layer10_monetization.modules.universal_os.universal_ai_os import UniversalAIOS
 from layers.layer10_monetization.modules.universal_os.system_kernel import SystemKernel
@@ -22,13 +23,13 @@ from layers.layer10_monetization.modules.universal_os.system_metrics import Syst
 from layers.layer10_monetization.modules.universal_os.backup_manager import BackupManager
 from layers.layer10_monetization.modules.universal_os.version_manager import VersionManager
 
+STAGES = ("observe", "research", "plan", "create", "quality",
+          "publish", "analyze", "learn", "optimize", "evolve")
+StageHandler = Callable[[str, Dict[str, Any]], Any]
+
 
 class UniversalOSOrchestrator:
-    """Final super orchestrator.
-
-    Pipeline: User Goal → Research → Plan → Create → Quality →
-              Publish → Analytics → Business → Learn → Optimize → Evolve
-    """
+    """Own lifecycle and execute only explicitly registered pipeline stages."""
 
     def __init__(self) -> None:
         self.os = UniversalAIOS()
@@ -50,58 +51,88 @@ class UniversalOSOrchestrator:
         self.backup = BackupManager()
         self.version = VersionManager()
         self._pipeline_runs: List[Dict[str, Any]] = []
+        self._stage_handlers: Dict[str, StageHandler] = {}
 
     def start(self) -> bool:
-        self.os.start()
+        if not self.os.start():
+            return False
         self.events.publish("system_started", "orchestrator")
         self.metrics.record_event("system_start")
         return True
 
     def stop(self) -> bool:
-        self.os.stop()
+        if not self.os.stop():
+            return False
         self.events.publish("system_stopped", "orchestrator")
+        self.metrics.record_event("system_stop")
         return True
+
+    def register_stage(self, stage: str, handler: StageHandler) -> None:
+        if stage not in STAGES:
+            raise ValueError(f"Unknown pipeline stage: {stage}")
+        if not callable(handler):
+            raise ValueError("handler must be callable")
+        self._stage_handlers[stage] = handler
 
     def run_pipeline(self, goal: str,
                      context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        start = time.time()
-        pipeline_id = f"pipe_{int(start)}"
-        pipeline: Dict[str, Any] = {
-            "pipeline_id": pipeline_id, "goal": goal, "stages": {}, "started_at": start,
-        }
-        ctx = context or {}
+        if not goal:
+            raise ValueError("goal is required")
+        if self.os.status()["state"] != "running":
+            raise RuntimeError("orchestrator must be running before pipeline execution")
+
+        started = time.time()
+        pipeline_id = f"pipe_{uuid4().hex}"
+        ctx = dict(context or {})
         self.context.set("goal", pipeline_id, {"goal": goal, "context": ctx})
-        stages_order = ["observe", "research", "plan", "create",
-                         "quality", "publish", "analyze", "learn",
-                         "optimize", "evolve"]
-        for stage in stages_order:
-            pipeline["stages"][stage] = {"status": "completed", "timestamp": time.time()}
-        pipeline["duration_ms"] = round((time.time() - start) * 1000, 1)
+        pipeline: Dict[str, Any] = {
+            "pipeline_id": pipeline_id, "goal": goal, "stages": {},
+            "started_at": started, "status": "running",
+        }
+
+        for stage in STAGES:
+            handler = self._stage_handlers.get(stage)
+            stage_started = time.time()
+            if handler is None:
+                pipeline["stages"][stage] = {
+                    "status": "not_configured", "timestamp": stage_started,
+                }
+                break
+            try:
+                result = handler(goal, ctx)
+                pipeline["stages"][stage] = {
+                    "status": "completed", "timestamp": stage_started,
+                    "result": result,
+                }
+            except Exception as exc:
+                pipeline["stages"][stage] = {
+                    "status": "failed", "timestamp": stage_started,
+                    "error": type(exc).__name__,
+                }
+                pipeline["status"] = "failed"
+                break
+        else:
+            pipeline["status"] = "completed"
+
+        pipeline["duration_ms"] = round((time.time() - started) * 1000, 1)
         self._pipeline_runs.append(pipeline)
-        self.events.publish("pipeline_completed", "orchestrator",
-                             {"pipeline_id": pipeline_id, "goal": goal})
-        self.metrics.record_event("pipeline_completed")
+        event_type = "pipeline_completed" if pipeline["status"] == "completed" else "pipeline_failed"
+        self.events.publish(event_type, "orchestrator",
+                            {"pipeline_id": pipeline_id, "status": pipeline["status"]})
+        self.metrics.record_event(event_type)
         return pipeline
 
     def get_health(self) -> Dict[str, Any]:
         return {
-            "os": self.os.status(),
-            "os_healthy": self.os.health(),
-            "kernel": self.kernel.get_stats(),
-            "context": self.context.get_stats(),
-            "memory": self.memory.get_stats(),
-            "events": self.events.get_stats(),
-            "plugins": self.plugins.get_stats(),
-            "services": self.services.get_stats(),
-            "api": self.api.get_stats(),
-            "auth": self.auth.get_stats(),
-            "resources": self.resources.get_stats(),
-            "cache": self.cache.get_stats(),
-            "monitor": self.monitor.get_stats(),
-            "healer": self.healer.get_stats(),
-            "security": self.security.get_stats(),
-            "metrics": self.metrics.get_stats(),
-            "backup": self.backup.get_stats(),
-            "version": self.version.get_stats(),
+            "os": self.os.status(), "os_healthy": self.os.health(),
+            "kernel": self.kernel.get_stats(), "context": self.context.get_stats(),
+            "memory": self.memory.get_stats(), "events": self.events.get_stats(),
+            "plugins": self.plugins.get_stats(), "services": self.services.get_stats(),
+            "api": self.api.get_stats(), "auth": self.auth.get_stats(),
+            "resources": self.resources.get_stats(), "cache": self.cache.get_stats(),
+            "monitor": self.monitor.get_stats(), "healer": self.healer.get_stats(),
+            "security": self.security.get_stats(), "metrics": self.metrics.get_stats(),
+            "backup": self.backup.get_stats(), "version": self.version.get_stats(),
             "pipeline_runs": len(self._pipeline_runs),
+            "configured_stages": sorted(self._stage_handlers),
         }
