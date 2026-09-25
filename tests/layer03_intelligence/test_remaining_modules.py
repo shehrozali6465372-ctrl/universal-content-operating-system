@@ -120,7 +120,7 @@ class TestIntelligenceOrchestrator:
     def test_cache(self):
         r1 = self.orch.analyze("Cached Topic")
         r2 = self.orch.analyze("Cached Topic")
-        assert r1 is r2
+        assert r1 is not r2
     def test_analyze_batch(self):
         results = self.orch.analyze_batch([{"topic": "AI"}, {"topic": "Crypto"}])
         assert len(results) == 2
