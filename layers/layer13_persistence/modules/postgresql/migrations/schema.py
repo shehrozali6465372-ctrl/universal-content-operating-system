@@ -1,6 +1,5 @@
 """PostgreSQL Schema — All table definitions for the Universal AI Content OS."""
 from __future__ import annotations
-from typing import List, Dict, Any
 
 
 SCHEMA_VERSION = "1.0.0"
