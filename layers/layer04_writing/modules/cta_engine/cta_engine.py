@@ -83,7 +83,9 @@ class CTAGenerator:
             result.cta_text = custom_cta
             result.cta_type = "custom"
         else:
-            platform_ctas = PLATFORM_CTAS.get(platform, PLATFORM_CTAS["facebook"])
+            if platform not in PLATFORM_CTAS:
+                raise ValueError(f"Unsupported platform: {platform}")
+            platform_ctas = PLATFORM_CTAS[platform]
             result.cta_text = platform_ctas[0]
             result.cta_type = "platform_default"
             result.alternatives = platform_ctas[1:3]
