@@ -7,6 +7,7 @@ reported only when a real adapter and real credentials are available.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 import uuid
@@ -90,6 +91,7 @@ class ContentResponse:
 class PipelineLogger:
     def __init__(self) -> None:
         self.events: List[Dict[str, Any]] = []
+        self._logger = logging.getLogger("ucos.layer14.pipeline")
 
     def log(self, layer: str, event: str, data: Optional[Dict[str, Any]] = None) -> None:
         self.events.append({"time": time.time(), "layer": layer, "event": event, "data": data or {}})
