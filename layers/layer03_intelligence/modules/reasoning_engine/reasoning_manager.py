@@ -144,6 +144,7 @@ class ReasoningManager:
 
         # Multi-objective optimization
         objectives_data = data.get("objectives", [])
+        self.multi_objective.clear_objectives()
         if objectives_data and options_data:
             for obj_data in objectives_data:
                 self.multi_objective.add_objective(Objective(
