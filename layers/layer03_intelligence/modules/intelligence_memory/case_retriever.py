@@ -2,6 +2,8 @@
 from __future__ import annotations
 import itertools
 import time
+import copy
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -42,61 +44,79 @@ class CaseRetriever:
         self._cases: List[Case] = []
         self._topic_index: Dict[str, List[int]] = {}
         self._tag_index: Dict[str, List[int]] = {}
+        self._lock = RLock()
 
     def store(self, topic: str, decision: str, outcome: str = "unknown",
               score: float = 0.0, tags: Optional[List[str]] = None,
               metadata: Optional[Dict] = None) -> Case:
-        """Store a new case."""
+        if not topic.strip():
+            raise ValueError("topic must not be empty")
+        if not isinstance(score, (int, float)):
+            raise TypeError("score must be numeric")
+        if not 0.0 <= score <= 1.0:
+            raise ValueError("score must be between 0 and 1")
         case = Case(topic=topic, decision=decision)
         case.outcome = outcome
         case.score = score
-        case.tags = tags or []
-        case.metadata = metadata or {}
-        idx = len(self._cases)
-        self._cases.append(case)
-        self._topic_index.setdefault(topic.lower(), []).append(idx)
-        for tag in case.tags:
-            self._tag_index.setdefault(tag.lower(), []).append(idx)
-        return case
+        case.tags = list(tags or [])
+        case.metadata = copy.deepcopy(metadata or {})
+        with self._lock:
+            idx = len(self._cases)
+            self._cases.append(case)
+            self._topic_index.setdefault(topic.lower(), []).append(idx)
+            for tag in case.tags:
+                self._tag_index.setdefault(tag.lower(), []).append(idx)
+            return copy.deepcopy(case)
 
     def get_similar(self, topic: str, limit: int = 5) -> List[Case]:
-        """Find cases with similar topic."""
-        idxs = self._topic_index.get(topic.lower(), [])
-        cases = [self._cases[i] for i in idxs if i < len(self._cases)]
-        return sorted(cases, key=lambda c: c.score, reverse=True)[:limit]
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        with self._lock:
+            idxs = self._topic_index.get(topic.lower(), [])
+            return copy.deepcopy(sorted([self._cases[i] for i in idxs if i < len(self._cases)], key=lambda x: x.score, reverse=True)[:limit])
 
     def get_by_tag(self, tag: str, limit: int = 10) -> List[Case]:
-        """Find cases by tag."""
-        idxs = self._tag_index.get(tag.lower(), [])
-        return [self._cases[i] for i in idxs if i < len(self._cases)][:limit]
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        with self._lock:
+            idxs = self._tag_index.get(tag.lower(), [])
+            return copy.deepcopy([self._cases[i] for i in idxs if i < len(self._cases)][:limit])
 
     def get_successful(self, min_score: float = 0.7, limit: int = 10) -> List[Case]:
-        """Get successful cases."""
-        success = [c for c in self._cases if c.outcome == "success" and c.score >= min_score]
-        return sorted(success, key=lambda c: c.score, reverse=True)[:limit]
+        if not 0.0 <= min_score <= 1.0:
+            raise ValueError("min_score must be between 0 and 1")
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        with self._lock:
+            items = [x for x in self._cases if x.outcome == "success" and x.score >= min_score]
+            return copy.deepcopy(sorted(items, key=lambda x: x.score, reverse=True)[:limit])
 
     def get_failed(self, limit: int = 10) -> List[Case]:
-        """Get failed cases."""
-        failed = [c for c in self._cases if c.outcome == "failure"]
-        return failed[:limit]
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        with self._lock:
+            return copy.deepcopy([x for x in self._cases if x.outcome == "failure"][:limit])
 
     def get_by_score_range(self, min_score: float, max_score: float) -> List[Case]:
-        return [c for c in self._cases if min_score <= c.score <= max_score]
+        if not 0.0 <= min_score <= max_score <= 1.0:
+            raise ValueError("invalid score range")
+        with self._lock:
+            return copy.deepcopy([x for x in self._cases if min_score <= x.score <= max_score])
 
     def search(self, query: str, limit: int = 5) -> List[Case]:
-        """Simple text search across topics and decisions."""
-        query_lower = query.lower()
-        results: List[Case] = []
-        for c in self._cases:
-            if query_lower in c.topic.lower() or query_lower in c.decision.lower():
-                results.append(c)
-        return results[:limit]
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        q = query.lower()
+        with self._lock:
+            return copy.deepcopy([x for x in self._cases if q in x.topic.lower() or q in x.decision.lower()][:limit])
 
     @property
     def count(self) -> int:
-        return len(self._cases)
+        with self._lock:
+            return len(self._cases)
 
     def clear(self) -> None:
-        self._cases.clear()
-        self._topic_index.clear()
-        self._tag_index.clear()
+        with self._lock:
+            self._cases.clear()
+            self._topic_index.clear()
+            self._tag_index.clear()
