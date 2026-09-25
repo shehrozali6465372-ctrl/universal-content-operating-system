@@ -70,6 +70,8 @@ class FinancialMemory:
         return entries[-count:]
 
     def get_successful(self, min_confidence: float = 0.7) -> List[FinancialMemoryEntry]:
+        if not 0 <= min_confidence <= 1:
+            raise ValueError("min_confidence must be between 0 and 1")
         return [e for e in self._entries if e.confidence >= min_confidence]
 
     def get_failed(self) -> List[FinancialMemoryEntry]:
