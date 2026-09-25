@@ -230,7 +230,7 @@ class IntelligenceOrchestrator:
         result.metadata = {"cached": False, "domain": domain}
 
         # Cache
-        self.cache.store(cache_key, result)
+        self.cache.store(cache_key, result, copy_data=False)
         with self._lock:
             self._total_analyses += 1
         return result
