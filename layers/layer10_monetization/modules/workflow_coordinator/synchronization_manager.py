@@ -121,5 +121,5 @@ class SynchronizationManager:
             "barriers": len(self._barriers),
             "locks": len(self._locks),
             "shared_keys": list(self._shared_state.keys()),
-            "locked_count": sum(1 for l in self._locks.values() if l.is_locked),
+            "locked_count": sum(1 for lock in self._locks.values() if lock.is_locked),
         }
