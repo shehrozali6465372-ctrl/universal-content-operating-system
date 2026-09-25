@@ -92,6 +92,7 @@ class AsyncScheduler:
         async with sem:
             if task.state == TaskState.CANCELLED:
                 return task.to_dict()
+            task._future = asyncio.current_task()
             task.state = TaskState.RUNNING
             task.started_at = time.time()
             self._running_count += 1
