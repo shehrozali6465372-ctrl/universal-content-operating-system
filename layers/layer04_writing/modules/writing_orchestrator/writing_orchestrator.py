@@ -124,7 +124,14 @@ class WritingOrchestrator:
         # 2. Generate draft
         draft_context = intelligence_data or {}
         draft_result = self.draft_manager.generate(plan_result.plan, context=draft_context)
-        result.draft = draft_result.draft.text if draft_result.draft else ""
+        if draft_result.draft is None:
+            raise RuntimeError("Draft generation returned no draft")
+        if draft_result.draft.validation is not None and not draft_result.draft.validation.is_valid:
+            raise ValueError(
+                "Generated draft failed validation: "
+                + "; ".join(draft_result.draft.validation.issues)
+            )
+        result.draft = draft_result.draft.text
         result.total_tokens = draft_result.total_tokens
 
         # 3. Generate hook
