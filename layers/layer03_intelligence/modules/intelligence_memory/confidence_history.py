@@ -2,6 +2,9 @@
 from __future__ import annotations
 import itertools
 import time
+import copy
+import math
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -41,29 +44,35 @@ class ConfidenceHistory:
         self._records: List[ConfidenceRecord] = []
         self._topic_index: Dict[str, List[int]] = {}
         self._module_index: Dict[str, List[int]] = {}
+        self._lock = RLock()
 
     def record(self, topic: str, module: str, confidence: float,
                reasons: Optional[List[str]] = None,
                components: Optional[Dict[str, float]] = None,
                context: Optional[Dict] = None) -> ConfidenceRecord:
         """Record a confidence measurement."""
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence must be finite and between 0 and 1")
         cr = ConfidenceRecord(topic=topic, module=module, confidence=confidence)
-        cr.reasons = reasons or []
-        cr.components = components or {}
-        cr.context = context or {}
-        idx = len(self._records)
-        self._records.append(cr)
-        self._topic_index.setdefault(topic, []).append(idx)
-        self._module_index.setdefault(module, []).append(idx)
-        return cr
+        cr.reasons = list(reasons or [])
+        cr.components = copy.deepcopy(components or {})
+        cr.context = copy.deepcopy(context or {})
+        with self._lock:
+            idx = len(self._records)
+            self._records.append(cr)
+            self._topic_index.setdefault(topic, []).append(idx)
+            self._module_index.setdefault(module, []).append(idx)
+            return copy.deepcopy(cr)
 
     def get_topic_history(self, topic: str) -> List[ConfidenceRecord]:
-        idxs = self._topic_index.get(topic, [])
-        return [self._records[i] for i in idxs if i < len(self._records)]
+        with self._lock:
+            idxs = self._topic_index.get(topic, [])
+            return copy.deepcopy([self._records[i] for i in idxs if i < len(self._records)])
 
     def get_module_history(self, module: str) -> List[ConfidenceRecord]:
-        idxs = self._module_index.get(module, [])
-        return [self._records[i] for i in idxs if i < len(self._records)]
+        with self._lock:
+            idxs = self._module_index.get(module, [])
+            return copy.deepcopy([self._records[i] for i in idxs if i < len(self._records)])
 
     def get_trend(self, topic: str) -> Dict[str, Any]:
         """Get confidence trend for a topic."""
@@ -109,4 +118,5 @@ class ConfidenceHistory:
 
     @property
     def count(self) -> int:
-        return len(self._records)
+        with self._lock:
+            return len(self._records)
