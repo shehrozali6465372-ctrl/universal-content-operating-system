@@ -2,6 +2,7 @@
 from __future__ import annotations
 import time
 from uuid import uuid4
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer04_writing.modules.content_planner.writing_plan import WritingPlan
@@ -49,6 +50,7 @@ class VariantGenerator:
     def __init__(self, prompt_builder: Optional[PromptBuilder] = None) -> None:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self._generation_count = 0
+        self._lock = RLock()
 
     def generate_variants(
         self,
@@ -70,7 +72,8 @@ class VariantGenerator:
             v.metadata = {"description": VARIANT_TYPES.get(vt, "")}
             variants.append(v)
 
-        self._generation_count += 1
+        with self._lock:
+            self._generation_count += 1
         return variants
 
     def score_variants(self, variants: List[DraftVariant]) -> List[DraftVariant]:
@@ -92,4 +95,5 @@ class VariantGenerator:
 
     @property
     def generation_count(self) -> int:
-        return self._generation_count
+        with self._lock:
+            return self._generation_count
