@@ -1,6 +1,7 @@
 """Trend Manager - Orchestrator for Trend Intelligence Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.trend_intelligence.trend_collector import TrendCollector
@@ -82,9 +83,16 @@ class TrendManager:
         self.history = TrendHistory()
         self.event_bus = TrendEventBus()
         self.event_emitter = TrendEventEmitter(self.event_bus)
+        self._lock = RLock()
 
     def analyze_topic(self, topic: str, data: Dict) -> TrendAnalysisResult:
         """Run full trend analysis pipeline for a topic."""
+        if not topic:
+            raise ValueError("topic must not be empty")
+        with self._lock:
+            return self._analyze_topic_locked(topic, data)
+
+    def _analyze_topic_locked(self, topic: str, data: Dict) -> TrendAnalysisResult:
         result = TrendAnalysisResult(topic)
 
         scores = data.get("scores", [])
