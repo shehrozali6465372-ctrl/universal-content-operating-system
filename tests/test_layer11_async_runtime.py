@@ -608,6 +608,7 @@ class TestAsyncRuntime:
         assert manager.resume() is True
         assert manager.runtime.is_accepting is True
         assert manager.stop() is True
+
     def test_pause_rejects_new_coroutines(self):
         runtime = AsyncRuntime()
         runtime.start()
