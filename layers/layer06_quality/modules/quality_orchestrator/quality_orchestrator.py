@@ -10,7 +10,7 @@ from layers.layer06_quality.modules.content_quality_analyzer.quality_analyzer im
 from layers.layer06_quality.modules.fact_citation_validator.fact_validator import FactValidator
 from layers.layer06_quality.modules.plagiarism_originality_engine.plagiarism_engine import PlagiarismEngine
 from layers.layer06_quality.modules.platform_compliance_engine.compliance_engine import ComplianceEngine
-from layers.layer06_quality.modules.quality_orchestrator.pipeline_runner import PipelineRunner
+from layers.layer06_quality.modules.quality_orchestrator.pipeline_runner import PipelineRunner, MODULE_PIPELINE
 from layers.layer06_quality.modules.quality_orchestrator.quality_report import (
     ModuleExecutionRecord,
     QualityReport,
@@ -103,6 +103,46 @@ class QualityOrchestrator:
         report.module_records = records
 
         module_scores = self._records_to_scores(records)
+        required_failures = {
+            r.module_name for r in records
+            if r.status == "failed"
+            and next(
+                (m["required"] for m in MODULE_PIPELINE if m["name"] == r.module_name),
+                False,
+            )
+        }
+        if required_failures:
+            report.overall_score = 0.0
+            report.confidence = 0.0
+            report.grade = "F"
+            report.decision = "reject"
+            report.risk_level = "critical"
+            report.hard_stops = [
+                f"required_module_failed:{name}"
+                for name in sorted(required_failures)
+            ]
+            report.publish_readiness = 0.0
+            report.total_duration_ms = round(
+                (time.monotonic() - start_time) * 1000, 2,
+            )
+            report.events.append({
+                "event": "quality_completed",
+                "report_id": report.report_id,
+                "decision": report.decision,
+                "score": report.overall_score,
+            })
+            report.metadata = {
+                "platform": platform,
+                "content_length": len(content),
+                "modules_executed": sum(r.status == "completed" for r in records),
+                "modules_failed": sum(r.status == "failed" for r in records),
+                "modules_skipped": sum(r.status == "skipped" for r in records),
+                "fail_closed": True,
+            }
+            self._history.append(report)
+            self._orchestration_count += 1
+            return report
+
         quality_result = self.quality_engine.score(
             module_scores, layer2_confidence, layer3_confidence,
         )
