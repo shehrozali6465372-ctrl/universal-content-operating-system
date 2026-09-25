@@ -1,28 +1,57 @@
 """LLMManager — Central AI model management."""
 from __future__ import annotations
+
 import os
 import time
 from typing import Any, Dict, List, Optional
 
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_config import LLMConfig
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_request import LLMRequest
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_response import LLMResponse
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_metrics import LLMMetrics
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_memory import LLMMemory
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_cost_tracker import LLMCostTracker
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_health import LLMHealth
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_registry import LLMRegistry
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_fallback import LLMFallback
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_pool import LLMPool
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_rate_limit import LLMRateLimit
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_cache import LLMCache
-from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_report import LLMReportGenerator
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_config import (
+    LLMConfig,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_request import (
+    LLMRequest,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_response import (
+    LLMResponse,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_metrics import (
+    LLMMetrics,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_memory import (
+    LLMMemory,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_cost_tracker import (
+    LLMCostTracker,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_health import (
+    LLMHealth,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_registry import (
+    LLMRegistry,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_fallback import (
+    LLMFallback,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_pool import (
+    LLMPool,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_rate_limit import (
+    LLMRateLimit,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_cache import (
+    LLMCache,
+)
+from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_report import (
+    LLMReportGenerator,
+)
 
 
 class LLMManager:
     """Central AI model management — the brain of the AI OS."""
 
-    def __init__(self, config: Optional[LLMConfig] = None, generator: Any = None) -> None:
+    def __init__(
+        self, config: Optional[LLMConfig] = None, generator: Any = None
+    ) -> None:
         self.config = config or LLMConfig()
         self._generator = generator
         self.metrics = LLMMetrics()
@@ -46,22 +75,46 @@ class LLMManager:
         self._is_running = False
         return True
 
-    def generate(self, prompt: str, model: str = "", provider: str = "",
-                 temperature: float = None, max_tokens: int = None,
-                 system_prompt: str = "") -> LLMResponse:
+    def generate(
+        self,
+        prompt: str,
+        model: str = "",
+        provider: str = "",
+        temperature: float = None,
+        max_tokens: int = None,
+        system_prompt: str = "",
+    ) -> LLMResponse:
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("prompt must be a non-empty string")
         model = model or self.config.default_model
         provider = provider or self.config.default_provider
-        temperature = temperature if temperature is not None else self.config.default_temperature
-        max_tokens = max_tokens or self.config.default_max_tokens
+        temperature = (
+            temperature
+            if temperature is not None
+            else self.config.default_temperature
+        )
+        max_tokens = (
+            max_tokens
+            if max_tokens is not None
+            else self.config.default_max_tokens
+        )
+        if max_tokens <= 0:
+            raise ValueError("max_tokens must be positive")
 
         request = LLMRequest(prompt, model, provider)
         request.temperature = temperature
         request.max_tokens = max_tokens
         request.system_prompt = system_prompt
 
-        cache_key = f"{provider}:{model}:{prompt[:200]}"
         if self.config.enable_cache:
-            cached = self.cache.get(prompt, model, provider, system_prompt, temperature, max_tokens)
+            cached = self.cache.get(
+                prompt,
+                model,
+                provider,
+                system_prompt,
+                temperature,
+                max_tokens,
+            )
             if cached:
                 response = LLMResponse(cached, model, provider)
                 response.metadata["cached"] = True
@@ -71,9 +124,12 @@ class LLMManager:
         if self._generator is None:
             if os.getenv("UCOS_ENV", "").strip().lower() == "production":
                 raise RuntimeError(
-                    "LLMManager has no production generator; refusing simulated AI output"
+                    "LLMManager has no production generator; "
+                    "refusing simulated AI output"
                 )
-            generated = f"[development-only simulated response for {provider}/{model}]"
+            generated = (
+                f"[development-only simulated response for {provider}/{model}]"
+            )
         else:
             generated = self._generator(
                 prompt=prompt,
@@ -84,30 +140,63 @@ class LLMManager:
                 system_prompt=system_prompt,
             )
             if not isinstance(generated, str) or not generated.strip():
-                raise RuntimeError("AI generator returned empty or non-text output")
+                raise RuntimeError(
+                    "AI generator returned empty or non-text output"
+                )
+
         response = LLMResponse(generated, model, provider)
         response.request_id = request.request_id
         response.latency_ms = (time.time() - start) * 1000
-        response.usage = {"prompt_tokens": len(prompt.split()) * 2,
-                          "completion_tokens": len(response.content.split()) * 2,
-                          "total_tokens": len(prompt.split()) * 2 + len(response.content.split()) * 2}
+        response.usage = {
+            "prompt_tokens": len(prompt.split()) * 2,
+            "completion_tokens": len(response.content.split()) * 2,
+            "total_tokens": (
+                len(prompt.split()) * 2 + len(response.content.split()) * 2
+            ),
+        }
+        response.metadata["usage_estimated"] = True
+        response.metadata["cost_estimated"] = True
 
-        self.metrics.record_request(provider, model, response.total_tokens, 0.001,
-                                    response.latency_ms, True)
-        self.cost_tracker.record(provider, model, response.usage["prompt_tokens"],
-                                  response.usage["completion_tokens"], 0.001)
+        self.metrics.record_request(
+            provider, model, response.total_tokens, 0.001,
+            response.latency_ms, True
+        )
+        self.cost_tracker.record(
+            provider,
+            model,
+            response.usage["prompt_tokens"],
+            response.usage["completion_tokens"],
+            0.001,
+        )
 
         if self.config.enable_cache:
-            self.cache.set(prompt, model, response.content, provider, system_prompt, temperature, max_tokens)
+            self.cache.set(
+                prompt,
+                model,
+                response.content,
+                provider,
+                system_prompt,
+                temperature,
+                max_tokens,
+            )
 
         return response
 
     def generate_stream(self, prompt: str, model: str = "", on_chunk=None):
-        response = self.generate(prompt, model)
-        return response
+        if not self.config.enable_streaming:
+            raise RuntimeError(
+                "streaming is disabled; enable_streaming must be true"
+            )
+        raise NotImplementedError(
+            "LLMManager streaming requires a provider-native streaming adapter"
+        )
 
-    def chat(self, messages: List[Dict[str, str]], model: str = "",
-             provider: str = "") -> LLMResponse:
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = "",
+        provider: str = "",
+    ) -> LLMResponse:
         if not messages:
             raise ValueError("messages must not be empty")
         system_prompt = ""
@@ -137,15 +226,21 @@ class LLMManager:
             max_tokens=self.config.default_max_tokens,
         )
         if not isinstance(generated, str) or not generated.strip():
-            raise RuntimeError("AI generator returned empty or non-text chat output")
-        return LLMResponse(
+            raise RuntimeError(
+                "AI generator returned empty or non-text chat output"
+            )
+        response = LLMResponse(
             generated,
             model or self.config.default_model,
             provider or self.config.default_provider,
         )
+        response.metadata["usage_estimated"] = True
+        response.metadata["cost_estimated"] = True
+        return response
 
-    def batch_generate(self, prompts: List[str], model: str = "",
-                       provider: str = "") -> List[LLMResponse]:
+    def batch_generate(
+        self, prompts: List[str], model: str = "", provider: str = ""
+    ) -> List[LLMResponse]:
         return [self.generate(p, model, provider) for p in prompts]
 
     def get_usage_report(self) -> Dict[str, Any]:
@@ -155,10 +250,17 @@ class LLMManager:
         return self.cost_tracker.get_stats()
 
     def get_health(self) -> Dict[str, Any]:
-        return {"healthy": self._is_running, "health": self.health.get_stats(),
-                "metrics": self.metrics.to_dict(), "cost": self.cost_tracker.get_stats()}
+        return {
+            "healthy": self._is_running,
+            "health": self.health.get_stats(),
+            "metrics": self.metrics.to_dict(),
+            "cost": self.cost_tracker.get_stats(),
+        }
 
     def status(self) -> Dict[str, Any]:
-        return {"running": self._is_running, "config": self.config.to_dict(),
-                "metrics": self.metrics.to_dict(), "cache": self.cache.get_stats()}
-
+        return {
+            "running": self._is_running,
+            "config": self.config.to_dict(),
+            "metrics": self.metrics.to_dict(),
+            "cache": self.cache.get_stats(),
+        }
