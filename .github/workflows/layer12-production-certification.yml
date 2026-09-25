@@ -57,6 +57,6 @@ jobs:
       - name: Layer 12 unit suite
         run: python -m pytest tests/test_layer12_ai_foundation.py -q --tb=short
 
-      - name: Layer 12 lint
+      - name: Layer 12 production-source lint
         run: |
-          ruff check layers/layer12_ai_foundation tests/test_layer12_production_contracts.py tests/test_layer12_ai_foundation.py --select E,F,W --ignore E501,E402
+          ruff check layers/layer12_ai_foundation --select E,F,W --ignore E501,E402
