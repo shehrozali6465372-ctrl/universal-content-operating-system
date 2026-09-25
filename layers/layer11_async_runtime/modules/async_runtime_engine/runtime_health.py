@@ -83,11 +83,24 @@ class RuntimeHealth:
 
     def get_results(self) -> List[HealthCheck]:
         with self._lock:
-            return list(self._results)
+            return [self._copy_result(result) for result in self._results]
+
+    @staticmethod
+    def _copy_result(result: HealthCheck) -> HealthCheck:
+        copied = HealthCheck(result.name)
+        copied.healthy = result.healthy
+        copied.message = result.message
+        copied.latency_ms = result.latency_ms
+        copied.checked_at = result.checked_at
+        return copied
 
     def get_unhealthy(self) -> List[HealthCheck]:
         with self._lock:
-            return [result for result in self._results if not result.healthy]
+            return [
+                self._copy_result(result)
+                for result in self._results
+                if not result.healthy
+            ]
 
     def get_stats(self) -> Dict[str, object]:
         with self._lock:
