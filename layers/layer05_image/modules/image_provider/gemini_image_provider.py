@@ -205,8 +205,12 @@ class GeminiImageProvider(BaseImageProvider):
     def _get_api_key(self) -> str:
         """Get Gemini API key from environment."""
         if self.api_key is not None:
-            return self.api_key
-        return os.environ.get("GEMINI_API_KEY_1", "")
+            return self.api_key.strip()
+        for name in ("GEMINI_API_KEY_1", "GEMINI_API_KEY"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return value
+        return ""
 
     def _parse_size(self, size: str) -> Tuple[int, int]:
         """Parse and validate a WIDTHxHEIGHT size."""
