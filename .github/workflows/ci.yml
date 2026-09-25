@@ -96,7 +96,9 @@ jobs:
         run: python -m pytest tests/layer04_writing/test_production_hardening.py tests/layer04_writing/test_modules_3_10.py -q --tb=short
 
       - name: Run Layer 5 Production Gate Tests
-        run: python -m pytest tests/unit/layer05_image/test_gemini_image_provider.py -q --tb=short
+        run: |
+          python -m pytest tests/unit/layer05_image/test_gemini_image_provider.py -q --tb=short
+          ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
         
       - name: Run Layer 14 Production Gate
         run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
