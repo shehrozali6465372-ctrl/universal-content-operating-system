@@ -266,7 +266,7 @@ class TestBatchProcessor:
     def test_analyze_with_cache(self):
         r1 = self.bp.analyze_with_cache("AI technology")
         r2 = self.bp.analyze_with_cache("AI technology")
-        assert r1 is r2  # Same cached object
+        assert r1 is not r2  # Cached result is defensively copied
 
     def test_cache_size(self):
         self.bp.analyze_with_cache("text1")
