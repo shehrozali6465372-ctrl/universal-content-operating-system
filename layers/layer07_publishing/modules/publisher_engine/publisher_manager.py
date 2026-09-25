@@ -3,6 +3,8 @@ from __future__ import annotations
 import itertools
 import time
 from pathlib import Path
+
+from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
 from typing import Any, Dict, List, Optional
 
 from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
@@ -15,6 +17,7 @@ from layers.layer07_publishing.modules.publisher_engine.publish_audit import Pub
 from layers.layer07_publishing.modules.publisher_engine.publish_result import PublisherResult
 from layers.layer07_publishing.modules.publisher_engine.publisher_metrics import PublisherMetrics
 from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
+from layers.layer07_publishing.modules.publishing_policies.policy_manager import PolicyManager
 
 _MANAGER_COUNTER = itertools.count(1)
 
@@ -28,7 +31,8 @@ class PublisherManager:
                  parser: Optional[ResponseParser] = None,
                  audit: Optional[PublishAudit] = None,
                  metrics: Optional[PublisherMetrics] = None,
-                 repetition_guard: Optional[ContentRepetitionGuard] = None) -> None:
+                 repetition_guard: Optional[ContentRepetitionGuard] = None,
+                 policy_manager: Optional[PolicyManager] = None) -> None:
         self.plugin_manager = plugin_manager or PluginManager()
         self.executor = executor or PublishExecutor()
         self.uploader = uploader or UploadCoordinator()
@@ -36,6 +40,7 @@ class PublisherManager:
         self.audit = audit or PublishAudit()
         self.metrics = metrics or PublisherMetrics()
         self.repetition_guard = repetition_guard or ContentRepetitionGuard()
+        self.policy_manager = policy_manager or PolicyManager()
         self._events: List[Dict[str, Any]] = []
         self._request_count = 0
 
@@ -62,6 +67,20 @@ class PublisherManager:
             self._record_event("publish_failed", request, result)
             return result
 
+        # Enforce policy rules for known production platforms.
+        if request.platform.strip().lower() in self.policy_manager.get_all_platforms():
+            policy = self.policy_manager.validate_content(
+                request.platform,
+                request.content,
+                image_count=sum(1 for asset in request.media_assets if asset.is_image()),
+                brand_id=request.metadata.get("brand_id", ""),
+            )
+            if not policy.passed:
+                result.set_error("; ".join(policy.violations), "policy")
+                tracker.update("failed", "Policy validation failed")
+                self._record_event("publish_rejected_policy", request, result)
+                return result
+
         account_id = request.metadata.get("account_id")
         if account_id and not request.metadata.get("repetition_reserved_by_pipeline"):
             guard = self._account_repetition_guard(str(account_id))
@@ -79,22 +98,23 @@ class PublisherManager:
             reservation_id = decision.reservation_id
 
         try:
+            try:
+                media_paths = self._resolve_media_paths(request)
+            except (OSError, ValueError) as exc:
+                result.set_error(str(exc), "media")
+                tracker.update("failed", str(exc)[:100])
+                self._record_event("publish_failed", request, result)
+                return result
+
             if request.has_media():
-                tracker.update("uploading", f"Uploading {len(request.media_assets)} assets")
-                upload_results = self.uploader.upload_assets(request.media_assets, self._default_uploader)
-                failed_uploads = [u for u in upload_results if not u.success]
-                if failed_uploads:
-                    result.set_error(f"Upload failed: {failed_uploads[0].error}", "upload")
-                    tracker.update("failed", "Upload failed")
-                    self._record_event("publish_failed", request, result)
-                    return result
+                tracker.update("uploading", f"Preparing {len(media_paths)} media assets")
 
             tracker.update("publishing", f"Publishing to {request.platform}")
             publisher = self._get_publisher(request.platform)
             if publisher is None:
                 result.set_error(f"No plugin registered for '{request.platform}'", "plugin")
             else:
-                pub_result = self.executor.execute_publish(publisher, request)
+                pub_result = self.executor.execute_publish(publisher, request, media_paths=media_paths)
                 if pub_result.success:
                     result.set_success(pub_result.post_id, pub_result.url)
                     if pub_result.metadata:
@@ -103,6 +123,8 @@ class PublisherManager:
                     if reservation_id is not None:
                         guard.finalize(reservation_id, pub_result.post_id)
                         reservation_id = None
+                    if request.platform.strip().lower() in self.policy_manager.get_all_platforms():
+                        self.policy_manager.record_publish(request.platform)
                 else:
                     result.set_error(pub_result.error_message, self.parser.classify_error(pub_result.error_message))
                     tracker.update("failed", pub_result.error_message[:100])
@@ -143,11 +165,29 @@ class PublisherManager:
     def _get_publisher(self, platform: str):
         return self.plugin_manager.registry.get_instance(platform)
 
-    def _default_uploader(self, asset: Any) -> UploadResult:
-        result = UploadResult(asset.asset_id or asset.file_name)
-        result.success = True
-        result.media_id = f"media_{asset.file_name}"
-        return result
+    @staticmethod
+    def _resolve_media_paths(request: PublishRequest) -> List[str]:
+        paths = request.get_media_paths()
+        if not paths:
+            return []
+
+        url_platforms = {"instagram", "pinterest", "tiktok"}
+        if request.platform.strip().lower() not in url_platforms:
+            return paths
+
+        resolved: List[str] = []
+        for path in paths:
+            if path.startswith(("http://", "https://")):
+                resolved.append(path)
+                continue
+            public_url = RuntimeMedia.public_url(path)
+            if not public_url:
+                raise ValueError(
+                    f"{request.platform} requires a public media URL; "
+                    f"no URL is configured for asset '{path}'"
+                )
+            resolved.append(public_url)
+        return resolved
 
     def _record_event(self, event: str, request: PublishRequest, result: PublisherResult) -> None:
         self._events.append({"event": event, "request_id": request.request_id,
