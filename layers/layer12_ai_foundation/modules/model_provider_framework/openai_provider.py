@@ -1,46 +1,76 @@
-"""openai_provider.py — OpenAI provider implementation."""
+"""OpenAI provider implementation with real HTTP transport."""
 from __future__ import annotations
+import json
+import os
 import time
-import itertools
+import uuid
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional
 from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import BaseProvider, ProviderRequest, ProviderResponse
 
-_REQUEST_ID = itertools.count(1)
-
-
 class OpenAIProvider(BaseProvider):
-    """OpenAI API provider (GPT-4, GPT-4o, GPT-3.5, etc.)."""
+    """Production OpenAI-compatible chat-completions provider."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         super().__init__("openai", config)
-        self._supported_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4",
-                                   "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"]
-        self._api_key = (config or {}).get("api_key", "")
-        self._base_url = (config or {}).get("base_url", "https://api.openai.com/v1")
-        self._organization = (config or {}).get("organization", "")
+        cfg = config or {}
+        self._api_key = str(cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or "")
+        self._base_url = str(cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+        self._timeout = float(cfg.get("timeout", 60.0))
+        self._supported_models = list(cfg.get("supported_models") or ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"])
 
     def initialize(self) -> bool:
-        self._is_initialized = bool(self._api_key) or True  # Allow simulation
-        self._health_status = "healthy"
+        self._is_initialized = bool(self._api_key)
+        self._health_status = "healthy" if self._is_initialized else "unconfigured"
         return self._is_initialized
+
+    def _call(self, messages: List[Dict[str, str]], model: str, request: ProviderRequest) -> ProviderResponse:
+        if not self._api_key:
+            raise RuntimeError("OpenAI API key is not configured")
+        payload: Dict[str, Any] = {"model": model, "messages": messages, "temperature": request.temperature, "max_tokens": request.max_tokens}
+        if request.stop:
+            payload["stop"] = request.stop
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(f"{self._base_url}/chat/completions", data=data, method="POST", headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"})
+        start = time.time()
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            self._metrics["errors"] += 1
+            raise RuntimeError(f"OpenAI request failed: {type(exc).__name__}") from exc
+        choices = body.get("choices") or []
+        if not choices:
+            self._metrics["errors"] += 1
+            raise RuntimeError("OpenAI response contained no choices")
+        message = choices[0].get("message") or {}
+        content = message.get("content", "")
+        if not isinstance(content, str) or not content.strip():
+            self._metrics["errors"] += 1
+            raise RuntimeError("OpenAI response contained empty content")
+        usage = body.get("usage") or {}
+        response = ProviderResponse(content, model, "openai")
+        response.request_id = str(body.get("id") or f"openai_{uuid.uuid4().hex}")
+        response.usage = {"prompt_tokens": int(usage.get("prompt_tokens", 0)), "completion_tokens": int(usage.get("completion_tokens", 0)), "total_tokens": int(usage.get("total_tokens", 0))}
+        response.finish_reason = str(choices[0].get("finish_reason") or "stop")
+        response.latency_ms = (time.time() - start) * 1000
+        self._metrics["requests"] += 1
+        self._metrics["total_tokens"] += response.usage["total_tokens"]
+        return response
 
     def generate(self, request: ProviderRequest) -> ProviderResponse:
-        start = time.time()
-        req_id = f"openai_{next(_REQUEST_ID)}"
-        content = f"[OpenAI/{request.model}] Generated for: {request.prompt[:100]}..."
-        tokens = max(10, len(request.prompt.split()) * 2)
-        resp = ProviderResponse(content, request.model or "gpt-4o", "openai")
-        resp.request_id = req_id
-        resp.usage = {"prompt_tokens": tokens, "completion_tokens": tokens * 2, "total_tokens": tokens * 3}
-        resp.latency_ms = (time.time() - start) * 1000
-        self._metrics["requests"] += 1
-        self._metrics["total_tokens"] += resp.usage["total_tokens"]
-        return resp
+        model = request.model or "gpt-4o-mini"
+        messages: List[Dict[str, str]] = []
+        if request.system_prompt:
+            messages.append({"role": "system", "content": request.system_prompt})
+        messages.extend(request.messages or [{"role": "user", "content": request.prompt}])
+        return self._call(messages, model, request)
 
     def chat(self, messages: List[Dict[str, str]], model: str = "") -> ProviderResponse:
-        prompt = messages[-1]["content"] if messages else ""
-        req = ProviderRequest(prompt, model or "gpt-4o", "openai")
-        return self.generate(req)
+        request = ProviderRequest("", model or "gpt-4o-mini", "openai")
+        request.messages = list(messages)
+        return self._call(request.messages, request.model, request)
 
     def is_available(self) -> bool:
-        return self._is_initialized
+        return self._is_initialized and bool(self._api_key)
