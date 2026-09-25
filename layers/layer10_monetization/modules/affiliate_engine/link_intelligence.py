@@ -5,7 +5,7 @@ import random
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class LinkVariant:
@@ -189,23 +189,23 @@ class LinkIntelligence:
     def get_top_links(self, metric: str = "revenue", limit: int = 10) -> List[TrackedLink]:
         links = list(self._links.values())
         if metric == "revenue":
-            links.sort(key=lambda l: l.total_revenue, reverse=True)
+            links.sort(key=lambda link: link.total_revenue, reverse=True)
         elif metric == "clicks":
-            links.sort(key=lambda l: l.total_clicks, reverse=True)
+            links.sort(key=lambda link: link.total_clicks, reverse=True)
         elif metric == "conversions":
-            links.sort(key=lambda l: l.total_conversions, reverse=True)
+            links.sort(key=lambda link: link.total_conversions, reverse=True)
         elif metric == "conversion_rate":
             links.sort(
-                key=lambda l: (l.total_conversions / l.total_clicks if l.total_clicks > 0 else 0),
+                key=lambda link: (link.total_conversions / link.total_clicks if link.total_clicks > 0 else 0),
                 reverse=True,
             )
         return links[:limit]
 
     def get_link_stats(self) -> Dict[str, Any]:
         links = list(self._links.values())
-        total_clicks = sum(l.total_clicks for l in links)
-        total_conversions = sum(l.total_conversions for l in links)
-        total_revenue = sum(l.total_revenue for l in links)
+        total_clicks = sum(link.total_clicks for link in links)
+        total_conversions = sum(link.total_conversions for link in links)
+        total_revenue = sum(link.total_revenue for link in links)
         return {
             "total_links": len(links),
             "active_links": sum(1 for l in links if any(v.active for v in l.variants)),
