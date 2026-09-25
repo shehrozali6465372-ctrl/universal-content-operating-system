@@ -121,8 +121,8 @@ class AsyncEventLoop:
             "total_loops": len(self._loops),
             "active_loop": self._active_loop is not None
             and not self._active_loop.is_closed(),
-            "tasks_spawned": sum(l.tasks_spawned for l in self._loops.values()),
-            "tasks_completed": sum(l.tasks_completed for l in self._loops.values()),
+            "tasks_spawned": sum(loop.tasks_spawned for loop in self._loops.values()),
+            "tasks_completed": sum(loop.tasks_completed for loop in self._loops.values()),
         }
 
     def count(self) -> int:
