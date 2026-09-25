@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib, hmac, json, os, time, threading, glob
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Any
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs\n\nlogger = logging.getLogger(__name__)
 
 class APIResponse:
     __slots__=("status_code","data","error","headers")
@@ -97,7 +97,7 @@ class APIGateway:
             def log_message(self,format,*args): pass
         try:
             self._server=ThreadingHTTPServer((self._host,self._port),Handler); self._running=True; self._thread=threading.Thread(target=self._server.serve_forever,daemon=True); self._thread.start()
-        except OSError as exc: print(f"API Gateway failed to start on {self._host}:{self._port}: {exc}")
+        except OSError as exc: logger.error("API Gateway failed to start on %s:%s: %s", self._host, self._port, exc)
     def stop(self):
         if self._server: self._server.shutdown(); self._running=False
     def is_running(self): return self._running
