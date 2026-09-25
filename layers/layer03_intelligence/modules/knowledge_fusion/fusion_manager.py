@@ -1,6 +1,7 @@
 """Fusion Manager - Orchestrator for Knowledge Fusion Module."""
 from __future__ import annotations
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer03_intelligence.modules.knowledge_fusion.fusion_engine import FusionEngine, UnifiedIntelligence
@@ -38,8 +39,15 @@ class FusionManager:
         self.source_ranker = SourceRanker()
         self.evidence_aggregator = EvidenceAggregator()
         self.intelligence_merger = IntelligenceMerger()
+        self._lock = RLock()
 
     def fuse(self, topic: str, data: Dict) -> FusionResult:
+        if not topic or not isinstance(data, dict):
+            raise ValueError("topic must be non-empty and data must be a dict")
+        with self._lock:
+            return self._fuse_locked(topic, data)
+
+    def _fuse_locked(self, topic: str, data: Dict) -> FusionResult:
         result = FusionResult(topic)
 
         # Core fusion
