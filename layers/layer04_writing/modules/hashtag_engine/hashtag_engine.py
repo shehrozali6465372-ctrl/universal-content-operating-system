@@ -1,6 +1,7 @@
 """Hashtag & Keyword Engine — Platform-specific hashtags and SEO keywords."""
 from __future__ import annotations
 import re
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
