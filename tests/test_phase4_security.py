@@ -22,7 +22,7 @@ class TestAuthentication:
         assert session is None
 
     def test_api_key(self):
-        user = self.am.register_user("ali")
+        user = self.am.register_user("ali", password="test-password-123")
         assert self.am.register_api_key(user.user_id, "key123")
         assert self.am.authenticate_api_key("key123") == user.user_id
 
