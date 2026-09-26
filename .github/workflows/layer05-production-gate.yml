@@ -1,4 +1,5 @@
 name: Layer 5 Production Gate
+# Layer 5 certification gate: real-provider, persistence, provenance, and failure-path verification.
 
 on:
   push:
