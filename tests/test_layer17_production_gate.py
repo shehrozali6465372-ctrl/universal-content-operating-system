@@ -103,7 +103,7 @@ def test_firewall_rate_limit_is_thread_safe() -> None:
 
 def test_expired_tokens_are_removed_from_reverse_indexes() -> None:
     manager = TokenManager()
-    token = manager.create_token(TokenType.SESSION, "user-1", expires_in=0.001)
+    manager.create_token(TokenType.SESSION, "user-1", expires_in=0.001)
     import time
     time.sleep(0.01)
     assert manager.cleanup_expired() == 1
