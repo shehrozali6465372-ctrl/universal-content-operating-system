@@ -7,7 +7,7 @@ from enum import Enum
 
 
 class AuditSeverity(str, Enum):
-    INFO = "info"; WARNING = "warning"; ERROR = "error"; CRITICAL = "critical"
+    INFO = "info"\n    WARNING = "warning"\n    ERROR = "error"\n    CRITICAL = "critical"
 
 
 class AuditEvent:
