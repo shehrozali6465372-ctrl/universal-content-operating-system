@@ -33,10 +33,11 @@ def test_invalid_size_is_rejected() -> None:
 
 def test_real_response_is_persisted_with_content_hash(tmp_path: Path) -> None:
     image_bytes = b"\x89PNG\r\n\x1a\nreal-image"
-    body = {"candidates": [{"content": {"parts": [{"inlineData": {
-        "mimeType": "image/png",
+    body = {"steps": [{"type": "model_output", "content": [{
+        "type": "image",
+        "mime_type": "image/png",
         "data": base64.b64encode(image_bytes).decode("ascii"),
-    }}]}}]}
+    }]}]}
 
     class FakeResponse:
         def __enter__(self):
@@ -69,10 +70,11 @@ def test_reference_url_fails_closed_instead_of_being_treated_as_visual_input() -
 
 def test_gemini_request_uses_current_image_config(tmp_path: Path) -> None:
     image_bytes = b"\\x89PNG\\r\\n\\x1a\\nrequest-contract"
-    body = {"candidates": [{"content": {"parts": [{"inlineData": {
-        "mimeType": "image/png",
+    body = {"steps": [{"type": "model_output", "content": [{
+        "type": "image",
+        "mime_type": "image/png",
         "data": base64.b64encode(image_bytes).decode("ascii"),
-    }}]}}]}
+    }]}]}
 
     class FakeResponse:
         def __enter__(self):
