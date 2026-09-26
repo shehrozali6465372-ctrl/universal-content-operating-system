@@ -140,10 +140,11 @@ def test_interactions_api_extracts_output_image(tmp_path: Path) -> None:
 
 def test_rate_limit_rotates_configured_environment_keys(tmp_path: Path) -> None:
     image_bytes = b"\\x89PNG\\r\\n\\x1a\\nrotated"
-    body = {"candidates": [{"content": {"parts": [{"inlineData": {
-        "mimeType": "image/png",
+    body = {"steps": [{"type": "model_output", "content": [{
+        "type": "image",
+        "mime_type": "image/png",
         "data": base64.b64encode(image_bytes).decode("ascii"),
-    }}]}}]}
+    }]}]}
     class FakeResponse:
         def __enter__(self):
             return self
