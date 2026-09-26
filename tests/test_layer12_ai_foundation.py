@@ -344,10 +344,11 @@ class TestProviderBase:
         assert p.name == "openai"
         assert len(p.supported_models) > 0
 
-    def test_provider_initialize(self):
+    def test_provider_initialize(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
         p = OpenAIProvider()
-        assert p.initialize() is False
-        assert p.is_initialized is False
+        assert p.initialize() is True
+        assert p.is_initialized is True
 
     def test_provider_generate(self):
         p = OpenAIProvider()
@@ -359,10 +360,11 @@ class TestProviderBase:
         with pytest.raises(RuntimeError, match="API key is not configured"):
             p.chat([{"role": "user", "content": "Hi"}])
 
-    def test_provider_is_available(self):
+    def test_provider_is_available(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
         p = OpenAIProvider()
         p.initialize()
-        assert p.is_available() is False
+        assert p.is_available() is True
 
     def test_provider_stats(self):
         p = OpenAIProvider()
@@ -402,13 +404,16 @@ class TestAllProviders:
     def test_gemini(self):
         self._test_provider(GeminiProvider, "gemini", "gemini-3.8-flash")
 
-    def test_deepseek(self):
+    def test_deepseek(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "production")
         self._test_provider(DeepSeekProvider, "deepseek", "deepseek-flash")
 
-    def test_grok(self):
+    def test_grok(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "production")
         self._test_provider(GrokProvider, "grok", "grok-2")
 
-    def test_mistral(self):
+    def test_mistral(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "production")
         self._test_provider(MistralProvider, "mistral", "mistral-large-latest")
 
     def test_cohere(self):
@@ -423,10 +428,14 @@ class TestAllProviders:
     def test_qwen(self):
         self._test_provider(QwenProvider, "qwen", "qwen-max")
 
-    def test_openrouter(self):
+    def test_openrouter(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "production")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         self._test_provider(OpenRouterProvider, "openrouter", "openai/gpt-4o")
 
-    def test_provider_chat_all(self):
+    def test_provider_chat_all(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "production")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         for cls, name in [(OpenAIProvider, "openai"), (ClaudeProvider, "claude"),
                            (GeminiProvider, "gemini"), (DeepSeekProvider, "deepseek"),
                            (GrokProvider, "grok"), (MistralProvider, "mistral"),
@@ -461,12 +470,13 @@ class TestProviderRegistry:
         r.register(ClaudeProvider())
         assert r.count() == 2
 
-    def test_get_available(self):
+    def test_get_available(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
         r = ProviderRegistry()
         p = OpenAIProvider()
         p.initialize()
         r.register(p)
-        assert r.get_available() == []
+        assert r.get_available() == [p]
 
     def test_alias(self):
         r = ProviderRegistry()
@@ -6118,7 +6128,8 @@ class TestAIOrchestrator:
         o = AIOrchestrator()
         assert o.start(); assert o.stop()
 
-    def test_process(self):
+    def test_process(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
         o = AIOrchestrator()
         o.start()
         result = o.process("test", {"input": "data"})

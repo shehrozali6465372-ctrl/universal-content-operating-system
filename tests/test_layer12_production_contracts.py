@@ -46,6 +46,7 @@ from layers.layer12_ai_foundation.modules.model_provider_framework.openrouter_pr
     ],
 )
 def test_cloud_providers_fail_closed_without_credentials(monkeypatch, provider_cls):
+    monkeypatch.setenv("UCOS_ENV", "production")
     for name in (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",

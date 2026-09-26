@@ -1,23 +1,9 @@
 """Comprehensive Layer 5 Tests — 120+ tests for production-grade coverage."""
+import pytest
+
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
 from layers.layer05_image.modules.image_prompt.image_prompt import ImagePromptBuilder, STYLE_PRESETS
-from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, MockImageProvider, ImageResponse
-import hashlib
-
-class RealTestImageProvider(BaseImageProvider):
-    def __init__(self):
-        super().__init__(provider_name="test-real")
-    def generate(self, prompt, size="1024x1024", **kwargs):
-        response = ImageResponse()
-        response.image_url = "https://example.com/test-image.png"
-        response.image_data = b"test-image-bytes"
-        response.provider = "test-real"
-        response.model = "test-model"
-        response.revised_prompt = prompt
-        response.metadata["sha256"] = hashlib.sha256(response.image_data).hexdigest()
-        return response
-    def is_configured(self):
-        return True
+from layers.layer05_image.modules.image_provider.image_provider import MockImageProvider, ImageResponse
 from layers.layer05_image.modules.layout_engine.layout_engine import LayoutEngine, LAYOUT_PRESETS
 from layers.layer05_image.modules.thumbnail_engine.thumbnail_engine import ThumbnailEngine
 from layers.layer05_image.modules.carousel_planner.carousel_planner import CarouselPlanner
@@ -335,7 +321,7 @@ class TestCarouselPlannerComprehensive:
         assert plan.slides[-1].is_cta is True
 
     def test_content_slides(self):
-        plan = self.cp.plan("AI", "instagram", key_points=["A", "B"])
+        plan = self.cp.plan("AI", "instagram", key_points=["A", "B"], slide_count=4)
         content = [s for s in plan.slides if not s.is_cover and not s.is_cta]
         assert len(content) == 2
 
@@ -642,8 +628,12 @@ class TestPromptEvaluator:
 # ═══════════════════════════════════════
 
 class TestImageOrchestratorComprehensive:
+    @pytest.fixture(autouse=True)
+    def development_env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
+
     def setup_method(self):
-        self.orch = ImageOrchestrator(provider=RealTestImageProvider())
+        self.orch = ImageOrchestrator(provider=MockImageProvider())
 
     def test_run_all_platforms(self):
         for p in ("facebook", "instagram", "twitter", "linkedin", "youtube", "pinterest", "tiktok", "threads"):

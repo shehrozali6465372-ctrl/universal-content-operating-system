@@ -88,10 +88,12 @@ class ImagePlanner:
         if not isinstance(count, int) or isinstance(count, bool) or count < 1 or count > 100:
             raise ValueError("count must be between 1 and 100")
         plans: List[ImagePlan] = []
+        default_spec = PLATFORM_IMAGE_SPECS[platform]
+        dimensions = next(iter(default_spec.values()))
         for _ in range(count):
             ip = ImagePlan(image_type=image_type, platform=platform)
             ip.description = f"{image_type} image about {topic}"
-            ip.dimensions = PLATFORM_IMAGE_SPECS[platform]["feed"]
+            ip.dimensions = dimensions
             plans.append(ip)
         with self._counter_lock:
             self._plan_count += len(plans)
