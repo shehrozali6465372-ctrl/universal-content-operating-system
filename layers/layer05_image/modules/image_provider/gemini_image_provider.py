@@ -212,7 +212,9 @@ class GeminiImageProvider(BaseImageProvider):
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             method="POST")
         body = self._request_json(req, "Gemini generateContent API")
-        result = ImageResponse(provider="gemini", model=self._model)
+        result = ImageResponse()
+        result.provider = "gemini"
+        result.model = self._model
         for candidate in body.get("candidates", []):
             for part in candidate.get("content", {}).get("parts", []):
                 inline = part.get("inlineData")
