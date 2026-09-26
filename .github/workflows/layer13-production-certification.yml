@@ -90,4 +90,5 @@ jobs:
           if failed or not report.get("certified", False):
               raise SystemExit(f"Layer 13 verification failed: {failed or report}")
           print("Layer 13 PostgreSQL verification: PASS")
+          print("Layer 13 production certification: CERTIFIED")
           PY
