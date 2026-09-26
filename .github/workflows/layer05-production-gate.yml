@@ -61,7 +61,8 @@ jobs:
           errors = []
           providers = []
           if os.environ.get("GEMINI_API_KEY"):
-              providers.append(("gemini", GeminiImageProvider(model="gemini-3.1-flash-image")))
+              providers.append(("gemini-3.1", GeminiImageProvider(model="gemini-3.1-flash-image")))
+              providers.append(("gemini-3-pro", GeminiImageProvider(model="gemini-3-pro-image")))
           if os.environ.get("OPENROUTER_API_KEY"):
               providers.append(("openrouter", OpenRouterImageProvider(model="bytedance-seed/seedream-4.5")))
           if not providers:
@@ -81,7 +82,7 @@ jobs:
                   path = Path(result.image_url)
                   if not path.is_file() or path.stat().st_size == 0:
                       raise RuntimeError("persisted image is missing or empty")
-                  print(f"REAL_{name.upper()}_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
+                  print(f"REAL_{name.upper().replace("-", "_")}_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
                   raise SystemExit(0)
               except Exception as exc:
                   errors.append(f"{name}: {type(exc).__name__}: {exc}")
