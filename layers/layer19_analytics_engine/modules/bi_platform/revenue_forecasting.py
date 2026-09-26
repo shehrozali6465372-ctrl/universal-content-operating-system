@@ -149,7 +149,8 @@ class RevenueForecasting:
         predicted_30 = forecast_30.get("total_revenue", 0)
         inv = require_finite_number(investment, "investment", minimum=0.0)
         if inv <= 0:
-            raise ValueError("ROI forecast requires a real investment amount; no synthetic default is permitted")
+            raise ValueError("ROI forecast requires a real investment amount
+            no synthetic default is permitted")
         roi_30 = ((predicted_30 - inv) / inv * 100) if inv > 0 else 0
         predicted_90 = summary.get("90day", {}).get("total_revenue", 0)
         roi_90 = ((predicted_90 - inv * 3) / (inv * 3) * 100) if inv > 0 else 0
