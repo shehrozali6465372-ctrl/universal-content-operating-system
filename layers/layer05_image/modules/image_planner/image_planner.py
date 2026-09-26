@@ -1,6 +1,7 @@
 """Image Planner — Plans what images to create (independent of writing)."""
 from __future__ import annotations
 import uuid
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
@@ -83,17 +84,18 @@ class ImagePlanner:
 
     def __init__(self) -> None:
         self._plan_count = 0
+        self._counter_lock = RLock()
 
     def plan(self, topic: str, platform: str = "facebook",
              image_type: str = "photo", count: int = 1) -> List[ImagePlan]:
         """Create image plans for a topic."""
-        if not topic or not topic.strip():
+        if not isinstance(topic, str) or not topic.strip():
             raise ValueError("topic must not be empty")
         if platform not in PLATFORM_IMAGE_SPECS:
             raise ValueError(f"Unsupported image platform: {platform}")
         if image_type not in IMAGE_TYPES:
             raise ValueError(f"Unsupported image type: {image_type}")
-        if count < 1 or count > 100:
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1 or count > 100:
             raise ValueError("count must be between 1 and 100")
         plans: List[ImagePlan] = []
         for _ in range(count):
@@ -101,13 +103,16 @@ class ImagePlanner:
             ip.description = f"{image_type} image about {topic}"
             ip.dimensions = PLATFORM_IMAGE_SPECS.get(platform, {}).get("feed") or PLATFORM_FALLBACK_DIMENSIONS[platform]
             plans.append(ip)
-        self._plan_count += len(plans)
+        with self._counter_lock:
+            self._plan_count += len(plans)
         return plans
 
     def plan_multi_platform(self, topic: str, platforms: Optional[List[str]] = None,
                              image_type: str = "photo") -> Dict[str, List[ImagePlan]]:
         """Plan images for multiple platforms."""
-        plats = platforms or ["facebook", "instagram", "twitter", "linkedin"]
+        if platforms is not None and (not isinstance(platforms, list) or not platforms):
+            raise ValueError("platforms must be a non-empty list when provided")
+        plats = platforms if platforms is not None else ["facebook", "instagram", "twitter", "linkedin"]
         result: Dict[str, List[ImagePlan]] = {}
         for p in plats:
             result[p] = self.plan(topic, p, image_type)
@@ -127,4 +132,5 @@ class ImagePlanner:
 
     @property
     def plan_count(self) -> int:
-        return self._plan_count
+        with self._counter_lock:
+            return self._plan_count
