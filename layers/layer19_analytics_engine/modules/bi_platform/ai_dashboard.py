@@ -4,6 +4,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_finite_number, require_non_negative_int, require_percentage, require_unit_interval, require_non_blank
+
 
 class AIMetricSnapshot:
     __slots__ = ("accuracy", "quality_score", "prompt_success_rate",
@@ -64,6 +66,7 @@ class AIDashboard:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._current = AIMetricSnapshot()
         self._history: List[Dict[str, Any]] = []
         self._component_scores: Dict[str, float] = {}
@@ -73,6 +76,17 @@ class AIDashboard:
                        memory_mb: float = 0.0, rag_accuracy: float = 0.0,
                        predictions: int = 0, correct: int = 0,
                        prompts_used: int = 0, knowledge: int = 0) -> AIMetricSnapshot:
+        accuracy = require_unit_interval(accuracy, "accuracy")
+        quality = require_unit_interval(quality, "quality")
+        prompt_success = require_unit_interval(prompt_success, "prompt_success")
+        rag_accuracy = require_unit_interval(rag_accuracy, "rag_accuracy")
+        learning_rate = require_finite_number(learning_rate, "learning_rate", minimum=0.0)
+        memory_mb = require_finite_number(memory_mb, "memory_mb", minimum=0.0)
+        for value, field in ((predictions, "predictions"), (correct, "correct"),
+                             (prompts_used, "prompts_used"), (knowledge, "knowledge")):
+            require_non_negative_int(value, field)
+        if correct > predictions:
+            raise ValueError("correct cannot exceed predictions")
         snap = AIMetricSnapshot()
         snap.accuracy = accuracy
         snap.quality_score = quality
@@ -84,17 +98,22 @@ class AIDashboard:
         snap.correct_predictions = correct
         snap.total_prompts_used = prompts_used
         snap.knowledge_entries = knowledge
-        self._current = snap
-        self._history.append(snap.to_dict())
-        if len(self._history) > 1000:
-            self._history = self._history[-500:]
-        return snap
+        with self._data_lock:
+            self._current = snap
+            self._history.append(snap.to_dict())
+            if len(self._history) > 1000:
+                self._history = self._history[-500:]
+            return snap
 
     def update_component_score(self, component: str, score: float) -> None:
-        self._component_scores[component] = score
+        component = require_non_blank(component, "component")
+        score = require_percentage(score, "score")
+        with self._data_lock:
+            self._component_scores[component] = score
 
     def get_current(self) -> AIMetricSnapshot:
-        return self._current
+        with self._data_lock:
+            return self._current
 
     def get_trend(self, metric: str = "accuracy", limit: int = 30) -> List[float]:
         values = {
@@ -115,10 +134,11 @@ class AIDashboard:
         }
 
     def stats(self) -> Dict[str, Any]:
-        return {
-            "snapshots": len(self._history),
-            "components": len(self._component_scores),
-        }
+        with self._data_lock:
+            return {
+                "snapshots": len(self._history),
+                "components": len(self._component_scores),
+            }
 
 
 def get_ai_dashboard() -> AIDashboard:
