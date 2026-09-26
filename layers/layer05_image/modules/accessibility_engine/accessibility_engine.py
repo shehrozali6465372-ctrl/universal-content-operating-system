@@ -59,7 +59,6 @@ class AccessibilityEngine:
             result.score -= 20
         result.recommendations.append("Ensure text is at least 24pt")
         with self._counter_lock:
-            with self._counter_lock:
             self._check_count += 1
         return result
 
