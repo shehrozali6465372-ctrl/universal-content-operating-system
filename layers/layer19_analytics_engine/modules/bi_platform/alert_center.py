@@ -72,9 +72,9 @@ class AlertCenter:
         category = require_non_blank(category, "category")
         severity = require_non_blank(severity, "severity")
         title = require_non_blank(title, "title")
-        if category not in self.CATEGORIES:
+        if category not in Alert.CATEGORIES:
             raise ValueError(f"unsupported alert category: {category}")
-        if severity not in self.SEVERITIES:
+        if severity not in Alert.SEVERITIES:
             raise ValueError(f"unsupported alert severity: {severity}")
         with self._data_lock:
             alert = Alert(category, severity, title, message, source)
