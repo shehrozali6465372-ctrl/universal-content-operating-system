@@ -49,7 +49,16 @@ class ImagePlan:
         self.image_type = image_type
         self.description = ""
         self.platform = platform
-        self.dimensions = PLATFORM_IMAGE_SPECS[platform]["feed"]
+        self.dimensions = PLATFORM_IMAGE_SPECS[platform][{
+                "facebook": "feed",
+                "instagram": "feed",
+                "twitter": "tweet",
+                "linkedin": "feed",
+                "tiktok": "video_cover",
+                "youtube": "thumbnail",
+                "pinterest": "pin",
+                "threads": "post",
+            }[platform]]
         self.style = "modern"
         self.text_overlay = ""
         self.color_scheme = ""
