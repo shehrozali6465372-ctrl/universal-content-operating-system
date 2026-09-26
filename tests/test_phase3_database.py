@@ -326,7 +326,7 @@ class TestRecoveryManager:
         self.rm = RecoveryManager()
 
     def test_create_execute(self):
-        plan = self.rm.create_plan("restore_db", [{"step": "stop"}])
+        plan = self.rm.create_plan("restore_db", [{"step": "stop", "execute": lambda: None}])
         result = self.rm.execute_plan(plan.plan_id)
         assert result["status"] == "completed"
         assert self.rm.get_state() == RecoveryState.HEALTHY.value
