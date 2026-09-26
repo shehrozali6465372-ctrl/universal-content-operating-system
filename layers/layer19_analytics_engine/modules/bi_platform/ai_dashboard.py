@@ -127,13 +127,18 @@ class AIDashboard:
         return values.get(metric, [])
 
     def get_dashboard(self) -> Dict[str, Any]:
-        current = self._current
+        with self._data_lock:
+            current = self._current.to_dict()
+            components = dict(self._component_scores)
+            history_size = len(self._history)
+            trend_accuracy = self.get_trend("accuracy")[-7:]
+            trend_quality = self.get_trend("quality")[-7:]
         return {
-            "current": current.to_dict(),
-            "components": self._component_scores,
-            "history_size": len(self._history),
-            "trend_accuracy": self.get_trend("accuracy")[-7:],
-            "trend_quality": self.get_trend("quality")[-7:],
+            "current": current,
+            "components": components,
+            "history_size": history_size,
+            "trend_accuracy": trend_accuracy,
+            "trend_quality": trend_quality,
         }
 
     def stats(self) -> Dict[str, Any]:
