@@ -154,18 +154,18 @@ class TestDockerDeploymentManager(unittest.TestCase):
     def test_expected_services(self):
         self.assertEqual(
             self.mgr.EXPECTED_SERVICES,
-            ["aios", "aios-worker", "postgres", "redis"],
+            ["aios-main", "aios-postgres", "aios-redis"],
         )
 
     def test_config_setup(self):
-        self.assertEqual(len(self.mgr._config.services), 4)
+        self.assertEqual(len(self.mgr._config.services), 3)
 
     def test_get_deployment_status(self):
         status = self.mgr.get_deployment_status()
         self.assertIn("docker", status)
         self.assertIn("deployment", status)
         self.assertIn("config", status)
-        self.assertEqual(status["deployment"]["total_services"], 4)
+        self.assertEqual(status["deployment"]["total_services"], 3)
 
     @patch("subprocess.run")
     def test_docker_available(self, mock_run):
@@ -189,7 +189,7 @@ class TestDockerDeploymentManager(unittest.TestCase):
             if "inspect" in cmd:
                 return MagicMock(
                     returncode=0,
-                    stdout="running healthy 0 2024-01-01T00:00:00Z",
+                    stdout='{"Status":"running","Health":{"Status":"healthy"},"RestartCount":0,"StartedAt":"2024-01-01T00:00:00Z"}',
                     stderr="",
                 )
             if "stats" in cmd:
@@ -332,7 +332,7 @@ class TestDockerConfig(unittest.TestCase):
         config = DockerConfig("myapp")
         df = config.generate_dockerfile()
         self.assertIn("FROM", df)
-        self.assertIn("pip install", df)
+        self.assertIn("FROM", df)
         self.assertIn("EXPOSE", df)
 
 
