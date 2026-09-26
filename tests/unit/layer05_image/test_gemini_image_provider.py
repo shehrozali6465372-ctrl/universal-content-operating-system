@@ -66,7 +66,7 @@ def test_reference_url_fails_closed_instead_of_being_treated_as_visual_input() -
         provider.generate_with_reference("product photo", reference_url="https://example.com/ref.png")
 
 
-def test_gemini_request_uses_current_image_response_format(tmp_path: Path) -> None:
+def test_gemini_request_uses_current_image_config(tmp_path: Path) -> None:
     image_bytes = b"\\x89PNG\\r\\n\\x1a\\nrequest-contract"
     body = {"candidates": [{"content": {"parts": [{"inlineData": {
         "mimeType": "image/png",
@@ -99,10 +99,10 @@ def test_gemini_request_uses_current_image_response_format(tmp_path: Path) -> No
 
     assert captured["url"].endswith("/v1/models/gemini-3.1-flash-image:generateContent")
     assert captured["payload"]["generationConfig"]["responseModalities"] == ["IMAGE"]
-    response_format = captured["payload"]["generationConfig"]["responseFormat"]
-    assert response_format["image"]["aspectRatio"] == "4:5"
-    assert response_format["image"]["imageSize"] == "2K"
-    assert "responseFormat" not in captured["payload"]
+    image_config = captured["payload"]["generationConfig"]["imageConfig"]
+    assert image_config["aspectRatio"] == "4:5"
+    assert image_config["imageSize"] == "2K"
+    assert "responseFormat" not in captured["payload"]["generationConfig"]
 
 
 def test_history_is_bounded_and_limit_is_validated() -> None:
