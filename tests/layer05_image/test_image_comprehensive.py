@@ -4,7 +4,22 @@ import pytest
 
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
 from layers.layer05_image.modules.image_prompt.image_prompt import ImagePromptBuilder, STYLE_PRESETS
-from layers.layer05_image.modules.image_provider.image_provider import MockImageProvider, ImageResponse
+from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, ImageResponse
+
+class RealTestImageProvider(BaseImageProvider):
+    def __init__(self):
+        super().__init__(provider_name="test-real")
+    def generate(self, prompt, size="1024x1024", **kwargs):
+        response = ImageResponse()
+        response.image_url = "https://example.com/test-image.png"
+        response.image_data = b"test-image-bytes"
+        response.provider = "test-real"
+        response.model = "test-model"
+        response.revised_prompt = prompt
+        response.metadata["sha256"] = hashlib.sha256(response.image_data).hexdigest()
+        return response
+    def is_configured(self):
+        return True
 from layers.layer05_image.modules.layout_engine.layout_engine import LayoutEngine, LAYOUT_PRESETS
 from layers.layer05_image.modules.thumbnail_engine.thumbnail_engine import ThumbnailEngine
 from layers.layer05_image.modules.carousel_planner.carousel_planner import CarouselPlanner
