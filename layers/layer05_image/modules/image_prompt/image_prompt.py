@@ -1,6 +1,8 @@
 """Image Prompt Builder — Build prompts for AI image generators."""
 from __future__ import annotations
+
 import uuid
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 STYLE_PRESETS = {
@@ -15,11 +17,30 @@ STYLE_PRESETS = {
     "watercolor": "Soft watercolor painting style, artistic and gentle.",
     "retro": "Vintage, retro design with classic color palette.",
 }
-SUPPORTED_PROMPT_PLATFORMS = {"facebook", "instagram", "twitter", "linkedin", "tiktok", "youtube", "pinterest", "threads"}
+SUPPORTED_PROMPT_PLATFORMS = {
+    "facebook", "instagram", "twitter", "linkedin",
+    "tiktok", "youtube", "pinterest", "threads"
+}
+PLATFORM_ASPECT_RATIOS = {
+    "facebook": "1200:630",
+    "instagram": "1080:1080",
+    "twitter": "16:9",
+    "linkedin": "1200:627",
+    "tiktok": "9:16",
+    "youtube": "16:9",
+    "pinterest": "2:3",
+    "threads": "1:1",
+}
+
 
 class ImagePrompt:
     """A prompt for AI image generation."""
-    __slots__ = ("prompt_id", "text", "negative_prompt", "style", "aspect_ratio", "parameters", "provider_hint")
+
+    __slots__ = (
+        "prompt_id", "text", "negative_prompt", "style",
+        "aspect_ratio", "parameters", "provider_hint"
+    )
+
     def __init__(self, text: str = "") -> None:
         self.prompt_id = f"imgprompt_{uuid.uuid4().hex}"
         self.text = text
@@ -28,14 +49,33 @@ class ImagePrompt:
         self.aspect_ratio = "1:1"
         self.parameters: Dict[str, Any] = {}
         self.provider_hint = ""
+
     def to_dict(self) -> Dict[str, Any]:
-        return {"prompt_id": self.prompt_id, "text": self.text, "negative_prompt": self.negative_prompt, "style": self.style, "aspect_ratio": self.aspect_ratio, "parameters": self.parameters}
+        return {
+            "prompt_id": self.prompt_id,
+            "text": self.text,
+            "negative_prompt": self.negative_prompt,
+            "style": self.style,
+            "aspect_ratio": self.aspect_ratio,
+            "parameters": self.parameters,
+        }
+
 
 class ImagePromptBuilder:
     """Builds prompts for AI image generators."""
+
     def __init__(self) -> None:
         self._build_count = 0
-    def build(self, description: str, style: str = "modern", platform: str = "facebook", image_type: str = "photo", extra_instructions: Optional[List[str]] = None) -> ImagePrompt:
+        self._counter_lock = RLock()
+
+    def build(
+        self,
+        description: str,
+        style: str = "modern",
+        platform: str = "facebook",
+        image_type: str = "photo",
+        extra_instructions: Optional[List[str]] = None,
+    ) -> ImagePrompt:
         """Build an image generation prompt."""
         if not isinstance(description, str) or not description.strip():
             raise ValueError("description must not be empty")
@@ -43,21 +83,44 @@ class ImagePromptBuilder:
             raise ValueError(f"Unsupported image style: {style}")
         if platform not in SUPPORTED_PROMPT_PLATFORMS:
             raise ValueError(f"Unsupported image platform: {platform}")
+        if extra_instructions is not None:
+            if not isinstance(extra_instructions, list):
+                raise ValueError("extra_instructions must be a list")
+            if any(not isinstance(item, str) for item in extra_instructions):
+                raise ValueError("extra_instructions must contain strings")
+
         prompt = ImagePrompt()
         prompt.style = style
         prompt.text = f"{description.strip()}. Style: {STYLE_PRESETS[style]}"
         prompt.negative_prompt = "blurry, low quality, watermark, text errors, deformed"
-        ar_map = {"facebook": "1200:630", "instagram": "1080:1080", "twitter": "16:9", "linkedin": "1200:627", "tiktok": "9:16", "youtube": "16:9", "pinterest": "2:3", "threads": "1:1"}
-        prompt.aspect_ratio = ar_map[platform]
-        prompt.parameters = {"quality": "hd" if style in ("photorealistic", "professional") else "standard", "size": "1024x1024"}
+        prompt.aspect_ratio = PLATFORM_ASPECT_RATIOS[platform]
+        prompt.parameters = {
+            "quality": "hd" if style in ("photorealistic", "professional") else "standard",
+            "size": "1024x1024",
+            "image_type": image_type,
+        }
         if extra_instructions:
-            if not isinstance(extra_instructions, list):
-                raise ValueError("extra_instructions must be a list")
-            prompt.text += ". " + ". ".join(str(item) for item in extra_instructions)
-        self._build_count += 1
+            prompt.text += ". " + ". ".join(extra_instructions)
+
+        with self._counter_lock:
+            self._build_count += 1
         return prompt
-    def build_batch(self, descriptions: List[str], style: str = "modern", platform: str = "facebook") -> List[ImagePrompt]:
-        return [self.build(d, style, platform) for d in descriptions]
+
+    def build_batch(
+        self,
+        descriptions: List[str],
+        style: str = "modern",
+        platform: str = "facebook",
+    ) -> List[ImagePrompt]:
+        """Build prompts for a non-empty batch of descriptions."""
+        if not isinstance(descriptions, list) or not descriptions:
+            raise ValueError("descriptions must be a non-empty list")
+        if any(not isinstance(description, str) or not description.strip()
+               for description in descriptions):
+            raise ValueError("descriptions must contain non-empty strings")
+        return [self.build(description, style, platform) for description in descriptions]
+
     @property
     def build_count(self) -> int:
-        return self._build_count
+        with self._counter_lock:
+            return self._build_count
