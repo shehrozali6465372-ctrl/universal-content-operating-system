@@ -19,7 +19,7 @@ class OpenRouterImageProvider(BaseImageProvider):
     """Real image generation through OpenRouter's unified Image API."""
 
     API_URL = "https://openrouter.ai/api/v1/images"
-    DEFAULT_MODEL = "x-ai/grok-imagine-image-quality:free"
+    DEFAULT_MODEL = "bytedance-seed/seedream-4.5"
 
     def __init__(self, api_key: Optional[str] = None,
                  model: str = DEFAULT_MODEL) -> None:
