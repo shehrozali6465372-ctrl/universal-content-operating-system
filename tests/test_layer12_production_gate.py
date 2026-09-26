@@ -1,31 +1,108 @@
 """Layer 12 production certification gate tests."""
 from __future__ import annotations
+
 import pytest
-from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_gateway import AIGateway
-from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_orchestrator import AIOrchestrator
-from layers.layer12_ai_foundation.modules.model_provider_framework.openai_provider import OpenAIProvider
-from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import ProviderRequest
-def test_openai_provider_requires_credentials_in_production(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production");monkeypatch.delenv("OPENAI_API_KEY",raising=False);provider=OpenAIProvider();assert provider.initialize() is False;assert provider.is_available() is False
-def test_orchestrator_requires_start_in_production(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production");result=AIOrchestrator().process("test-task",{});assert result["success"] is False;assert result["error_code"]=="ORCHESTRATOR_NOT_RUNNING"
-def test_orchestrator_rejects_unlinked_route_in_production(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production");o=AIOrchestrator();o.start();r=o.process("test-task",{});assert r["success"] is False;assert r["error_code"]=="TASK_EXECUTION_FAILED"
-def test_gateway_rejects_invalid_payload()->None:
- g=AIGateway();g.register_handler("test",lambda p:p);r=g.handle("test","not-a-dict") # type: ignore[arg-type]
- assert r["success"] is False;assert r["error_code"]=="INVALID_PAYLOAD"
-def test_provider_uses_live_transport_when_credentials_exist(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production");p=OpenAIProvider({"api_key":"test-key","base_url":"http://127.0.0.1:9","max_retries":0});assert p.initialize() is True;assert p.is_available() is True
- with pytest.raises(RuntimeError,match="OpenAI request failed"):p.generate(ProviderRequest("hello","gpt-4o-mini","openai"))
-def test_orchestrator_rejects_invalid_linked_module(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production")
- with pytest.raises(TypeError,match="must expose callable"):AIOrchestrator().link_module("broken",object())
-def test_orchestrator_rejects_non_dict_component_result(monkeypatch:pytest.MonkeyPatch)->None:
- monkeypatch.setenv("UCOS_ENV","production")
- class Component:
-  def evaluate(self,_payload:str)->str:return "invalid"
- o=AIOrchestrator();o.router.register("test-task","component");o.link_module("component",Component());o.start();r=o.process("test-task",{});assert r["success"] is False;assert r["error_code"]=="TASK_EXECUTION_FAILED"
-def test_openai_rejects_invalid_timeout()->None:
- with pytest.raises(ValueError,match="timeout"):OpenAIProvider({"api_key":"test-key","timeout":0})
-def test_openai_accepts_bounded_timeout()->None:
- p=OpenAIProvider({"api_key":"test-key","timeout":30});assert p.initialize() is True
+
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_gateway import (
+    AIGateway,
+)
+from layers.layer12_ai_foundation.modules.ai_orchestrator.ai_orchestrator import (
+    AIOrchestrator,
+)
+from layers.layer12_ai_foundation.modules.model_provider_framework.openai_provider import (
+    OpenAIProvider,
+)
+from layers.layer12_ai_foundation.modules.model_provider_framework.provider_base import (
+    ProviderRequest,
+)
+
+
+def test_openai_provider_requires_credentials_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = OpenAIProvider()
+    assert provider.initialize() is False
+    assert provider.is_available() is False
+
+
+def test_orchestrator_requires_start_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    result = AIOrchestrator().process("test-task", {})
+    assert result["success"] is False
+    assert result["error_code"] == "ORCHESTRATOR_NOT_RUNNING"
+
+
+def test_orchestrator_rejects_unlinked_route_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    orchestrator = AIOrchestrator()
+    orchestrator.start()
+    result = orchestrator.process("test-task", {})
+    assert result["success"] is False
+    assert result["error_code"] == "TASK_EXECUTION_FAILED"
+
+
+def test_gateway_rejects_invalid_payload() -> None:
+    gateway = AIGateway()
+    gateway.register_handler("test", lambda payload: payload)
+    result = gateway.handle("test", "not-a-dict")  # type: ignore[arg-type]
+    assert result["success"] is False
+    assert result["error_code"] == "INVALID_PAYLOAD"
+
+
+def test_provider_uses_live_transport_when_credentials_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    provider = OpenAIProvider(
+        {
+            "api_key": "test-key",
+            "base_url": "http://127.0.0.1:9",
+            "max_retries": 0,
+        }
+    )
+    assert provider.initialize() is True
+    assert provider.is_available() is True
+    with pytest.raises(RuntimeError, match="OpenAI request failed"):
+        provider.generate(ProviderRequest("hello", "gpt-4o-mini", "openai"))
+
+
+def test_orchestrator_rejects_invalid_linked_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+    with pytest.raises(TypeError, match="must expose callable"):
+        AIOrchestrator().link_module("broken", object())
+
+
+def test_orchestrator_rejects_non_dict_component_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
+
+    class Component:
+        def evaluate(self, _payload: str) -> str:
+            return "invalid"
+
+    orchestrator = AIOrchestrator()
+    orchestrator.router.register("test-task", "component")
+    orchestrator.link_module("component", Component())
+    orchestrator.start()
+    result = orchestrator.process("test-task", {})
+    assert result["success"] is False
+    assert result["error_code"] == "TASK_EXECUTION_FAILED"
+
+
+def test_openai_rejects_invalid_timeout() -> None:
+    with pytest.raises(ValueError, match="timeout"):
+        OpenAIProvider({"api_key": "test-key", "timeout": 0})
+
+
+def test_openai_accepts_bounded_timeout() -> None:
+    provider = OpenAIProvider({"api_key": "test-key", "timeout": 30})
+    assert provider.initialize() is True
