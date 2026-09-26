@@ -47,9 +47,11 @@ class WebsiteManager:
         # Sub-modules
         self.structure = SiteStructureManager()
         self.url_manager = URLManager(domain=domain)
-        self.publisher = Publisher(storage_dir=os.path.join(storage_dir, "articles"))
+        article_storage = os.path.join(storage_dir, "articles") if storage_dir else ""
+        media_storage = os.path.join(storage_dir, "media") if storage_dir else ""
+        self.publisher = Publisher(storage_dir=article_storage)
         self.seo = SEOManager(site_name=site_name, domain=domain)
-        self.media = MediaManager(storage_dir=os.path.join(storage_dir, "media"))
+        self.media = MediaManager(storage_dir=media_storage)
         self.health = WebsiteHealthChecker()
         self.linking = InternalLinkManager()
 
