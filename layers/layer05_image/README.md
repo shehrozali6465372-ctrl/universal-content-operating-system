@@ -43,3 +43,5 @@ pytest tests/unit/layer05_image -q
 
 <!-- Certification gate trigger: primary real-provider certification remains mandatory. -->
 <!-- Certification gate trigger: primary real-provider certification remains mandatory. -->
+
+<!-- Layer 5 certification gate retrigger: primary real-provider smoke required. -->
