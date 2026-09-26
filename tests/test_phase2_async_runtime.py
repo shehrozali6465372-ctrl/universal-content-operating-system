@@ -22,7 +22,7 @@ class TestAsyncScheduler:
             task = self.scheduler.schedule(lambda: "ok")
             result = await self.scheduler.execute_task(task)
             return result
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result["state"] == "completed"
 
     def test_execute_with_retry(self):
@@ -36,7 +36,7 @@ class TestAsyncScheduler:
             task = self.scheduler.schedule(flaky, max_retries=3)
             result = await self.scheduler.execute_task(task)
             return result
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result["state"] == "completed"
 
     def test_cancel(self):
@@ -74,7 +74,7 @@ class TestCoroutineManager:
         return result
 
     def test_start(self):
-        result = asyncio.get_event_loop().run_until_complete(self._start_coro())
+        result = asyncio.run(self._start_coro())
         assert result["state"] == "completed"
 
     def test_cancel(self):
@@ -103,7 +103,7 @@ class TestTaskQueue:
         return dequeued
 
     def test_enqueue_dequeue(self):
-        item = asyncio.get_event_loop().run_until_complete(self._run())
+        item = asyncio.run(self._run())
         assert item is not None
 
     def test_stats(self):
@@ -175,7 +175,7 @@ class TestBackgroundJobs:
         return result
 
     def test_execute_job(self):
-        result = asyncio.get_event_loop().run_until_complete(self._run_job())
+        result = asyncio.run(self._run_job())
         assert result["state"] == "completed"
 
     def test_cancel_job(self):
@@ -255,7 +255,7 @@ class TestTimeoutEngine:
         return await self.te.run_with_timeout(lambda: "ok", timeout_seconds=5.0, name="test")
 
     def test_run_within_timeout(self):
-        result = asyncio.get_event_loop().run_until_complete(self._run())
+        result = asyncio.run(self._run())
         assert result["status"] == "completed"
 
     async def _run_timeout(self):
@@ -265,11 +265,11 @@ class TestTimeoutEngine:
         return await self.te.run_with_timeout(slow, timeout_seconds=0.01, name="slow")
 
     def test_run_timeout(self):
-        result = asyncio.get_event_loop().run_until_complete(self._run_timeout())
+        result = asyncio.run(self._run_timeout())
         assert result["status"] == "timed_out"
 
     def test_stats(self):
-        asyncio.get_event_loop().run_until_complete(self._run())
+        asyncio.run(self._run())
         stats = self.te.stats()
         assert stats["total"] == 1
 
@@ -333,7 +333,7 @@ class TestResourcePool:
         return True
 
     def test_acquire_release(self):
-        result = asyncio.get_event_loop().run_until_complete(self._acquire_release())
+        result = asyncio.run(self._acquire_release())
         assert result
 
     def test_stats(self):
