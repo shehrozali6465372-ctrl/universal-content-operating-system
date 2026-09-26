@@ -1,7 +1,7 @@
 """RecommendationEngine — content and strategy recommendations."""
 from __future__ import annotations
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 
 class Recommendation:
