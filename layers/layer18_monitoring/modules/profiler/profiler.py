@@ -72,14 +72,14 @@ class Profiler:
     def profile(self, func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            self.start(func.__qualname__)
+            self.start(func.__name__)
             try:
                 return func(*args, **kwargs)
             except Exception:
-                self.record_error(func.__qualname__)
+                self.record_error(func.__name__)
                 raise
             finally:
-                self.stop(func.__qualname__)
+                self.stop(func.__name__)
         return wrapper
 
     def get_profile(self, name: str) -> Optional[ProfileEntry]:
