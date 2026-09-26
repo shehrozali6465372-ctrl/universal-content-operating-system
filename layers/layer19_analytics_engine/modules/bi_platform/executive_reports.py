@@ -52,8 +52,8 @@ class ExecutiveReports:
         self._type_index: Dict[str, List[str]] = {}
 
     def generate_report(self, report_type: str, period: str,
-                        sections: List[Dict[str, Any]] = None,
-                        data: Dict[str, Any] = None) -> Report:
+                        sections: Optional[List[Dict[str, Any]]] = None,
+                        data: Optional[Dict[str, Any]] = None) -> Report:
         report_type = require_non_blank(report_type, "report_type")
         period = require_non_blank(period, "period")
         if sections is not None and not isinstance(sections, list):
@@ -97,18 +97,22 @@ class ExecutiveReports:
         return reports[0] if reports else None
 
     def get_reports_status(self) -> Dict[str, Any]:
-        reports = list(self._reports.values())
+        with self._data_lock:
+            reports = list(self._reports.values())
+            by_type = {t: len(ids) for t, ids in self._type_index.items()}
+        latest = self.get_latest()
         return {
             "total_reports": len(reports),
-            "by_type": {t: len(ids) for t, ids in self._type_index.items()},
-            "latest": self.get_latest().to_dict() if self.get_latest() else None,
+            "by_type": by_type,
+            "latest": latest.to_dict() if latest else None,
         }
 
     def stats(self) -> Dict[str, Any]:
-        return {
-            "reports": len(self._reports),
-            "types": len(self._type_index),
-        }
+        with self._data_lock:
+            return {
+                "reports": len(self._reports),
+                "types": len(self._type_index),
+            }
 
 
 def get_executive_reports() -> ExecutiveReports:
