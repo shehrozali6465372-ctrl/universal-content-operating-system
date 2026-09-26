@@ -2,7 +2,7 @@
 from __future__ import annotations
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .ceo_dashboard import CEODashboard, get_ceo_dashboard
 from .revenue_forecasting import RevenueForecasting, get_revenue_forecasting

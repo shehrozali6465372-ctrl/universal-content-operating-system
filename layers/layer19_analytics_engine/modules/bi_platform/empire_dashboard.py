@@ -4,7 +4,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from .validation import require_finite_number, require_non_negative_int
+from .validation import require_non_negative_int
 
 
 class EmpireSnapshot:

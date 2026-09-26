@@ -1,6 +1,5 @@
 """APIDashboard — REST API endpoints and dashboard data serving."""
 from __future__ import annotations
-import json
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -151,10 +150,10 @@ class APIDashboard:
             "total_requests": total_requests,
             "recent_requests": len(logs),
             "avg_latency": round(
-                sum(l["latency_ms"] for l in logs) / len(logs), 2
+                sum(log["latency_ms"] for log in logs) / len(logs), 2
             ) if logs else 0,
             "error_rate": round(
-                sum(1 for l in logs if l["status"] >= 400) / len(logs) * 100, 1
+                sum(1 for log in logs if log["status"] >= 400) / len(logs) * 100, 1
             ) if logs else 0,
         }
 
