@@ -1,6 +1,7 @@
 name: Layer 13 PostgreSQL Production Certification
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
