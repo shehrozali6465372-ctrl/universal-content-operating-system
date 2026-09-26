@@ -1,5 +1,6 @@
 """TrendEngine — detect and analyze trends in time series data."""
 from __future__ import annotations
+import time
 from typing import Any, Dict, List
 from enum import Enum
 
