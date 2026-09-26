@@ -45,7 +45,7 @@ jobs:
 
 
       - name: Real Gemini smoke
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && env.OPENROUTER_API_KEY == ''
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
