@@ -152,7 +152,7 @@ class WebsiteManager:
             article.published_at = time.time()
 
         with self._lock:
-            self.publisher._articles[article.article_id] = article
+            self.publisher.save_article(article)
         self._log_operation("create_article", {"title": title, "slug": slug})
 
         # Generate SEO metadata
@@ -362,20 +362,29 @@ class WebsiteManager:
 
 # ─── Singleton Access ───────────────────────────────────────────────────────
 
-_website_instance: Optional[WebsiteManager] = None
+_website_instances: Dict[tuple[str, str], WebsiteManager] = {}
 _instance_lock = threading.Lock()
 
 
 def get_website(domain: str = "example.com", site_name: str = "My Website") -> WebsiteManager:
-    """Get or create the singleton WebsiteManager instance."""
-    global _website_instance
-    if _website_instance is None:
-        with _instance_lock:
-            if _website_instance is None:
-                storage = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "website")
-                _website_instance = WebsiteManager(
-                    domain=domain,
-                    site_name=site_name,
-                    storage_dir=storage,
-                )
-    return _website_instance
+    """Get a thread-safe WebsiteManager instance keyed by site identity."""
+    normalized_domain = domain.strip().lower()
+    normalized_name = site_name.strip()
+    if not normalized_domain or not normalized_name:
+        raise WebsiteConfigError("domain and site_name are required")
+    key = (normalized_domain, normalized_name)
+    with _instance_lock:
+        instance = _website_instances.get(key)
+        if instance is None:
+            base_storage = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "data", "website"
+            )
+            storage_key = hashlib.sha256(
+                f"{normalized_domain}\0{normalized_name}".encode("utf-8")
+            ).hexdigest()[:16]
+            storage = os.path.join(base_storage, storage_key)
+            instance = WebsiteManager(
+                domain=domain, site_name=site_name, storage_dir=storage
+            )
+            _website_instances[key] = instance
+        return instance
