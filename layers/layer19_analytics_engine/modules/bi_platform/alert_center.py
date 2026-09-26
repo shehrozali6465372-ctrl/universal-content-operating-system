@@ -5,6 +5,8 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from .validation import require_non_blank
+
 
 class Alert:
     __slots__ = ("id", "category", "severity", "title", "message",
@@ -59,6 +61,7 @@ class AlertCenter:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._alerts: Dict[str, Alert] = {}
         self._category_index: Dict[str, List[str]] = {}
         self._severity_index: Dict[str, List[str]] = {}
@@ -66,31 +69,44 @@ class AlertCenter:
 
     def fire(self, category: str, severity: str, title: str,
              message: str = "", source: str = "") -> Alert:
-        alert = Alert(category, severity, title, message, source)
-        self._alerts[alert.id] = alert
-        self._category_index.setdefault(category, []).append(alert.id)
-        self._severity_index.setdefault(severity, []).append(alert.id)
-        self._alert_history.append(alert.to_dict())
-        return alert
+        category = require_non_blank(category, "category")
+        severity = require_non_blank(severity, "severity")
+        title = require_non_blank(title, "title")
+        if category not in self.CATEGORIES:
+            raise ValueError(f"unsupported alert category: {category}")
+        if severity not in self.SEVERITIES:
+            raise ValueError(f"unsupported alert severity: {severity}")
+        with self._data_lock:
+            alert = Alert(category, severity, title, message, source)
+            self._alerts[alert.id] = alert
+            self._category_index.setdefault(category, []).append(alert.id)
+            self._severity_index.setdefault(severity, []).append(alert.id)
+            self._alert_history.append(alert.to_dict())
+            if len(self._alert_history) > 10000:
+                self._alert_history = self._alert_history[-5000:]
+            return alert
 
     def acknowledge(self, alert_id: str) -> bool:
-        a = self._alerts.get(alert_id)
-        if a and a.status == "active":
-            a.status = "acknowledged"
-            a.acknowledged_at = time.time()
-            return True
+        with self._data_lock:
+            a = self._alerts.get(alert_id)
+            if a and a.status == "active":
+                a.status = "acknowledged"
+                a.acknowledged_at = time.time()
+                return True
         return False
 
     def resolve(self, alert_id: str) -> bool:
-        a = self._alerts.get(alert_id)
-        if a and a.status in ("active", "acknowledged"):
-            a.status = "resolved"
-            a.resolved_at = time.time()
-            return True
+        with self._data_lock:
+            a = self._alerts.get(alert_id)
+            if a and a.status in ("active", "acknowledged"):
+                a.status = "resolved"
+                a.resolved_at = time.time()
+                return True
         return False
 
     def get_active(self, category: str = "", severity: str = "") -> List[Alert]:
-        alerts = [a for a in self._alerts.values() if a.status == "active"]
+        with self._data_lock:
+            alerts = [a for a in self._alerts.values() if a.status == "active"]
         if category:
             alerts = [a for a in alerts if a.category == category]
         if severity:
@@ -104,7 +120,8 @@ class AlertCenter:
         return self.get_active(severity="critical") + self.get_active(severity="emergency")
 
     def get_alert_summary(self) -> Dict[str, Any]:
-        alerts = list(self._alerts.values())
+        with self._data_lock:
+            alerts = list(self._alerts.values())
         return {
             "total": len(alerts),
             "active": sum(1 for a in alerts if a.status == "active"),
