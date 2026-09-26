@@ -16,16 +16,6 @@ PLATFORM_IMAGE_SPECS = {
     "threads": {"post": (1080, 1080), "story": (1080, 1920)},
 }
 
-PLATFORM_FALLBACK_DIMENSIONS = {    "facebook": (1200, 630),
-    "instagram": (1080, 1080),
-    "twitter": (1200, 675),
-    "linkedin": (1200, 627),
-    "tiktok": (1080, 1920),
-    "youtube": (1280, 720),
-    "pinterest": (1000, 1500),
-    "threads": (1080, 1080),
-}
-
 SUPPORTED_IMAGE_PLATFORMS = frozenset({
     "facebook", "instagram", "twitter", "linkedin",
     "tiktok", "youtube", "pinterest", "threads",
@@ -59,7 +49,7 @@ class ImagePlan:
         self.image_type = image_type
         self.description = ""
         self.platform = platform
-        self.dimensions = PLATFORM_IMAGE_SPECS.get(platform, {}).get("feed") or PLATFORM_FALLBACK_DIMENSIONS[platform]
+        self.dimensions = PLATFORM_IMAGE_SPECS[platform]["feed"]
         self.style = "modern"
         self.text_overlay = ""
         self.color_scheme = ""
