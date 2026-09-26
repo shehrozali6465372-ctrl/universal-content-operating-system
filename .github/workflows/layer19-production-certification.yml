@@ -1,4 +1,5 @@
 name: Layer 19 Production Certification
+# Production gate: compile, tests, lint, and repository hygiene must all pass.
 
 on:
   push:
