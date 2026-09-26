@@ -141,11 +141,9 @@ class GeminiImageProvider(BaseImageProvider):
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseModalities": ["IMAGE"],
-                "responseFormat": {
-                    "image": {
+                "imageConfig": {
                     "aspectRatio": self._aspect_ratio(width, height),
                     "imageSize": self._image_size(width, height),
-                    }
                 },
             },
         }
