@@ -105,7 +105,7 @@ def test_gemini_request_uses_current_image_config(tmp_path: Path) -> None:
     assert captured["payload"]["input"][0]["type"] == "text"
     image_config = captured["payload"]["response_format"]
     assert image_config["type"] == "image"
-    assert image_config["mime_type"] == "image/png"
+    assert image_config["mime_type"] == "image/jpeg"
     assert image_config["aspect_ratio"] == "4:5"
     assert image_config["image_size"] == "2K"
 
