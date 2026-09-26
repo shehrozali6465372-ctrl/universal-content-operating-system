@@ -113,19 +113,25 @@ class NicheDashboard:
             return self._niches.get(name)
 
     def get_top_niches(self, limit: int = 10) -> List[NicheMetrics]:
-        return sorted(self._niches.values(), key=lambda n: n.overall_score, reverse=True)[:limit]
+        require_non_negative_int(limit, "limit")
+        with self._data_lock:
+            return sorted(self._niches.values(), key=lambda n: n.overall_score, reverse=True)[:limit]
 
     def get_by_revenue(self, limit: int = 10) -> List[NicheMetrics]:
-        return sorted(self._niches.values(), key=lambda n: n.revenue, reverse=True)[:limit]
+        require_non_negative_int(limit, "limit")
+        with self._data_lock:
+            return sorted(self._niches.values(), key=lambda n: n.revenue, reverse=True)[:limit]
 
     def get_growing(self) -> List[NicheMetrics]:
-        return sorted(
-            [n for n in self._niches.values() if n.growth_rate > 5],
-            key=lambda n: n.growth_rate, reverse=True,
-        )
+        with self._data_lock:
+            return sorted(
+                [n for n in self._niches.values() if n.growth_rate > 5],
+                key=lambda n: n.growth_rate, reverse=True,
+            )
 
     def get_dashboard(self) -> Dict[str, Any]:
-        niches = list(self._niches.values())
+        with self._data_lock:
+            niches = list(self._niches.values())
         total_revenue = sum(n.revenue for n in niches)
         return {
             "total_niches": len(niches),
@@ -139,7 +145,10 @@ class NicheDashboard:
                 n.name: round(n.revenue / total_revenue * 100, 1) if total_revenue > 0 else 0
                 for n in niches
             },
-            "top_10": [n.to_dict() for n in self.get_top_niches(10)],
+            "top_10": [
+                n.to_dict()
+                for n in sorted(niches, key=lambda item: item.overall_score, reverse=True)[:10]
+            ],
         }
 
     def stats(self) -> Dict[str, Any]:
