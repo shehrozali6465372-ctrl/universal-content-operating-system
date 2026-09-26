@@ -12,9 +12,17 @@ class DailySnapshot:
 
     def __init__(self, date: str = "") -> None:
         self.date = date or time.strftime("%Y-%m-%d")
-        self.total_revenue = 0.0; self.affiliate_revenue = 0.0; self.ad_revenue = 0.0
-        self.total_expenses = 0.0; self.profit = 0.0; self.new_accounts = 0; self.active_accounts = 0
-        self.total_posts = 0; self.total_clicks = 0; self.total_conversions = 0; self.ai_health_score = 0.0
+        self.total_revenue = 0.0
+        self.affiliate_revenue = 0.0
+        self.ad_revenue = 0.0
+        self.total_expenses = 0.0
+        self.profit = 0.0
+        self.new_accounts = 0
+        self.active_accounts = 0
+        self.total_posts = 0
+        self.total_clicks = 0
+        self.total_conversions = 0
+        self.ai_health_score = 0.0
         self.metadata: Dict[str, Any] = {}
 
     @property
@@ -37,7 +45,8 @@ class CEODashboard:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = super().__new__(cls); cls._instance._initialized = False
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self) -> None:
@@ -46,7 +55,8 @@ class CEODashboard:
         self._data_lock = threading.RLock()
         self._snapshots: Dict[str, DailySnapshot] = {}
         self._totals = {"total_revenue": 0, "affiliate_revenue": 0, "ad_revenue": 0, "total_expenses": 0, "total_profit": 0, "total_accounts": 0, "total_posts": 0, "total_clicks": 0, "total_conversions": 0}
-        self._kpi_targets: Dict[str, float] = {}; self._alert_rules: List[Dict[str, Any]] = []
+        self._kpi_targets: Dict[str, float] = {}
+        self._alert_rules: List[Dict[str, Any]] = []
 
     def record_snapshot(self, snapshot: DailySnapshot) -> None:
         if not isinstance(snapshot, DailySnapshot):
@@ -92,9 +102,19 @@ class CEODashboard:
         ai_health = require_finite_number(ai_health, "ai_health", minimum=0.0)
         if ai_health > 100.0:
             raise ValueError("ai_health must be <= 100")
-        snap = DailySnapshot(date); snap.total_revenue = revenue; snap.affiliate_revenue = affiliate_rev; snap.ad_revenue = ad_rev
-        snap.total_expenses = expenses; snap.profit = revenue - expenses; snap.active_accounts = active_accounts; snap.total_posts = posts
-        snap.total_clicks = clicks; snap.total_conversions = conversions; snap.ai_health_score = ai_health; self.record_snapshot(snap); return snap
+        snap = DailySnapshot(date)
+        snap.total_revenue = revenue
+        snap.affiliate_revenue = affiliate_rev
+        snap.ad_revenue = ad_rev
+        snap.total_expenses = expenses
+        snap.profit = revenue - expenses
+        snap.active_accounts = active_accounts
+        snap.total_posts = posts
+        snap.total_clicks = clicks
+        snap.total_conversions = conversions
+        snap.ai_health_score = ai_health
+        self.record_snapshot(snap)
+        return snap
 
     def get_today(self) -> Optional[DailySnapshot]:
         with self._data_lock:
