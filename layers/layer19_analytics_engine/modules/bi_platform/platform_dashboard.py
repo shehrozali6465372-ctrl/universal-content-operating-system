@@ -4,6 +4,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_finite_number, require_non_negative_int, require_non_blank
+
 
 class PlatformMetrics:
     __slots__ = ("platform", "reach", "engagement", "clicks", "conversions",
@@ -74,6 +76,7 @@ class PlatformDashboard:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._platforms: Dict[str, PlatformMetrics] = {}
         for p in PLATFORMS:
             self._platforms[p] = PlatformMetrics(p)
@@ -82,22 +85,31 @@ class PlatformDashboard:
                         clicks: int = 0, conversions: int = 0, revenue: float = 0.0,
                         accounts: int = 0, posts: int = 0,
                         follower_growth: int = 0) -> PlatformMetrics:
-        if platform not in self._platforms:
-            self._platforms[platform] = PlatformMetrics(platform)
-        pm = self._platforms[platform]
-        pm.reach += reach
-        pm.engagement += engagement
-        pm.clicks += clicks
-        pm.conversions += conversions
-        pm.revenue += revenue
-        pm.accounts = max(pm.accounts, accounts)
-        pm.posts += posts
-        pm.follower_growth += follower_growth
-        pm.updated_at = time.time()
-        return pm
+        platform = require_non_blank(platform, "platform").lower()
+        for value, field in ((reach, "reach"), (engagement, "engagement"), (clicks, "clicks"),
+                             (conversions, "conversions"), (accounts, "accounts"),
+                             (posts, "posts"), (follower_growth, "follower_growth")):
+            require_non_negative_int(value, field)
+        revenue = require_finite_number(revenue, "revenue", minimum=0.0)
+        with self._data_lock:
+            if platform not in self._platforms:
+                self._platforms[platform] = PlatformMetrics(platform)
+            pm = self._platforms[platform]
+            pm.reach += reach
+            pm.engagement += engagement
+            pm.clicks += clicks
+            pm.conversions += conversions
+            pm.revenue += revenue
+            pm.accounts = max(pm.accounts, accounts)
+            pm.posts += posts
+            pm.follower_growth += follower_growth
+            pm.updated_at = time.time()
+            return pm
 
     def get_platform(self, platform: str) -> Optional[PlatformMetrics]:
-        return self._platforms.get(platform)
+        platform = require_non_blank(platform, "platform").lower()
+        with self._data_lock:
+            return self._platforms.get(platform)
 
     def get_top_by_revenue(self, limit: int = 10) -> List[PlatformMetrics]:
         return sorted(self._platforms.values(), key=lambda p: p.revenue, reverse=True)[:limit]
@@ -127,10 +139,11 @@ class PlatformDashboard:
         }
 
     def stats(self) -> Dict[str, Any]:
-        return {
-            "platforms": len(self._platforms),
-            "active": sum(1 for p in self._platforms.values() if p.reach > 0),
-        }
+        with self._data_lock:
+            return {
+                "platforms": len(self._platforms),
+                "active": sum(1 for p in self._platforms.values() if p.reach > 0),
+            }
 
 
 def get_platform_dashboard() -> PlatformDashboard:
