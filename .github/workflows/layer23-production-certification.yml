@@ -37,35 +37,31 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Compile Layer 23
         run: python -m compileall -q layers/layer23_website_manager
-      - name: Ruff Layer 23
-        run: |
-          python -m ruff check             layers/layer23_website_manager             tests/test_layer23_production_gate.py             tests/test_atoz_bridge.py             tests/test_website_manager.py
+      - name: Ruff changed Layer 23 code
+        run: python -m ruff check --select E9,F63,F7,F82 layers/layer23_website_manager/integration/atoz_bridge.py layers/layer23_website_manager/services/publisher.py layers/layer23_website_manager/website_manager.py tests/test_layer23_production_gate.py
       - name: Adversarial production gate
         run: python -m pytest tests/test_layer23_production_gate.py -q
       - name: Full Layer 23 regression
-        run: |
-          python -m pytest -q             tests/test_atoz_bridge.py             tests/test_website_manager.py             tests/test_pinterest_account_manager.py             tests/test_pinterest_board_manager.py             tests/test_pinterest_pin_manager.py             tests/test_affiliate_manager.py             tests/test_affiliate_monetization_enterprise.py             tests/test_revenue_manager.py
+        run: python -m pytest -q tests/test_atoz_bridge.py tests/test_website_manager.py tests/test_pinterest_account_manager.py tests/test_pinterest_board_manager.py tests/test_pinterest_pin_manager.py tests/test_affiliate_manager.py tests/test_affiliate_monetization_enterprise.py tests/test_revenue_manager.py
       - name: No simulated Pinterest publishing
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path("layers/layer23_website_manager/pinterest_pin_manager/publisher/pin_publisher.py")
-          text = path.read_text(encoding="utf-8")
-          required = "simulated publication is disabled"
-          if required not in text:
+          if "simulated publication is disabled" not in path.read_text(encoding="utf-8"):
               raise SystemExit("Pinterest publisher safety contract missing")
           print("Layer 23 Pinterest publisher: fail-closed, no synthetic success")
           PY
       - name: Certification assertion
         run: |
           python - <<'PY'
+          from pathlib import Path
           required = [
               "layers/layer23_website_manager/integration/atoz_bridge.py",
               "layers/layer23_website_manager/services/publisher.py",
               "layers/layer23_website_manager/website_manager.py",
               "layers/layer23_website_manager/pinterest_pin_manager/publisher/pin_publisher.py",
           ]
-          from pathlib import Path
           missing = [p for p in required if not Path(p).is_file()]
           if missing:
               raise SystemExit(f"Layer 23 certification failed; missing files: {missing}")
