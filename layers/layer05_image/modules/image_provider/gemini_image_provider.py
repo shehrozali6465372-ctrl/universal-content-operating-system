@@ -151,31 +151,41 @@ class GeminiImageProvider(BaseImageProvider):
             url, data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            if exc.code == 429:
-                raise RuntimeError("Gemini rate limit exceeded") from exc
-            if exc.code in (401, 403):
-                raise RuntimeError("Gemini authentication/authorization failed") from exc
-            detail = ""
+        for attempt in range(4):
             try:
-                raw_error = exc.read().decode("utf-8", errors="replace")
-                parsed_error = json.loads(raw_error)
-                error_obj = parsed_error.get("error", {})
-                detail = str(error_obj.get("message") or error_obj.get("status") or "").strip()
-            except (OSError, UnicodeError, json.JSONDecodeError):
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 or 500 <= exc.code <= 599:
+                    if attempt < 3:
+                        time.sleep(2 ** attempt)
+                        continue
+                if exc.code == 429:
+                    raise RuntimeError("Gemini rate limit exceeded") from exc
+                if exc.code in (401, 403):
+                    raise RuntimeError("Gemini authentication/authorization failed") from exc
                 detail = ""
-            suffix = f": {detail}" if detail else ""
-            raise RuntimeError(
-                f"Gemini HTTP request failed ({exc.code}){suffix}"
-            ) from exc
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise RuntimeError("Gemini transport failed") from exc
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Gemini returned invalid JSON") from exc
-
+                try:
+                    raw_error = exc.read().decode("utf-8", errors="replace")
+                    parsed_error = json.loads(raw_error)
+                    error_obj = parsed_error.get("error", {})
+                    detail = str(error_obj.get("message") or error_obj.get("status") or "").strip()
+                except (OSError, UnicodeError, json.JSONDecodeError):
+                    detail = ""
+                suffix = f": {detail}" if detail else ""
+                raise RuntimeError(
+                    f"Gemini HTTP request failed ({exc.code}){suffix}"
+                ) from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError("Gemini transport failed") from exc
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Gemini returned invalid JSON") from exc
+        else:
+            raise RuntimeError("Gemini request retry budget exhausted")
         result = ImageResponse()
         result.provider = "gemini"
         result.model = self._model
