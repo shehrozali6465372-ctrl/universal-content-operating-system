@@ -153,7 +153,7 @@ class TestDockerDeploymentManager(unittest.TestCase):
 
     def test_expected_services(self):
         self.assertEqual(
-            self.mgr.EXPECTED_SERVICES,
+            list(self.mgr.EXPECTED_SERVICES),
             ["aios-main", "aios-postgres", "aios-redis"],
         )
 
