@@ -91,7 +91,7 @@ class ImagePlanner:
         for _ in range(count):
             ip = ImagePlan(image_type=image_type, platform=platform)
             ip.description = f"{image_type} image about {topic}"
-            ip.dimensions = PLATFORM_IMAGE_SPECS.get(platform, {}).get("feed") or PLATFORM_FALLBACK_DIMENSIONS[platform]
+            ip.dimensions = PLATFORM_IMAGE_SPECS[platform]["feed"]
             plans.append(ip)
         with self._counter_lock:
             self._plan_count += len(plans)
