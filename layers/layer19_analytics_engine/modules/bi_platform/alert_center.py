@@ -82,7 +82,7 @@ class AlertCenter:
             self._category_index.setdefault(category, []).append(alert.id)
             self._severity_index.setdefault(severity, []).append(alert.id)
             self._alert_history.append(alert.to_dict())
-            if len(self._alert_history) > 10000:
+            if len(self._alert_history) > 5000:
                 self._alert_history = self._alert_history[-5000:]
             return alert
 
