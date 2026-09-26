@@ -103,7 +103,7 @@ jobs:
           ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
 
       - name: Run Layer 5 Real Gemini Smoke Test
-        if: env.GEMINI_API_KEY != ''
+        if: env.GEMINI_API_KEY != '' && env.OPENROUTER_API_KEY == ''
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
