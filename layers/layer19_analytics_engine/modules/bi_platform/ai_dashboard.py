@@ -116,10 +116,13 @@ class AIDashboard:
             return self._current
 
     def get_trend(self, metric: str = "accuracy", limit: int = 30) -> List[float]:
+        require_non_negative_int(limit, "limit")
+        with self._data_lock:
+            history = list(self._history[-limit:]) if limit else []
         values = {
-            "accuracy": [h.get("accuracy", 0) for h in self._history[-limit:]],
-            "quality": [h.get("quality", 0) for h in self._history[-limit:]],
-            "rag": [h.get("rag_accuracy", 0) for h in self._history[-limit:]],
+            "accuracy": [h.get("accuracy", 0) for h in history],
+            "quality": [h.get("quality", 0) for h in history],
+            "rag": [h.get("rag_accuracy", 0) for h in history],
         }
         return values.get(metric, [])
 
