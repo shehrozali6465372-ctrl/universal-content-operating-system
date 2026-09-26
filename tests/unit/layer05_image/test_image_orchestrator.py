@@ -37,6 +37,8 @@ def test_orchestrator_counts_successful_runs() -> None:
     orchestrator = ImageOrchestrator(provider=ConfiguredProvider())
     result = orchestrator.run("test topic")
     assert result.metadata["asset_sha256"]
+    serialized = result.to_dict()
+    assert serialized["metadata"]["asset_sha256"] == result.metadata["asset_sha256"]
     assert orchestrator.run_count == 1
 
 
