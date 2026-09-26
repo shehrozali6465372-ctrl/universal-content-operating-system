@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -134,6 +135,21 @@ def test_human_approval_requires_review_stage_and_unique_reviewer() -> None:
     ok, _ = manager.approve(request.request_id, reviewer="alice")
     assert not ok
     assert request.current_approvals == 1
+
+
+
+def test_human_review_request_ids_are_atomic_under_concurrency() -> None:
+    manager = ReviewManager()
+
+    def create(_: int) -> int:
+        return manager.create_request("Concurrent review item.").request_id
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        request_ids = list(executor.map(create, range(100)))
+
+    assert len(request_ids) == 100
+    assert len(set(request_ids)) == 100
+    assert manager.check_count == 100
 
 
 def test_invalid_inputs_are_rejected() -> None:
