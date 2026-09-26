@@ -5,6 +5,7 @@ import base64
 import json
 from pathlib import Path
 from unittest.mock import patch
+import urllib.error
 
 import pytest
 
@@ -103,6 +104,41 @@ def test_gemini_request_uses_current_image_config(tmp_path: Path) -> None:
     assert image_config["aspectRatio"] == "4:5"
     assert image_config["imageSize"] == "2K"
     assert "responseFormat" not in captured["payload"]["generationConfig"]
+
+
+def test_rate_limit_rotates_configured_environment_keys(tmp_path: Path) -> None:
+    image_bytes = b"\\x89PNG\\r\\n\\x1a\\nrotated"
+    body = {"candidates": [{"content": {"parts": [{"inlineData": {
+        "mimeType": "image/png",
+        "data": base64.b64encode(image_bytes).decode("ascii"),
+    }}]}}]}
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return json.dumps(body).encode("utf-8")
+    provider = GeminiImageProvider(api_key=None)
+    calls = []
+    def fake_urlopen(request, timeout):
+        calls.append(request.headers["X-goog-api-key"])
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(request.full_url, 429, "rate", {}, None)
+        return FakeResponse()
+    with patch.dict("os.environ", {
+        "GEMINI_API_KEY_1": "first",
+        "GEMINI_API_KEY_2": "second",
+        "UCOS_IMAGE_OUTPUT_DIR": str(tmp_path),
+    }, clear=True):
+        with patch(
+            "layers.layer05_image.modules.image_provider.gemini_image_provider.urllib.request.urlopen",
+            side_effect=fake_urlopen,
+        ):
+            result = provider.generate("rotation test", size="1024x1024")
+    assert result.image_data == image_bytes
+    assert calls[0] == "first"
+    assert calls[-1] == "second"
 
 
 def test_history_is_bounded_and_limit_is_validated() -> None:
