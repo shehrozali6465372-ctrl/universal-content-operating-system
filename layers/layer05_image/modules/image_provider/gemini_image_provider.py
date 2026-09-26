@@ -1,6 +1,6 @@
 """GeminiImageProvider — Real image generation via Gemini API.
 
-Uses Gemini's generateContent with image output capabilities.
+Uses Gemini's current Interactions API for native image models, with legacy generateContent support for older image models.
 Fails closed when API credentials or generation responses are unavailable.
 
 Architecture:
@@ -41,6 +41,7 @@ class GeminiImageProvider(BaseImageProvider):
     """
 
     GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1"
+    GEMINI_INTERACTIONS_API_BASE = "https://generativelanguage.googleapis.com/v1beta/interactions"
     SUPPORTED_MODELS = [
         "gemini-3.1-flash-image",
         "gemini-3-pro-image",
@@ -147,7 +148,53 @@ class GeminiImageProvider(BaseImageProvider):
 
     def _real_generate(self, prompt: str, api_key: str,
                        size: str = "1024x1024") -> Optional[ImageResponse]:
-        """Call Gemini's image-capable generateContent endpoint."""
+        """Call Gemini's current image API and return only real image bytes.
+
+        Gemini 3.x native image models are served through the Interactions API.
+        Gemini 2.5 Flash Image remains on generateContent for compatibility.
+        """
+        if self._model in {
+            "gemini-3.1-flash-image",
+            "gemini-3.1-flash-lite-image",
+            "gemini-3-pro-image",
+        }:
+            return self._real_generate_interaction(prompt, api_key, size)
+        return self._real_generate_legacy(prompt, api_key, size)
+
+    def _real_generate_interaction(self, prompt: str, api_key: str,
+                                   size: str) -> Optional[ImageResponse]:
+        """Generate an image through Gemini's current Interactions REST API."""
+        width, height = self._parse_size(size)
+        payload = {
+            "model": self._model,
+            "input": [{"type": "text", "text": prompt}],
+            "response_format": {
+                "type": "image",
+                "mime_type": "image/png",
+                "aspect_ratio": self._aspect_ratio(width, height),
+                "image_size": self._image_size(width, height),
+            },
+        }
+        req = urllib.request.Request(
+            self.GEMINI_INTERACTIONS_API_BASE,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        body = self._request_json(req, "Gemini Interactions API")
+        image_data, mime_type = self._extract_interaction_image(body)
+        if not image_data:
+            return None
+        result = ImageResponse()\n        result.provider = "gemini"\n        result.model = self._model
+        result.image_data = image_data
+        result.metadata["mime_type"] = mime_type
+        result.metadata["sha256"] = hashlib.sha256(image_data).hexdigest()
+        result.image_url = self._persist_image(image_data, mime_type)
+        return result
+
+    def _real_generate_legacy(self, prompt: str, api_key: str,
+                              size: str) -> Optional[ImageResponse]:
+        """Generate through legacy generateContent for Gemini 2.5 Flash Image."""
         width, height = self._parse_size(size)
         url = f"{self.GEMINI_API_BASE}/models/{self._model}:generateContent"
         payload = {
@@ -164,44 +211,8 @@ class GeminiImageProvider(BaseImageProvider):
             url, data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             method="POST")
-        for attempt in range(4):
-            try:
-                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                    body = json.loads(resp.read().decode("utf-8"))
-                break
-            except urllib.error.HTTPError as exc:
-                if exc.code == 429 or 500 <= exc.code <= 599:
-                    if attempt < 3:
-                        time.sleep(2 ** attempt)
-                        continue
-                if exc.code == 429:
-                    raise RuntimeError("Gemini rate limit exceeded") from exc
-                if exc.code in (401, 403):
-                    raise RuntimeError("Gemini authentication/authorization failed") from exc
-                detail = ""
-                try:
-                    raw_error = exc.read().decode("utf-8", errors="replace")
-                    parsed_error = json.loads(raw_error)
-                    error_obj = parsed_error.get("error", {})
-                    detail = str(error_obj.get("message") or error_obj.get("status") or "").strip()
-                except (OSError, UnicodeError, json.JSONDecodeError):
-                    detail = ""
-                suffix = f": {detail}" if detail else ""
-                raise RuntimeError(
-                    f"Gemini HTTP request failed ({exc.code}){suffix}"
-                ) from exc
-            except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                if attempt < 3:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise RuntimeError("Gemini transport failed") from exc
-            except json.JSONDecodeError as exc:
-                raise RuntimeError("Gemini returned invalid JSON") from exc
-        else:
-            raise RuntimeError("Gemini request retry budget exhausted")
-        result = ImageResponse()
-        result.provider = "gemini"
-        result.model = self._model
+        body = self._request_json(req, "Gemini generateContent API")
+        result = ImageResponse(provider="gemini", model=self._model)
         for candidate in body.get("candidates", []):
             for part in candidate.get("content", {}).get("parts", []):
                 inline = part.get("inlineData")
@@ -220,6 +231,66 @@ class GeminiImageProvider(BaseImageProvider):
                 result.image_url = self._persist_image(image_bytes, mime_type)
                 return result
         return None
+
+    def _request_json(self, req: urllib.request.Request, api_name: str) -> Dict[str, Any]:
+        """Perform a bounded, classified Gemini request without leaking credentials."""
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 or 500 <= exc.code <= 599:
+                    if attempt < 3:
+                        time.sleep(2 ** attempt)
+                        continue
+                if exc.code == 429:
+                    raise RuntimeError("Gemini rate limit exceeded") from exc
+                if exc.code in (401, 403):
+                    raise RuntimeError("Gemini authentication/authorization failed") from exc
+                detail = ""
+                try:
+                    raw_error = exc.read().decode("utf-8", errors="replace")
+                    parsed_error = json.loads(raw_error)
+                    error_obj = parsed_error.get("error", {})
+                    detail = str(error_obj.get("message") or error_obj.get("status") or "").strip()
+                except (OSError, UnicodeError, json.JSONDecodeError):
+                    detail = ""
+                suffix = f": {detail}" if detail else ""
+                raise RuntimeError(f"{api_name} HTTP request failed ({exc.code}){suffix}") from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError(f"{api_name} transport failed") from exc
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"{api_name} returned invalid JSON") from exc
+        raise RuntimeError(f"{api_name} retry budget exhausted")
+
+    @staticmethod
+    def _extract_interaction_image(body: Dict[str, Any]) -> Tuple[bytes, str]:
+        """Extract the first image block from an Interactions response."""
+        output_image = body.get("output_image")
+        candidates: List[Dict[str, Any]] = []
+        if isinstance(output_image, dict):
+            candidates.append(output_image)
+        for step in body.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            content = step.get("content", [])
+            if isinstance(content, list):
+                candidates.extend(item for item in content if isinstance(item, dict))
+        for item in candidates:
+            encoded = item.get("data")
+            mime_type = str(item.get("mime_type") or item.get("mimeType") or "")
+            if not encoded or not mime_type.startswith("image/"):
+                continue
+            try:
+                image_bytes = base64.b64decode(encoded, validate=True)
+            except (ValueError, TypeError) as exc:
+                raise RuntimeError("Gemini returned invalid image encoding") from exc
+            if image_bytes:
+                return image_bytes, mime_type
+        return b"", ""
 
     @staticmethod
     def _image_size(width: int, height: int) -> str:
