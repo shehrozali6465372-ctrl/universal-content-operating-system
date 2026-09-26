@@ -41,6 +41,7 @@ class ImageOrchestratorResult:
             "layout": self.layout.to_dict() if self.layout else None,
             "image": self.image_response.to_dict() if self.image_response else None,
             "optimization": self.optimization.to_dict() if self.optimization else None,
+            "metadata": dict(self.metadata),
             "pipeline_time_ms": round(self.pipeline_time_ms, 2),
         }
 
