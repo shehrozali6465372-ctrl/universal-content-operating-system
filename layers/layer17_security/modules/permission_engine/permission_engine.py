@@ -1,6 +1,7 @@
-"""PermissionEngine — fine-grained permission evaluation."""
+"""Fail-closed fine-grained permission evaluation."""
 from __future__ import annotations
-from typing import Any, Callable, Dict, List, Optional, Set
+
+from typing import Any, Dict, List, Optional, Set
 
 
 class PermissionRule:
@@ -8,10 +9,12 @@ class PermissionRule:
 
     def __init__(self, resource: str, action: str, effect: str = "allow",
                  conditions: Optional[Dict[str, Any]] = None) -> None:
+        if effect not in {"allow", "deny"}:
+            raise ValueError("effect must be allow or deny")
         self.resource = resource
         self.action = action
         self.effect = effect
-        self.conditions = conditions or {}
+        self.conditions = dict(conditions or {})
 
 
 class PermissionEngine:
@@ -27,23 +30,31 @@ class PermissionEngine:
 
     def check_permission(self, resource: str, action: str,
                          context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        context = context or {}
+        matches: List[PermissionRule] = []
         for rule in self._rules:
-            if rule.resource == resource and rule.action == action:
-                if rule.conditions and context:
-                    met = all(context.get(k) == v for k, v in rule.conditions.items())
-                    if not met:
-                        continue
-                return {"allowed": rule.effect == "allow", "rule": rule.resource}
+            if rule.resource != resource or rule.action != action:
+                continue
+            if rule.conditions and any(context.get(k) != v for k, v in rule.conditions.items()):
+                continue
+            matches.append(rule)
+        if any(rule.effect == "deny" for rule in matches):
+            return {"allowed": False, "rule": "explicit_deny"}
+        if any(rule.effect == "allow" for rule in matches):
+            return {"allowed": True, "rule": "explicit_allow"}
         return {"allowed": False, "rule": "no_matching_rule"}
 
     def assign_role_permissions(self, role: str, permissions: List[str]) -> None:
+        if not role:
+            raise ValueError("role is required")
         self._role_permissions[role] = set(permissions)
 
     def check_role_permission(self, role: str, permission: str) -> bool:
         return permission in self._role_permissions.get(role, set())
 
     def list_rules(self) -> List[Dict[str, Any]]:
-        return [{"resource": r.resource, "action": r.action, "effect": r.effect} for r in self._rules]
+        return [{"resource": r.resource, "action": r.action, "effect": r.effect}
+                for r in self._rules]
 
     def count(self) -> int:
         return len(self._rules)

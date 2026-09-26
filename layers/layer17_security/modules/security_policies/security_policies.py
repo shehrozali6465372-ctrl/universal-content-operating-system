@@ -6,7 +6,10 @@ from enum import Enum
 
 
 class PolicyLevel(str, Enum):
-    LOW = "low"; MEDIUM = "medium"; HIGH = "high"; CRITICAL = "critical"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class SecurityPolicy:

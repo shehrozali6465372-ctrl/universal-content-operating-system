@@ -1,9 +1,11 @@
-"""SecretsManager — secure storage and retrieval of secrets."""
+"""Fail-closed in-memory secret manager for tests/development only."""
 from __future__ import annotations
+
 import hashlib
+import hmac
+import os
 import time
 import uuid
-import os
 from typing import Any, Dict, List, Optional
 
 
@@ -12,13 +14,13 @@ class SecretEntry:
                  "created_at", "rotated_at", "expires_at", "metadata")
 
     def __init__(self, key: str, value: str, category: str = "general") -> None:
-        self.secret_id = str(uuid.uuid4())[:12]
+        self.secret_id = uuid.uuid4().hex
         self.key = key
         self.value_hash = hashlib.sha256(value.encode()).hexdigest()
         self.category = category
         self.created_at = time.time()
-        self.rotated_at: float = 0.0
-        self.expires_at: float = 0.0
+        self.rotated_at = 0.0
+        self.expires_at = 0.0
         self.metadata: Dict[str, Any] = {}
         self._value = value
 
@@ -32,40 +34,54 @@ class SecretsManager:
         self._secrets: Dict[str, SecretEntry] = {}
         self._access_log: List[Dict[str, Any]] = []
 
+    @staticmethod
+    def _production() -> bool:
+        return os.getenv("UCOS_ENV", "development").lower() in {"production", "prod"}
+
     def set_secret(self, key: str, value: str, category: str = "general") -> SecretEntry:
-        if os.getenv("UCOS_ENV", "development").lower() in {"production", "prod"} and os.getenv("UCOS_ALLOW_IN_MEMORY_SECRETS", "false").lower() != "true":
+        if self._production():
             raise RuntimeError("in-memory secret storage is disabled in production")
-        if not key or not value: raise ValueError("secret key and value are required")
+        if not key or not value:
+            raise ValueError("secret key and value are required")
         entry = SecretEntry(key, value, category)
         self._secrets[key] = entry
         return entry
 
     def get_secret(self, key: str) -> Optional[str]:
         entry = self._secrets.get(key)
-        if entry:
-            self._access_log.append({"key_hash": hashlib.sha256(key.encode()).hexdigest(), "time": time.time()})
-            return entry._value
-        return None
+        if entry is None:
+            return None
+        self._access_log.append({
+            "key_hash": hashlib.sha256(key.encode()).hexdigest(),
+            "time": time.time(),
+        })
+        return entry._value
 
     def delete_secret(self, key: str) -> bool:
-        if key in self._secrets:
-            del self._secrets[key]
-            return True
-        return False
+        return self._secrets.pop(key, None) is not None
 
     def rotate_secret(self, key: str, new_value: str) -> bool:
+        if not new_value:
+            raise ValueError("new secret value is required")
         entry = self._secrets.get(key)
-        if entry:
-            entry._value = new_value
-            entry.value_hash = hashlib.sha256(new_value.encode()).hexdigest()
-            entry.rotated_at = time.time()
-            return True
-        return False
+        if entry is None:
+            return False
+        entry._value = new_value
+        entry.value_hash = hashlib.sha256(new_value.encode()).hexdigest()
+        entry.rotated_at = time.time()
+        return True
+
+    def verify_secret(self, key: str, candidate: str) -> bool:
+        entry = self._secrets.get(key)
+        return entry is not None and hmac.compare_digest(
+            entry.value_hash, hashlib.sha256(candidate.encode()).hexdigest()
+        )
 
     def list_secrets(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        if category:
-            return [e.to_dict() for e in self._secrets.values() if e.category == category]
-        return [e.to_dict() for e in self._secrets.values()]
+        values = self._secrets.values()
+        if category is not None:
+            values = [e for e in values if e.category == category]
+        return [e.to_dict() for e in values]
 
     def count(self) -> int:
         return len(self._secrets)

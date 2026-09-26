@@ -1,15 +1,20 @@
-"""Authentication — user authentication with multiple strategies."""
+"""Production authentication primitives for Layer 17."""
 from __future__ import annotations
+
 import hashlib
 import hmac
+import secrets
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class AuthStrategy(str, Enum):
-    PASSWORD = "password"; API_KEY = "api_key"; TOKEN = "token"; OAUTH = "oauth"
+    PASSWORD = "password"
+    API_KEY = "api_key"
+    TOKEN = "token"
+    OAUTH = "oauth"
 
 
 class User:
@@ -17,27 +22,33 @@ class User:
                  "roles", "is_active", "created_at", "last_login", "metadata")
 
     def __init__(self, username: str, email: str = "", password: str = "") -> None:
-        self.user_id = str(uuid.uuid4())[:12]
+        if not username:
+            raise ValueError("username is required")
+        self.user_id = uuid.uuid4().hex
         self.username = username
         self.email = email
-        self.salt = str(uuid.uuid4())[:8]
+        self.salt = secrets.token_bytes(16)
         self.password_hash = self._hash_password(password) if password else ""
         self.roles: List[str] = []
         self.is_active = True
         self.created_at = time.time()
-        self.last_login: float = 0.0
+        self.last_login = 0.0
         self.metadata: Dict[str, Any] = {}
 
-    def _hash_password(self, password: str) -> str:
-        return hashlib.sha256((password + self.salt).encode()).hexdigest()
+    def _hash_password(self, password: str) -> bytes:
+        if not isinstance(password, str):
+            raise TypeError("password must be a string")
+        return hashlib.pbkdf2_hmac("sha256", password.encode(), self.salt, 600_000)
 
     def verify_password(self, password: str) -> bool:
-        return self._hash_password(password) == self.password_hash
+        return bool(self.password_hash) and hmac.compare_digest(
+            self._hash_password(password), self.password_hash
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"user_id": self.user_id, "username": self.username,
                 "email": self.email, "is_active": self.is_active,
-                "roles": self.roles}
+                "roles": list(self.roles)}
 
 
 class AuthSession:
@@ -45,16 +56,18 @@ class AuthSession:
                  "expires_at", "ip_address", "metadata")
 
     def __init__(self, user_id: str, token: str, expires_in: float = 3600.0) -> None:
-        self.session_id = str(uuid.uuid4())[:12]
+        if expires_in <= 0:
+            raise ValueError("expires_in must be positive")
+        self.session_id = uuid.uuid4().hex
         self.user_id = user_id
         self.token = token
         self.created_at = time.time()
-        self.expires_at = time.time() + expires_in
+        self.expires_at = self.created_at + expires_in
         self.ip_address = ""
         self.metadata: Dict[str, Any] = {}
 
     def is_expired(self) -> bool:
-        return time.time() > self.expires_at
+        return time.time() >= self.expires_at
 
     def to_dict(self) -> Dict[str, Any]:
         return {"session_id": self.session_id, "user_id": self.user_id,
@@ -62,26 +75,28 @@ class AuthSession:
 
 
 class AuthenticationManager:
-    def __init__(self) -> None:
+    def __init__(self, max_failed: int = 5) -> None:
+        if max_failed <= 0:
+            raise ValueError("max_failed must be positive")
         self._users: Dict[str, User] = {}
         self._sessions: Dict[str, AuthSession] = {}
         self._api_keys: Dict[str, str] = {}
         self._failed_attempts: Dict[str, int] = {}
-        self._max_failed = 5
+        self._max_failed = max_failed
 
     def register_user(self, username: str, email: str = "",
                       password: str = "") -> User:
+        if not password:
+            raise ValueError("password is required")
+        if any(u.username == username for u in self._users.values()):
+            raise ValueError("username already exists")
         user = User(username, email, password)
         self._users[user.user_id] = user
         return user
 
     def authenticate_password(self, username: str, password: str) -> Optional[AuthSession]:
-        user = None
-        for u in self._users.values():
-            if u.username == username:
-                user = u
-                break
-        if not user or not user.is_active:
+        user = next((u for u in self._users.values() if u.username == username), None)
+        if user is None or not user.is_active:
             return None
         if not user.verify_password(password):
             self._failed_attempts[username] = self._failed_attempts.get(username, 0) + 1
@@ -89,34 +104,34 @@ class AuthenticationManager:
                 user.is_active = False
             return None
         self._failed_attempts.pop(username, None)
-        token = str(uuid.uuid4())
+        token = secrets.token_urlsafe(32)
         session = AuthSession(user.user_id, token)
         self._sessions[session.session_id] = session
         user.last_login = time.time()
         return session
 
     def register_api_key(self, user_id: str, api_key: str) -> bool:
-        if user_id in self._users:
-            self._api_keys[api_key] = user_id
-            return True
-        return False
+        if user_id not in self._users or not api_key:
+            return False
+        self._api_keys[hashlib.sha256(api_key.encode()).hexdigest()] = user_id
+        return True
 
     def authenticate_api_key(self, api_key: str) -> Optional[str]:
-        return self._api_keys.get(api_key)
+        if not api_key:
+            return None
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        return self._api_keys.get(key_hash)
 
     def validate_session(self, session_id: str) -> Optional[AuthSession]:
         session = self._sessions.get(session_id)
         if session and not session.is_expired():
             return session
         if session:
-            del self._sessions[session_id]
+            self._sessions.pop(session_id, None)
         return None
 
     def invalidate_session(self, session_id: str) -> bool:
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            return True
-        return False
+        return self._sessions.pop(session_id, None) is not None
 
     def get_user(self, user_id: str) -> Optional[User]:
         return self._users.get(user_id)
