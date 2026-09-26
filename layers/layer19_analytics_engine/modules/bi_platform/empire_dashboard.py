@@ -75,25 +75,28 @@ class EmpireDashboard:
         self._current = EmpireSnapshot()
         self._history: List[Dict[str, Any]] = []
 
-    def update(self, total_accounts: int = 0, active_accounts: int = 0,
-               healthy_accounts: int = 0, published_today: int = 0,
-               revenue_today: float = 0.0, queue_depth: int = 0,
-               shadow_bans: int = 0) -> EmpireSnapshot:
-        for value, field in ((total_accounts, "total_accounts"), (active_accounts, "active_accounts"),
-                             (healthy_accounts, "healthy_accounts"), (published_today, "published_today"),
-                             (queue_depth, "queue_depth"), (shadow_bans, "shadow_bans")):
-            require_non_negative_int(value, field)
-        if active_accounts > total_accounts or healthy_accounts > active_accounts:
-            raise ValueError("account health counts must satisfy healthy <= active <= total")
-        revenue_today = require_finite_number(revenue_today, "revenue_today", minimum=0.0)
+    def update(self, **kwargs: Any) -> EmpireSnapshot:
+        allowed = set(EmpireSnapshot.__slots__) - {"timestamp"}
+        unknown = set(kwargs) - allowed
+        if unknown:
+            raise ValueError(f"unsupported empire metrics: {sorted(unknown)}")
+        for key, value in kwargs.items():
+            if key in {"total_accounts", "active_accounts", "healthy_accounts",
+                       "shadow_ban_alerts", "banned_accounts", "queued_posts",
+                       "published_today", "failed_posts", "scheduled_posts",
+                       "total_followers", "follower_growth_today"}:
+                require_non_negative_int(value, key)
+        values = {
+            key: kwargs.get(key, 0)
+            for key in allowed
+        }
+        if values["active_accounts"] > values["total_accounts"]:
+            raise ValueError("active_accounts cannot exceed total_accounts")
+        if values["healthy_accounts"] > values["active_accounts"]:
+            raise ValueError("healthy_accounts cannot exceed active_accounts")
         snap = EmpireSnapshot()
-        snap.total_accounts = total_accounts
-        snap.active_accounts = active_accounts
-        snap.healthy_accounts = healthy_accounts
-        snap.published_today = published_today
-        snap.revenue_today = revenue_today
-        snap.queue_depth = queue_depth
-        snap.shadow_bans = shadow_bans
+        for key, value in values.items():
+            setattr(snap, key, value)
         with self._data_lock:
             self._current = snap
             self._history.append(snap.to_dict())
@@ -102,14 +105,16 @@ class EmpireDashboard:
             return snap
 
     def get_current(self) -> EmpireSnapshot:
-        return self._current
+        with self._data_lock:
+            return self._current
 
     def get_dashboard(self) -> Dict[str, Any]:
-        return {
-            "current": self._current.to_dict(),
-            "history_size": len(self._history),
-            "recent": self._history[-7:] if self._history else [],
-        }
+        with self._data_lock:
+            return {
+                "current": self._current.to_dict(),
+                "history_size": len(self._history),
+                "recent": list(self._history[-7:]),
+            }
 
     def stats(self) -> Dict[str, Any]:
         with self._data_lock:
