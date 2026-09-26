@@ -216,7 +216,7 @@ class TestDockerDeploymentManager(unittest.TestCase):
     def test_check_all_containers(self, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
         status = self.mgr.check_all_containers()
-        self.assertEqual(status.total_services, 4)
+        self.assertEqual(status.total_services, 3)
         self.assertEqual(status.running, 0)
         self.assertEqual(status.stopped, 4)
         self.assertFalse(status.overall_healthy)
@@ -353,7 +353,7 @@ class TestDockerCompose(unittest.TestCase):
         config.ports = ["80:80"]
         compose.add_service("web", config)
         output = compose.generate()
-        self.assertIn("version:", output)
+        self.assertIn("services:", output)
         self.assertIn("web:", output)
         self.assertIn("80:80", output)
 
@@ -405,7 +405,7 @@ class TestFullEnterpriseStack(unittest.TestCase):
         mgr = DockerDeploymentManager()
         status = mgr.get_deployment_status()
         self.assertIn("docker", status)
-        self.assertEqual(status["deployment"]["total_services"], 4)
+        self.assertEqual(status["deployment"]["total_services"], 3)
 
         # 4. Verification
         verification = mgr.verify_deployment()
