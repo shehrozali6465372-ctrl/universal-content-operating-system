@@ -61,6 +61,7 @@ jobs:
           errors = []
           providers = []
           if os.environ.get("GEMINI_API_KEY"):
+              providers.append(("gemini-3.1-lite", GeminiImageProvider(model="gemini-3.1-flash-lite-image")))
               providers.append(("gemini-3.1", GeminiImageProvider(model="gemini-3.1-flash-image")))
               providers.append(("gemini-3-pro", GeminiImageProvider(model="gemini-3-pro-image")))
           if os.environ.get("OPENROUTER_API_KEY"):
