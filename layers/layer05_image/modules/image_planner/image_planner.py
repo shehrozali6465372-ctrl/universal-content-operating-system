@@ -49,7 +49,7 @@ class ImagePlan:
         self.image_type = image_type
         self.description = ""
         self.platform = platform
-        self.dimensions = PLATFORM_IMAGE_SPECS[platform]["feed"]
+        self.dimensions = next(iter(PLATFORM_IMAGE_SPECS[platform].values()))
         self.style = "modern"
         self.text_overlay = ""
         self.color_scheme = ""
