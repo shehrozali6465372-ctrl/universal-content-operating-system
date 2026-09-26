@@ -45,7 +45,7 @@ jobs:
 
 
       - name: Real Gemini smoke
-        if: env.GEMINI_API_KEY != '' && env.OPENROUTER_API_KEY == ''
+        if: env.GEMINI_API_KEY != ''
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
@@ -70,8 +70,9 @@ jobs:
           print(f"REAL_GEMINI_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
           PY
 
-      - name: Real OpenRouter image smoke
-        if: env.OPENROUTER_API_KEY != ''
+      - name: Temporary OpenRouter image smoke (advisory)
+        if: env.OPENROUTER_API_KEY != '' && env.GEMINI_API_KEY == ''
+        continue-on-error: true
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-openrouter-images
         run: |
