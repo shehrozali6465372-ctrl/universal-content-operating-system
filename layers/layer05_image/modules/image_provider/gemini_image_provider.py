@@ -86,7 +86,7 @@ class GeminiImageProvider(BaseImageProvider):
         except Exception as exc:
             self._record_history({"status": "error", "error_type": type(exc).__name__,
                                   "latency_ms": (time.monotonic() - start) * 1000})
-            raise RuntimeError("Gemini image generation failed") from exc
+            raise RuntimeError(f"Gemini image generation failed: {exc}") from exc
         if result is None or not result.image_data:
             raise RuntimeError("Gemini returned no image data")
         result.latency_ms = (time.monotonic() - start) * 1000
