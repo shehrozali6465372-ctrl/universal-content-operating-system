@@ -1,7 +1,7 @@
 """StatisticsEngine — descriptive and inferential statistics."""
 from __future__ import annotations
 import math
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 
 class StatisticsEngine:
