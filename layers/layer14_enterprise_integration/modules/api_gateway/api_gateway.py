@@ -105,15 +105,30 @@ class APIGateway:
     def is_running(self): return self._running
     def _handle_status(self,params):
         return APIResponse(data={"version":self.VERSION,"status":"running","layers":self.LAYER_COUNT,"gateway_requests":self._request_count,"platforms":self.SUPPORTED_PLATFORMS})
-    def _handle_health(self,params):
-        checks={"api":"healthy","database":"unknown"}
+    def _handle_health(self, params):
+        checks = {"api": "healthy", "database": "unknown"}
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
         try:
-            from layers.layer01_core.modules.database_manager import DatabaseManager
-            db=DatabaseManager(); db.initialize(); db.health_check(); checks["database"]="healthy"; db.close()
-        except Exception: checks["database"]="unavailable"
-        checks["gemini"]="configured" if os.environ.get("GEMINI_API_KEY_1","") else "not_configured"
-        overall="healthy" if checks["database"]=="healthy" else "degraded"
-        return APIResponse(data={"status":overall,"checks":checks})
+            if production:
+                from layers.layer13_persistence.modules.postgresql.manager import get_database
+                report = get_database().health_check()
+                checks["database"] = (
+                    "healthy" if report.get("overall") == "PASS" else "unhealthy"
+                )
+            else:
+                from layers.layer01_core.modules.database_manager import DatabaseManager
+                db = DatabaseManager()
+                db.initialize()
+                db.health_check()
+                checks["database"] = "healthy"
+                db.close()
+        except Exception:
+            checks["database"] = "unavailable"
+        checks["gemini"] = (
+            "configured" if os.environ.get("GEMINI_API_KEY_1", "") else "not_configured"
+        )
+        overall = "healthy" if checks["database"] == "healthy" else "degraded"
+        return APIResponse(data={"status": overall, "checks": checks})
 
     def _handle_heartbeat(self,params):
         return APIResponse(data={"status":"ok","service":"universal-content-operating-system","layer":23,"component":"website_manager"})
