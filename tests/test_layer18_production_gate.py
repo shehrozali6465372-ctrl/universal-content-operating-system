@@ -43,7 +43,7 @@ def test_alert_rule_ids_do_not_collide_and_failures_are_observable():
 
 def test_alert_lifecycle():
     alerts = AlertManager()
-    rule = alerts.add_rule("test", lambda _: True, cooldown_seconds=0)
+    alerts.add_rule("test", lambda _: True, cooldown_seconds=0)
     fired = alerts.evaluate()
     assert fired and fired[0].state == AlertState.FIRING
     assert alerts.resolve_alert(fired[0].alert_id)
