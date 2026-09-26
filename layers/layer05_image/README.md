@@ -39,3 +39,6 @@ The layer remains **Not Production Certified** until the CI gate verifies target
 pytest tests/unit/layer05_image -q
 ```
 
+
+
+<!-- Certification gate trigger: real OpenRouter smoke remains mandatory when configured. -->
