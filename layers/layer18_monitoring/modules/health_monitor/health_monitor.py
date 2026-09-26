@@ -1,6 +1,6 @@
 """Bounded health checks with timeout handling."""
 from __future__ import annotations
-import concurrent.futures,threading,time
+import threading,time
 from enum import Enum
 from typing import Any,Callable,Dict,List,Optional
 class HealthLevel(str,Enum): HEALTHY="healthy";DEGRADED="degraded";UNHEALTHY="unhealthy"
@@ -22,11 +22,27 @@ class HealthMonitor:
     def check(self,name:str)->Dict[str,Any]:
         with self._lock:c=self._checks.get(name)
         if c is None:return {"name":name,"status":"unhealthy","error":"not_found"}
-        executor=concurrent.futures.ThreadPoolExecutor(max_workers=1);future=executor.submit(c.check_fn);timed_out=False
-        try: result=future.result(timeout=c.timeout)
-        except concurrent.futures.TimeoutError:timed_out=True;result={"error":f"health check timed out after {c.timeout:.2f}s"};future.cancel()
-        except Exception as exc:result={"error":str(exc)}
-        finally:executor.shutdown(wait=not timed_out,cancel_futures=True)
+        result_holder: Dict[str, Any] = {}
+        error_holder: List[BaseException] = []
+        done = threading.Event()
+
+        def run_check() -> None:
+            try:
+                result_holder["value"] = c.check_fn()
+            except BaseException as exc:
+                error_holder.append(exc)
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=run_check, name="health-check-" + name, daemon=True)
+        worker.start()
+        timed_out = not done.wait(c.timeout)
+        if timed_out:
+            result = {"error": "health check timed out after %.2fs" % c.timeout}
+        elif error_holder:
+            result = {"error": str(error_holder[0])}
+        else:
+            result = result_holder.get("value")
         with self._lock:
             if timed_out or isinstance(result,dict) and "error" in result:c.consecutive_failures+=1
             else:c.consecutive_failures=0
