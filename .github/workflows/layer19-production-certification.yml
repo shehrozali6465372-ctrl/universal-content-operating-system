@@ -8,6 +8,13 @@ on:
       - "tests/test_bi_platform_enterprise.py"
       - "tests/layer19_analytics_engine/**"
       - ".github/workflows/layer19-production-certification.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "layers/layer19_analytics_engine/**"
+      - "tests/test_bi_platform_enterprise.py"
+      - "tests/layer19_analytics_engine/**"
+      - ".github/workflows/layer19-production-certification.yml"
   workflow_dispatch:
 
 permissions:
