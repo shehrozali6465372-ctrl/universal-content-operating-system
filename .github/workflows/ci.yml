@@ -142,16 +142,10 @@ jobs:
           provider = OpenRouterImageProvider(api_key=os.environ.get("OPENROUTER_API_KEY", ""), model="bytedance-seed/seedream-4.5")
           if not provider.is_configured():
               raise SystemExit("OpenRouter smoke test: provider is not configured")
-          try:
-              result = provider.generate(
-                  "Create a simple professional abstract geometric marketing background",
-                  size="512x512",
-              )
-          except RuntimeError as exc:
-              if "insufficient credits" in str(exc).lower():
-                  print("OpenRouter smoke SKIP: account has no image-generation credits")
-                  raise SystemExit(0)
-              raise
+          result = provider.generate(
+              "Create a simple professional abstract geometric marketing background",
+              size="512x512",
+          )
           if not result.image_data:
               raise SystemExit("OpenRouter smoke test: empty image data")
           digest = result.metadata.get("sha256")
