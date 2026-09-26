@@ -45,6 +45,7 @@ class GeminiImageProvider(BaseImageProvider):
         "gemini-3.1-flash-image",
         "gemini-3-pro-image",
         "gemini-2.5-flash-image",
+        "gemini-3.1-flash-lite-image",
     ]
 
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3.1-flash-image") -> None:
