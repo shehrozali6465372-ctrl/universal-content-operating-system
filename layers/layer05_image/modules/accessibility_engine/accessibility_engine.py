@@ -1,5 +1,6 @@
 """Accessibility Engine — Alt text, contrast validation, readability checks."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -29,6 +30,7 @@ class AccessibilityResult:
 class AccessibilityEngine:
     def __init__(self) -> None:
         self._check_count = 0
+        self._counter_lock = RLock()
 
     def generate_alt_text(self, topic: str, image_type: str = "photo",
                           description: str = "") -> str:
@@ -46,13 +48,18 @@ class AccessibilityEngine:
         return round((lighter + 0.05) / (darker + 0.05), 2)
 
     def check_text_density(self, text: str, image_area: int = 1000000) -> AccessibilityResult:
+        if not isinstance(text, str):
+            raise ValueError("text must be a string")
+        if not isinstance(image_area, int) or isinstance(image_area, bool) or image_area <= 0:
+            raise ValueError("image_area must be a positive integer")
         result = AccessibilityResult()
         density = len(text) / image_area * 10000
         if density > 0.05:
             result.issues.append("Text density too high")
             result.score -= 20
         result.recommendations.append("Ensure text is at least 24pt")
-        self._check_count += 1
+        with self._counter_lock:
+            self._check_count += 1
         return result
 
     def validate(self, text_overlay: str = "", bg_color: str = "#FFFFFF",
@@ -72,6 +79,8 @@ class AccessibilityEngine:
         return result
 
     def _relative_luminance(self, hex_color: str) -> float:
+        if not isinstance(hex_color, str):
+            raise ValueError("color must be a six-digit hexadecimal value")
         h = hex_color.lstrip("#")
         if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
             raise ValueError("color must be a six-digit hexadecimal value")
@@ -83,4 +92,5 @@ class AccessibilityEngine:
 
     @property
     def check_count(self) -> int:
-        return self._check_count
+        with self._counter_lock:
+            return self._check_count
