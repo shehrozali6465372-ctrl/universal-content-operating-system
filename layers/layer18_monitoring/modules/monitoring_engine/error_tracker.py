@@ -100,7 +100,9 @@ class ErrorTracker:
 
     def clear(self) -> None:
         with self._lock:
-            self._errors.clear(); self._groups.clear(); self._total_errors = 0
+            self._errors.clear()
+            self._groups.clear()
+            self._total_errors = 0
 
     def stats(self) -> Dict[str, Any]:
         with self._lock:
