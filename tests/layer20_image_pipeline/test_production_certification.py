@@ -170,8 +170,11 @@ def test_provider_router_status_and_input_contracts() -> None:
     assert router.route({})["error"] == "no_available_provider"
     with pytest.raises(TypeError):
         router.route("not-a-dict")  # type: ignore[arg-type]
+
+    enabled_router = ProviderRouter()
+    enabled_router.register("a", handler=lambda _: {"ok": True})
     with pytest.raises(ValueError):
-        router.route({}, "unsupported")
+        enabled_router.route({}, "unsupported")
 
 
 def test_batch_generator_fails_closed_without_generator() -> None:
@@ -229,10 +232,14 @@ def test_batch_generator_ids_and_input_contract() -> None:
 def test_batch_generator_concurrent_execution_does_not_duplicate_work() -> None:
     calls = []
     lock = threading.Lock()
+    started = threading.Event()
+    release = threading.Event()
 
     def generate(prompt):
         with lock:
             calls.append(prompt)
+        started.set()
+        assert release.wait(timeout=5)
         return {"ok": True}
 
     generator = BatchGenerator()
@@ -243,11 +250,18 @@ def test_batch_generator_concurrent_execution_does_not_duplicate_work() -> None:
     def execute():
         results.append(generator.execute_batch(job.batch_id))
 
-    threads = [threading.Thread(target=execute) for _ in range(8)]
+    first_thread = threading.Thread(target=execute)
+    first_thread.start()
+    assert started.wait(timeout=5)
+
+    threads = [threading.Thread(target=execute) for _ in range(7)]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
+
+    release.set()
+    first_thread.join()
 
     assert len(calls) == 1
     assert sum(result.get("error") == "batch_already_running" for result in results) >= 1
@@ -258,7 +272,7 @@ def test_cross_module_image_pipeline_contract() -> None:
     prompt = PromptBuilder().build("product hero", platform="instagram")
     composition = CompositionEngine().create_plan("center")
     composition.add_element("image", (0, 0), (1080, 1080))
-    assert composition.validate(composition)["valid"]
+    assert CompositionEngine().validate(composition)["valid"]
 
     styles = StyleEngine()
     styles.add_preset(StylePreset("photorealistic", effects=["natural-light"]))
