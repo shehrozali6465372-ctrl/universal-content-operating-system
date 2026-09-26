@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from layers.layer06_quality.modules.human_review_engine.review_models import (
@@ -32,6 +33,7 @@ class ReviewManager:
         self._requests: Dict[int, ReviewRequest] = {}
         self._next_id = 1
         self._check_count = 0
+        self._lock = RLock()
 
     def create_request(
         self,
@@ -49,13 +51,14 @@ class ReviewManager:
         if risk_category not in VALID_RISK_CATEGORIES:
             raise ValueError(f"unsupported risk category: {risk_category}")
 
-        req = ReviewRequest(
-            request_id=self._next_id,
+        with self._lock:
+            req = ReviewRequest(
+                request_id=self._next_id,
             content=content,
             title=title,
-            author=author,
-        )
-        req.confidence_score = confidence_score
+                author=author,
+            )
+            req.confidence_score = confidence_score
         req.risk_category = risk_category
         req.audit_log.append(
             AuditEntry(
@@ -65,14 +68,21 @@ class ReviewManager:
                 reason="Review request created",
             )
         )
-        self._requests[req.request_id] = req
-        self._next_id += 1
-        self._check_count += 1
-        return req
+            self._requests[req.request_id] = req
+            self._next_id += 1
+            self._check_count += 1
+            return req
 
     def submit_for_review(self, request_id: int, actor: str = "") -> tuple:
         """Submit content from draft to review."""
-        req = self._requests.get(request_id)
+        with self._lock:
+            with self._lock:
+            with self._lock:
+            with self._lock:
+            with self._lock:
+            with self._lock:
+            with self._lock:
+            req = self._requests.get(request_id)
         if not req:
             return False, f"Request {request_id} not found"
         return self.workflow.transition(
@@ -186,17 +196,20 @@ class ReviewManager:
         return comment
 
     def get_request(self, request_id: int) -> Optional[ReviewRequest]:
-        return self._requests.get(request_id)
+        with self._lock:
+            return self._requests.get(request_id)
 
     def get_by_stage(self, stage: str) -> List[ReviewRequest]:
-        return [r for r in self._requests.values() if r.current_stage == stage]
+        with self._lock:
+            return [r for r in self._requests.values() if r.current_stage == stage]
 
     def get_pending_review(self) -> List[ReviewRequest]:
         return self.get_by_stage("review")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get overall review statistics."""
-        all_reqs = list(self._requests.values())
+        with self._lock:
+            all_reqs = list(self._requests.values())
         return {
             "total_requests": len(all_reqs),
             "by_stage": {
@@ -213,4 +226,5 @@ class ReviewManager:
 
     @property
     def check_count(self) -> int:
-        return self._check_count
+        with self._lock:
+            return self._check_count
