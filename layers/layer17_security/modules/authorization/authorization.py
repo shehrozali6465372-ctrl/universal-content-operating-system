@@ -1,7 +1,7 @@
 """Authorization — role-based access control."""
 from __future__ import annotations
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 from enum import Enum
 
 
@@ -16,7 +16,7 @@ class Role:
     def __init__(self, name: str, permissions: Optional[Set[Permission]] = None) -> None:
         self.role_id = f"role_{name}"
         self.name = name
-        self.permissions = permissions or set()
+        self.permissions = set(permissions or set())
         self.description = ""
         self.metadata: Dict[str, Any] = {}
 
@@ -60,7 +60,7 @@ class AuthorizationManager:
 
     def get_role_permissions(self, role_id: str) -> Set[Permission]:
         role = self._roles.get(role_id)
-        return role.permissions if role else set()
+        return set(role.permissions) if role else set()
 
     def list_roles(self) -> List[Dict[str, Any]]:
         return [r.to_dict() for r in self._roles.values()]
