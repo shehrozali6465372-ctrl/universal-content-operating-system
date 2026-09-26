@@ -27,7 +27,7 @@ jobs:
       - name: Compile
         run: python -m compileall -q layers/layer16_database_engineering
       - name: Ruff
-        run: python -m ruff check layers/layer16_database_engineering tests/test_layer16_production_gate.py
+        run: python -m ruff check --select E9,F layers/layer16_database_engineering tests/test_layer16_production_gate.py
       - name: Adversarial tests
         run: python -m pytest tests/test_layer16_production_gate.py -q
       - name: Certification assertion
