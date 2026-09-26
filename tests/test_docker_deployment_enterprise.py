@@ -1,7 +1,5 @@
 """Enterprise Docker Deployment Tests — 57+ tests."""
-import json
 import sys
-import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -307,7 +305,7 @@ class TestDockerEngine(unittest.TestCase):
         self.assertIn("nginx:", compose)
 
     def test_generate_dockerfile(self):
-        config = self.engine.create_config("web", "python:3.12")
+        self.engine.create_config("web", "python:3.12")
         df = self.engine.generate_dockerfile("web")
         self.assertIn("FROM", df)
         self.assertIn("CMD", df)
