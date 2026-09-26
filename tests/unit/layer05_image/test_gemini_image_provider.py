@@ -123,7 +123,7 @@ def test_rate_limit_rotates_configured_environment_keys(tmp_path: Path) -> None:
     calls = []
     def fake_urlopen(request, timeout):
         calls.append(request.headers["X-goog-api-key"])
-        if len(calls) == 1:
+        if len(calls) <= 4:
             raise urllib.error.HTTPError(request.full_url, 429, "rate", {}, None)
         return FakeResponse()
     with patch.dict("os.environ", {
