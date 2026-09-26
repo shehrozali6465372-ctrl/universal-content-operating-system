@@ -4,6 +4,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_date, require_finite_number, require_non_negative_int
+
 
 class DailySnapshot:
     __slots__ = ("date", "total_revenue", "affiliate_revenue", "ad_revenue", "total_expenses", "profit", "new_accounts", "active_accounts", "total_posts", "total_clicks", "total_conversions", "ai_health_score", "metadata")
@@ -41,24 +43,45 @@ class CEODashboard:
     def __init__(self) -> None:
         if self._initialized: return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._snapshots: Dict[str, DailySnapshot] = {}
         self._totals = {"total_revenue": 0, "affiliate_revenue": 0, "ad_revenue": 0, "total_expenses": 0, "total_profit": 0, "total_accounts": 0, "total_posts": 0, "total_clicks": 0, "total_conversions": 0}
         self._kpi_targets: Dict[str, float] = {}; self._alert_rules: List[Dict[str, Any]] = []
 
     def record_snapshot(self, snapshot: DailySnapshot) -> None:
-        old = self._snapshots.get(snapshot.date)
+        if not isinstance(snapshot, DailySnapshot):
+            raise TypeError("snapshot must be a DailySnapshot")
+        require_date(snapshot.date)
+        for field in ("total_revenue", "affiliate_revenue", "ad_revenue", "total_expenses"):
+            require_finite_number(getattr(snapshot, field), field, minimum=0.0)
+        for field in ("new_accounts", "active_accounts", "total_posts", "total_clicks", "total_conversions"):
+            require_non_negative_int(getattr(snapshot, field), field)
+        with self._data_lock:
+            old = self._snapshots.get(snapshot.date)
         if old is not None:
             self._totals["total_revenue"] -= old.total_revenue; self._totals["affiliate_revenue"] -= old.affiliate_revenue
             self._totals["ad_revenue"] -= old.ad_revenue; self._totals["total_expenses"] -= old.total_expenses
             self._totals["total_profit"] -= old.profit; self._totals["total_posts"] -= old.total_posts
             self._totals["total_clicks"] -= old.total_clicks; self._totals["total_conversions"] -= old.total_conversions
-        self._snapshots[snapshot.date] = snapshot
-        self._totals["total_revenue"] += snapshot.total_revenue; self._totals["affiliate_revenue"] += snapshot.affiliate_revenue
-        self._totals["ad_revenue"] += snapshot.ad_revenue; self._totals["total_expenses"] += snapshot.total_expenses
-        self._totals["total_profit"] += snapshot.profit; self._totals["total_posts"] += snapshot.total_posts
-        self._totals["total_clicks"] += snapshot.total_clicks; self._totals["total_conversions"] += snapshot.total_conversions
+            self._snapshots[snapshot.date] = snapshot
+            self._totals["total_revenue"] += snapshot.total_revenue; self._totals["affiliate_revenue"] += snapshot.affiliate_revenue
+            self._totals["ad_revenue"] += snapshot.ad_revenue; self._totals["total_expenses"] += snapshot.total_expenses
+            self._totals["total_profit"] += snapshot.profit; self._totals["total_posts"] += snapshot.total_posts
+            self._totals["total_clicks"] += snapshot.total_clicks; self._totals["total_conversions"] += snapshot.total_conversions
+            self._totals["total_accounts"] = max(self._totals["total_accounts"], snapshot.active_accounts)
 
     def record_daily(self, date: str = "", revenue: float = 0.0, affiliate_rev: float = 0.0, ad_rev: float = 0.0, expenses: float = 0.0, active_accounts: int = 0, posts: int = 0, clicks: int = 0, conversions: int = 0, ai_health: float = 100.0) -> DailySnapshot:
+        if date:
+            date = require_date(date)
+        revenue = require_finite_number(revenue, "revenue", minimum=0.0)
+        affiliate_rev = require_finite_number(affiliate_rev, "affiliate_rev", minimum=0.0)
+        ad_rev = require_finite_number(ad_rev, "ad_rev", minimum=0.0)
+        expenses = require_finite_number(expenses, "expenses", minimum=0.0)
+        for value, field in ((active_accounts, "active_accounts"), (posts, "posts"), (clicks, "clicks"), (conversions, "conversions")):
+            require_non_negative_int(value, field)
+        ai_health = require_finite_number(ai_health, "ai_health", minimum=0.0)
+        if ai_health > 100.0:
+            raise ValueError("ai_health must be <= 100")
         snap = DailySnapshot(date); snap.total_revenue = revenue; snap.affiliate_revenue = affiliate_rev; snap.ad_revenue = ad_rev
         snap.total_expenses = expenses; snap.profit = revenue - expenses; snap.active_accounts = active_accounts; snap.total_posts = posts
         snap.total_clicks = clicks; snap.total_conversions = conversions; snap.ai_health_score = ai_health; self.record_snapshot(snap); return snap
@@ -66,7 +89,9 @@ class CEODashboard:
     def get_today(self) -> Optional[DailySnapshot]: return self._snapshots.get(time.strftime("%Y-%m-%d"))
 
     def get_recent(self, days: int = 30) -> List[DailySnapshot]:
-        return [self._snapshots[d] for d in sorted(self._snapshots.keys(), reverse=True)[:days]]
+        require_non_negative_int(days, "days")
+        with self._data_lock:
+            return [self._snapshots[d] for d in sorted(self._snapshots.keys(), reverse=True)[:days]]
 
     def get_monthly_summary(self) -> Dict[str, Any]:
         month = time.strftime("%Y-%m")
@@ -87,7 +112,12 @@ class CEODashboard:
         weekly = ((recent.total_revenue - week.total_revenue) / week.total_revenue * 100) if week.total_revenue > 0 else 0
         return {"daily_growth": round(daily, 1), "weekly_growth": round(weekly, 1), "current_revenue": round(recent.total_revenue, 2), "current_profit": round(recent.profit, 2), "current_ai_health": round(recent.ai_health_score, 1)}
 
-    def set_kpi_target(self, metric: str, target: float) -> None: self._kpi_targets[metric] = target
+    def set_kpi_target(self, metric: str, target: float) -> None:
+        if not metric or not metric.strip():
+            raise ValueError("metric must be non-blank")
+        target = require_finite_number(target, "target", minimum=0.0)
+        with self._data_lock:
+            self._kpi_targets[metric.strip()] = target
 
     def get_kpi_status(self) -> Dict[str, Any]:
         return {m: {"current": round(self._totals.get(m, 0), 2), "target": t, "progress": round((self._totals.get(m, 0) / t * 100) if t > 0 else 0, 1)} for m, t in self._kpi_targets.items()}
@@ -96,7 +126,9 @@ class CEODashboard:
         recent = self.get_recent(7); latest = recent[0] if recent else None
         return {"total_revenue": round(self._totals["total_revenue"], 2), "total_profit": round(self._totals["total_profit"], 2), "total_accounts": self._totals["total_accounts"], "total_posts": self._totals["total_posts"], "total_clicks": self._totals["total_clicks"], "total_conversions": self._totals["total_conversions"], "overall_conversion_rate": round((self._totals["total_conversions"] / self._totals["total_clicks"] * 100) if self._totals["total_clicks"] > 0 else 0, 2), "today_revenue": round(latest.total_revenue, 2) if latest else 0, "today_profit": round(latest.profit, 2) if latest else 0, "ai_health": round(latest.ai_health_score, 1) if latest else 0, "growth": self.get_growth_metrics(), "monthly": self.get_monthly_summary(), "kpis": self.get_kpi_status()}
 
-    def stats(self) -> Dict[str, Any]: return {"snapshots": len(self._snapshots), "totals": self._totals}
+    def stats(self) -> Dict[str, Any]:
+        with self._data_lock:
+            return {"snapshots": len(self._snapshots), "totals": dict(self._totals)}
 
 
 def get_ceo_dashboard() -> CEODashboard:
