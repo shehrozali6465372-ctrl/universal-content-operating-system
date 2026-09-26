@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Any, Optional
@@ -27,7 +28,10 @@ class OpenRouterImageProvider(BaseImageProvider):
         self._timeout = 120
 
     def _get_api_key(self) -> str:
-        return (self.api_key or os.environ.get("OPENROUTER_API_KEY", "")).strip()
+        raw_key = self.api_key or os.environ.get("OPENROUTER_API_KEY", "")
+        normalized = unicodedata.normalize("NFKC", raw_key)
+        normalized = normalized.replace("\ufeff", "").replace("\u200e", "").replace("\u200f", "")
+        return normalized.strip()
 
     def is_configured(self) -> bool:
         return bool(self._get_api_key()) and bool(self._model.strip())
