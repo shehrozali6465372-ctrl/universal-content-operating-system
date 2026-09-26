@@ -299,11 +299,11 @@ class TestQualityEngine:
         assert "Overall Quality" in summary
 
     def test_with_critical_issues(self):
-        ms = ModuleScore("safety", 80, 0.8)
-        ms.critical_issues.append("Safety violation")
-        scores = [ms]
+        scores = _make_scores()
+        safety = next(score for score in scores if score.module_name == "safety")
+        safety.critical_issues.append("Safety violation")
         result = self.engine.score(scores)
-        assert len(result.explanations) > 0  # explanations should mention issues
+        assert len(result.explanations) > 0
 
     def test_statistics_populated(self):
         scores = _make_scores()

@@ -1,27 +1,30 @@
-"""Fact Validator — Core validation engine for written content.
+"""Fact and citation validation for Layer 06.
 
-Orchestrates:
-- Claim parsing (from Layer 2)
-- Citation checking
-- Unsupported claim detection
-- Numerical accuracy validation
-- Produces ValidationReport
+The validator distinguishes citation presence/format from factual verification.
+A syntactically valid citation is not treated as proof of a claim.
 """
 from __future__ import annotations
+
+import re
 import time
 from typing import Any, Dict, List, Optional
 
 from layers.layer06_quality.modules.fact_citation_validator.claim_parser import ClaimParser
 from layers.layer06_quality.modules.fact_citation_validator.citation_checker import CitationChecker
-from layers.layer06_quality.modules.fact_citation_validator.unsupported_claim_detector import UnsupportedClaimDetector
-from layers.layer06_quality.modules.fact_citation_validator.numerical_accuracy_checker import NumericalAccuracyChecker
+from layers.layer06_quality.modules.fact_citation_validator.unsupported_claim_detector import (
+    UnsupportedClaimDetector,
+)
+from layers.layer06_quality.modules.fact_citation_validator.numerical_accuracy_checker import (
+    NumericalAccuracyChecker,
+)
 from layers.layer06_quality.modules.fact_citation_validator.validation_report import (
-    ClaimValidation, ValidationReport,
+    ClaimValidation,
+    ValidationReport,
 )
 
 
 class FactValidator:
-    """Orchestrates full fact and citation validation pipeline."""
+    """Validate claims, citations, evidence references, and numerical consistency."""
 
     def __init__(
         self,
@@ -41,54 +44,82 @@ class FactValidator:
         content: str,
         evidence_texts: Optional[List[Dict[str, str]]] = None,
     ) -> ValidationReport:
-        """Full validation pipeline for written content."""
+        """Validate content without falsely upgrading citation presence to proof."""
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must be a non-empty string")
+
         report = ValidationReport()
-        start_time = time.time()
-
-        # Step 1: Parse claims from content
+        start_time = time.monotonic()
         parsed_claims = self.claim_parser.parse(content)
+        citation_validations = self.citation_checker.check_content_citations(
+            parsed_claims, evidence_texts,
+        )
 
-        # Step 2: Check each claim's citation status
-        for pc in parsed_claims:
+        for index, pc in enumerate(parsed_claims):
+            citation = citation_validations[index]
             cv = ClaimValidation(
                 claim_text=pc.claim.text,
                 claim_type=pc.claim.claim_type,
                 has_citation=pc.has_inline_citation,
             )
             cv.confidence = pc.claim.confidence
-            if pc.has_inline_citation:
-                cv.status = "verified"
-                cv.evidence_count = 1
-                cv.support_ratio = 0.8
-            else:
+
+            if not pc.has_inline_citation:
                 cv.status = "unsupported"
                 cv.issues.append("no_inline_citation")
+            elif not citation.is_valid:
+                cv.status = "unverified"
+                cv.issues.extend(citation.issues or ["citation_invalid"])
+            elif self._claim_has_exact_evidence(pc.claim.text, evidence_texts):
+                cv.status = "verified"
+                cv.evidence_count = 1
+                cv.support_ratio = 1.0
+            else:
+                # A valid citation proves citation structure/reliability, not
+                # the truth of the underlying claim.
+                cv.status = "partially_verified"
+                cv.evidence_count = 0
+                cv.support_ratio = 0.0
+                cv.issues.append("source_content_not_verified")
             report.add_claim(cv)
+            report.add_citation(citation)
 
-        # Step 3: Check citations
-        citation_validations = self.citation_checker.check_content_citations(parsed_claims)
-        for cv in citation_validations:
-            report.add_citation(cv)
-
-        # Step 4: Detect unsupported claims
         unsupported = self.unsupported_detector.detect(parsed_claims, evidence_texts)
-        for u in unsupported:
-            report.issues.append(f"unsupported_{u.severity}: {u.claim_text[:100]}")
+        for item in unsupported:
+            report.issues.append(
+                f"unsupported_{item.severity}: {item.claim_text[:100]}"
+            )
 
-        # Step 5: Numerical accuracy
-        numerical_results = self.numerical_checker.check(content)
-        for nr in numerical_results:
-            report.add_numerical(nr)
+        for numerical in self.numerical_checker.check(content):
+            report.add_numerical(numerical)
 
-        # Step 6: Compute overall
         report.compute_overall()
-
-        elapsed = time.time() - start_time
-        report.statistics["validation_time_ms"] = round(elapsed * 1000, 2)
+        report.statistics["validation_time_ms"] = round(
+            (time.monotonic() - start_time) * 1000, 2,
+        )
         report.statistics["content_length"] = len(content)
-
         self._validate_count += 1
         return report
+
+    @staticmethod
+    def _claim_has_exact_evidence(
+        claim_text: str,
+        evidence_texts: Optional[List[Dict[str, str]]],
+    ) -> bool:
+        """Return true only when the complete normalized claim is in evidence."""
+        if not evidence_texts:
+            return False
+        normalized_claim = re.sub(r"\s+", " ", claim_text).strip().lower()
+        if not normalized_claim:
+            return False
+        for evidence in evidence_texts:
+            if not isinstance(evidence, dict):
+                continue
+            text = evidence.get("text", "")
+            normalized_text = re.sub(r"\s+", " ", text).strip().lower()
+            if normalized_claim in normalized_text:
+                return True
+        return False
 
     def validate_batch(
         self,
@@ -96,10 +127,10 @@ class FactValidator:
         evidence_texts: Optional[List[Dict[str, str]]] = None,
     ) -> List[ValidationReport]:
         """Validate multiple content pieces."""
-        return [self.validate(c, evidence_texts) for c in contents]
+        return [self.validate(content, evidence_texts) for content in contents]
 
     def validate_quick(self, content: str) -> Dict[str, Any]:
-        """Quick validation returning summary dict."""
+        """Validate and return a compact summary."""
         report = self.validate(content)
         return {
             "overall_status": report.overall_status,
@@ -108,7 +139,9 @@ class FactValidator:
             "unsupported_count": report.statistics.get("unsupported", 0),
             "citation_count": report.statistics.get("citation_count", 0),
             "valid_citations": report.statistics.get("valid_citations", 0),
-            "numerical_issues": sum(1 for n in report.numerical_checks if not n.is_consistent),
+            "numerical_issues": sum(
+                1 for item in report.numerical_checks if not item.is_consistent
+            ),
         }
 
     @property

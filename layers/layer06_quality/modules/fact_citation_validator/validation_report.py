@@ -168,6 +168,8 @@ class ValidationReport:
             self.overall_status = "verified"
         elif verified >= n * 0.4:
             self.overall_status = "partially_verified"
+        elif partial > 0:
+            self.overall_status = "partially_verified"
         else:
             self.overall_status = "needs_review"
 

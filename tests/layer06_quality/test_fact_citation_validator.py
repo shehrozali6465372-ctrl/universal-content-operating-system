@@ -279,10 +279,10 @@ class TestFactValidator:
     def setup_method(self):
         self.validator = FactValidator()
 
-    def test_validate_empty(self):
-        report = self.validator.validate("")
-        assert isinstance(report, ValidationReport)
-        assert report.overall_status in ("no_claims", "needs_review")
+    def test_validate_empty_rejected(self):
+        import pytest
+        with pytest.raises(ValueError):
+            self.validator.validate("")
 
     def test_validate_simple_text(self):
         report = self.validator.validate("AI technology is transforming the world.")
