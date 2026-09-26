@@ -1,99 +1,87 @@
-"""ProviderRouter — route image generation to multiple providers."""
+"""Production-safe multi-provider image routing."""
 from __future__ import annotations
+from enum import Enum
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
-from enum import Enum
-
 
 class ProviderStatus(str, Enum):
-    AVAILABLE = "available"; BUSY = "busy"; ERROR = "error"; DISABLED = "disabled"
-
+    AVAILABLE="available"
+    BUSY="busy"
+    ERROR="error"
+    DISABLED="disabled"
 
 class ImageProvider:
-    __slots__ = ("name", "status", "cost_per_image", "quality_score",
-                 "speed_score", "handler", "metadata")
-
-    def __init__(self, name: str, handler: Optional[Callable] = None,
-                 cost_per_image: float = 0.0) -> None:
-        self.name = name
-        self.status = ProviderStatus.AVAILABLE
-        self.cost_per_image = cost_per_image
-        self.quality_score: Optional[float] = None
-        self.speed_score: Optional[float] = None
-        self.handler = handler
-        self.metadata: Dict[str, Any] = {}
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "status": self.status.value,
-                "cost": self.cost_per_image, "quality": self.quality_score}
-
+    __slots__=("name","status","cost_per_image","quality_score","speed_score","handler","metadata")
+    def __init__(self,name: str,handler: Optional[Callable]=None,cost_per_image: float=0.0) -> None:
+        if not name or not name.strip(): raise ValueError("provider name is required")
+        if cost_per_image < 0: raise ValueError("cost_per_image cannot be negative")
+        self.name=name; self.status=ProviderStatus.AVAILABLE; self.cost_per_image=cost_per_image
+        self.quality_score: Optional[float]=None; self.speed_score: Optional[float]=None
+        self.handler=handler; self.metadata: Dict[str,Any]={}
+    def to_dict(self) -> Dict[str,Any]:
+        return {"name":self.name,"status":self.status.value,"cost":self.cost_per_image,
+                "quality":self.quality_score,"speed":self.speed_score}
 
 class ProviderRouter:
     def __init__(self) -> None:
-        self._providers: Dict[str, ImageProvider] = {}
-        self._history: List[Dict[str, Any]] = []
-
-    def register(self, name: str, handler: Optional[Callable] = None,
-                 cost_per_image: float = 0.0) -> ImageProvider:
-        provider = ImageProvider(name, handler, cost_per_image)
-        self._providers[name] = provider
+        self._providers: Dict[str,ImageProvider]={}; self._history: List[Dict[str,Any]]=[]; self._lock=threading.RLock()
+    def register(self,name: str,handler: Optional[Callable]=None,cost_per_image: float=0.0) -> ImageProvider:
+        provider=ImageProvider(name,handler,cost_per_image)
+        with self._lock: self._providers[name]=provider
         return provider
-
-    def unregister(self, name: str) -> bool:
-        if name in self._providers:
-            del self._providers[name]
-            return True
-        return False
-
-    def route(self, prompt: Dict[str, Any], strategy: str = "cheapest") -> Optional[Dict[str, Any]]:
-        available = [p for p in self._providers.values()
-                     if p.status == ProviderStatus.AVAILABLE]
-        if not available:
-            return None
-        if strategy == "cheapest":
-            provider = min(available, key=lambda p: p.cost_per_image)
-        elif strategy == "highest_quality":
-            measured = [p for p in available if p.quality_score is not None]
-            if not measured: return {"error": "no provider quality telemetry available"}
-            provider = max(measured, key=lambda p: p.quality_score)
-        elif strategy == "fastest":
-            measured = [p for p in available if p.speed_score is not None]
-            if not measured: return {"error": "no provider speed telemetry available"}
-            provider = max(measured, key=lambda p: p.speed_score)
-        else:
-            provider = available[0]
-        self._history.append({"provider": provider.name, "strategy": strategy, "time": time.time()})
-        if provider.handler is None:
-            return {"provider": provider.name, "result": None, "error": "provider handler is not configured"}
-        started = time.perf_counter()
+    def unregister(self,name: str) -> bool:
+        with self._lock:
+            return self._providers.pop(name,None) is not None
+    def route(self,prompt: Dict[str,Any],strategy: str="cheapest") -> Optional[Dict[str,Any]]:
+        if not isinstance(prompt,dict): raise TypeError("prompt must be a dictionary")
+        if not strategy or not strategy.strip(): raise ValueError("strategy is required")
+        with self._lock:
+            available=[p for p in self._providers.values() if p.status==ProviderStatus.AVAILABLE]
+            if not available: return {"error":"no_available_provider"}
+            if strategy=="cheapest": provider=min(available,key=lambda p:p.cost_per_image)
+            elif strategy=="highest_quality":
+                measured=[p for p in available if p.quality_score is not None]
+                if not measured: return {"error":"no_provider_quality_telemetry"}
+                provider=max(measured,key=lambda p:p.quality_score)
+            elif strategy=="fastest":
+                measured=[p for p in available if p.speed_score is not None]
+                if not measured: return {"error":"no_provider_speed_telemetry"}
+                provider=max(measured,key=lambda p:p.speed_score)
+            else: raise ValueError(f"unsupported routing strategy: {strategy}")
+            if provider.handler is None:
+                return {"provider":provider.name,"error":"provider_handler_not_configured"}
+            self._history.append({"provider":provider.name,"strategy":strategy,"time":time.time()})
+            handler=provider.handler
+        started=time.perf_counter()
         try:
-            value = provider.handler(prompt)
-            elapsed = time.perf_counter() - started
-            provider.metadata["last_latency_seconds"] = elapsed
-            return {"provider": provider.name, "result": value}
+            value=handler(prompt)
         except Exception as exc:
-            provider.metadata["last_error"] = str(exc)
-            return {"provider": provider.name, "error": str(exc)}
-
-    def record_observation(self, name: str, quality_score: Optional[float] = None,
-                           speed_score: Optional[float] = None) -> bool:
-        provider = self._providers.get(name)
-        if not provider: return False
-        if quality_score is not None and 0.0 <= quality_score <= 1.0:
-            provider.quality_score = quality_score
-        if speed_score is not None and 0.0 <= speed_score <= 1.0:
-            provider.speed_score = speed_score
-        return True
-
-    def list_providers(self) -> List[Dict[str, Any]]:
-        return [p.to_dict() for p in self._providers.values()]
-
-    def get_provider(self, name: str) -> Optional[ImageProvider]:
-        return self._providers.get(name)
-
-    def set_status(self, name: str, status: ProviderStatus) -> bool:
-        provider = self._providers.get(name)
-        if provider:
-            provider.status = status
+            with self._lock:
+                provider.metadata["last_error_type"]=type(exc).__name__
+                provider.metadata["last_error"]=str(exc)
+            return {"provider":provider.name,"error":str(exc),"error_type":type(exc).__name__}
+        elapsed=time.perf_counter()-started
+        with self._lock: provider.metadata["last_latency_seconds"]=elapsed
+        return {"provider":provider.name,"result":value,"latency_seconds":elapsed}
+    def record_observation(self,name: str,quality_score: Optional[float]=None,speed_score: Optional[float]=None) -> bool:
+        with self._lock:
+            provider=self._providers.get(name)
+            if provider is None: return False
+            for label,value in (("quality",quality_score),("speed",speed_score)):
+                if value is not None and not 0.0 <= value <= 1.0: raise ValueError(f"{label}_score must be between 0 and 1")
+            if quality_score is not None: provider.quality_score=quality_score
+            if speed_score is not None: provider.speed_score=speed_score
             return True
-        return False
+    def list_providers(self) -> List[Dict[str,Any]]:
+        with self._lock: return [p.to_dict() for p in self._providers.values()]
+    def get_provider(self,name: str) -> Optional[ImageProvider]:
+        with self._lock: return self._providers.get(name)
+    def set_status(self,name: str,status: ProviderStatus) -> bool:
+        if not isinstance(status,ProviderStatus): raise TypeError("status must be ProviderStatus")
+        with self._lock:
+            provider=self._providers.get(name)
+            if provider is None: return False
+            provider.status=status; return True
+    def history(self) -> List[Dict[str,Any]]:
+        with self._lock: return [dict(item) for item in self._history]
