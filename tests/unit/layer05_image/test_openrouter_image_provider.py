@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -147,10 +148,11 @@ def test_transport_and_invalid_json_fail_closed() -> None:
     from urllib.error import URLError
 
     provider = OpenRouterImageProvider(api_key="test")
-    with patch(
-        "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
-        side_effect=URLError("network down"),
-    ):
+    patch_target = (
+        "layers.layer05_image.modules.image_provider.openrouter_image_provider."
+        "urllib.request.urlopen"
+    )
+    with patch(patch_target, side_effect=URLError("network down")):
         with pytest.raises(RuntimeError, match="transport failed"):
             provider.generate("photo")
 
@@ -158,10 +160,7 @@ def test_transport_and_invalid_json_fail_closed() -> None:
         def read(self):
             return b"not-json"
 
-    with patch(
-        "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
-        return_value=InvalidJsonResponse({}),
-    ):
+    with patch(patch_target, return_value=InvalidJsonResponse({})):
         with pytest.raises(RuntimeError, match="invalid JSON"):
             provider.generate("photo")
 
@@ -181,6 +180,28 @@ def test_persisted_hash_matches_returned_bytes(tmp_path: Path) -> None:
         ):
             result = provider.generate("photo", size="512x512")
 
-    import hashlib
     assert result.metadata["sha256"] == hashlib.sha256(result.image_data).hexdigest()
     assert Path(result.image_url).read_bytes() == result.image_data
+
+
+def test_storage_failure_propagates_and_cleans_temp_file(tmp_path: Path) -> None:
+    body = {
+        "data": [{
+            "b64_json": base64.b64encode(PNG_BYTES).decode("ascii"),
+            "media_type": "image/png",
+        }]
+    }
+    provider = OpenRouterImageProvider(api_key="test")
+    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
+        with patch(
+            "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
+            return_value=FakeResponse(body),
+        ):
+            with patch(
+                "layers.layer05_image.modules.image_provider.openrouter_image_provider.os.replace",
+                side_effect=OSError("storage unavailable"),
+            ):
+                with pytest.raises(OSError, match="storage unavailable"):
+                    provider.generate("photo")
+
+    assert list(tmp_path.iterdir()) == []
