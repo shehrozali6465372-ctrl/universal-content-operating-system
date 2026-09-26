@@ -1,8 +1,6 @@
 """Layer 21 production certification contract tests."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from layers.layer21_deployment import (
