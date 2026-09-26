@@ -58,16 +58,17 @@ class Publisher:
                           "og_title", "og_description", "og_image", "canonical_url",
                           "is_indexable", "scheduled_at", "related_article_ids", "internal_links"}
         with self._lock:
-            old_slug = article.slug
+            requested_slug = kwargs.get("slug", article.slug)
+            if requested_slug != article.slug and any(
+                other.article_id != article.article_id and other.slug == requested_slug
+                for other in self._articles.values()
+            ):
+                raise DuplicateArticleError(
+                    f"Article with slug '{requested_slug}' already exists"
+                )
             for key, value in kwargs.items():
                 if key in allowed_fields:
                     setattr(article, key, value)
-            if article.slug != old_slug and any(
-                other.article_id != article.article_id and other.slug == article.slug
-                for other in self._articles.values()
-            ):
-                article.slug = old_slug
-                raise DuplicateArticleError(f"Article with slug '{old_slug}' already exists")
             article.updated_at = time.time()
             article.version += 1
             self._persist_locked()
