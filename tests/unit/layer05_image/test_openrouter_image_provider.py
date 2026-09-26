@@ -141,3 +141,46 @@ def test_empty_prompt_is_rejected() -> None:
     provider = OpenRouterImageProvider(api_key="test")
     with pytest.raises(ValueError, match="must not be empty"):
         provider.generate("   ")
+
+
+def test_transport_and_invalid_json_fail_closed() -> None:
+    from urllib.error import URLError
+
+    provider = OpenRouterImageProvider(api_key="test")
+    with patch(
+        "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
+        side_effect=URLError("network down"),
+    ):
+        with pytest.raises(RuntimeError, match="transport failed"):
+            provider.generate("photo")
+
+    class InvalidJsonResponse(FakeResponse):
+        def read(self):
+            return b"not-json"
+
+    with patch(
+        "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
+        return_value=InvalidJsonResponse({}),
+    ):
+        with pytest.raises(RuntimeError, match="invalid JSON"):
+            provider.generate("photo")
+
+
+def test_persisted_hash_matches_returned_bytes(tmp_path: Path) -> None:
+    body = {
+        "data": [{
+            "b64_json": base64.b64encode(PNG_BYTES).decode("ascii"),
+            "media_type": "image/png",
+        }]
+    }
+    provider = OpenRouterImageProvider(api_key="test")
+    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
+        with patch(
+            "layers.layer05_image.modules.image_provider.openrouter_image_provider.urllib.request.urlopen",
+            return_value=FakeResponse(body),
+        ):
+            result = provider.generate("photo", size="512x512")
+
+    import hashlib
+    assert result.metadata["sha256"] == hashlib.sha256(result.image_data).hexdigest()
+    assert Path(result.image_url).read_bytes() == result.image_data
