@@ -125,17 +125,21 @@ class APIDashboard:
             return self._endpoints.get(path)
 
     def get_all_endpoints(self) -> List[APIEndpoint]:
-        return list(self._endpoints.values())
+        with self._data_lock:
+            return list(self._endpoints.values())
 
     def get_api_status(self) -> Dict[str, Any]:
-        endpoints = list(self._endpoints.values())
+        with self._data_lock:
+            endpoints = list(self._endpoints.values())
+            request_count = len(self._request_log)
+            by_method = {m: len(paths) for m, paths in self._method_index.items()}
         return {
             "total_endpoints": len(endpoints),
-            "total_requests": sum(e.calls_count for e in endpoints),
+            "total_requests": request_count,
             "avg_latency": round(
                 sum(e.avg_latency_ms for e in endpoints) / len(endpoints), 2
             ) if endpoints else 0,
-            "by_method": {m: len(paths) for m, paths in self._method_index.items()},
+            "by_method": by_method,
             "endpoints": [e.to_dict() for e in endpoints],
         }
 
