@@ -1,14 +1,22 @@
 """Infographic Engine — Plan data visualization images."""
 from __future__ import annotations
+
 import uuid
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 
 CHART_TYPES = ["bar", "line", "pie", "progress", "comparison", "timeline", "flowchart"]
+PLATFORM_DIMENSIONS = {
+    "pinterest": (1000, 1500),
+    "instagram": (1080, 1350),
+    "linkedin": (1200, 1200),
+}
 
 
 class InfographicPlan:
     """Plan for an infographic."""
+
     __slots__ = ("plan_id", "topic", "chart_type", "data_points",
                  "title", "subtitle", "dimensions", "color_scheme")
 
@@ -38,21 +46,27 @@ class InfographicEngine:
 
     def __init__(self) -> None:
         self._plan_count = 0
+        self._counter_lock = RLock()
 
     def plan(self, topic: str, data: Optional[List[Dict[str, Any]]] = None,
              chart_type: str = "bar", platform: str = "pinterest") -> InfographicPlan:
         """Plan an infographic."""
-        if not topic or not topic.strip():
+        if not isinstance(topic, str) or not topic.strip():
             raise ValueError("topic must not be empty")
         if chart_type not in CHART_TYPES:
             raise ValueError(f"Unsupported chart type: {chart_type}")
-        ip = InfographicPlan(topic=topic)
+        if data is not None and not isinstance(data, list):
+            raise ValueError("data must be a list or None")
+        if platform not in PLATFORM_DIMENSIONS:
+            raise ValueError(f"Unsupported infographic platform: {platform}")
+
+        ip = InfographicPlan(topic=topic.strip())
         ip.chart_type = chart_type
-        ip.title = topic
-        ip.data_points = data or []
-        dims = {"pinterest": (1000, 1500), "instagram": (1080, 1350), "linkedin": (1200, 1200)}
-        ip.dimensions = dims.get(platform, (1080, 1350))
-        self._plan_count += 1
+        ip.title = topic.strip()
+        ip.data_points = [dict(point) for point in (data or [])]
+        ip.dimensions = PLATFORM_DIMENSIONS[platform]
+        with self._counter_lock:
+            self._plan_count += 1
         return ip
 
     def suggest_chart(self, data_type: str = "comparison") -> str:
@@ -65,4 +79,5 @@ class InfographicEngine:
 
     @property
     def plan_count(self) -> int:
-        return self._plan_count
+        with self._counter_lock:
+            return self._plan_count
