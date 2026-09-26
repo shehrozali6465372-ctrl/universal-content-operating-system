@@ -41,7 +41,6 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
