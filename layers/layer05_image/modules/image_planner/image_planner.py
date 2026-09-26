@@ -15,6 +15,11 @@ PLATFORM_IMAGE_SPECS = {
     "threads": {"post": (1080, 1080), "story": (1080, 1920)},
 }
 
+SUPPORTED_IMAGE_PLATFORMS = frozenset({
+    "facebook", "instagram", "twitter", "linkedin",
+    "tiktok", "youtube", "pinterest", "threads",
+})
+
 IMAGE_TYPES = {
     "photo": "Realistic photo-style image",
     "illustration": "Hand-drawn or digital illustration",
@@ -37,7 +42,7 @@ class ImagePlan:
     def __init__(self, image_type: str = "photo", platform: str = "facebook") -> None:
         if image_type not in IMAGE_TYPES:
             raise ValueError(f"Unsupported image type: {image_type}")
-        if platform not in PLATFORM_IMAGE_SPECS:
+        if platform not in SUPPORTED_IMAGE_PLATFORMS:
             raise ValueError(f"Unsupported image platform: {platform}")
         self.plan_id = f"imgplan_{uuid.uuid4().hex}"
         self.image_type = image_type
