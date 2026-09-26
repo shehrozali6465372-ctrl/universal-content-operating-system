@@ -73,10 +73,16 @@ class APIGateway:
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/")
                 if path == "/heartbeat":
                     if not gateway._aios_authorized("GET", path, b"", self.headers):
-                        self._send(APIResponse(401,error="AI OS authentication required")); return
-                elif not gateway._authorized(self.headers):
-                    self._send(APIResponse(401,error="API authentication required")); return
-                response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
+                        self._send(APIResponse(401, error="AI OS authentication required"))
+                        return
+                elif path not in {"/health", "/status"} and not gateway._authorized(self.headers):
+                    self._send(APIResponse(401, error="API authentication required"))
+                    return
+                response = gateway._routes.get(
+                    f"GET {path}",
+                    lambda p: APIResponse(404, error=f"Endpoint not found: {path}"),
+                )(parse_qs(parsed.query))
+                self._send(response)
             def do_POST(self):
                 gateway._request_count+=1
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/"); n=int(self.headers.get("Content-Length",0)); raw=self.rfile.read(n) if n else b""
