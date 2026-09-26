@@ -5,6 +5,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_finite_number, require_non_blank, require_non_negative_int
+
 
 class APIEndpoint:
     __slots__ = ("path", "method", "description", "handler", "rate_limit",
@@ -49,6 +51,7 @@ class APIDashboard:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._endpoints: Dict[str, APIEndpoint] = {}
         self._method_index: Dict[str, List[str]] = {}
         self._request_log: List[Dict[str, Any]] = []
@@ -75,28 +78,51 @@ class APIDashboard:
 
     def register_endpoint(self, path: str, method: str = "GET",
                           description: str = "", rate_limit: int = 100) -> APIEndpoint:
-        ep = APIEndpoint(path, method, description)
-        ep.rate_limit = rate_limit
-        self._endpoints[path] = ep
-        self._method_index.setdefault(method, []).append(path)
-        return ep
+        path = require_non_blank(path, "path")
+        method = require_non_blank(method, "method").upper()
+        description = description.strip()
+        require_non_negative_int(rate_limit, "rate_limit")
+        if rate_limit == 0:
+            raise ValueError("rate_limit must be > 0")
+        with self._data_lock:
+            existing = self._endpoints.get(path)
+            if existing is not None:
+                if existing.method != method:
+                    raise ValueError("endpoint path already registered with a different method")
+                existing.description = description
+                existing.rate_limit = rate_limit
+                return existing
+            ep = APIEndpoint(path, method, description)
+            ep.rate_limit = rate_limit
+            self._endpoints[path] = ep
+            if path not in self._method_index.setdefault(method, []):
+                self._method_index[method].append(path)
+            return ep
 
     def log_request(self, path: str, method: str = "GET",
                     latency_ms: float = 0.0, status: int = 200) -> None:
-        ep = self._endpoints.get(path)
-        if ep:
-            ep.calls_count += 1
-            n = ep.calls_count
-            ep.avg_latency_ms = ((ep.avg_latency_ms * (n - 1) + latency_ms) / n)
-            ep.last_called = time.time()
-        self._request_log.append({
-            "path": path, "method": method,
-            "latency_ms": latency_ms, "status": status,
-            "timestamp": time.time(),
-        })
+        path = require_non_blank(path, "path")
+        method = require_non_blank(method, "method").upper()
+        latency_ms = require_finite_number(latency_ms, "latency_ms", minimum=0.0)
+        require_non_negative_int(status, "status")
+        with self._data_lock:
+            ep = self._endpoints.get(path)
+            if ep:
+                ep.calls_count += 1
+                n = ep.calls_count
+                ep.avg_latency_ms = ((ep.avg_latency_ms * (n - 1) + latency_ms) / n)
+                ep.last_called = time.time()
+            self._request_log.append({
+                "path": path, "method": method,
+                "latency_ms": latency_ms, "status": status,
+                "timestamp": time.time(),
+            })
+            if len(self._request_log) > 10000:
+                self._request_log = self._request_log[-5000:]
 
     def get_endpoint(self, path: str) -> Optional[APIEndpoint]:
-        return self._endpoints.get(path)
+        with self._data_lock:
+            return self._endpoints.get(path)
 
     def get_all_endpoints(self) -> List[APIEndpoint]:
         return list(self._endpoints.values())
@@ -114,7 +140,8 @@ class APIDashboard:
         }
 
     def get_request_stats(self) -> Dict[str, Any]:
-        logs = self._request_log[-1000:]
+        with self._data_lock:
+            logs = list(self._request_log[-1000:])
         return {
             "total_requests": len(self._request_log),
             "recent_requests": len(logs),
@@ -127,10 +154,11 @@ class APIDashboard:
         }
 
     def stats(self) -> Dict[str, Any]:
-        return {
-            "endpoints": len(self._endpoints),
-            "requests": len(self._request_log),
-        }
+        with self._data_lock:
+            return {
+                "endpoints": len(self._endpoints),
+                "requests": len(self._request_log),
+            }
 
 
 def get_api_dashboard() -> APIDashboard:
