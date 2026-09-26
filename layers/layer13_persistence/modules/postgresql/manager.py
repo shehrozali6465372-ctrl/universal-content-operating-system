@@ -162,6 +162,10 @@ class PostgreSQLManager:
         if self._pool:
             for table in TABLES:
                 name = table["name"]
+                # SQLite fallback may intentionally contain only a partial schema.
+                if not self._pool.table_exists(name):
+                    tables[name] = 0
+                    continue
                 count = self._pool.count(name)
                 tables[name] = count
                 total_rows += count
