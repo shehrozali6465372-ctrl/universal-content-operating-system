@@ -45,13 +45,14 @@ RUN chmod +x /entrypoint.sh
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
+    APP_HOST=0.0.0.0 \
     APP_PORT=8000
 
 USER aios
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/health > /dev/null
+    CMD curl -fsS http://localhost:8000/status > /dev/null
 
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["--api"]

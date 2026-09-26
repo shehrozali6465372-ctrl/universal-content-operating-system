@@ -73,10 +73,16 @@ class APIGateway:
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/")
                 if path == "/heartbeat":
                     if not gateway._aios_authorized("GET", path, b"", self.headers):
-                        self._send(APIResponse(401,error="AI OS authentication required")); return
-                elif not gateway._authorized(self.headers):
-                    self._send(APIResponse(401,error="API authentication required")); return
-                response=gateway._routes.get(f"GET {path}",lambda p:APIResponse(404,error=f"Endpoint not found: {path}"))(parse_qs(parsed.query)); self._send(response)
+                        self._send(APIResponse(401, error="AI OS authentication required"))
+                        return
+                elif path not in {"/health", "/status"} and not gateway._authorized(self.headers):
+                    self._send(APIResponse(401, error="API authentication required"))
+                    return
+                response = gateway._routes.get(
+                    f"GET {path}",
+                    lambda p: APIResponse(404, error=f"Endpoint not found: {path}"),
+                )(parse_qs(parsed.query))
+                self._send(response)
             def do_POST(self):
                 gateway._request_count+=1
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/"); n=int(self.headers.get("Content-Length",0)); raw=self.rfile.read(n) if n else b""
@@ -105,15 +111,43 @@ class APIGateway:
     def is_running(self): return self._running
     def _handle_status(self,params):
         return APIResponse(data={"version":self.VERSION,"status":"running","layers":self.LAYER_COUNT,"gateway_requests":self._request_count,"platforms":self.SUPPORTED_PLATFORMS})
-    def _handle_health(self,params):
-        checks={"api":"healthy","database":"unknown"}
+    def _handle_health(self, params):
+        checks = {"api": "healthy", "database": "unknown"}
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
         try:
-            from layers.layer01_core.modules.database_manager import DatabaseManager
-            db=DatabaseManager(); db.initialize(); db.health_check(); checks["database"]="healthy"; db.close()
-        except Exception: checks["database"]="unavailable"
-        checks["gemini"]="configured" if os.environ.get("GEMINI_API_KEY_1","") else "not_configured"
-        overall="healthy" if checks["database"]=="healthy" else "degraded"
-        return APIResponse(data={"status":overall,"checks":checks})
+            if production:
+                import psycopg2
+
+                connection = psycopg2.connect(
+                    host=os.environ.get("POSTGRES_HOST", "localhost"),
+                    port=int(os.environ.get("POSTGRES_PORT", "5432")),
+                    dbname=os.environ.get("POSTGRES_DB", "aios"),
+                    user=os.environ.get("POSTGRES_USER", "postgres"),
+                    password=os.environ.get("POSTGRES_PASSWORD", ""),
+                    connect_timeout=3,
+                )
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                    checks["database"] = "healthy"
+                finally:
+                    connection.close()
+            else:
+                from layers.layer01_core.modules.database_manager import DatabaseManager
+
+                db = DatabaseManager()
+                db.initialize()
+                db.health_check()
+                checks["database"] = "healthy"
+                db.close()
+        except Exception:
+            checks["database"] = "unavailable"
+        checks["gemini"] = (
+            "configured" if os.environ.get("GEMINI_API_KEY_1", "") else "not_configured"
+        )
+        overall = "healthy" if checks["database"] == "healthy" else "degraded"
+        return APIResponse(data={"status": overall, "checks": checks})
 
     def _handle_heartbeat(self,params):
         return APIResponse(data={"status":"ok","service":"universal-content-operating-system","layer":23,"component":"website_manager"})
