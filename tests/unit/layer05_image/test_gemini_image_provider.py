@@ -98,12 +98,42 @@ def test_gemini_request_uses_current_image_config(tmp_path: Path) -> None:
         ):
             provider.generate("a product photo", size="1200x1500")
 
-    assert captured["url"].endswith("/v1/models/gemini-3.1-flash-image:generateContent")
-    assert captured["payload"]["generationConfig"]["responseModalities"] == ["IMAGE"]
-    image_config = captured["payload"]["generationConfig"]["imageConfig"]
-    assert image_config["aspectRatio"] == "4:5"
-    assert image_config["imageSize"] == "2K"
-    assert "responseFormat" not in captured["payload"]["generationConfig"]
+    assert captured["url"].endswith("/v1beta/interactions")
+    assert captured["payload"]["model"] == "gemini-3.1-flash-image"
+    assert captured["payload"]["input"][0]["type"] == "text"
+    image_config = captured["payload"]["response_format"]
+    assert image_config["type"] == "image"
+    assert image_config["mime_type"] == "image/png"
+    assert image_config["aspect_ratio"] == "4:5"
+    assert image_config["image_size"] == "2K"
+
+
+def test_interactions_api_extracts_output_image(tmp_path: Path) -> None:
+    image_bytes = b"\\x89PNG\\r\\n\\x1a\\ninteraction-output"
+    body = {"output_image": {
+        "data": base64.b64encode(image_bytes).decode("ascii"),
+        "mime_type": "image/png",
+    }}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return json.dumps(body).encode("utf-8")
+
+    provider = GeminiImageProvider(api_key="test")
+    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
+        with patch(
+            "layers.layer05_image.modules.image_provider.gemini_image_provider.urllib.request.urlopen",
+            return_value=FakeResponse(),
+        ):
+            result = provider.generate("current API test")
+
+    assert result.image_data == image_bytes
+    assert Path(result.image_url).exists()
+    assert result.metadata["mime_type"] == "image/png"
 
 
 def test_rate_limit_rotates_configured_environment_keys(tmp_path: Path) -> None:
