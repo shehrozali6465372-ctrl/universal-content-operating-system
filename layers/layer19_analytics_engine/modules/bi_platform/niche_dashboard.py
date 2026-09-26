@@ -4,6 +4,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_finite_number, require_non_negative_int, require_percentage, require_non_blank
+
 
 class NicheMetrics:
     __slots__ = ("name", "revenue", "clicks", "conversions", "accounts",
@@ -75,29 +77,40 @@ class NicheDashboard:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._niches: Dict[str, NicheMetrics] = {}
 
     def update_niche(self, name: str, revenue: float = 0.0, clicks: int = 0,
                      conversions: int = 0, accounts: int = 0, posts: int = 0,
                      growth_rate: float = 0.0, competition: float = 50.0,
                      opportunity: float = 50.0) -> NicheMetrics:
-        if name not in self._niches:
-            self._niches[name] = NicheMetrics(name)
-        nm = self._niches[name]
-        nm.revenue += revenue
-        nm.clicks += clicks
-        nm.conversions += conversions
-        nm.accounts = max(nm.accounts, accounts)
-        nm.posts += posts
-        nm.growth_rate = growth_rate
-        nm.competition_score = competition
-        nm.opportunity_score = opportunity
-        nm.trend = "growing" if growth_rate > 5 else "declining" if growth_rate < -5 else "stable"
-        nm.updated_at = time.time()
-        return nm
+        name = require_non_blank(name, "name")
+        revenue = require_finite_number(revenue, "revenue", minimum=0.0)
+        for value, field in ((clicks, "clicks"), (conversions, "conversions"), (accounts, "accounts"), (posts, "posts")):
+            require_non_negative_int(value, field)
+        growth_rate = require_finite_number(growth_rate, "growth_rate")
+        competition = require_percentage(competition, "competition")
+        opportunity = require_percentage(opportunity, "opportunity")
+        with self._data_lock:
+            if name not in self._niches:
+                self._niches[name] = NicheMetrics(name)
+            nm = self._niches[name]
+            nm.revenue += revenue
+            nm.clicks += clicks
+            nm.conversions += conversions
+            nm.accounts = max(nm.accounts, accounts)
+            nm.posts += posts
+            nm.growth_rate = growth_rate
+            nm.competition_score = competition
+            nm.opportunity_score = opportunity
+            nm.trend = "growing" if growth_rate > 5 else "declining" if growth_rate < -5 else "stable"
+            nm.updated_at = time.time()
+            return nm
 
     def get_niche(self, name: str) -> Optional[NicheMetrics]:
-        return self._niches.get(name)
+        name = require_non_blank(name, "name")
+        with self._data_lock:
+            return self._niches.get(name)
 
     def get_top_niches(self, limit: int = 10) -> List[NicheMetrics]:
         return sorted(self._niches.values(), key=lambda n: n.overall_score, reverse=True)[:limit]
@@ -130,7 +143,8 @@ class NicheDashboard:
         }
 
     def stats(self) -> Dict[str, Any]:
-        return {"niches": len(self._niches)}
+        with self._data_lock:
+            return {"niches": len(self._niches)}
 
 
 def get_niche_dashboard() -> NicheDashboard:
