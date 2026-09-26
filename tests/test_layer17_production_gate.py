@@ -5,7 +5,6 @@ These tests validate security invariants, not just nominal API behavior.
 from __future__ import annotations
 
 import base64
-import os
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
