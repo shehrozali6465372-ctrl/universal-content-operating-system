@@ -76,7 +76,8 @@ class AccessibilityEngine:
             if len(words) > 15:
                 result.issues.append("Too much text — keep under 15 words")
                 result.score -= 15
-        self._check_count += 1
+        with self._counter_lock:
+            self._check_count += 1
         return result
 
     def _relative_luminance(self, hex_color: str) -> float:
