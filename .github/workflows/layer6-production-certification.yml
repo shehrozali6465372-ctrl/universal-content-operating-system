@@ -1,0 +1,44 @@
+name: Layer 6 Production Certification
+
+on:
+  push:
+    branches:
+      - layer6-production-hardening
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "layers/layer06_quality/**"
+      - "tests/layer06_quality/**"
+      - "tests/test_layer6_production_gate.py"
+      - ".github/workflows/layer6-production-certification.yml"
+
+jobs:
+  layer6-certification:
+    name: Layer 6 production gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+          python -m pip install pytest pytest-asyncio
+
+      - name: Compile Layer 6
+        run: python -m compileall -q layers/layer06_quality
+
+      - name: Run Layer 6 production gate
+        run: |
+          python -m pytest -q             tests/test_layer6_production_gate.py             tests/layer06_quality
+
+      - name: Verify no Layer 6 placeholder markers
+        run: |
+          ! grep -RInE 'NotImplementedError|TODO|FIXME|SIMULATION_ONLY|fake_result'             layers/layer06_quality tests/layer06_quality
