@@ -22,7 +22,7 @@ class TestAuthentication:
         assert session is None
 
     def test_api_key(self):
-        user = self.am.register_user("ali")
+        user = self.am.register_user("ali", password="test-password-123")
         assert self.am.register_api_key(user.user_id, "key123")
         assert self.am.authenticate_api_key("key123") == user.user_id
 
@@ -134,7 +134,7 @@ from layers.layer17_security.modules.encryption_engine.encryption_engine import 
 class TestEncryptionEngine:
     def setup_method(self):
         self.ee = EncryptionEngine()
-        self.ee.set_key("test-key-123")
+        self.ee.set_key("test-key-material-123")
 
     def test_encrypt_decrypt(self):
         encrypted = self.ee.encrypt("hello world")
@@ -152,7 +152,7 @@ class TestEncryptionEngine:
 
     def test_generate_key(self):
         key = self.ee.generate_key()
-        assert len(key) == 64
+        assert len(key) == 44
 
 
 # ─── Input Validator ───────────────────────────────────────────────
@@ -316,7 +316,7 @@ from layers.layer17_security.modules.jwt_framework.jwt_framework import JWTFrame
 
 class TestJWTFramework:
     def setup_method(self):
-        self.jwt = JWTFramework("test-secret")
+        self.jwt = JWTFramework("test-secret-material-32-characters-long")
 
     def test_create_decode(self):
         token = self.jwt.create_token({"sub": "user1", "role": "admin"})
