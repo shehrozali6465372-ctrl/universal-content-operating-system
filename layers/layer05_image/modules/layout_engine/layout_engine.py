@@ -51,7 +51,7 @@ class LayoutEngine:
         """Get a layout specification."""
         if layout_type and layout_type not in LAYOUT_PRESETS:
             raise ValueError(f"Unsupported layout type: {layout_type}")
-        if platform not in {"facebook", "instagram", "twitter", "linkedin", "pinterest", "youtube"}:
+        if platform not in {"facebook", "instagram", "twitter", "linkedin", "pinterest", "youtube", "tiktok", "threads"}:
             raise ValueError(f"Unsupported layout platform: {platform}")
         if layout_type:
             lt = layout_type
@@ -65,7 +65,7 @@ class LayoutEngine:
             lt = "centered"
 
         dims = {"facebook": (1200, 630), "instagram": (1080, 1080), "twitter": (1200, 675),
-                "linkedin": (1200, 627), "pinterest": (1000, 1500), "youtube": (1280, 720)}
+                "linkedin": (1200, 627), "pinterest": (1000, 1500), "youtube": (1280, 720), "tiktok": (1080, 1920), "threads": (1080, 1080)}
         w, h = dims.get(platform, (1080, 1080))
         return LayoutSpec(layout_type=lt, width=w, height=h)
 
