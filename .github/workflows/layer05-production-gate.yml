@@ -46,55 +46,45 @@ jobs:
         run: python -m pytest tests/unit/layer05_image -q --tb=short
 
 
-      - name: Real Gemini smoke
-        if: env.GEMINI_API_KEY != ''
+      - name: Real image-provider smoke (Gemini, then OpenRouter fallback)
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
           python - <<'PY'
           from pathlib import Path
-          from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-          provider = GeminiImageProvider(model="gemini-3.1-flash-image")
-          if not provider.is_configured():
-              raise SystemExit("Gemini provider is not configured")
-          result = provider.generate(
-              "Create a simple professional abstract geometric marketing background",
-              size="512x512",
-          )
-          if not result.image_data:
-              raise SystemExit("Gemini returned empty image bytes")
-          digest = result.metadata.get("sha256")
-          if not digest:
-              raise SystemExit("Missing SHA-256 provenance")
-          path = Path(result.image_url)
-          if not path.is_file() or path.stat().st_size == 0:
-              raise SystemExit("Persisted image is missing or empty")
-          print(f"REAL_GEMINI_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
-          PY
+          import os
 
-      - name: Temporary OpenRouter image smoke (advisory)
-        if: env.OPENROUTER_API_KEY != '' && env.GEMINI_API_KEY == ''
-        continue-on-error: true
-        env:
-          UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-openrouter-images
-        run: |
-          python - <<'PY'
-          from pathlib import Path
+          from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
           from layers.layer05_image.modules.image_provider.openrouter_image_provider import OpenRouterImageProvider
-          provider = OpenRouterImageProvider(model="bytedance-seed/seedream-4.5")
-          if not provider.is_configured():
-              raise SystemExit("OpenRouter provider is not configured")
-          result = provider.generate(
-              "Create a simple professional abstract geometric marketing background",
-              size="512x512",
-          )
-          if not result.image_data:
-              raise SystemExit("OpenRouter returned empty image bytes")
-          digest = result.metadata.get("sha256")
-          if not digest:
-              raise SystemExit("Missing SHA-256 provenance")
-          path = Path(result.image_url)
-          if not path.is_file() or path.stat().st_size == 0:
-              raise SystemExit("Persisted image is missing or empty")
-          print(f"REAL_OPENROUTER_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
+
+          prompt = "Create a simple professional abstract geometric marketing background"
+          errors = []
+          providers = []
+          if os.environ.get("GEMINI_API_KEY"):
+              providers.append(("gemini", GeminiImageProvider(model="gemini-3.1-flash-image")))
+          if os.environ.get("OPENROUTER_API_KEY"):
+              providers.append(("openrouter", OpenRouterImageProvider(model="bytedance-seed/seedream-4.5")))
+          if not providers:
+              raise SystemExit("No real Layer 5 image provider credential is configured")
+
+          for name, provider in providers:
+              try:
+                  if not provider.is_configured():
+                      errors.append(f"{name}: provider is not configured")
+                      continue
+                  result = provider.generate(prompt, size="512x512")
+                  if not result.image_data:
+                      raise RuntimeError("returned empty image bytes")
+                  digest = result.metadata.get("sha256")
+                  if not digest:
+                      raise RuntimeError("missing SHA-256 provenance")
+                  path = Path(result.image_url)
+                  if not path.is_file() or path.stat().st_size == 0:
+                      raise RuntimeError("persisted image is missing or empty")
+                  print(f"REAL_{name.upper()}_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
+                  raise SystemExit(0)
+              except Exception as exc:
+                  errors.append(f"{name}: {type(exc).__name__}: {exc}")
+
+          raise SystemExit("All configured real image providers failed: " + " | ".join(errors))
           PY
