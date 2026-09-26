@@ -185,7 +185,9 @@ class GeminiImageProvider(BaseImageProvider):
         image_data, mime_type = self._extract_interaction_image(body)
         if not image_data:
             return None
-        result = ImageResponse()\n        result.provider = "gemini"\n        result.model = self._model
+        result = ImageResponse()
+        result.provider = "gemini"
+        result.model = self._model
         result.image_data = image_data
         result.metadata["mime_type"] = mime_type
         result.metadata["sha256"] = hashlib.sha256(image_data).hexdigest()
