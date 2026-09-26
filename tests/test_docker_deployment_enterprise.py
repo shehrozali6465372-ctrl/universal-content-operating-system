@@ -218,7 +218,7 @@ class TestDockerDeploymentManager(unittest.TestCase):
         status = self.mgr.check_all_containers()
         self.assertEqual(status.total_services, 3)
         self.assertEqual(status.running, 0)
-        self.assertEqual(status.stopped, 4)
+        self.assertEqual(status.stopped, 3)
         self.assertFalse(status.overall_healthy)
 
     @patch("subprocess.run")
