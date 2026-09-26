@@ -60,15 +60,26 @@ class GeminiImageProvider(BaseImageProvider):
         """Generate a real image; never return a synthetic success."""
         if not prompt or not prompt.strip():
             raise ValueError("Image generation prompt must not be empty")
-        api_key = self._get_api_key()
-        if not api_key or self._model not in self.SUPPORTED_MODELS:
+        api_keys = self._get_api_keys()
+        if not api_keys or self._model not in self.SUPPORTED_MODELS:
             raise RuntimeError("Gemini image provider is not configured")
         start = time.monotonic()
         with self._history_lock:
             self._call_count += 1
         enhanced_prompt = self._enhance_prompt(prompt, size, style, **kwargs)
         try:
-            result = self._real_generate(enhanced_prompt, api_key, size)
+            result = None
+            last_error: Optional[Exception] = None
+            for api_key in api_keys:
+                try:
+                    result = self._real_generate(enhanced_prompt, api_key, size)
+                    break
+                except RuntimeError as exc:
+                    last_error = exc
+                    if "rate limit" not in str(exc).lower():
+                        raise
+            if result is None:
+                raise last_error or RuntimeError("Gemini image generation failed")
         except Exception as exc:
             self._record_history({"status": "error", "error_type": type(exc).__name__,
                                   "latency_ms": (time.monotonic() - start) * 1000})
@@ -248,15 +259,27 @@ class GeminiImageProvider(BaseImageProvider):
                 pass
             raise
 
-    def _get_api_key(self) -> str:
-        """Get Gemini API key from environment."""
+    def _get_api_keys(self) -> List[str]:
+        """Return configured Gemini keys in deterministic rotation order."""
         if self.api_key is not None:
-            return self.api_key.strip()
-        for name in ("GEMINI_API_KEY_1", "GEMINI_API_KEY"):
+            value = self.api_key.strip()
+            return [value] if value else []
+        keys: List[str] = []
+        for name in (
+            "GEMINI_API_KEY_1",
+            "GEMINI_API_KEY_2",
+            "GEMINI_API_KEY_3",
+            "GEMINI_API_KEY",
+        ):
             value = os.environ.get(name, "").strip()
-            if value:
-                return value
-        return ""
+            if value and value not in keys:
+                keys.append(value)
+        return keys
+
+    def _get_api_key(self) -> str:
+        """Get the first configured Gemini API key."""
+        keys = self._get_api_keys()
+        return keys[0] if keys else ""
 
     def _parse_size(self, size: str) -> Tuple[int, int]:
         """Parse and validate a WIDTHxHEIGHT size."""
