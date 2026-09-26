@@ -4,6 +4,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from .validation import require_date, require_finite_number
+
 
 class ForecastPoint:
     __slots__ = ("date", "predicted_revenue", "predicted_profit", "confidence",
@@ -48,16 +50,25 @@ class RevenueForecasting:
         if self._initialized:
             return
         self._initialized = True
+        self._data_lock = threading.RLock()
         self._historical: List[Dict[str, float]] = []
         self._forecasts: Dict[str, List[ForecastPoint]] = {}
         self._roi_forecast: Dict[str, float] = {}
 
     def add_historical(self, date: str, revenue: float, profit: float = 0.0,
                        expenses: float = 0.0) -> None:
-        self._historical.append({
-            "date": date, "revenue": revenue,
-            "profit": profit if profit else revenue - expenses,
-        })
+        date = require_date(date)
+        revenue = require_finite_number(revenue, "revenue", minimum=0.0)
+        expenses = require_finite_number(expenses, "expenses", minimum=0.0)
+        profit_value = require_finite_number(profit, "profit") if profit else revenue - expenses
+        with self._data_lock:
+            self._historical = [
+                item for item in self._historical if item["date"] != date
+            ]
+            self._historical.append({
+                "date": date, "revenue": revenue, "profit": profit_value,
+            })
+            self._historical.sort(key=lambda item: item["date"])
 
     def forecast_30_days(self) -> List[ForecastPoint]:
         return self._generate_forecast(30, "30day")
@@ -69,10 +80,12 @@ class RevenueForecasting:
         return self._generate_forecast(365, "1year")
 
     def _generate_forecast(self, days: int, key: str) -> List[ForecastPoint]:
-        if len(self._historical) < 2:
-            raise ValueError("revenue forecast requires at least two real historical observations")
-        revenues = [float(h["revenue"]) for h in self._historical]
-        profits = [float(h["profit"]) for h in self._historical]
+        with self._data_lock:
+            if len(self._historical) < 2:
+                raise ValueError("revenue forecast requires at least two real historical observations")
+            historical = list(self._historical)
+        revenues = [float(h["revenue"]) for h in historical]
+        profits = [float(h["profit"]) for h in historical]
         n = len(revenues)
         xs = list(range(n))
         xbar = sum(xs) / n
@@ -92,8 +105,8 @@ class RevenueForecasting:
             "model": "ordinary_least_squares_linear_trend",
             "observation_count": n,
             "r_squared": round(r_squared, 6),
-            "historical_start": self._historical[0]["date"],
-            "historical_end": self._historical[-1]["date"],
+            "historical_start": historical[0]["date"],
+            "historical_end": historical[-1]["date"],
         }
         points = []
         for i in range(1, days + 1):
@@ -109,13 +122,16 @@ class RevenueForecasting:
             fp.model = "ordinary_least_squares_linear_trend"
             fp.provenance = model_provenance
             points.append(fp)
-        self._forecasts[key] = points
-        return points
+        with self._data_lock:
+            self._forecasts[key] = points
+        return list(points)
 
     def get_forecast_summary(self) -> Dict[str, Any]:
+        with self._data_lock:
+            stored = {key: list(value) for key, value in self._forecasts.items()}
         forecasts = {}
         for key in ("30day", "90day", "1year"):
-            pts = self._forecasts.get(key, [])
+            pts = stored.get(key, [])
             if pts:
                 forecasts[key] = {
                     "total_revenue": round(sum(p.predicted_revenue for p in pts), 2),
@@ -139,14 +155,15 @@ class RevenueForecasting:
         roi_90 = ((predicted_90 - inv * 3) / (inv * 3) * 100) if inv > 0 else 0
         predicted_1y = summary.get("1year", {}).get("total_revenue", 0)
         roi_1y = ((predicted_1y - inv * 12) / (inv * 12) * 100) if inv > 0 else 0
-        self._roi_forecast = {
+        with self._data_lock:
+            self._roi_forecast = {
             "investment": round(inv, 2),
             "roi_30day": round(roi_30, 1),
             "roi_90day": round(roi_90, 1),
             "roi_1year": round(roi_1y, 1),
             "payback_days": round(inv / (predicted_30 / 30), 0) if predicted_30 > 0 else 0,
-        }
-        return self._roi_forecast
+            }
+            return dict(self._roi_forecast)
 
     def get_full_forecast(self) -> Dict[str, Any]:
         return {
@@ -161,11 +178,14 @@ class RevenueForecasting:
         }
 
     def stats(self) -> Dict[str, Any]:
+        with self._data_lock:
+            historical = len(self._historical)
+            forecasts = len(self._forecasts)
         return {
-            "historical": len(self._historical),
-            "forecasts": len(self._forecasts),
-            "model": "ordinary_least_squares_linear_trend" if self._historical else None,
-            "observations": len(self._historical),
+            "historical": historical,
+            "forecasts": forecasts,
+            "model": "ordinary_least_squares_linear_trend" if historical else None,
+            "observations": historical,
             "confidence_scale": "0_to_100",
             "provenance_required": True,
         }
