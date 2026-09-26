@@ -84,9 +84,9 @@ class CarouselPlanner:
             raise ValueError("slide_count must be between 3 and 20")
         if key_points is not None and not isinstance(key_points, list):
             raise ValueError("key_points must be a list")
-        if key_points is not None and len(key_points) != slide_count - 2:
+        if key_points is not None and len(key_points) > slide_count - 2:
             raise ValueError(
-                "key_points must contain exactly slide_count - 2 items"
+                "key_points cannot exceed slide_count - 2 items"
             )
         if key_points is not None and any(
             not isinstance(point, str) or not point.strip() for point in key_points
