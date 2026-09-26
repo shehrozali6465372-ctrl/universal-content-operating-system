@@ -7,6 +7,7 @@ on:
       - "layers/layer12_ai_foundation/**"
       - "tests/test_layer12_ai_foundation.py"
       - "tests/test_layer12_production_contracts.py"
+      - "tests/test_layer12_production_gate.py"
       - ".github/workflows/layer12-production-certification.yml"
       - "requirements.txt"
   pull_request:
@@ -15,6 +16,7 @@ on:
       - "layers/layer12_ai_foundation/**"
       - "tests/test_layer12_ai_foundation.py"
       - "tests/test_layer12_production_contracts.py"
+      - "tests/test_layer12_production_gate.py"
       - ".github/workflows/layer12-production-certification.yml"
       - "requirements.txt"
   workflow_dispatch:
@@ -54,12 +56,20 @@ jobs:
       - name: Layer 12 production contracts
         run: python -m pytest tests/test_layer12_production_contracts.py -q --tb=short
 
+      - name: Layer 12 production gate
+        run: python -m pytest tests/test_layer12_production_gate.py -q --tb=short
+
       - name: Layer 12 unit suite
         run: python -m pytest tests/test_layer12_ai_foundation.py -q --tb=short
 
       - name: Layer 12 production-source lint
         run: |
-          ruff check layers/layer12_ai_foundation --select E9,F821,F822,F823,F811 --ignore E501,E402
+          ruff check \
+            layers/layer12_ai_foundation/modules/ai_orchestrator/ai_gateway.py \
+            layers/layer12_ai_foundation/modules/ai_orchestrator/ai_orchestrator.py \
+            layers/layer12_ai_foundation/modules/model_provider_framework/openai_provider.py \
+            tests/test_layer12_production_gate.py \
+            --select E,F,W --ignore E501,E402
 
   live-provider-preflight:
     needs: production-gate

@@ -6118,7 +6118,8 @@ class TestAIOrchestrator:
         o = AIOrchestrator()
         assert o.start(); assert o.stop()
 
-    def test_process(self):
+    def test_process(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
         o = AIOrchestrator()
         o.start()
         result = o.process("test", {"input": "data"})
