@@ -170,7 +170,7 @@ class GeminiImageProvider(BaseImageProvider):
             "input": [{"type": "text", "text": prompt}],
             "response_format": {
                 "type": "image",
-                "mime_type": "image/png",
+                "mime_type": "image/jpeg",
                 "aspect_ratio": self._aspect_ratio(width, height),
                 "image_size": self._image_size(width, height),
             },
