@@ -1,0 +1,46 @@
+name: Layer 16 Production Certification
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer16_database_engineering/**"
+      - "tests/test_layer16_production_gate.py"
+      - ".github/workflows/layer16-production-certification.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  certify:
+    name: Layer 16 production gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall -q layers/layer16_database_engineering
+      - name: Ruff
+        run: python -m ruff check layers/layer16_database_engineering tests/test_layer16_production_gate.py
+      - name: Adversarial tests
+        run: python -m pytest tests/test_layer16_production_gate.py -q
+      - name: Certification assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          required = ["audit_trail","backup_manager","cache_layer","connection_pool","data_mapper",
+                      "index_manager","migration_engine","object_mapper","orm_layer","query_builder",
+                      "recovery_manager","repository_pattern","repository_registry","schema_validator",
+                      "transaction_manager"]
+          root = Path("layers/layer16_database_engineering/modules")
+          missing = [name for name in required if not (root / name).is_dir()]
+          if missing:
+              raise SystemExit(f"Layer 16 certification failed; missing modules: {missing}")
+          print("Layer 16 production certification: CERTIFIED")
+          PY
