@@ -24,6 +24,8 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_1 || secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 || secrets.GEMINIAPIKEY2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 || secrets.GEMINIAPIKEY3 }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
