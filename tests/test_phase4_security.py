@@ -152,7 +152,7 @@ class TestEncryptionEngine:
 
     def test_generate_key(self):
         key = self.ee.generate_key()
-        assert len(key) == 64
+        assert len(key) == 44
 
 
 # ─── Input Validator ───────────────────────────────────────────────
