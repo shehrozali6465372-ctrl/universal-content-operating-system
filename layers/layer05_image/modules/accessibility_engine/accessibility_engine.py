@@ -83,6 +83,8 @@ class AccessibilityEngine:
         if not isinstance(hex_color, str):
             raise ValueError("color must be a six-digit hexadecimal value")
         h = hex_color.lstrip("#")
+        if len(h) == 3 and all(c in "0123456789abcdefABCDEF" for c in h):
+            h = "".join(c * 2 for c in h)
         if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
             raise ValueError("color must be a six-digit hexadecimal value")
         r, g, b = [int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4)]

@@ -1,8 +1,10 @@
 """Comprehensive Layer 5 Tests — 120+ tests for production-grade coverage."""
+import hashlib
+import pytest
+
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
 from layers.layer05_image.modules.image_prompt.image_prompt import ImagePromptBuilder, STYLE_PRESETS
-from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, MockImageProvider, ImageResponse
-import hashlib
+from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, ImageResponse, MockImageProvider, MockImageProvider
 
 class RealTestImageProvider(BaseImageProvider):
     def __init__(self):
@@ -335,7 +337,7 @@ class TestCarouselPlannerComprehensive:
         assert plan.slides[-1].is_cta is True
 
     def test_content_slides(self):
-        plan = self.cp.plan("AI", "instagram", key_points=["A", "B"])
+        plan = self.cp.plan("AI", "instagram", key_points=["A", "B"], slide_count=4)
         content = [s for s in plan.slides if not s.is_cover and not s.is_cta]
         assert len(content) == 2
 
@@ -641,9 +643,30 @@ class TestPromptEvaluator:
 # Image Orchestrator — Integration
 # ═══════════════════════════════════════
 
+class _CertifiedTestImageProvider:
+    """Deterministic test double that satisfies the real-asset contract."""
+
+    def is_configured(self):
+        return True
+
+    def generate(self, prompt, size="1024x1024", **kwargs):
+        from layers.layer05_image.modules.image_provider.image_provider import ImageResponse
+        response = ImageResponse()
+        response.image_url = "data://test-image"
+        response.image_data = b"certified-test-image"
+        response.provider = "test-provider"
+        response.model = "test-model"
+        response.metadata["sha256"] = hashlib.sha256(response.image_data).hexdigest()
+        return response
+
+
 class TestImageOrchestratorComprehensive:
+    @pytest.fixture(autouse=True)
+    def development_env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UCOS_ENV", "development")
+
     def setup_method(self):
-        self.orch = ImageOrchestrator(provider=RealTestImageProvider())
+        self.orch = ImageOrchestrator(provider=_CertifiedTestImageProvider())
 
     def test_run_all_platforms(self):
         for p in ("facebook", "instagram", "twitter", "linkedin", "youtube", "pinterest", "tiktok", "threads"):

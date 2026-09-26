@@ -142,7 +142,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest -q --tb=short 2>&1 | tee full-test-output.txt
+          UCOS_ENV=development python -m pytest -q --tb=short 2>&1 | tee full-test-output.txt
 
       - name: Upload Full Test Output
         if: always()

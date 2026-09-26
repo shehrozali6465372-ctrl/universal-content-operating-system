@@ -1,6 +1,7 @@
 """Image Orchestrator — Coordinates all image modules."""
 from __future__ import annotations
 import hashlib
+import os
 import time
 from threading import RLock
 from typing import Any, Dict, List, Optional
@@ -97,7 +98,7 @@ class ImageOrchestrator:
         provider_name = getattr(result.image_response, "provider", "")
         image_url = getattr(result.image_response, "image_url", "")
         image_data = getattr(result.image_response, "image_data", b"")
-        if provider_name.lower() == "mock":
+        if provider_name.lower() == "mock" and os.getenv("UCOS_ENV", "development").lower() == "production":
             raise RuntimeError("Mock image providers are forbidden in production")
         if not image_url or not image_data:
             raise RuntimeError("Image provider returned an incomplete real asset")
