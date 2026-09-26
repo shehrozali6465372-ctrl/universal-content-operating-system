@@ -11,6 +11,8 @@ PLATFORM_IMAGE_CONFIG = {
     "linkedin": {"max_size_mb": 10, "formats": ["jpg", "png"], "dpi": 72, "compression": "medium"},
     "pinterest": {"max_size_mb": 20, "formats": ["jpg", "png"], "dpi": 72, "compression": "medium"},
     "youtube": {"max_size_mb": 2, "formats": ["jpg", "png"], "dpi": 72, "compression": "high"},
+    "tiktok": {"max_size_mb": 10, "formats": ["jpg", "png"], "dpi": 72, "compression": "medium"},
+    "threads": {"max_size_mb": 10, "formats": ["jpg", "png"], "dpi": 72, "compression": "medium"},
 }
 
 
