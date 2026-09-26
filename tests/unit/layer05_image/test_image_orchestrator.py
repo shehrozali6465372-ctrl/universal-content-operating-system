@@ -54,7 +54,8 @@ def test_orchestrator_rejects_non_list_platforms() -> None:
         orchestrator.run_multi_platform("topic", "instagram")  # type: ignore[arg-type]
 
 
-def test_orchestrator_rejects_mock_provider_result() -> None:
+def test_orchestrator_rejects_mock_provider_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UCOS_ENV", "production")
     class MockResultProvider(ConfiguredProvider):
         def generate(self, prompt: str, size: str = "1024x1024", **kwargs: object) -> ImageResponse:
             response = super().generate(prompt, size, **kwargs)
