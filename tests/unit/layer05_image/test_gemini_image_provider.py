@@ -1,4 +1,5 @@
 """Production-boundary tests for the Layer 5 Gemini image provider."""
+# Current Gemini 3.x image API contract uses JPEG output.
 from __future__ import annotations
 
 import base64
