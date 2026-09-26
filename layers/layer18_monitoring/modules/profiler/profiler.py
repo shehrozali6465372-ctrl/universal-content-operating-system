@@ -1,9 +1,10 @@
-"""Profiler — code execution profiling and timing."""
+"""Thread-safe function profiler with nested/concurrent call safety."""
 from __future__ import annotations
-import time
+
 import functools
+import threading
+import time
 from typing import Any, Callable, Dict, List, Optional
-from enum import Enum
 
 
 class ProfileEntry:
@@ -14,7 +15,7 @@ class ProfileEntry:
         self.function_name = function_name
         self.total_calls = 0
         self.total_time_ms = 0.0
-        self.min_time_ms = float('inf')
+        self.min_time_ms = float("inf")
         self.max_time_ms = 0.0
         self.avg_time_ms = 0.0
         self.errors = 0
@@ -32,58 +33,70 @@ class ProfileEntry:
         return {"function": self.function_name, "calls": self.total_calls,
                 "total_ms": round(self.total_time_ms, 3),
                 "avg_ms": round(self.avg_time_ms, 3),
-                "min_ms": round(self.min_time_ms, 3),
+                "min_ms": round(self.min_time_ms, 3) if self.total_calls else 0.0,
                 "max_ms": round(self.max_time_ms, 3),
                 "errors": self.errors}
 
 
 class Profiler:
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self._profiles: Dict[str, ProfileEntry] = {}
-        self._active: Dict[str, float] = {}
+        self._active = threading.local()
 
     def start(self, name: str) -> None:
-        self._active[name] = time.time()
+        if not name:
+            raise ValueError("profile name is required")
+        active = getattr(self._active, "starts", None)
+        if active is None:
+            active = {}
+            self._active.starts = active
+        active.setdefault(name, []).append(time.perf_counter())
 
     def stop(self, name: str) -> float:
-        start = self._active.pop(name, time.time())
-        duration_ms = (time.time() - start) * 1000
-        if name not in self._profiles:
-            self._profiles[name] = ProfileEntry(name)
-        self._profiles[name].record(duration_ms)
+        active = getattr(self._active, "starts", {})
+        starts = active.get(name)
+        if not starts:
+            raise RuntimeError(f"profile '{name}' was not started")
+        duration_ms = (time.perf_counter() - starts.pop()) * 1000
+        with self._lock:
+            entry = self._profiles.setdefault(name, ProfileEntry(name))
+            entry.record(duration_ms)
         return duration_ms
 
     def record_error(self, name: str) -> None:
-        if name not in self._profiles:
-            self._profiles[name] = ProfileEntry(name)
-        self._profiles[name].errors += 1
+        with self._lock:
+            entry = self._profiles.setdefault(name, ProfileEntry(name))
+            entry.errors += 1
 
-    def profile(self, func: Callable) -> Callable:
+    def profile(self, func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             self.start(func.__name__)
             try:
-                result = func(*args, **kwargs)
-                self.stop(func.__name__)
-                return result
+                return func(*args, **kwargs)
             except Exception:
                 self.record_error(func.__name__)
-                self.stop(func.__name__)
                 raise
+            finally:
+                self.stop(func.__name__)
         return wrapper
 
     def get_profile(self, name: str) -> Optional[ProfileEntry]:
-        return self._profiles.get(name)
+        with self._lock:
+            return self._profiles.get(name)
 
     def list_profiles(self) -> List[Dict[str, Any]]:
-        return [p.to_dict() for p in self._profiles.values()]
+        with self._lock:
+            return [p.to_dict() for p in self._profiles.values()]
 
     def summary(self) -> Dict[str, Any]:
-        total_calls = sum(p.total_calls for p in self._profiles.values())
-        total_time = sum(p.total_time_ms for p in self._profiles.values())
-        return {"functions": len(self._profiles), "total_calls": total_calls,
-                "total_time_ms": round(total_time, 3)}
+        with self._lock:
+            return {"functions": len(self._profiles),
+                    "total_calls": sum(p.total_calls for p in self._profiles.values()),
+                    "total_time_ms": round(sum(p.total_time_ms for p in self._profiles.values()), 3)}
 
     def reset(self) -> None:
-        self._profiles.clear()
-        self._active.clear()
+        with self._lock:
+            self._profiles.clear()
+        self._active = threading.local()

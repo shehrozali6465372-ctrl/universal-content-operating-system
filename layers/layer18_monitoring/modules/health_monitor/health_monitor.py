@@ -1,25 +1,38 @@
-"""HealthMonitor — continuous health monitoring with alerts."""
+"""Bounded health checks with timeout handling."""
 from __future__ import annotations
+
+import threading
 import time
-import concurrent.futures
-from typing import Any, Callable, Dict, List, Optional
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 
 class HealthLevel(str, Enum):
-    HEALTHY = "healthy"; DEGRADED = "degraded"; UNHEALTHY = "unhealthy"
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
 
 
 class HealthCheck:
-    __slots__ = ("name", "check_fn", "interval", "last_check", "consecutive_failures",
-                 "max_failures", "timeout", "metadata")
+    __slots__ = (
+        "name", "check_fn", "interval", "last_check", "consecutive_failures",
+        "max_failures", "timeout", "metadata",
+    )
 
-    def __init__(self, name: str, check_fn: Callable, interval: float = 60.0,
-                 max_failures: int = 3, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        name: str,
+        check_fn: Callable[[], Any],
+        interval: float = 60.0,
+        max_failures: int = 3,
+        timeout: float = 5.0,
+    ) -> None:
+        if not name.strip() or interval < 0 or max_failures <= 0 or timeout <= 0:
+            raise ValueError("invalid health check configuration")
         self.name = name
         self.check_fn = check_fn
         self.interval = interval
-        self.last_check: float = 0.0
+        self.last_check = 0.0
         self.consecutive_failures = 0
         self.max_failures = max_failures
         self.timeout = timeout
@@ -27,78 +40,144 @@ class HealthCheck:
 
 
 class HealthMonitor:
-    def __init__(self) -> None:
+    def __init__(self, history_size: int = 1000) -> None:
+        if history_size <= 0:
+            raise ValueError("history_size must be positive")
+        self._lock = threading.RLock()
+        self._history_size = history_size
         self._checks: Dict[str, HealthCheck] = {}
         self._results: Dict[str, Dict[str, Any]] = {}
         self._history: List[Dict[str, Any]] = []
 
-    def register(self, name: str, check_fn: Callable, interval: float = 60.0,
-                 max_failures: int = 3, timeout: float = 5.0) -> HealthCheck:
-        if timeout <= 0: raise ValueError("timeout must be positive")
+    def register(
+        self,
+        name: str,
+        check_fn: Callable[[], Any],
+        interval: float = 60.0,
+        max_failures: int = 3,
+        timeout: float = 5.0,
+    ) -> HealthCheck:
         check = HealthCheck(name, check_fn, interval, max_failures, timeout)
-        self._checks[name] = check
+        with self._lock:
+            self._checks[name] = check
         return check
 
     def unregister(self, name: str) -> bool:
-        if name in self._checks:
-            del self._checks[name]
+        with self._lock:
             self._results.pop(name, None)
-            return True
-        return False
+            return self._checks.pop(name, None) is not None
 
     def check(self, name: str) -> Dict[str, Any]:
-        check = self._checks.get(name)
-        if not check:
-            return {"name": name, "status": HealthLevel.UNHEALTHY.value, "error": "not_found"}
-        try:
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(check.check_fn)
+        with self._lock:
+            check = self._checks.get(name)
+        if check is None:
+            return {
+                "name": name,
+                "status": HealthLevel.UNHEALTHY.value,
+                "error": "not_found",
+            }
+
+        result_holder: Dict[str, Any] = {}
+        error_holder: List[BaseException] = []
+        done = threading.Event()
+
+        def run_check() -> None:
             try:
-                result = future.result(timeout=check.timeout)
-            except concurrent.futures.TimeoutError:
-                future.cancel()
-                executor.shutdown(wait=False, cancel_futures=True)
-                raise TimeoutError(f"health check timed out after {check.timeout:.2f}s")
+                result_holder["value"] = check.check_fn()
+            except BaseException as exc:
+                error_holder.append(exc)
             finally:
-                if not future.done():
-                    executor.shutdown(wait=False, cancel_futures=True)
-                else:
-                    executor.shutdown(wait=True)
-            healthy = result.get("healthy", True) if isinstance(result, dict) else bool(result)
-            level = HealthLevel.HEALTHY if healthy else HealthLevel.DEGRADED
-            check.consecutive_failures = 0
-        except Exception as exc:
-            check.consecutive_failures += 1
-            level = HealthLevel.UNHEALTHY if check.consecutive_failures >= check.max_failures else HealthLevel.DEGRADED
-            result = {"error": str(exc)}
-        check.last_check = time.time()
-        entry = {"name": name, "status": level.value, "details": result,
-                 "failures": check.consecutive_failures, "time": time.time()}
-        self._results[name] = entry
-        self._history.append(entry)
+                done.set()
+
+        worker = threading.Thread(
+            target=run_check, name=f"health-check-{name}", daemon=True
+        )
+        worker.start()
+        timed_out = not done.wait(check.timeout)
+
+        if timed_out:
+            result: Any = {
+                "error": f"health check timed out after {check.timeout:.2f}s"
+            }
+        elif error_holder:
+            result = {"error": str(error_holder[0])}
+        else:
+            result = result_holder.get("value")
+
+        with self._lock:
+            failed = timed_out or (
+                isinstance(result, dict) and "error" in result
+            )
+            check.consecutive_failures = (
+                check.consecutive_failures + 1 if failed else 0
+            )
+            failures = check.consecutive_failures
+
+        if failed:
+            status = (
+                HealthLevel.UNHEALTHY
+                if failures >= check.max_failures
+                else HealthLevel.DEGRADED
+            )
+        else:
+            healthy = (
+                result.get("healthy", True)
+                if isinstance(result, dict)
+                else bool(result)
+            )
+            status = HealthLevel.HEALTHY if healthy else HealthLevel.DEGRADED
+
+        now = time.time()
+        entry = {
+            "name": name,
+            "status": status.value,
+            "details": result,
+            "failures": failures,
+            "time": now,
+        }
+        with self._lock:
+            check.last_check = now
+            self._results[name] = entry
+            self._history.append(dict(entry))
+            if len(self._history) > self._history_size:
+                del self._history[:-self._history_size]
         return entry
 
     def check_all(self) -> Dict[str, Any]:
-        results = {name: self.check(name) for name in self._checks}
-        statuses = [r["status"] for r in results.values()]
-        overall = HealthLevel.HEALTHY
-        if HealthLevel.UNHEALTHY.value in statuses:
-            overall = HealthLevel.UNHEALTHY
-        elif HealthLevel.DEGRADED.value in statuses:
-            overall = HealthLevel.DEGRADED
-        return {"overall": overall.value, "checks": results}
+        with self._lock:
+            names = list(self._checks)
+        results = {name: self.check(name) for name in names}
+        statuses = [result["status"] for result in results.values()]
+        overall = (
+            HealthLevel.UNHEALTHY.value
+            if "unhealthy" in statuses
+            else HealthLevel.DEGRADED.value
+            if "degraded" in statuses
+            else HealthLevel.HEALTHY.value
+        )
+        return {"overall": overall, "checks": results}
 
     def get_unhealthy(self) -> List[str]:
-        return [name for name, r in self._results.items()
-                if r["status"] == HealthLevel.UNHEALTHY.value]
+        with self._lock:
+            return [
+                name
+                for name, result in self._results.items()
+                if result["status"] == HealthLevel.UNHEALTHY.value
+            ]
 
     def list_checks(self) -> List[str]:
-        return list(self._checks.keys())
+        with self._lock:
+            return list(self._checks)
 
     def get_history(self, name: Optional[str] = None) -> List[Dict[str, Any]]:
-        if name:
-            return [h for h in self._history if h.get("name") == name]
-        return list(self._history)
+        with self._lock:
+            values = (
+                self._history
+                if name is None
+                else [entry for entry in self._history if entry["name"] == name]
+            )
+            return [dict(value) for value in values]
 
     def count(self) -> int:
-        return len(self._checks)
+        with self._lock:
+            return len(self._checks)
