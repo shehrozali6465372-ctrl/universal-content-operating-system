@@ -78,7 +78,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from layers.layer05_image.modules.image_provider.openrouter_image_provider import OpenRouterImageProvider
-          provider = OpenRouterImageProvider(model="bytedance-seed/seedream-4.5")
+          provider = OpenRouterImageProvider(model="x-ai/grok-imagine-image-quality:free")
           if not provider.is_configured():
               raise SystemExit("OpenRouter provider is not configured")
           result = provider.generate(
