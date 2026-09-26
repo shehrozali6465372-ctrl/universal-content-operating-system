@@ -281,14 +281,18 @@ class TestABTestEngine:
         assert self.engine.start_test("t1") is True
     def test_record_impression(self):
         test = self.engine.create_test("t1", "Test", ["A", "B"])
+        assert self.engine.start_test("t1") is True
         variant = test.variants[0]
         assert self.engine.record_impression("t1", variant.variant_id) is True
     def test_record_conversion(self):
         test = self.engine.create_test("t1", "Test", ["A", "B"])
+        assert self.engine.start_test("t1") is True
         variant = test.variants[0]
+        self.engine.record_impression("t1", variant.variant_id)
         assert self.engine.record_conversion("t1", variant.variant_id, 10.0) is True
     def test_analyze(self):
         test = self.engine.create_test("t1", "Test", ["Control", "Variant"])
+        assert self.engine.start_test("t1") is True
         for _ in range(100):
             self.engine.record_impression("t1", test.variants[0].variant_id)
             self.engine.record_impression("t1", test.variants[1].variant_id)
