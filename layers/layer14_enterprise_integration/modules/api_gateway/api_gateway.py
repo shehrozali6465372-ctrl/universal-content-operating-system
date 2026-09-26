@@ -110,13 +110,26 @@ class APIGateway:
         production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
         try:
             if production:
-                from layers.layer13_persistence.modules.postgresql.manager import get_database
-                report = get_database().health_check()
-                checks["database"] = (
-                    "healthy" if report.get("overall") == "PASS" else "unhealthy"
+                import psycopg2
+
+                connection = psycopg2.connect(
+                    host=os.environ.get("POSTGRES_HOST", "localhost"),
+                    port=int(os.environ.get("POSTGRES_PORT", "5432")),
+                    dbname=os.environ.get("POSTGRES_DB", "aios"),
+                    user=os.environ.get("POSTGRES_USER", "postgres"),
+                    password=os.environ.get("POSTGRES_PASSWORD", ""),
+                    connect_timeout=3,
                 )
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                    checks["database"] = "healthy"
+                finally:
+                    connection.close()
             else:
                 from layers.layer01_core.modules.database_manager import DatabaseManager
+
                 db = DatabaseManager()
                 db.initialize()
                 db.health_check()
