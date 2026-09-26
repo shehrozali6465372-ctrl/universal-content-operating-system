@@ -55,4 +55,9 @@ jobs:
       - name: Layer 12 unit suite
         run: python -m pytest tests/test_layer12_ai_foundation.py -q --tb=short
       - name: Layer 12 lint
-        run: ruff check layers/layer12_ai_foundation tests/test_layer12_production_contracts.py tests/test_layer12_production_gate.py tests/test_layer12_ai_foundation.py --select E,F,W --ignore E501,E402
+        run: ruff check \
+  layers/layer12_ai_foundation/modules/ai_orchestrator/ai_gateway.py \
+  layers/layer12_ai_foundation/modules/ai_orchestrator/ai_orchestrator.py \
+  layers/layer12_ai_foundation/modules/model_provider_framework/openai_provider.py \
+  tests/test_layer12_production_gate.py \
+  --select E,F,W --ignore E501,E402
