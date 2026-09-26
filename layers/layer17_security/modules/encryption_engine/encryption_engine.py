@@ -5,7 +5,6 @@ import base64
 import hashlib
 import hmac
 import secrets
-from typing import Any
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
