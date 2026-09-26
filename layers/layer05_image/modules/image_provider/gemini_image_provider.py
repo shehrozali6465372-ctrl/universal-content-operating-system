@@ -131,14 +131,10 @@ class GeminiImageProvider(BaseImageProvider):
         )
 
         enhanced = (
-            f"Generate a {style} image.
-"
-            f"Prompt: {prompt}
-"
-            f"Dimensions: {width}x{height} ({aspect_ratio})
-"
-            f"Quality: High resolution, professional, publication-ready
-"
+            f"Generate a {style} image.\n"
+            f"Prompt: {prompt}\n"
+            f"Dimensions: {width}x{height} ({aspect_ratio})\n"
+            f"Quality: High resolution, professional, publication-ready\n"
             f"Style notes: Clean composition, balanced colors, "
             f"appropriate for social media sharing"
         )
