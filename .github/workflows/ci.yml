@@ -139,7 +139,7 @@ jobs:
           import os
           from layers.layer05_image.modules.image_provider.openrouter_image_provider import OpenRouterImageProvider
 
-          provider = OpenRouterImageProvider(api_key=os.environ.get("OPENROUTER_API_KEY", ""), model="x-ai/grok-imagine-image-quality:free")
+          provider = OpenRouterImageProvider(api_key=os.environ.get("OPENROUTER_API_KEY", ""), model="bytedance-seed/seedream-4.5")
           if not provider.is_configured():
               raise SystemExit("OpenRouter smoke test: provider is not configured")
           try:
