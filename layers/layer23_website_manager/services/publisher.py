@@ -49,6 +49,22 @@ class Publisher:
         with self._lock:
             return next((a for a in self._articles.values() if a.slug == slug), None)
 
+    def get_all_articles(
+        self,
+        status: Optional[ArticleStatus] = None,
+        category_id: str = "",
+    ) -> List[Article]:
+        """Return articles with optional status/category filters."""
+        with self._lock:
+            articles = list(self._articles.values())
+            if status is not None:
+                articles = [article for article in articles if article.status == status]
+            if category_id:
+                articles = [
+                    article for article in articles if article.category_id == category_id
+                ]
+            return sorted(articles, key=lambda article: article.created_at, reverse=True)
+
     def update_article(self, article_id: str, **kwargs) -> Optional[Article]:
         article = self.get_article(article_id)
         if not article:
