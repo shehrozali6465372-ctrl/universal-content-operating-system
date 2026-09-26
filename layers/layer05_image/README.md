@@ -42,3 +42,4 @@ pytest tests/unit/layer05_image -q
 
 
 <!-- Certification gate trigger: real OpenRouter smoke remains mandatory when configured. -->
+<!-- Certification gate trigger: rerun after external provider readiness is verified. -->
