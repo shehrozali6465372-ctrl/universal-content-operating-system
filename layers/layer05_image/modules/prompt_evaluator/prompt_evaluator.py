@@ -1,5 +1,7 @@
 """Prompt Evaluator — Evaluate and refine image prompts."""
 from __future__ import annotations
+
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -32,8 +34,12 @@ class PromptEvaluator:
 
     def __init__(self) -> None:
         self._eval_count = 0
+        self._counter_lock = RLock()
 
     def evaluate(self, prompt: str) -> PromptEvaluation:
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("prompt must not be empty")
+        prompt = prompt.strip()
         result = PromptEvaluation(prompt=prompt)
         words = set(prompt.lower().split())
 
@@ -55,7 +61,8 @@ class PromptEvaluator:
             result.clarity_score * 0.3 + result.specificity_score * 0.4 + result.style_coverage * 0.3, 3
         )
         result.refined_prompt = self._refine(prompt, result)
-        self._eval_count += 1
+        with self._counter_lock:
+            self._eval_count += 1
         return result
 
     def _refine(self, prompt: str, ev: PromptEvaluation) -> str:
@@ -68,4 +75,5 @@ class PromptEvaluator:
 
     @property
     def eval_count(self) -> int:
-        return self._eval_count
+        with self._counter_lock:
+            return self._eval_count
