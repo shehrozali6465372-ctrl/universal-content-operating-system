@@ -50,7 +50,8 @@ class CEODashboard:
         return cls._instance
 
     def __init__(self) -> None:
-        if self._initialized: return
+        if self._initialized:
+            return
         self._initialized = True
         self._data_lock = threading.RLock()
         self._snapshots: Dict[str, DailySnapshot] = {}
