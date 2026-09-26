@@ -58,17 +58,27 @@ class CEODashboard:
             require_non_negative_int(getattr(snapshot, field), field)
         with self._data_lock:
             old = self._snapshots.get(snapshot.date)
-        if old is not None:
-            self._totals["total_revenue"] -= old.total_revenue; self._totals["affiliate_revenue"] -= old.affiliate_revenue
-            self._totals["ad_revenue"] -= old.ad_revenue; self._totals["total_expenses"] -= old.total_expenses
-            self._totals["total_profit"] -= old.profit; self._totals["total_posts"] -= old.total_posts
-            self._totals["total_clicks"] -= old.total_clicks; self._totals["total_conversions"] -= old.total_conversions
+            if old is not None:
+                self._totals["total_revenue"] -= old.total_revenue
+                self._totals["affiliate_revenue"] -= old.affiliate_revenue
+                self._totals["ad_revenue"] -= old.ad_revenue
+                self._totals["total_expenses"] -= old.total_expenses
+                self._totals["total_profit"] -= old.profit
+                self._totals["total_posts"] -= old.total_posts
+                self._totals["total_clicks"] -= old.total_clicks
+                self._totals["total_conversions"] -= old.total_conversions
             self._snapshots[snapshot.date] = snapshot
-            self._totals["total_revenue"] += snapshot.total_revenue; self._totals["affiliate_revenue"] += snapshot.affiliate_revenue
-            self._totals["ad_revenue"] += snapshot.ad_revenue; self._totals["total_expenses"] += snapshot.total_expenses
-            self._totals["total_profit"] += snapshot.profit; self._totals["total_posts"] += snapshot.total_posts
-            self._totals["total_clicks"] += snapshot.total_clicks; self._totals["total_conversions"] += snapshot.total_conversions
-            self._totals["total_accounts"] = max(self._totals["total_accounts"], snapshot.active_accounts)
+            self._totals["total_revenue"] += snapshot.total_revenue
+            self._totals["affiliate_revenue"] += snapshot.affiliate_revenue
+            self._totals["ad_revenue"] += snapshot.ad_revenue
+            self._totals["total_expenses"] += snapshot.total_expenses
+            self._totals["total_profit"] += snapshot.profit
+            self._totals["total_posts"] += snapshot.total_posts
+            self._totals["total_clicks"] += snapshot.total_clicks
+            self._totals["total_conversions"] += snapshot.total_conversions
+            self._totals["total_accounts"] = max(
+                self._totals["total_accounts"], snapshot.active_accounts
+            )
 
     def record_daily(self, date: str = "", revenue: float = 0.0, affiliate_rev: float = 0.0, ad_rev: float = 0.0, expenses: float = 0.0, active_accounts: int = 0, posts: int = 0, clicks: int = 0, conversions: int = 0, ai_health: float = 100.0) -> DailySnapshot:
         if date:
