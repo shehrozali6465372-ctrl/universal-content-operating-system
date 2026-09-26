@@ -205,3 +205,8 @@ def test_storage_failure_propagates_and_cleans_temp_file(tmp_path: Path) -> None
                     provider.generate("photo")
 
     assert list(tmp_path.iterdir()) == []
+
+def test_credential_hidden_unicode_markers_are_removed() -> None:
+    provider = OpenRouterImageProvider(api_key="\u200etest-key\ufeff")
+    assert provider.is_configured() is True
+    assert provider._get_api_key() == "test-key"
