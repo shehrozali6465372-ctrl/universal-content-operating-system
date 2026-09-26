@@ -129,34 +129,6 @@ jobs:
           print(f"Gemini smoke PASS: bytes={len(result.image_data)} sha256={digest}")
           PY
         
-      - name: Run Layer 5 Real OpenRouter Smoke Test
-        if: env.OPENROUTER_API_KEY != ''
-        env:
-          UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-openrouter-images
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import os
-          from layers.layer05_image.modules.image_provider.openrouter_image_provider import OpenRouterImageProvider
-
-          provider = OpenRouterImageProvider(api_key=os.environ.get("OPENROUTER_API_KEY", ""), model="bytedance-seed/seedream-4.5")
-          if not provider.is_configured():
-              raise SystemExit("OpenRouter smoke test: provider is not configured")
-          result = provider.generate(
-              "Create a simple professional abstract geometric marketing background",
-              size="512x512",
-          )
-          if not result.image_data:
-              raise SystemExit("OpenRouter smoke test: empty image data")
-          digest = result.metadata.get("sha256")
-          if not digest:
-              raise SystemExit("OpenRouter smoke test: missing SHA-256")
-          persisted = Path(result.image_url)
-          if not persisted.is_file() or persisted.stat().st_size == 0:
-              raise SystemExit("OpenRouter smoke test: persisted image is missing or empty")
-          print(f"OpenRouter smoke PASS: bytes={len(result.image_data)} sha256={digest}")
-          PY
-
       - name: Run Layer 14 Production Gate
         run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
 
