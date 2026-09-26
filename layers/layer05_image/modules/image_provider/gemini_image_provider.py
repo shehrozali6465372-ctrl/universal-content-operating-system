@@ -76,7 +76,8 @@ class GeminiImageProvider(BaseImageProvider):
                     break
                 except RuntimeError as exc:
                     last_error = exc
-                    if "rate limit" not in str(exc).lower():
+                    error_text = str(exc).lower()
+                    if "rate limit" not in error_text and "authentication/authorization failed" not in error_text:
                         raise
             if result is None:
                 raise last_error or RuntimeError("Gemini image generation failed")
