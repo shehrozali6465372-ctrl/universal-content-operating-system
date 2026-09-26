@@ -45,6 +45,7 @@ RUN chmod +x /entrypoint.sh
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
+    APP_HOST=0.0.0.0 \
     APP_PORT=8000
 
 USER aios
