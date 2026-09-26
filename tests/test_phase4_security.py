@@ -316,7 +316,7 @@ from layers.layer17_security.modules.jwt_framework.jwt_framework import JWTFrame
 
 class TestJWTFramework:
     def setup_method(self):
-        self.jwt = JWTFramework("test-secret")
+        self.jwt = JWTFramework("test-secret-material-32-characters-long")
 
     def test_create_decode(self):
         token = self.jwt.create_token({"sub": "user1", "role": "admin"})
