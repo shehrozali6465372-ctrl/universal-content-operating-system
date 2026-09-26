@@ -1,0 +1,94 @@
+name: Layer 17 Production Certification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer17-certification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  layer17:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      UCOS_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all Python
+        run: python -m compileall -q layers/layer17_security tests/test_layer17_production_gate.py
+
+      - name: Ruff Layer 17
+        run: |
+          ruff check layers/layer17_security tests/test_layer17_production_gate.py --select E,F,W --ignore E501,E402
+
+      - name: Secret pattern scan
+        shell: bash
+        run: |
+          if git grep -nE 'sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----' -- layers/layer17_security tests; then
+            echo "Potential high-confidence secret material found."
+            exit 1
+          fi
+
+      - name: Layer 17 production security gate
+        run: python -m pytest tests/test_layer17_production_gate.py -q --tb=short
+
+      - name: Layer 17 module regression gate
+        run: |
+          python - <<'PY'
+          from layers.layer17_security import (
+              AuthenticationManager,
+              AuthorizationManager,
+              Permission,
+              TokenManager,
+              TokenType,
+          )
+          auth = AuthenticationManager()
+          user = auth.register_user("cert-user", password="cert-password")
+          assert auth.authenticate_password("cert-user", "cert-password") is not None
+          roles = AuthorizationManager()
+          role = roles.create_role("cert", {Permission.READ})
+          assert roles.assign_role(user.user_id, role.role_id)
+          assert roles.has_permission(user.user_id, Permission.READ)
+          token = TokenManager().create_token(TokenType.BEARER, user.user_id)
+          assert token.is_valid()
+          print("Layer 17 module regression PASS")
+          PY
+
+      - name: Certification evidence
+        if: always()
+        run: |
+          python - <<'PY' > layer17-certification-evidence.txt
+          import platform
+          import sys
+          print("Layer: 17")
+          print("Domain: Security")
+          print("Python:", sys.version)
+          print("Platform:", platform.platform())
+          print("Gate: tests/test_layer17_production_gate.py")
+          print("Status: workflow evidence generated")
+          PY
+
+      - name: Upload certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer17-production-certification
+          path: layer17-certification-evidence.txt
