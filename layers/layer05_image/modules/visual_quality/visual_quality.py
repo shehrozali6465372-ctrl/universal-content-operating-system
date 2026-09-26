@@ -1,5 +1,6 @@
 """Visual Quality Scorer — Evaluate image plan quality."""
 from __future__ import annotations
+from threading import RLock
 from typing import Any, Dict, List
 
 
@@ -24,21 +25,31 @@ class QualityScore:
             "clickability": round(self.clickability, 3),
             "overall_score": round(self.overall_score, 3),
             "grade": self.grade,
-            "issues": self.issues,
+            "issues": list(self.issues),
         }
 
 
 class VisualQualityScorer:
-    GRADES = [(0.9, "A+"), (0.8, "A"), (0.7, "B+"), (0.6, "B"), (0.5, "C+"), (0.4, "C"), (0.0, "D")]
+    GRADES = [(0.9, "A+"), (0.8, "A"), (0.7, "B+"), (0.6, "B"),
+              (0.5, "C+"), (0.4, "C"), (0.0, "D")]
 
     def __init__(self) -> None:
         self._score_count = 0
+        self._counter_lock = RLock()
 
     def score(self, image_type: str = "photo", text_overlay: str = "",
               has_face: bool = False, has_logo: bool = False,
               platform: str = "facebook") -> QualityScore:
-        result = QualityScore()
+        if not isinstance(image_type, str) or not image_type.strip():
+            raise ValueError("image_type must not be empty")
+        if not isinstance(text_overlay, str):
+            raise ValueError("text_overlay must be a string")
+        if not isinstance(platform, str) or not platform.strip():
+            raise ValueError("platform must not be empty")
+        if not isinstance(has_face, bool) or not isinstance(has_logo, bool):
+            raise ValueError("has_face and has_logo must be booleans")
 
+        result = QualityScore()
         if image_type in ("photo", "illustration"):
             result.composition_score = 0.8
         elif image_type in ("infographic", "carousel"):
@@ -58,7 +69,6 @@ class VisualQualityScorer:
             result.issues.append("Text overlay too dense")
 
         result.safe_margins = 0.8
-
         if image_type == "meme":
             result.clickability = 0.85
         elif image_type == "thumbnail":
@@ -67,7 +77,6 @@ class VisualQualityScorer:
             result.clickability = 0.75
         else:
             result.clickability = 0.6
-
         if platform in ("instagram", "pinterest") and image_type in ("photo", "infographic"):
             result.clickability += 0.05
 
@@ -81,9 +90,11 @@ class VisualQualityScorer:
                 result.grade = grade
                 break
 
-        self._score_count += 1
+        with self._counter_lock:
+            self._score_count += 1
         return result
 
     @property
     def score_count(self) -> int:
-        return self._score_count
+        with self._counter_lock:
+            return self._score_count
