@@ -110,29 +110,19 @@ class TestGeminiImageProvider:
         self.provider = GeminiImageProvider(api_key="test_key_for_testing")
 
     def test_generate_without_api(self):
-        """Without real API key, should return enhanced prompt."""
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        prov = GeminiImageProvider(api_key="")
-        result = prov.generate("A sunset over mountains", size="1024x1024")
-        assert result is not None
-        assert result.provider == "gemini_image_prompt"
-        assert len(result.revised_prompt) > 0
-        assert result.metadata.get("enhanced") is True
-
+        with pytest.raises(RuntimeError, match="not configured"):
+            GeminiImageProvider(api_key="").generate("A sunset over mountains")
     def test_enhanced_prompt_contains_details(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        prov = GeminiImageProvider(api_key="")
-        result = prov.generate("A cat playing piano", style="cartoon")
-        assert "cartoon" in result.revised_prompt.lower()
-        assert "cat" in result.revised_prompt.lower()
-
+        prompt = GeminiImageProvider(api_key="test")._enhance_prompt("A cat playing piano", "1024x1024", "cartoon")
+        assert "cartoon" in prompt.lower()
+        assert "cat" in prompt.lower()
     def test_generate_batch(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         prov = GeminiImageProvider(api_key="")
-        results = prov.generate_batch(["prompt1", "prompt2"], size="1024x1024")
-        assert len(results) == 2
-        assert all(r.revised_prompt for r in results)
-
+        with pytest.raises(RuntimeError, match="not configured"):
+            prov.generate_batch(["prompt1", "prompt2"])
     def test_is_configured(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         prov = GeminiImageProvider(api_key="real_key")
@@ -143,19 +133,13 @@ class TestGeminiImageProvider:
     def test_get_stats(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         prov = GeminiImageProvider(api_key="")
-        prov.generate("test")
         stats = prov.get_stats()
-        assert stats["total_calls"] == 1
+        assert stats["total_calls"] == 0
         assert stats["provider"] == "gemini_image"
-
     def test_history_tracking(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         prov = GeminiImageProvider(api_key="")
-        prov.generate("prompt1")
-        prov.generate("prompt2")
-        history = prov.get_history()
-        assert len(history) == 2
-
+        assert prov.get_history() == []
     def test_size_parsing(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         prov = GeminiImageProvider(api_key="")
@@ -165,21 +149,16 @@ class TestGeminiImageProvider:
 
     def test_enhanced_prompt_landscape(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        prov = GeminiImageProvider(api_key="")
-        result = prov.generate("test", size="1920x1080")
-        assert "landscape" in result.revised_prompt.lower()
-
+        prompt = GeminiImageProvider(api_key="test")._enhance_prompt("test", "1920x1080", "photorealistic")
+        assert "landscape" in prompt.lower()
     def test_enhanced_prompt_portrait(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        prov = GeminiImageProvider(api_key="")
-        result = prov.generate("test", size="1080x1920")
-        assert "portrait" in result.revised_prompt.lower()
-
+        prompt = GeminiImageProvider(api_key="test")._enhance_prompt("test", "1080x1920", "photorealistic")
+        assert "portrait" in prompt.lower()
     def test_generate_with_reference(self):
         from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-        prov = GeminiImageProvider(api_key="")
-        result = prov.generate_with_reference("A mountain", reference_url="http://example.com/ref.jpg")
-        assert "reference" in result.revised_prompt.lower()
+        with pytest.raises(NotImplementedError, match="actual image bytes"):
+            GeminiImageProvider(api_key="test").generate_with_reference("A mountain", reference_url="http://example.com/ref.jpg")
 
 
 # ══════════════════════════════════════════════════════════════════════
