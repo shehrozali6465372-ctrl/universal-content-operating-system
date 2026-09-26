@@ -127,7 +127,7 @@ class TestStyleEngine:
 from layers.layer20_image_pipeline.modules.batch_generator.batch_generator import BatchGenerator, BatchStatus
 class TestBatchGenerator:
     def setup_method(self):
-        self.bg = BatchGenerator()
+        self.bg = BatchGenerator()\n        self.bg.set_generator(lambda prompt: {"image": prompt["prompt"]})
     def test_create_execute(self):
         job = self.bg.create_batch([{"prompt": "a"}, {"prompt": "b"}])
         result = self.bg.execute_batch(job.batch_id)
