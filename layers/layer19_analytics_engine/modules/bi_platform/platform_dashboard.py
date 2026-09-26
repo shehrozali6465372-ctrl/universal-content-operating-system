@@ -112,13 +112,18 @@ class PlatformDashboard:
             return self._platforms.get(platform)
 
     def get_top_by_revenue(self, limit: int = 10) -> List[PlatformMetrics]:
-        return sorted(self._platforms.values(), key=lambda p: p.revenue, reverse=True)[:limit]
+        require_non_negative_int(limit, "limit")
+        with self._data_lock:
+            return sorted(self._platforms.values(), key=lambda p: p.revenue, reverse=True)[:limit]
 
     def get_top_by_engagement(self, limit: int = 10) -> List[PlatformMetrics]:
-        return sorted(self._platforms.values(), key=lambda p: p.engagement_rate, reverse=True)[:limit]
+        require_non_negative_int(limit, "limit")
+        with self._data_lock:
+            return sorted(self._platforms.values(), key=lambda p: p.engagement_rate, reverse=True)[:limit]
 
     def get_dashboard(self) -> Dict[str, Any]:
-        platforms = list(self._platforms.values())
+        with self._data_lock:
+            platforms = list(self._platforms.values())
         total_revenue = sum(p.revenue for p in platforms)
         total_reach = sum(p.reach for p in platforms)
         return {
@@ -135,7 +140,10 @@ class PlatformDashboard:
                 p.platform: round(p.revenue / total_revenue * 100, 1) if total_revenue > 0 else 0
                 for p in platforms
             },
-            "platforms": [p.to_dict() for p in self.get_top_by_revenue()],
+            "platforms": [
+                p.to_dict()
+                for p in sorted(platforms, key=lambda item: item.revenue, reverse=True)[:10]
+            ],
         }
 
     def stats(self) -> Dict[str, Any]:
