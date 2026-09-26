@@ -161,7 +161,18 @@ class GeminiImageProvider(BaseImageProvider):
                 raise RuntimeError("Gemini rate limit exceeded") from exc
             if exc.code in (401, 403):
                 raise RuntimeError("Gemini authentication/authorization failed") from exc
-            raise RuntimeError(f"Gemini HTTP request failed ({exc.code})") from exc
+            detail = ""
+            try:
+                raw_error = exc.read().decode("utf-8", errors="replace")
+                parsed_error = json.loads(raw_error)
+                error_obj = parsed_error.get("error", {})
+                detail = str(error_obj.get("message") or error_obj.get("status") or "").strip()
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                detail = ""
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeError(
+                f"Gemini HTTP request failed ({exc.code}){suffix}"
+            ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise RuntimeError("Gemini transport failed") from exc
         except json.JSONDecodeError as exc:
