@@ -1,0 +1,58 @@
+name: Layer 18 Production Certification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer18_monitoring/**"
+      - "tests/test_layer18_production_gate.py"
+      - "requirements.txt"
+      - ".github/workflows/layer18-production-certification.yml"
+  pull_request:
+    paths:
+      - "layers/layer18_monitoring/**"
+      - "tests/test_layer18_production_gate.py"
+      - "requirements.txt"
+      - ".github/workflows/layer18-production-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer18-production-certification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  layer18:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+      - name: Compile Layer 18
+        run: python -m compileall -q layers/layer18_monitoring tests/test_layer18_production_gate.py
+      - name: Layer 18 Production Tests
+        run: python -m pytest tests/test_layer18_production_gate.py -q --tb=short
+      - name: Layer 18 Ruff
+        run: ruff check layers/layer18_monitoring tests/test_layer18_production_gate.py --select E,F,W --ignore E501,E402
+      - name: Layer 18 Import Smoke
+        run: |
+          python - <<'PY'
+          from layers.layer18_monitoring import AlertManager, HealthMonitor, MetricsEngine
+          from layers.layer18_monitoring.modules.monitoring_engine.monitoring_manager import MonitoringManager
+          manager = MonitoringManager()
+          assert manager.initialize() is True
+          status = manager.get_monitoring_status()
+          assert status["initialized"] is True
+          print("Layer 18 import/boot smoke PASS")
+          PY
