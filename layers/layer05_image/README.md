@@ -31,6 +31,8 @@ from layers.layer05_image import *
 
 The layer remains **Not Production Certified** until the CI gate verifies targeted tests, a real provider smoke test, persisted nonempty image bytes, SHA-256 provenance, and the remaining Layer 5 cross-layer/failure/concurrency gates.
 
+**Current external gate blocker:** the latest real OpenRouter smoke reached the configured API but returned HTTP 402 (`insufficient credits`). The gate therefore remains blocking rather than treating a skipped/failed real generation as certification evidence.
+
 ## Tests
 
 ```bash
