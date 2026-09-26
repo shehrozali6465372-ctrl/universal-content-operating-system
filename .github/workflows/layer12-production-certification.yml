@@ -1,7 +1,7 @@
 name: Layer 12 Production Certification
 on:
   push:
-    branches: [main, "layer12-production-certification-clean-20260925"]
+    branches: [main]
     paths: ["layers/layer12_ai_foundation/**","tests/test_layer12_ai_foundation.py","tests/test_layer12_production_contracts.py","tests/test_layer12_production_gate.py",".github/workflows/layer12-production-certification.yml","requirements.txt"]
   pull_request:
     branches: [main]

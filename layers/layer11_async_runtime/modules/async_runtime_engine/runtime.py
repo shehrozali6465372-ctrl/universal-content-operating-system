@@ -56,6 +56,7 @@ class AsyncRuntime:
         self._tasks: Dict[str, AsyncTask] = {}
         self._running = False
         self._stopped = False
+        self._accepting = False
         self._lock = threading.RLock()
         self._metrics = {
             "total_tasks": 0,
@@ -74,6 +75,7 @@ class AsyncRuntime:
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
             self._stopped = False
             self._running = True
+            self._accepting = True
 
     def stop(self) -> None:
         """Stop the runtime and wait for worker threads to finish."""
@@ -81,6 +83,7 @@ class AsyncRuntime:
             if not self._running and self._stopped:
                 return
             self._running = False
+            self._accepting = False
             pool = self._thread_pool
             self._thread_pool = None
             self._stopped = True
@@ -101,6 +104,8 @@ class AsyncRuntime:
         with self._lock:
             if not self._running:
                 raise RuntimeError("async runtime is not running")
+            if not self._accepting:
+                raise RuntimeError("async runtime is paused")
             task = AsyncTask(name)
             task.state = TaskState.RUNNING
             task.started_at = time.monotonic()
