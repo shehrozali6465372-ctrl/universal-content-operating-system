@@ -146,8 +146,9 @@ class APIDashboard:
     def get_request_stats(self) -> Dict[str, Any]:
         with self._data_lock:
             logs = list(self._request_log[-1000:])
+            total_requests = len(self._request_log)
         return {
-            "total_requests": len(self._request_log),
+            "total_requests": total_requests,
             "recent_requests": len(logs),
             "avg_latency": round(
                 sum(l["latency_ms"] for l in logs) / len(logs), 2
