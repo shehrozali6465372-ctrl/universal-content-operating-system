@@ -134,7 +134,7 @@ from layers.layer17_security.modules.encryption_engine.encryption_engine import 
 class TestEncryptionEngine:
     def setup_method(self):
         self.ee = EncryptionEngine()
-        self.ee.set_key("test-key-123")
+        self.ee.set_key("test-key-material-123")
 
     def test_encrypt_decrypt(self):
         encrypted = self.ee.encrypt("hello world")
