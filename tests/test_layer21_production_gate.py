@@ -99,7 +99,7 @@ def test_docker_verification_requires_health_not_only_running():
         "StartedAt": "2026-01-01T00:00:00Z",
     }
     def run(args, timeout=10):
-        if args[:3] == ["docker", "--version",] or args[:3] == ["docker", "compose", "version"]:
+        if args == ["docker", "--version"] or args == ["docker", "compose", "version"]:
             return 0, "Docker version test", ""
         if args[:3] == ["docker", "inspect", "--format={{json .State}}"]:
             return 0, __import__("json").dumps(healthy), ""
