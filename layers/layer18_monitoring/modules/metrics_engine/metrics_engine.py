@@ -111,5 +111,7 @@ class MetricsEngine:
 
     def reset(self) -> None:
         with self._lock:
-            self._counters.clear(); self._gauges.clear()
-            self._histograms.clear(); self._history.clear()
+            self._counters.clear()
+            self._gauges.clear()
+            self._histograms.clear()
+            self._history.clear()
