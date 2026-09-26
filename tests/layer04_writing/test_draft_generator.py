@@ -125,7 +125,7 @@ class TestDraftValidator:
         self.dv = DraftValidator()
 
     def test_valid_draft(self):
-        text = "AI jobs are increasing rapidly. Companies need skilled developers. The demand for AI talent has grown significantly in recent years. This trend will continue."
+        text = " ".join(["AI jobs are increasing rapidly. Companies need skilled developers and analysts."] * 12)
         r = self.dv.validate(text, length="medium")
         assert r.is_valid is True
         assert r.word_count > 20
@@ -241,7 +241,7 @@ class TestDraftMemory:
 
 class TestDraftManager:
     def setup_method(self):
-        self.provider = MockLLMProvider(response="AI jobs are booming in 2026. Companies need developers with AI skills. The demand is growing rapidly.")
+        self.provider = MockLLMProvider(response=" ".join(["AI jobs are booming in 2026. Companies need developers with AI skills and practical experience. The demand is growing rapidly across industries."] * 12))
         self.dm = DraftManager(provider=self.provider)
 
     def test_generate_basic(self):
