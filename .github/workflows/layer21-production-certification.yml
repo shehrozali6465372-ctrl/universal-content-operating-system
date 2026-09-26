@@ -1,0 +1,90 @@
+name: Layer 21 Production Certification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layer21-certification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layer21:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      POSTGRES_PASSWORD: layer21_ci_password
+      APP_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Layer 21
+        run: python -m compileall -q layers/layer21_deployment
+
+      - name: Layer 21 certification tests
+        run: python -m pytest tests/test_layer21_production_gate.py tests/test_docker_deployment_enterprise.py -q --tb=short
+
+      - name: Layer 21 lint
+        run: ruff check layers/layer21_deployment tests/test_layer21_production_gate.py tests/test_docker_deployment_enterprise.py --select E,F,W --ignore E501,E402
+
+      - name: Validate production Compose
+        run: |
+          printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD" > .env.ci
+          docker compose --env-file .env.ci config --quiet
+
+      - name: Build production image
+        run: docker compose --env-file .env.ci build aios
+
+      - name: Start production stack
+        run: docker compose --env-file .env.ci up -d
+
+      - name: Verify production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            docker compose --env-file .env.ci ps
+            if docker inspect --format='{{.State.Health.Status}}' aios-main 2>/dev/null | grep -qx healthy; then
+              echo "LAYER21_PRODUCTION_HEALTH=PASS"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "LAYER21_PRODUCTION_HEALTH=FAIL"
+          docker compose --env-file .env.ci ps
+          docker compose --env-file .env.ci logs --tail=200 aios postgres redis
+          exit 1
+
+      - name: Verify application endpoint
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8000/health
+          echo
+          echo "LAYER21_APPLICATION_HEALTH=PASS"
+
+      - name: Capture deployment evidence
+        if: always()
+        run: |
+          docker compose --env-file .env.ci ps
+          docker compose --env-file .env.ci logs --tail=200 aios postgres redis || true
+
+      - name: Teardown
+        if: always()
+        run: docker compose --env-file .env.ci down -v
