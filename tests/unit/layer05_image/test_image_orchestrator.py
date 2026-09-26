@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -67,3 +68,16 @@ def test_optimizer_counter_is_thread_safe() -> None:
     orchestrator = ImageOrchestrator(provider=ConfiguredProvider())
     orchestrator.run("counter topic")
     assert orchestrator.optimizer.optimization_count == 1
+
+
+def test_orchestrator_run_count_is_thread_safe() -> None:
+    orchestrator = ImageOrchestrator(provider=ConfiguredProvider())
+    run_count = 12
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(orchestrator.run, [f"topic-{i}" for i in range(run_count)]))
+
+    assert len(results) == run_count
+    assert all(result.metadata["asset_sha256"] for result in results)
+    assert orchestrator.run_count == run_count
+    assert orchestrator.optimizer.optimization_count == run_count
+    assert orchestrator.memory.history_count == run_count
