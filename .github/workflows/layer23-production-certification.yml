@@ -1,0 +1,73 @@
+name: Layer 23 Production Certification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/layer23_website_manager/**"
+      - "tests/test_atoz_bridge.py"
+      - "tests/test_website_manager.py"
+      - "tests/test_pinterest_account_manager.py"
+      - "tests/test_pinterest_board_manager.py"
+      - "tests/test_pinterest_pin_manager.py"
+      - "tests/test_affiliate_manager.py"
+      - "tests/test_affiliate_monetization_enterprise.py"
+      - "tests/test_revenue_manager.py"
+      - "tests/test_layer23_production_gate.py"
+      - ".github/workflows/layer23-production-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Layer 23 production gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile Layer 23
+        run: python -m compileall -q layers/layer23_website_manager
+      - name: Ruff Layer 23
+        run: |
+          python -m ruff check             layers/layer23_website_manager             tests/test_layer23_production_gate.py             tests/test_atoz_bridge.py             tests/test_website_manager.py
+      - name: Adversarial production gate
+        run: python -m pytest tests/test_layer23_production_gate.py -q
+      - name: Full Layer 23 regression
+        run: |
+          python -m pytest -q             tests/test_atoz_bridge.py             tests/test_website_manager.py             tests/test_pinterest_account_manager.py             tests/test_pinterest_board_manager.py             tests/test_pinterest_pin_manager.py             tests/test_affiliate_manager.py             tests/test_affiliate_monetization_enterprise.py             tests/test_revenue_manager.py
+      - name: No simulated Pinterest publishing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("layers/layer23_website_manager/pinterest_pin_manager/publisher/pin_publisher.py")
+          text = path.read_text(encoding="utf-8")
+          required = "simulated publication is disabled"
+          if required not in text:
+              raise SystemExit("Pinterest publisher safety contract missing")
+          print("Layer 23 Pinterest publisher: fail-closed, no synthetic success")
+          PY
+      - name: Certification assertion
+        run: |
+          python - <<'PY'
+          required = [
+              "layers/layer23_website_manager/integration/atoz_bridge.py",
+              "layers/layer23_website_manager/services/publisher.py",
+              "layers/layer23_website_manager/website_manager.py",
+              "layers/layer23_website_manager/pinterest_pin_manager/publisher/pin_publisher.py",
+          ]
+          from pathlib import Path
+          missing = [p for p in required if not Path(p).is_file()]
+          if missing:
+              raise SystemExit(f"Layer 23 certification failed; missing files: {missing}")
+          print("Layer 23 production certification: CERTIFIED")
+          PY
