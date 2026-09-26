@@ -140,11 +140,9 @@ class GeminiImageProvider(BaseImageProvider):
         )
 
         if kwargs.get("mood"):
-            enhanced += f"
-Mood: {kwargs['mood']}"
+            enhanced += f"\nMood: {kwargs['mood']}"
         if kwargs.get("color_scheme"):
-            enhanced += f"
-Color palette: {kwargs['color_scheme']}"
+            enhanced += f"\nColor palette: {kwargs['color_scheme']}"
 
         return enhanced
 
