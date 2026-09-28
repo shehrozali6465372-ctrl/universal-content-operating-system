@@ -138,6 +138,56 @@ def test_malformed_success_responses_fail_closed(body: dict) -> None:
             provider.generate("photo")
 
 
+
+def test_transient_http_failure_is_retried_then_succeeds() -> None:
+    body = {
+        "data": [{
+            "b64_json": base64.b64encode(PNG_BYTES).decode("ascii"),
+            "media_type": "image/png",
+        }]
+    }
+    provider = OpenRouterImageProvider(api_key="test")
+    from urllib.error import HTTPError
+
+    transient = HTTPError(
+        "https://openrouter.ai/api/v1/images", 503, "service unavailable", {}, None
+    )
+    patch_target = (
+        "layers.layer05_image.modules.image_provider.openrouter_image_provider."
+        "urllib.request.urlopen"
+    )
+    with patch(patch_target, side_effect=[transient, FakeResponse(body)]):
+        with patch(
+            "layers.layer05_image.modules.image_provider.openrouter_image_provider.time.sleep"
+        ) as sleep:
+            result = provider.generate("photo", size="512x512")
+
+    assert result.image_data == PNG_BYTES
+    assert sleep.call_count == 1
+    sleep.assert_called_once_with(1)
+
+
+def test_auth_and_credit_failures_are_not_retried() -> None:
+    from urllib.error import HTTPError
+
+    provider = OpenRouterImageProvider(api_key="test")
+    patch_target = (
+        "layers.layer05_image.modules.image_provider.openrouter_image_provider."
+        "urllib.request.urlopen"
+    )
+    for status, message in ((401, "authentication failed"), (402, "insufficient credits")):
+        error = HTTPError(
+            "https://openrouter.ai/api/v1/images", status, "error", {}, None
+        )
+        with patch(patch_target, side_effect=error) as urlopen:
+            with patch(
+                "layers.layer05_image.modules.image_provider.openrouter_image_provider.time.sleep"
+            ) as sleep:
+                with pytest.raises(RuntimeError, match=message):
+                    provider.generate("photo")
+        urlopen.assert_called_once()
+        sleep.assert_not_called()
+
 def test_empty_prompt_is_rejected() -> None:
     provider = OpenRouterImageProvider(api_key="test")
     with pytest.raises(ValueError, match="must not be empty"):
