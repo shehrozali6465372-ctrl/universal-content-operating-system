@@ -102,3 +102,14 @@ def test_persisted_hash_matches_returned_bytes(tmp_path: Path) -> None:
             result = provider.generate("photo", size="512x512")
 
     assert result.metadata["sha256"] == hashlib.sha256(result.image_data).hexdigest()
+
+
+def test_node_runtime_unavailable_fails_closed() -> None:
+    provider = PuterImageProvider(auth_token="real-token")
+    with patch.object(provider, "is_configured", return_value=True):
+        with patch(
+            "layers.layer05_image.modules.image_provider.puter_image_provider.subprocess.run",
+            side_effect=OSError("node missing"),
+        ):
+            with pytest.raises(RuntimeError, match="runtime is unavailable"):
+                provider.generate("photo")
