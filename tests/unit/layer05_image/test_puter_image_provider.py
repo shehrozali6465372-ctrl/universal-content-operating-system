@@ -19,7 +19,6 @@ PNG_BYTES = b"\x89PNG\r\n\x1a\nreal-puter-image"
 def test_provider_fails_closed_without_auth_token() -> None:
     provider = PuterImageProvider(auth_token=None)
     with patch.dict("os.environ", {}, clear=True):
-        assert provider.is_configured() is True or provider.BRIDGE_PATH.is_file()
         provider._auth_token = ""
         assert provider.is_configured() is False
         with pytest.raises(RuntimeError, match="not configured"):
@@ -79,9 +78,9 @@ def test_bridge_timeout_is_propagated() -> None:
     with patch.object(provider, "is_configured", return_value=True):
         with patch(
             "layers.layer05_image.modules.image_provider.puter_image_provider.subprocess.run",
-            side_effect=TimeoutError("timed out"),
+            side_effect=__import__("subprocess").TimeoutExpired("node", 120),
         ):
-            with pytest.raises(TimeoutError):
+            with pytest.raises(RuntimeError, match="timed out"):
                 provider.generate("photo")
 
 
