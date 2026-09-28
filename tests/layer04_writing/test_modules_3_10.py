@@ -325,7 +325,7 @@ class TestWritingOrchestrator:
         assert r.outputs[0].cta != ""
 
     def test_orchestrator_stores_in_memory(self):
-        r = self.wo.run("AI Jobs", platforms=["facebook"])
+        self.wo.run("AI Jobs", platforms=["facebook"])
         history = self.wo.get_history(platform="facebook")
         assert len(history) >= 1
 

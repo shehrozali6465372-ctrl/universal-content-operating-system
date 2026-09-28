@@ -65,3 +65,8 @@ Run:
 ```bash
 python -m pytest tests/layer04_writing/ -q
 ```
+
+
+## Production Certification Gate
+
+Layer 4 certification requires all of the following to pass on the certification branch: focused Layer 4 production-hardening tests, repository compile/static gates, integration contract tests, full repository test suite, and CI completion without cancellation. Production mode must reject mock LLM providers, invalid generated drafts, unsupported platforms, mutable plan/constraint ownership leaks, and outputs exceeding platform limits.

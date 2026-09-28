@@ -14,6 +14,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  layer4-production-certification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install Dependencies
+        run: |
+          pip install --break-system-packages --upgrade pip
+          pip install --break-system-packages -r requirements.txt
+      - name: Compile Layer 4
+        run: python -m compileall -q layers/layer04_writing tests/layer04_writing
+      - name: Layer 4 Static Audit
+        run: ruff check layers/layer04_writing tests/layer04_writing --select E,F,W --ignore E501,E402
+      - name: Layer 4 Production Tests
+        run: >-
+          python -m pytest
+          tests/layer04_writing/test_content_planner.py
+          tests/layer04_writing/test_draft_generator.py
+          tests/layer04_writing/test_modules_3_10.py
+          tests/layer04_writing/test_production_hardening.py
+          -q --tb=short
+
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 15

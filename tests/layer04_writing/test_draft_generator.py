@@ -215,7 +215,7 @@ class TestDraftMemory:
             DraftMemory(max_size=0)
 
     def test_defensive_read(self):
-        rec = self.dm.store("p1", "AI", "original")
+        self.dm.store("p1", "AI", "original")
         got = self.dm.get_recent(1)[0]
         got.text = "mutated"
         assert self.dm.get_recent(1)[0].text == "original"
