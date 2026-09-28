@@ -1,0 +1,12 @@
+{
+  "name": "ucos-puter-image-provider",
+  "private": true,
+  "version": "1.0.0",
+  "description": "UCOS Layer 5 Puter.js image-provider runtime",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@heyputer/puter.js": "2.6.3"
+  }
+}
