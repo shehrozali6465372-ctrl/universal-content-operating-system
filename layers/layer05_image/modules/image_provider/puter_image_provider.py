@@ -68,15 +68,20 @@ class PuterImageProvider(BaseImageProvider):
 
         env = os.environ.copy()
         env["PUTER_AUTH_TOKEN"] = self._get_auth_token()
-        completed = subprocess.run(
-            [self._node_binary, str(self.BRIDGE_PATH)],
-            input=json.dumps(request),
-            text=True,
-            capture_output=True,
-            timeout=self._timeout,
-            check=False,
-            env=env,
-        )
+        try:
+            completed = subprocess.run(
+                [self._node_binary, str(self.BRIDGE_PATH)],
+                input=json.dumps(request),
+                text=True,
+                capture_output=True,
+                timeout=self._timeout,
+                check=False,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("Puter image generation timed out") from exc
+        except OSError as exc:
+            raise RuntimeError("Puter Node.js runtime is unavailable") from exc
         payload = self._decode_bridge_output(completed.stdout)
         if completed.returncode != 0 or not payload.get("ok"):
             code = str(payload.get("code") or "upstream_failed")
