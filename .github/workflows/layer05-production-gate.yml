@@ -7,6 +7,8 @@ on:
     paths:
       - "layers/layer05_image/**"
       - "tests/unit/layer05_image/**"
+      - "scripts/puter_image_provider.cjs"
+      - "package.json"
       - ".github/workflows/layer05-production-gate.yml"
   workflow_dispatch:
 
@@ -27,6 +29,7 @@ jobs:
       GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 || secrets.GEMINIAPIKEY2 }}
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 || secrets.GEMINIAPIKEY3 }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PUTER_AUTH_TOKEN: ${{ secrets.PUTER_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,10 +37,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           pip install --break-system-packages --upgrade pip
           pip install --break-system-packages -r requirements.txt
+          npm install --ignore-scripts --no-audit --no-fund
 
       - name: Compile Layer 5
         run: python -m compileall -q layers/layer05_image
@@ -60,6 +68,9 @@ jobs:
           prompt = "Create a simple professional abstract geometric marketing background"
           errors = []
           providers = []
+          if os.environ.get("PUTER_AUTH_TOKEN"):
+              from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider
+              providers.append(("puter", PuterImageProvider()))
           if os.environ.get("GEMINI_API_KEY"):
               providers.append(("gemini-3.1-lite", GeminiImageProvider(model="gemini-3.1-flash-lite-image")))
               providers.append(("gemini-3.1", GeminiImageProvider(model="gemini-3.1-flash-image")))
