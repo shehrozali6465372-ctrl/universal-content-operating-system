@@ -62,21 +62,7 @@ class OpenRouterImageProvider(BaseImageProvider):
         start = time.monotonic()
         with self._counter_lock:
             self._call_count += 1
-        try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            if exc.code == 401:
-                raise RuntimeError("OpenRouter authentication failed") from exc
-            if exc.code == 402:
-                raise RuntimeError("OpenRouter account has insufficient credits") from exc
-            if exc.code == 429:
-                raise RuntimeError("OpenRouter rate limit exceeded") from exc
-            raise RuntimeError(f"OpenRouter HTTP request failed ({exc.code})") from exc
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise RuntimeError("OpenRouter transport failed") from exc
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("OpenRouter returned invalid JSON") from exc
+        body = self._request_json(request)
 
         images = body.get("data")
         if not isinstance(images, list) or not images or not isinstance(images[0], dict):
@@ -110,6 +96,34 @@ class OpenRouterImageProvider(BaseImageProvider):
         }
         result.image_url = self._persist_image(image_bytes, mime_type)
         return result
+
+    def _request_json(self, request: urllib.request.Request) -> dict[str, Any]:
+        """Perform bounded retries for transient OpenRouter failures."""
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401:
+                    raise RuntimeError("OpenRouter authentication failed") from exc
+                if exc.code == 402:
+                    raise RuntimeError("OpenRouter account has insufficient credits") from exc
+                if exc.code == 429 or 500 <= exc.code <= 599:
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+                        continue
+                    if exc.code == 429:
+                        raise RuntimeError("OpenRouter rate limit exceeded") from exc
+                    raise RuntimeError(f"OpenRouter HTTP request failed ({exc.code})") from exc
+                raise RuntimeError(f"OpenRouter HTTP request failed ({exc.code})") from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError("OpenRouter transport failed") from exc
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("OpenRouter returned invalid JSON") from exc
+        raise RuntimeError("OpenRouter retry budget exhausted")
 
     @staticmethod
     def _parse_size(size: str) -> tuple[int, int]:
