@@ -50,10 +50,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install Dependencies
         run: |
           pip install --break-system-packages --upgrade pip
           pip install --break-system-packages -r requirements.txt
+          npm install --ignore-scripts --no-audit --no-fund
 
       - name: Compile Python
         run: python -m compileall -q .
