@@ -73,7 +73,7 @@ class APIGateway:
             def do_GET(self):
                 gateway._request_count+=1
                 parsed=urlparse(self.path); path=parsed.path.rstrip("/")
-                if path == "/heartbeat":
+                if path in {"/heartbeat", "/healthz"}:
                     if not gateway._aios_authorized("GET", path, b"", self.headers):
                         self._send(APIResponse(401,error="AI OS authentication required")); return
                 elif not gateway._authorized(self.headers):
