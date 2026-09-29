@@ -20,8 +20,8 @@ class EncryptionEngine:
         self._key = hashlib.sha256(key.encode("utf-8")).digest()
 
     def generate_key(self) -> str:
-        key = secrets.token_bytes(32)
-        return base64.urlsafe_b64encode(key).decode("ascii")
+        """Return 256 bits of cryptographic key material as a 64-char hex string."""
+        return secrets.token_hex(32)
 
     def _require_key(self) -> bytes:
         if self._key is None:
