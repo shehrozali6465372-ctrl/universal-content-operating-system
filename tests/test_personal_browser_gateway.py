@@ -21,3 +21,11 @@ def test_browser_task_dispatch_contract(monkeypatch):
     assert response.status_code == 202
     assert response.data["source"] == "ucos_personal_browser"
     assert response.data["result"]["title"] == "Example Domain"
+
+
+def test_public_healthz_contract():
+    gateway = APIGateway()
+    response = gateway._handle_healthz({})
+    assert response.status_code == 200
+    assert response.data["status"] == "ok"
+    assert response.data["layers"] == 23
