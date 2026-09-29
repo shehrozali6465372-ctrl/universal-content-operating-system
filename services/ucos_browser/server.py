@@ -67,10 +67,10 @@ def execute_task(task: dict) -> dict:
         raise RuntimeError("browser worker is busy; retry the task")
     try:
         try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
-        raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
-    with sync_playwright() as pw:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
+        with sync_playwright() as pw:
             browser: Browser = pw.chromium.launch(
                 headless=True,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
