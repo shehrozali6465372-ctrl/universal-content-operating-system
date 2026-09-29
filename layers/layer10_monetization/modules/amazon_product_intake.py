@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 
 _ASIN_RE = re.compile(r"^[A-Z0-9]{10}$")
-_AMAZON_HOST_RE = re.compile(r"(?:^|\.)amazon\.[a-z.]+$", re.IGNORECASE)
+_AMAZON_HOST_RE = re.compile(r"(?:[a-z0-9-]+\.)*amazon\.[a-z.]+$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
