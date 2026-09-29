@@ -54,50 +54,35 @@ jobs:
         run: python -m pytest tests/unit/layer05_image -q --tb=short
 
 
-      - name: Real image-provider smoke (Gemini, then OpenRouter fallback)
+      - name: Require Puter production credential
+        run: |
+          test -n "$PUTER_AUTH_TOKEN"
+
+      - name: Real Puter image-provider smoke
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
           python - <<'PY'
+          from hashlib import sha256
           from pathlib import Path
-          import os
 
-          from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-          from layers.layer05_image.modules.image_provider.openrouter_image_provider import OpenRouterImageProvider
+          from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider
 
           prompt = "Create a simple professional abstract geometric marketing background"
-          errors = []
-          providers = []
-          if os.environ.get("PUTER_AUTH_TOKEN"):
-              from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider
-              providers.append(("puter", PuterImageProvider()))
-          if os.environ.get("GEMINI_API_KEY"):
-              providers.append(("gemini-3.1-lite", GeminiImageProvider(model="gemini-3.1-flash-lite-image")))
-              providers.append(("gemini-3.1", GeminiImageProvider(model="gemini-3.1-flash-image")))
-              providers.append(("gemini-3-pro", GeminiImageProvider(model="gemini-3-pro-image")))
-          if os.environ.get("OPENROUTER_API_KEY"):
-              providers.append(("openrouter", OpenRouterImageProvider(model="bytedance-seed/seedream-4.5")))
-          if not providers:
-              raise SystemExit("No real Layer 5 image provider credential is configured")
+          provider = PuterImageProvider()
+          if not provider.is_configured():
+              raise SystemExit("Puter provider is not configured")
 
-          for name, provider in providers:
-              try:
-                  if not provider.is_configured():
-                      errors.append(f"{name}: provider is not configured")
-                      continue
-                  result = provider.generate(prompt, size="512x512")
-                  if not result.image_data:
-                      raise RuntimeError("returned empty image bytes")
-                  digest = result.metadata.get("sha256")
-                  if not digest:
-                      raise RuntimeError("missing SHA-256 provenance")
-                  path = Path(result.image_url)
-                  if not path.is_file() or path.stat().st_size == 0:
-                      raise RuntimeError("persisted image is missing or empty")
-                  print(f"REAL_{name.upper().replace("-", "_")}_SMOKE_PASS bytes={len(result.image_data)} sha256={digest}")
-                  raise SystemExit(0)
-              except Exception as exc:
-                  errors.append(f"{name}: {type(exc).__name__}: {exc}")
-
-          raise SystemExit("All configured real image providers failed: " + " | ".join(errors))
+          result = provider.generate(prompt, size="512x512")
+          if not result.image_data:
+              raise SystemExit("Puter returned empty image bytes")
+          digest = sha256(result.image_data).hexdigest()
+          if result.metadata.get("sha256") != digest:
+              raise SystemExit("Puter SHA-256 provenance mismatch")
+          path = Path(result.image_url)
+          if not path.is_file() or path.stat().st_size == 0:
+              raise SystemExit("Persisted Puter image is missing or empty")
+          if path.read_bytes() != result.image_data:
+              raise SystemExit("Persisted Puter bytes differ from returned bytes")
+          print(f"REAL_PUTER_SMOKE_PASS bytes={len(result.image_data)} sha256={digest} path={path}")
           PY
