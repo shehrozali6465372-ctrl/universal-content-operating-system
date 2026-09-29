@@ -29,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -105,6 +105,9 @@ class APIGateway:
     def stop(self):
         if self._server: self._server.shutdown(); self._running=False
     def is_running(self): return self._running
+    def _handle_healthz(self,params):
+        return APIResponse(data={"status":"ok","service":"universal-content-operating-system","version":self.VERSION,"layers":self.LAYER_COUNT})
+
     def _handle_status(self,params):
         return APIResponse(data={"version":self.VERSION,"status":"running","layers":self.LAYER_COUNT,"gateway_requests":self._request_count,"platforms":self.SUPPORTED_PLATFORMS})
     def _handle_health(self,params):
