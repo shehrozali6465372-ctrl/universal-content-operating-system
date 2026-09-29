@@ -176,9 +176,6 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             LOG.exception("browser task failed")
             self._send(502, {"state": "failed", "error": str(exc)[:1000]})
-        except Exception as exc:
-            LOG.exception("unexpected browser worker error")
-            self._send(500, {"state": "failed", "error": str(exc)[:1000]})
 
     def log_message(self, fmt, *args):
         LOG.info("%s - %s", self.address_string(), fmt % args)
