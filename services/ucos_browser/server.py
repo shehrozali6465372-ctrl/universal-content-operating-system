@@ -55,6 +55,7 @@ def validate_url(value: str) -> str:
 def _assert_public_page(page) -> None:
     validate_url(page.url)
 
+
 def execute_task(task: dict) -> dict:
     url = validate_url(task.get("url", ""))
     actions = task.get("actions") or [{"type": "extract"}]
@@ -67,54 +68,59 @@ def execute_task(task: dict) -> dict:
         raise RuntimeError("browser worker is busy; retry the task")
     try:
         with sync_playwright() as pw:
-            browser: Browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"])
+            browser: Browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
+            )
             context = browser.new_context(ignore_https_errors=False, accept_downloads=False)
             page = context.new_page()
             page.set_default_timeout(timeout)
             try:
                 response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
                 _assert_public_page(page)
-            result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
-            for action in actions:
-                kind = str(action.get("type", "")).strip().lower()
-                if kind == "navigate":
-                    target = validate_url(action.get("url", ""))
-                    response = page.goto(target, wait_until="domcontentloaded", timeout=timeout)
-                    _assert_public_page(page)
-                    result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
-                elif kind == "click":
-                    selector = str(action.get("selector", "")).strip()
-                    if not selector or len(selector) > 500:
-                        raise ValueError("click selector is required and must be <= 500 chars")
-                    page.locator(selector).first.click()
-                    _assert_public_page(page)
-                    result["events"].append({"type": "click", "selector": selector})
-                elif kind == "wait":
-                    ms = max(0, min(int(action.get("ms", 250)), 10_000))
-                    page.wait_for_timeout(ms)
-                elif kind == "press":
-                    selector = str(action.get("selector", "")).strip()
-                    key = str(action.get("key", "")).strip()
-                    if not selector or not key or len(key) > 100:
-                        raise ValueError("press requires selector and key")
-                    page.locator(selector).first.press(key)
-                    _assert_public_page(page)
-                    result["events"].append({"type": "press", "selector": selector, "key": key})
-                elif kind == "extract":
-                    text = page.locator("body").inner_text(timeout=timeout)
-                    result["text"] = text[:MAX_TEXT]
-                    result["title"] = page.title()[:500]
-                    hrefs = page.locator("a[href]").evaluate_all("els => els.map(e => ({text:(e.innerText||'').trim(), href:e.href}))")
-                    result["links"] = hrefs[:MAX_LINKS]
-                elif kind == "extract_selector":
-                    selector = str(action.get("selector", "")).strip()
-                    if not selector or len(selector) > 500:
-                        raise ValueError("extract_selector selector is required and must be <= 500 chars")
-                    result["text"] = page.locator(selector).first.inner_text(timeout=timeout)[:MAX_TEXT]
-                elif kind == "screenshot":
-                    result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
-                else:
-                    raise ValueError(f"unsupported browser action: {kind}")
+                result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
+                for action in actions:
+                    kind = str(action.get("type", "")).strip().lower()
+                    if kind == "navigate":
+                        target = validate_url(action.get("url", ""))
+                        response = page.goto(target, wait_until="domcontentloaded", timeout=timeout)
+                        _assert_public_page(page)
+                        result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
+                    elif kind == "click":
+                        selector = str(action.get("selector", "")).strip()
+                        if not selector or len(selector) > 500:
+                            raise ValueError("click selector is required and must be <= 500 chars")
+                        page.locator(selector).first.click()
+                        _assert_public_page(page)
+                        result["events"].append({"type": "click", "selector": selector})
+                    elif kind == "wait":
+                        ms = max(0, min(int(action.get("ms", 250)), 10_000))
+                        page.wait_for_timeout(ms)
+                    elif kind == "press":
+                        selector = str(action.get("selector", "")).strip()
+                        key = str(action.get("key", "")).strip()
+                        if not selector or not key or len(key) > 100:
+                            raise ValueError("press requires selector and key")
+                        page.locator(selector).first.press(key)
+                        _assert_public_page(page)
+                        result["events"].append({"type": "press", "selector": selector, "key": key})
+                    elif kind == "extract":
+                        text = page.locator("body").inner_text(timeout=timeout)
+                        result["text"] = text[:MAX_TEXT]
+                        result["title"] = page.title()[:500]
+                        hrefs = page.locator("a[href]").evaluate_all(
+                            "els => els.map(e => ({text:(e.innerText||'').trim(), href:e.href}))"
+                        )
+                        result["links"] = hrefs[:MAX_LINKS]
+                    elif kind == "extract_selector":
+                        selector = str(action.get("selector", "")).strip()
+                        if not selector or len(selector) > 500:
+                            raise ValueError("extract_selector selector is required and must be <= 500 chars")
+                        result["text"] = page.locator(selector).first.inner_text(timeout=timeout)[:MAX_TEXT]
+                    elif kind == "screenshot":
+                        result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
+                    else:
+                        raise ValueError(f"unsupported browser action: {kind}")
                 result["final_url"] = page.url
                 result["duration_ms"] = int((time.monotonic() - started) * 1000)
                 return result
@@ -123,8 +129,6 @@ def execute_task(task: dict) -> dict:
                 browser.close()
     finally:
         _BROWSER_SLOTS.release()
-
-
 def _authorized(headers) -> bool:
     token = os.getenv("UCOS_BROWSER_TOKEN", "").strip()
     supplied = str(headers.get("Authorization", ""))
