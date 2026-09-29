@@ -114,11 +114,9 @@ class PuterImageProvider(BaseImageProvider):
         mime_type = str(payload.get("mime_type") or "").lower().strip()
         if not mime_type.startswith("image/"):
             raise RuntimeError("Puter returned a non-image media type")
-        if not image_bytes.startswith(
-            (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"RIFF", b"GIF8")
-        ):
+        if not self._image_signature_matches_mime(image_bytes, mime_type):
             raise RuntimeError(
-                "Puter returned bytes that do not match a supported image signature"
+                "Puter returned bytes that do not match the declared image MIME type"
             )
 
         digest = hashlib.sha256(image_bytes).hexdigest()
@@ -136,6 +134,18 @@ class PuterImageProvider(BaseImageProvider):
         }
         result.image_url = self._persist_image(image_bytes, mime_type)
         return result
+
+    @staticmethod
+    def _image_signature_matches_mime(image_bytes: bytes, mime_type: str) -> bool:
+        """Validate that the declared MIME type matches the returned magic bytes."""
+        signatures = {
+            "image/png": (b"\\x89PNG\\r\\n\\x1a\\n",),
+            "image/jpeg": (b"\\xff\\xd8\\xff",),
+            "image/webp": (b"RIFF",),
+            "image/gif": (b"GIF8",),
+        }
+        expected = signatures.get(mime_type.lower().strip())
+        return bool(expected and image_bytes.startswith(expected))
 
     @staticmethod
     def _decode_bridge_output(stdout: str) -> dict[str, Any]:
