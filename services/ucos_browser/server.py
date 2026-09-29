@@ -168,6 +168,10 @@ def main() -> None:
     port = int(os.getenv("PORT", "10000"))
     if not os.getenv("UCOS_BROWSER_TOKEN", "").strip():
         raise RuntimeError("UCOS_BROWSER_TOKEN is required")
+    smoke = execute_task({"url": "https://example.com", "actions": [{"type": "extract"}], "timeout_ms": 15000})
+    if smoke.get("title") != "Example Domain":
+        raise RuntimeError("browser startup smoke test failed")
+    LOG.info("UCOS Personal Browser startup smoke test PASS: example.com")
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     LOG.info("UCOS Personal Browser listening on 0.0.0.0:%s", port)
     server.serve_forever()
