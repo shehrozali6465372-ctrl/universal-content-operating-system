@@ -25,6 +25,11 @@ async function main() {
     return;
   }
 
+  if (request.test_mode === true) {
+    fail("test_mode_forbidden", "Puter test_mode is forbidden at the production image boundary");
+    return;
+  }
+
   const prompt = typeof request.prompt === "string" ? request.prompt.trim() : "";
   if (!prompt) {
     fail("prompt_required", "Image generation prompt must not be empty");
