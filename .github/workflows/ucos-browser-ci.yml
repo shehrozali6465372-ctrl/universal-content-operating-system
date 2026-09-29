@@ -27,8 +27,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Install browser dependencies
-        run: pip install -r services/ucos_browser/requirements.txt
+      - name: Install browser test dependencies
+        run: pip install -r services/ucos_browser/requirements.txt pytest
       - name: Install Chromium matching Playwright
         run: playwright install chromium
       - name: Browser contract tests
@@ -38,7 +38,6 @@ jobs:
           UCOS_BROWSER_TOKEN: ci-smoke-token
         run: |
           python - <<'PY'
-          import os
           from services.ucos_browser.server import execute_task
           result = execute_task({
               "url": "https://example.com",
