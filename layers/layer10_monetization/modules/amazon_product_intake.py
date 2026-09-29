@@ -85,6 +85,8 @@ def normalize_amazon_product(
 
     params = parse_qs(urlsplit(affiliate_link).query)
     tracking_id = (params.get("tag") or [""])[0].strip()
+    if not tracking_id:
+        raise ValueError("affiliate_link must contain an Amazon Associates tracking tag")
 
     return AmazonProductIntake(
         product_name=product_name,
