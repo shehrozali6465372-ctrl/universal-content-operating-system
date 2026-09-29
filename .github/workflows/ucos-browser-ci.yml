@@ -45,6 +45,6 @@ jobs:
               "timeout_ms": 30000,
           })
           assert result["title"], repr(result)
-          assert "Example Domain" in result["text"], repr(result)
+          assert "This domain is for use in documentation examples" in result["text"], repr(result)
           print("REAL_CHROMIUM_SMOKE=PASS")
           PY
