@@ -1,0 +1,66 @@
+name: UCOS Live Production Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-live-smoke.yml"
+      - "main.py"
+      - "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py"
+      - "services/ucos_browser/server.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      UCOS_API_TOKEN: ${{ secrets.UCOS_API_TOKEN }}
+    steps:
+      - name: Verify public browser worker
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            code="$(curl -sS -o /tmp/browser-root.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
+            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/browser-root.json; then
+              echo "BROWSER_PUBLIC_ROOT=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/browser-root.json || true; echo "BROWSER_PUBLIC_ROOT=FAIL"; exit 1; }
+            sleep 10
+          done
+
+      - name: Verify authenticated UCOS API health
+        run: |
+          set -euo pipefail
+          test -n "$UCOS_API_TOKEN"
+          for i in {1..6}; do
+            code="$(curl -sS -o /tmp/ucos-health.json -w '%{http_code}'               -H "Authorization: Bearer $UCOS_API_TOKEN"               https://ucos-backend.onrender.com/health || true)"
+            if [ "$code" = "200" ] && grep -q '"success": true' /tmp/ucos-health.json; then
+              cat /tmp/ucos-health.json
+              echo "UCOS_API_HEALTH=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/ucos-health.json || true; echo "UCOS_API_HEALTH=FAIL"; exit 1; }
+            sleep 10
+          done
+
+      - name: Verify authenticated browser health through UCOS gateway
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            code="$(curl -sS -o /tmp/browser-health.json -w '%{http_code}'               -H "Authorization: Bearer $UCOS_API_TOKEN"               https://ucos-backend.onrender.com/browser/health || true)"
+            if [ "$code" = "200" ] && grep -q '"status": "ok"' /tmp/browser-health.json; then
+              cat /tmp/browser-health.json
+              echo "UCOS_BROWSER_GATEWAY_HEALTH=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/browser-health.json || true; echo "UCOS_BROWSER_GATEWAY_HEALTH=FAIL"; exit 1; }
+            sleep 10
+          done
+
+      - name: Production smoke result
+        run: echo "FINAL_LIVE_SMOKE=PASS"
