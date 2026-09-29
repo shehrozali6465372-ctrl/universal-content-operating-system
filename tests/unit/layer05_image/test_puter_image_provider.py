@@ -123,3 +123,43 @@ def test_production_boundary_rejects_test_mode() -> None:
 def test_provider_path_is_repo_root_independent() -> None:
     assert PuterImageProvider.BRIDGE_PATH.name == "puter_image_provider.cjs"
     assert PuterImageProvider.BRIDGE_PATH.parent.name == "scripts"
+
+def test_persist_is_digest_addressed_and_concurrent_safe(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    payload = b"\x89PNG\r\n\x1a\nconcurrent-real-image"
+    expected = hashlib.sha256(payload).hexdigest()
+
+    def persist() -> str:
+        return PuterImageProvider._persist_image(payload, "image/png")
+
+    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            paths = list(pool.map(lambda _: persist(), range(16)))
+
+    assert all(Path(path).name == f"{expected}.png" for path in paths)
+    final_path = tmp_path / f"{expected}.png"
+    assert final_path.is_file()
+    assert final_path.read_bytes() == payload
+
+
+def test_mismatched_mime_and_signature_are_rejected(tmp_path: Path) -> None:
+    payload = {
+        "ok": True,
+        "mime_type": "image/jpeg",
+        "bytes_base64": base64.b64encode(PNG_BYTES).decode("ascii"),
+    }
+
+    class Completed:
+        returncode = 0
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    provider = PuterImageProvider(auth_token="token")
+    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
+        with patch(
+            "layers.layer05_image.modules.image_provider.puter_image_provider.subprocess.run",
+            return_value=Completed(),
+        ):
+            with pytest.raises(RuntimeError, match="supported image signature"):
+                provider.generate("photo", size="512x512")
