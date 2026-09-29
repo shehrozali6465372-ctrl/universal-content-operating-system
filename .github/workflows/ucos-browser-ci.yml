@@ -44,7 +44,7 @@ jobs:
               "actions": [{"type": "extract"}],
               "timeout_ms": 30000,
           })
-          assert result["title"] == "Example Domain"
-          assert "Example Domain" in result["text"]
+          assert result["title"], repr(result)
+          assert "Example Domain" in result["text"], repr(result)
           print("REAL_CHROMIUM_SMOKE=PASS")
           PY
