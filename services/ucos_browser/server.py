@@ -147,7 +147,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def do_HEAD(self):
+        if self.path.rstrip("/") in {"", "/health"}:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def do_GET(self):
+        if self.path.rstrip("/") == "":
+            self._send(200, {"status": "ok", "service": "ucos-personal-browser"})
+            return
         if self.path.rstrip("/") != "/health":
             self._send(404, {"error": "not found"})
             return
