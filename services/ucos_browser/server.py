@@ -13,6 +13,7 @@ import logging
 import os
 import socket
 import time
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -23,6 +24,7 @@ MAX_ACTIONS = 20
 MAX_TEXT = 200_000
 MAX_LINKS = 2_000
 DEFAULT_TIMEOUT_MS = 30_000
+_BROWSER_SLOTS = threading.BoundedSemaphore(1)
 
 
 def _is_public_host(hostname: str) -> bool:
@@ -50,6 +52,9 @@ def validate_url(value: str) -> str:
     return url
 
 
+def _assert_public_page(page) -> None:
+    validate_url(page.url)
+
 def execute_task(task: dict) -> dict:
     url = validate_url(task.get("url", ""))
     actions = task.get("actions") or [{"type": "extract"}]
@@ -58,25 +63,31 @@ def execute_task(task: dict) -> dict:
     timeout = max(1_000, min(int(task.get("timeout_ms", DEFAULT_TIMEOUT_MS)), 60_000))
     started = time.monotonic()
     result = {"url": url, "title": "", "text": "", "links": [], "screenshot": None, "events": []}
-    with sync_playwright() as pw:
-        browser: Browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"])
-        context = browser.new_context(ignore_https_errors=False)
-        page = context.new_page()
-        page.set_default_timeout(timeout)
-        try:
-            response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+    if not _BROWSER_SLOTS.acquire(blocking=False):
+        raise RuntimeError("browser worker is busy; retry the task")
+    try:
+        with sync_playwright() as pw:
+            browser: Browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"])
+            context = browser.new_context(ignore_https_errors=False, accept_downloads=False)
+            page = context.new_page()
+            page.set_default_timeout(timeout)
+            try:
+                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                _assert_public_page(page)
             result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
             for action in actions:
                 kind = str(action.get("type", "")).strip().lower()
                 if kind == "navigate":
                     target = validate_url(action.get("url", ""))
                     response = page.goto(target, wait_until="domcontentloaded", timeout=timeout)
+                    _assert_public_page(page)
                     result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
                 elif kind == "click":
                     selector = str(action.get("selector", "")).strip()
                     if not selector or len(selector) > 500:
                         raise ValueError("click selector is required and must be <= 500 chars")
                     page.locator(selector).first.click()
+                    _assert_public_page(page)
                     result["events"].append({"type": "click", "selector": selector})
                 elif kind == "wait":
                     ms = max(0, min(int(action.get("ms", 250)), 10_000))
@@ -87,6 +98,7 @@ def execute_task(task: dict) -> dict:
                     if not selector or not key or len(key) > 100:
                         raise ValueError("press requires selector and key")
                     page.locator(selector).first.press(key)
+                    _assert_public_page(page)
                     result["events"].append({"type": "press", "selector": selector, "key": key})
                 elif kind == "extract":
                     text = page.locator("body").inner_text(timeout=timeout)
@@ -103,12 +115,14 @@ def execute_task(task: dict) -> dict:
                     result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
                 else:
                     raise ValueError(f"unsupported browser action: {kind}")
-            result["final_url"] = page.url
-            result["duration_ms"] = int((time.monotonic() - started) * 1000)
-            return result
-        finally:
-            context.close()
-            browser.close()
+                result["final_url"] = page.url
+                result["duration_ms"] = int((time.monotonic() - started) * 1000)
+                return result
+            finally:
+                context.close()
+                browser.close()
+    finally:
+        _BROWSER_SLOTS.release()
 
 
 def _authorized(headers) -> bool:
