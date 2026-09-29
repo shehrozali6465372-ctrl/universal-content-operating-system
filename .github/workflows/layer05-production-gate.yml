@@ -50,8 +50,12 @@ jobs:
       - name: Compile Layer 5
         run: python -m compileall -q layers/layer05_image
 
-      - name: Layer 5 unit and contract tests
-        run: python -m pytest tests/unit/layer05_image -q --tb=short
+      - name: Validate Puter bridge syntax
+        run: node --check scripts/puter_image_provider.cjs
+
+      - name: Layer 5 unit, comprehensive, and contract tests
+        run: |
+          python -m pytest tests/unit/layer05_image tests/layer05_image -q --tb=short
 
 
       - name: Require Puter production credential
