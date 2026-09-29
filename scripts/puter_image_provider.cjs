@@ -51,7 +51,7 @@ async function main() {
       options.ratio = { w: Number(request.ratio.w), h: Number(request.ratio.h) };
     }
 
-    const image = await puter.ai.txt2img(prompt, options);
+    const generation = puter.ai.txt2img(prompt, options);\n    const image = await Promise.race([\n      generation,\n      new Promise((_, reject) =>\n        setTimeout(() => reject(new Error("Puter image generation timed out")), timeoutMs)\n      ),\n    ]);
     const src = image && typeof image.src === "string" ? image.src : "";
     if (!src) fail("empty_image", "Puter returned no image source");
 
