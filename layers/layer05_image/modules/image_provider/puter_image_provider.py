@@ -139,8 +139,8 @@ class PuterImageProvider(BaseImageProvider):
     def _image_signature_matches_mime(image_bytes: bytes, mime_type: str) -> bool:
         """Validate that the declared MIME type matches the returned magic bytes."""
         signatures = {
-            "image/png": (b"\\x89PNG\\r\\n\\x1a\\n",),
-            "image/jpeg": (b"\\xff\\xd8\\xff",),
+            "image/png": (bytes.fromhex("89504e470d0a1a0a"),),
+            "image/jpeg": (bytes.fromhex("ffd8ff"),),
             "image/webp": (b"RIFF",),
             "image/gif": (b"GIF8",),
         }
