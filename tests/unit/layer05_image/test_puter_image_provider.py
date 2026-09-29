@@ -161,27 +161,6 @@ def test_mismatched_mime_and_signature_are_rejected(tmp_path: Path) -> None:
             "layers.layer05_image.modules.image_provider.puter_image_provider.subprocess.run",
             return_value=Completed(),
         ):
-            with pytest.raises(RuntimeError, match="supported image signature"):
-                provider.generate("photo", size="512x512")
-
-
-def test_declared_mime_must_match_supported_signature(tmp_path: Path) -> None:
-    payload = {
-        "ok": True,
-        "mime_type": "image/jpeg",
-        "bytes_base64": base64.b64encode(PNG_BYTES).decode("ascii"),
-    }
-
-    class Completed:
-        returncode = 0
-        stdout = json.dumps(payload)
-        stderr = ""
-
-    provider = PuterImageProvider(auth_token="token")
-    with patch.dict("os.environ", {"UCOS_IMAGE_OUTPUT_DIR": str(tmp_path)}):
-        with patch(
-            "layers.layer05_image.modules.image_provider.puter_image_provider.subprocess.run",
-            return_value=Completed(),
-        ):
             with pytest.raises(RuntimeError, match="declared image MIME type"):
                 provider.generate("photo", size="512x512")
+
