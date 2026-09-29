@@ -27,7 +27,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -117,6 +117,37 @@ class APIGateway:
 
     def _handle_heartbeat(self,params):
         return APIResponse(data={"status":"ok","service":"universal-content-operating-system","layer":23,"component":"website_manager"})
+
+    def _handle_amazon_intake(self, data):
+        """Accept a product + affiliate link produced by an approved Amazon workflow."""
+        try:
+            from layers.layer10_monetization.modules.amazon_product_intake import normalize_amazon_product
+            required = ("product_name", "product_url", "affiliate_link")
+            missing = [key for key in required if not str(data.get(key, "")).strip()]
+            if missing:
+                return APIResponse(400, error=f"missing required fields: {', '.join(missing)}")
+            product = normalize_amazon_product(
+                product_name=data["product_name"],
+                product_url=data["product_url"],
+                affiliate_link=data["affiliate_link"],
+                asin=str(data.get("asin", "")),
+                niche=str(data.get("niche", "")),
+                marketplace=str(data.get("marketplace", "")),
+                metadata=dict(data.get("metadata") or {}),
+            )
+            if not product.tracking_id:
+                return APIResponse(400, error="affiliate_link must contain an Amazon Associates tracking tag")
+            return APIResponse(status_code=202, data={
+                "state": "accepted",
+                "source": "amazon_associates_intake",
+                "product": product.to_dict(),
+                "next": "content_pipeline",
+            })
+        except (TypeError, ValueError) as exc:
+            return APIResponse(400, error=str(exc))
+        except Exception as exc:
+            logger.exception("Amazon affiliate intake failed")
+            return APIResponse(500, error=str(exc))
 
     def _handle_aios_job(self,data):
         """AtoZ Product Hub -> AI OS Bridge -> Layer 23 dispatch surface."""
