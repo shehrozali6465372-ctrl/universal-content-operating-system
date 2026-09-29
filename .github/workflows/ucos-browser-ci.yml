@@ -32,7 +32,7 @@ jobs:
       - name: Install Chromium matching Playwright
         run: playwright install chromium
       - name: Browser contract tests
-        run: pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py
+        run: PYTHONPATH=. pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py
       - name: Real Chromium smoke test
         env:
           UCOS_BROWSER_TOKEN: ci-smoke-token
