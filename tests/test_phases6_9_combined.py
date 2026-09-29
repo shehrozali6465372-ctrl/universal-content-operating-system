@@ -129,6 +129,7 @@ class TestBatchGenerator:
     def setup_method(self):
         self.bg = BatchGenerator()
     def test_create_execute(self):
+        self.bg.set_generator(lambda prompt: {"image": prompt["prompt"]})
         job = self.bg.create_batch([{"prompt": "a"}, {"prompt": "b"}])
         result = self.bg.execute_batch(job.batch_id)
         assert result["completed"] == 2
