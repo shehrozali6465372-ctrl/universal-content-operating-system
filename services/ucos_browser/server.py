@@ -17,7 +17,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-from playwright.sync_api import Browser, Error as PlaywrightError, sync_playwright
 
 LOG = logging.getLogger("ucos.browser")
 MAX_ACTIONS = 20
@@ -67,7 +66,11 @@ def execute_task(task: dict) -> dict:
     if not _BROWSER_SLOTS.acquire(blocking=False):
         raise RuntimeError("browser worker is busy; retry the task")
     try:
-        with sync_playwright() as pw:
+        try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
+    with sync_playwright() as pw:
             browser: Browser = pw.chromium.launch(
                 headless=True,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
@@ -170,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"state": "completed", "result": execute_task(payload)})
         except (ValueError, TypeError) as exc:
             self._send(400, {"state": "rejected", "error": str(exc)})
-        except PlaywrightError as exc:
+        except Exception as exc:
             LOG.exception("browser task failed")
             self._send(502, {"state": "failed", "error": str(exc)[:1000]})
         except Exception as exc:
