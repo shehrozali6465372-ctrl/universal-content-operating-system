@@ -17,14 +17,15 @@ from .image_provider import BaseImageProvider, ImageResponse
 class PuterImageProvider(BaseImageProvider):
     """Generate real images through the official Puter.js Node.js SDK.
 
-    Puter uses a user-pays model. In a backend/CI process, the caller must
-    supply a real PUTER_AUTH_TOKEN; no anonymous production generation is
-    accepted.
+    Backend/CI execution uses a real Puter auth token. Test-mode/synthetic
+    responses are rejected so they cannot cross the production boundary.
     """
 
     DEFAULT_MODEL = ""
     DEFAULT_TIMEOUT_SECONDS = 120
-    BRIDGE_PATH = Path("scripts/puter_image_provider.cjs")
+    BRIDGE_PATH = (
+        Path(__file__).resolve().parents[4] / "scripts" / "puter_image_provider.cjs"
+    )
 
     def __init__(
         self,
@@ -37,7 +38,9 @@ class PuterImageProvider(BaseImageProvider):
         self._model = model
         self._node_binary = node_binary
         self._timeout = int(
-            os.environ.get("PUTER_IMAGE_TIMEOUT_SECONDS", self.DEFAULT_TIMEOUT_SECONDS)
+            os.environ.get(
+                "PUTER_IMAGE_TIMEOUT_SECONDS", self.DEFAULT_TIMEOUT_SECONDS
+            )
         )
 
     def _get_auth_token(self) -> str:
@@ -51,6 +54,10 @@ class PuterImageProvider(BaseImageProvider):
     ) -> ImageResponse:
         if not prompt or not prompt.strip():
             raise ValueError("Image generation prompt must not be empty")
+        if bool(kwargs.get("test_mode", False)):
+            raise RuntimeError(
+                "Puter test_mode is forbidden at the production image boundary"
+            )
         if not self.is_configured():
             raise RuntimeError("Puter image provider is not configured")
 
@@ -58,8 +65,9 @@ class PuterImageProvider(BaseImageProvider):
         request = {
             "prompt": prompt.strip(),
             "model": self._model.strip() or None,
+            "provider": str(kwargs.get("provider") or "").strip() or None,
             "ratio": {"w": width, "h": height},
-            "test_mode": bool(kwargs.get("test_mode", False)),
+            "test_mode": False,
         }
 
         start = time.monotonic()
@@ -82,10 +90,15 @@ class PuterImageProvider(BaseImageProvider):
             raise RuntimeError("Puter image generation timed out") from exc
         except OSError as exc:
             raise RuntimeError("Puter Node.js runtime is unavailable") from exc
+
         payload = self._decode_bridge_output(completed.stdout)
         if completed.returncode != 0 or not payload.get("ok"):
             code = str(payload.get("code") or "upstream_failed")
-            message = str(payload.get("message") or completed.stderr.strip() or "Puter generation failed")
+            message = str(
+                payload.get("message")
+                or completed.stderr.strip()
+                or "Puter generation failed"
+            )
             raise RuntimeError(f"Puter {code}: {message}")
 
         encoded = payload.get("bytes_base64")
@@ -104,7 +117,9 @@ class PuterImageProvider(BaseImageProvider):
         if not image_bytes.startswith(
             (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"RIFF", b"GIF8")
         ):
-            raise RuntimeError("Puter returned bytes that do not match a supported image signature")
+            raise RuntimeError(
+                "Puter returned bytes that do not match a supported image signature"
+            )
 
         digest = hashlib.sha256(image_bytes).hexdigest()
         result = ImageResponse()
@@ -117,6 +132,7 @@ class PuterImageProvider(BaseImageProvider):
             "sha256": digest,
             "source": payload.get("source", "unknown"),
             "auth_mode": "puter_auth_token",
+            "production": True,
         }
         result.image_url = self._persist_image(image_bytes, mime_type)
         return result
@@ -156,7 +172,7 @@ class PuterImageProvider(BaseImageProvider):
             "image/webp": ".webp",
             "image/gif": ".gif",
         }.get(mime_type, ".bin")
-        digest = hashlib.sha256(image_bytes).hexdigest()[:24]
+        digest = hashlib.sha256(image_bytes).hexdigest()
         fd, temp_path = tempfile.mkstemp(
             prefix=".image-", suffix=extension, dir=output_dir
         )
