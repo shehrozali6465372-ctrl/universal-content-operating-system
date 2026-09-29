@@ -1,4 +1,5 @@
 name: UCOS Live Production Smoke
+# Live endpoint and authentication smoke gate.
 
 on:
   push:
