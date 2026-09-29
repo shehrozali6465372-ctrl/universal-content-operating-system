@@ -113,3 +113,13 @@ def test_node_runtime_unavailable_fails_closed() -> None:
         ):
             with pytest.raises(RuntimeError, match="runtime is unavailable"):
                 provider.generate("photo")
+
+def test_production_boundary_rejects_test_mode() -> None:
+    provider = PuterImageProvider(auth_token="real-token")
+    with pytest.raises(RuntimeError, match="test_mode is forbidden"):
+        provider.generate("photo", test_mode=True)
+
+
+def test_provider_path_is_repo_root_independent() -> None:
+    assert PuterImageProvider.BRIDGE_PATH.name == "puter_image_provider.cjs"
+    assert PuterImageProvider.BRIDGE_PATH.parent.name == "scripts"
