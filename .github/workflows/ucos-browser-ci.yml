@@ -1,0 +1,49 @@
+name: UCOS Personal Browser CI
+
+on:
+  push:
+    paths:
+      - "services/ucos_browser/**"
+      - "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py"
+      - "tests/test_ucos_personal_browser.py"
+      - "tests/test_personal_browser_gateway.py"
+      - ".github/workflows/ucos-browser-ci.yml"
+  pull_request:
+    paths:
+      - "services/ucos_browser/**"
+      - "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py"
+      - "tests/test_ucos_personal_browser.py"
+      - "tests/test_personal_browser_gateway.py"
+      - ".github/workflows/ucos-browser-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.55.0-noble
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser dependencies
+        run: pip install -r services/ucos_browser/requirements.txt
+      - name: Browser contract tests
+        run: pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py
+      - name: Real Chromium smoke test
+        env:
+          UCOS_BROWSER_TOKEN: ci-smoke-token
+        run: |
+          python - <<'PY'
+          import os
+          from services.ucos_browser.server import execute_task
+          result = execute_task({
+              "url": "https://example.com",
+              "actions": [{"type": "extract"}],
+              "timeout_ms": 30000,
+          })
+          assert result["title"] == "Example Domain"
+          assert "Example Domain" in result["text"]
+          print("REAL_CHROMIUM_SMOKE=PASS")
+          PY
