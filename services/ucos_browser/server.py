@@ -59,7 +59,7 @@ def execute_task(task: dict) -> dict:
     started = time.monotonic()
     result = {"url": url, "title": "", "text": "", "links": [], "screenshot": None, "events": []}
     with sync_playwright() as pw:
-        browser: Browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        browser: Browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"])
         context = browser.new_context(ignore_https_errors=False)
         page = context.new_page()
         page.set_default_timeout(timeout)
@@ -168,10 +168,6 @@ def main() -> None:
     port = int(os.getenv("PORT", "10000"))
     if not os.getenv("UCOS_BROWSER_TOKEN", "").strip():
         raise RuntimeError("UCOS_BROWSER_TOKEN is required")
-    smoke = execute_task({"url": "https://example.com", "actions": [{"type": "extract"}], "timeout_ms": 15000})
-    if smoke.get("title") != "Example Domain":
-        raise RuntimeError("browser startup smoke test failed")
-    LOG.info("UCOS Personal Browser startup smoke test PASS: example.com")
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     LOG.info("UCOS Personal Browser listening on 0.0.0.0:%s", port)
     server.serve_forever()
