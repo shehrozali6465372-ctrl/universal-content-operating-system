@@ -4,6 +4,8 @@ import hashlib, hmac, json, logging, os, time, threading, glob
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse, parse_qs
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -148,6 +150,46 @@ class APIGateway:
         except Exception as exc:
             logger.exception("Amazon affiliate intake failed")
             return APIResponse(500, error=str(exc))
+
+    def _browser_request(self, method: str, path: str, payload: dict | None = None, timeout: float = 75.0):
+        base=os.getenv("UCOS_BROWSER_WORKER_URL", "").strip().rstrip("/")
+        token=os.getenv("UCOS_BROWSER_TOKEN", "").strip()
+        if not base or not token:
+            raise RuntimeError("UCOS browser worker is not configured")
+        body=json.dumps(payload or {}).encode("utf-8")
+        request=Request(f"{base}{path}", data=body if method != "GET" else None, method=method, headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"})
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                raw=response.read(2_000_000)
+                return response.status, json.loads(raw.decode("utf-8"))
+        except HTTPError as exc:
+            raw=exc.read(2_000_000)
+            try: data=json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError): data={"error":str(exc)}
+            return exc.code, data
+        except URLError as exc:
+            raise RuntimeError(f"browser worker unavailable: {exc.reason}") from exc
+
+    def _handle_browser_health(self,params):
+        try:
+            status, data=self._browser_request("GET", "/health")
+            return APIResponse(status_code=200 if status < 400 else 503, data=data if status < 400 else None, error="" if status < 400 else str(data.get("error","browser worker unhealthy")))
+        except RuntimeError as exc:
+            return APIResponse(status_code=503,error=str(exc))
+
+    def _handle_browser_task(self,data):
+        try:
+            if not isinstance(data, dict) or not str(data.get("url","")).strip():
+                return APIResponse(status_code=400,error="url is required")
+            status, result=self._browser_request("POST", "/execute", data)
+            if status >= 400:
+                return APIResponse(status_code=502 if status >= 500 else 400,error=str(result.get("error","browser task failed")))
+            return APIResponse(status_code=202,data={"state":"completed","source":"ucos_personal_browser","result":result.get("result",result)})
+        except (RuntimeError, ValueError) as exc:
+            return APIResponse(status_code=503,error=str(exc))
+        except Exception as exc:
+            logger.exception("UCOS browser task dispatch failed")
+            return APIResponse(status_code=500,error=str(exc))
 
     def _handle_aios_job(self,data):
         """AtoZ Product Hub -> AI OS Bridge -> Layer 23 dispatch surface."""
