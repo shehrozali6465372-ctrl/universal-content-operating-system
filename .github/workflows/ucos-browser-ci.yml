@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install browser dependencies
         run: pip install -r services/ucos_browser/requirements.txt
+      - name: Install Chromium matching Playwright
+        run: playwright install chromium
       - name: Browser contract tests
         run: pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py
       - name: Real Chromium smoke test
