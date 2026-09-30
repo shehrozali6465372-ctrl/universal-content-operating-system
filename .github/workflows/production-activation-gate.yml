@@ -1,6 +1,18 @@
-name: UCOS Production Integration Activation Gate
+name: UCOS Production Certificate Gate
+# Final evidence gate: source tests + live endpoints + real-provider readiness.
+
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-activation-gate.yml"
+      - ".github/workflows/production-live-smoke.yml"
+      - ".github/workflows/production-browser-live-smoke.yml"
+      - ".github/workflows/production-provider-readiness.yml"
+      - "main.py"
+      - "layers/layer14_enterprise_integration/**"
+      - "layers/layer07_publishing/**"
   workflow_dispatch:
 
 permissions:
@@ -39,6 +51,20 @@ jobs:
       - name: Repository regression suite
         run: pytest -q
 
+      - name: Verify live production endpoints
+        run: |
+          set -euo pipefail
+          browser_code="$(curl -sS -o /tmp/browser.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
+          test "$browser_code" = "200"
+          grep -q '"status":"ok"' /tmp/browser.json
+          api_code="$(curl -sS -o /tmp/healthz.json -w '%{http_code}' https://ucos-backend.onrender.com/healthz || true)"
+          test "$api_code" = "200"
+          grep -q '"status": "ok"' /tmp/healthz.json
+          auth_code="$(curl -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
+          test "$auth_code" = "401"
+          grep -q 'API authentication required' /tmp/auth.json
+          echo "LIVE_ENDPOINTS=PASS"
+
       - name: Evaluate real integration readiness
         run: |
           set -euo pipefail
@@ -70,3 +96,9 @@ jobs:
 
       - name: Integration status
         run: python main.py --integration-status
+
+      - name: Final certificate marker
+        run: |
+          echo "PRODUCTION_CERTIFICATE=PASS"
+          echo "CERTIFICATION_SCOPE=tests+live-endpoints+real-provider-configuration"
+
