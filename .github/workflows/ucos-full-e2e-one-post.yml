@@ -176,8 +176,15 @@ jobs:
           verified = plugins.registry.get_instance("facebook").get_post(str(pid))
           if not verified or str(verified.get("id")) != str(pid):
               raise SystemExit("Real Facebook post verification failed")
+          post_from = verified.get("from") or {}
+          verified_page_id = str(post_from.get("id") or "").strip()
+          verified_page_name = str(post_from.get("name") or "").strip()
+          if verified_page_id != str(page.asset_id):
+              raise SystemExit("Facebook post owner mismatch: published page ID does not match verified post owner")
 
           print("REAL_FACEBOOK_POST_ID=" + str(pid))
+          print("VERIFIED_FACEBOOK_POST_OWNER_ID=" + verified_page_id)
+          print("VERIFIED_FACEBOOK_POST_OWNER_NAME=" + verified_page_name)
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
           print("RESEARCH_PROVIDER=" + str(data["metadata"].get("research_provider") or ""))
           print("ANALYTICS_STAGE=PASS")
