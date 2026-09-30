@@ -180,7 +180,13 @@ jobs:
           ).MetaCredentialProvider(token=token).credentials_for("facebook", account_id)
           plugins = PluginManager()
           plugins.authenticate("facebook", credentials)
-          verified = plugins.registry.get_instance("facebook").get_post(str(pid))
+          facebook_plugin = plugins.registry.get_instance("facebook")
+          page_info = facebook_plugin.get_page_info()
+          print("TARGET_PAGE_IS_PUBLISHED=" + str(page_info.get("is_published")))
+          print("TARGET_PAGE_LINK=" + str(page_info.get("link") or ""))
+          if page_info.get("is_published") is False:
+              raise SystemExit("Facebook target Page itself is unpublished")
+          verified = facebook_plugin.get_post(str(pid))
           if not verified or str(verified.get("id")) != str(pid):
               raise SystemExit("Real Facebook post verification failed")
           post_from = verified.get("from") or {}
@@ -196,7 +202,7 @@ jobs:
           if not permalink:
               raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
-          page_feed = plugins.registry.get_instance("facebook").get_page_feed(limit=100)
+          page_feed = facebook_plugin.get_page_feed(limit=100)
           feed_matches = [p for p in page_feed if str(p.get("id") or "") == str(pid)]
           if len(feed_matches) != 1:
               raise SystemExit("Facebook post verification failed: post was not returned by the target Page /feed")
