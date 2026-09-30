@@ -33,10 +33,17 @@ jobs:
           d=json.loads(sys.argv[1])
           ci=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1] if False]
           PY
-          state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; print("success" if ok else "pending")' "${{ github.sha }}" <<<"$result")"
+          state="pending"
+          for attempt in {1..18}; do
+            result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+            state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; bad=[x for x in r if x["status"]=="completed" and x["conclusion"] not in ("success","cancelled")]; print("success" if ok else ("fail" if bad else "pending"))' "${{ github.sha }}" <<<"$result")"
+            [ "$state" = success ] && break
+            [ "$state" = fail ] && { echo "CURRENT_REVISION_CI=FAIL"; exit 1; }
+            sleep 10
+          done
           if [ "$state" != success ]; then
             echo "CURRENT_REVISION_CI=FAIL"
-            echo "The certificate gate must not pass before the current revision CI is green."
+            echo "Timed out waiting for current revision CI."
             exit 1
           fi
           echo "CURRENT_REVISION_CI=PASS"
@@ -54,16 +61,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
-          python - "$result" "${{ github.sha }}" <<'PY'
+          state="pending"
+          for attempt in {1..18}; do
+            result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+            state="$(python - "${{ github.sha }}" <<<"$result" <<'PY'
           import json, sys
-          d=json.loads(sys.argv[1]); sha=sys.argv[2]
+          d=json.load(sys.stdin); sha=sys.argv[1]
           runs=[x for x in d["workflow_runs"] if x["head_sha"]==sha and x["name"]=="UCOS Full End-to-End One Real Autonomous Post"]
-          if not any(x["status"]=="completed" and x["conclusion"]=="success" for x in runs):
-              raise SystemExit("Current revision real-provider E2E is not passing")
-          print("CURRENT_REVISION_REAL_PROVIDER_E2E=PASS")
+          if any(x["status"]=="completed" and x["conclusion"]=="success" for x in runs):
+              print("success")
+          elif any(x["status"]=="completed" and x["conclusion"] not in ("success","cancelled") for x in runs):
+              print("fail")
+          else:
+              print("pending")
           PY
-
+            )"
+            [ "$state" = success ] && break
+            [ "$state" = fail ] && { echo "CURRENT_REVISION_REAL_PROVIDER_E2E=FAIL"; exit 1; }
+            sleep 10
+          done
+          if [ "$state" != success ]; then
+            echo "CURRENT_REVISION_REAL_PROVIDER_E2E=FAIL"
+            exit 1
+          fi
+          echo "CURRENT_REVISION_REAL_PROVIDER_E2E=PASS"
       - name: Verify real-provider readiness gate
         env:
           GH_TOKEN: ${{ github.token }}
