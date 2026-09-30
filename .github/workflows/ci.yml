@@ -42,7 +42,7 @@ jobs:
       POSTGRES_PASSWORD: postgres
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
 
     steps:
