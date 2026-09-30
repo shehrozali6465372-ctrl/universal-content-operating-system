@@ -29,12 +29,6 @@ jobs:
           --health-retries 10
     env:
       PYTHONPATH: ${{ github.workspace }}
-      APP_ENV: production
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: aios
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_API_VERSION: v26.0
     steps:
@@ -50,6 +44,12 @@ jobs:
         run: pytest -q
       - name: One real post through canonical UCOS autonomous pipeline
         env:
+          APP_ENV: production
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINIAPIKEY2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINIAPIKEY3 }}
