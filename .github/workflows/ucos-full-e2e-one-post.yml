@@ -1,5 +1,9 @@
 name: UCOS Full End-to-End One Real Autonomous Post
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ucos-full-e2e-one-post.yml"
   workflow_dispatch:
 
 permissions:
@@ -29,9 +33,6 @@ jobs:
           GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINIAPIKEY2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINIAPIKEY3 }}
-          # Isolate the live E2E state from the preceding test suite.
-          # Tests intentionally exercise repetition/history using the default
-          # local stores; the real-post smoke test must start from clean state.
           UCOS_ACCOUNT_REGISTRY_DB: ${{ runner.temp }}/ucos-e2e/accounts/registry.sqlite3
           UCOS_ACCOUNT_WORKSPACES: ${{ runner.temp }}/ucos-e2e/accounts/workspaces
           UCOS_CONTENT_HISTORY_DB: ${{ runner.temp }}/ucos-e2e/content-history.sqlite3
@@ -59,7 +60,7 @@ jobs:
           if len(discovered["instagram"]) != 11:
               raise SystemExit(f"Expected 11 Instagram profiles, found {len(discovered['instagram'])}")
 
-          provisioned = discovery.provision(registry)
+          discovery.provision(registry)
           page = discovered["facebook"][0]
           account_id = f"facebook:{page.asset_id}"
           account = registry.get(account_id)
@@ -73,7 +74,6 @@ jobs:
               "produce original useful content, validate it, and publish it through the canonical UCOS pipeline. "
               f"Internal verification marker: {marker}"
           )
-
           request = ContentRequest(
               topic=goal,
               platform="facebook",
@@ -89,14 +89,10 @@ jobs:
               "niche": account.niche,
               "test_marker": marker,
           })
-
           os.environ["FACEBOOK_PAGE_ID"] = page.asset_id
           os.environ["FACEBOOK_ACCESS_TOKEN"] = token
 
-          pipeline = ProductionPipeline()
-          response = pipeline.execute(request)
-          data = response.to_dict()
-
+          data = ProductionPipeline().execute(request).to_dict()
           print("META_DISCOVERY=PASS")
           print("ACCOUNT_PROVISIONING=PASS")
           print("UCOS_PIPELINE=" + json.dumps(data, sort_keys=True))
@@ -105,40 +101,36 @@ jobs:
           actual = [s["layer"] for s in data["steps"]]
           print("EXPECTED_CANONICAL_STEPS=" + json.dumps(required))
           print("ACTUAL_CANONICAL_STEPS=" + json.dumps(actual))
-
           if actual != required:
               raise SystemExit("Canonical UCOS pipeline did not execute every required stage")
-          required_failures = [
-              s for s in data["steps"]
-              if s["status"] != "success" and s["layer"] != "L5-Image"
-          ]
-          if required_failures:
-              raise SystemExit("One or more required canonical UCOS stages did not succeed: "
-                               + json.dumps(required_failures, sort_keys=True))
+          failures = [s for s in data["steps"] if s["status"] != "success" and s["layer"] != "L5-Image"]
+          if failures:
+              raise SystemExit("Canonical UCOS stage failure: " + json.dumps(failures, sort_keys=True))
           image_step = next(s for s in data["steps"] if s["layer"] == "L5-Image")
           if image_step["status"] not in ("success", "skipped"):
               raise SystemExit("L5-Image stage failed")
           if not data.get("published"):
               raise SystemExit("Canonical UCOS pipeline did not publish a real post")
-          if data.get("publish_result", {}).get("post_id") is None:
+          pid = data.get("publish_result", {}).get("post_id")
+          if pid is None:
               raise SystemExit("Canonical publisher returned no real post_id")
 
           ai_step = next(s for s in data["steps"] if s["layer"] == "L12-AI")
-          if ai_step["status"] != "success":
-              raise SystemExit("AI generation stage failed")
-          if ai_step["data_keys"] and "offline" in ai_step["data_keys"]:
-              raise SystemExit("AI generation fell back to offline draft; production autonomous test requires configured AI")
+          if ai_step["status"] != "success" or "offline" in ai_step.get("data_keys", []):
+              raise SystemExit("AI generation was not a configured production success")
 
-          pid = str(data["publish_result"]["post_id"])
           from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
+          credentials = __import__(
+              "layers.layer07_publishing.modules.account_control.meta_credentials",
+              fromlist=["MetaCredentialProvider"],
+          ).MetaCredentialProvider(token=token).credentials_for("facebook", account_id)
           plugins = PluginManager()
-          credentials = __import__("layers.layer07_publishing.modules.account_control.meta_credentials", fromlist=["MetaCredentialProvider"]).MetaCredentialProvider(token=token).credentials_for("facebook", account_id)
           plugins.authenticate("facebook", credentials)
-          verified = plugins.registry.get_instance("facebook").get_post(pid)
-          if not verified or str(verified.get("id")) != pid:
+          verified = plugins.registry.get_instance("facebook").get_post(str(pid))
+          if not verified or str(verified.get("id")) != str(pid):
               raise SystemExit("Real Facebook post verification failed")
 
-          print("REAL_FACEBOOK_POST_ID=" + pid)
+          print("REAL_FACEBOOK_POST_ID=" + str(pid))
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
           print("ANALYTICS_STAGE=PASS")
           print("LEARNING_STAGE=PASS")
