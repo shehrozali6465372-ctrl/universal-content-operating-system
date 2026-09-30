@@ -31,8 +31,8 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
-      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY || secrets.SERPAPI_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.UCOS_SERPAPI_API_KEY }}
+      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
       META_GRAPH_API_VERSION: v26.0
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +43,11 @@ jobs:
           pip install pytest
       - name: Compile UCOS
         run: python -m compileall -q layers dashboard
+      - name: Verify real research credential is available
+        run: |
+          set -euo pipefail
+          if [ -n "${UCOS_SERPAPI_API_KEY:-}" ]; then echo "SERPAPI_SECRET=CONFIGURED"; elif [ -n "${SERPAPI_API_KEY:-}" ]; then echo "SERPAPI_SECRET=CONFIGURED"; else echo "SERPAPI_SECRET=MISSING"; exit 1; fi
+
       - name: One real post through canonical UCOS autonomous pipeline
         env:
           APP_ENV: production
