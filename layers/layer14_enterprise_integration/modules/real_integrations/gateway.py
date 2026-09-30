@@ -65,38 +65,55 @@ class IntegrationGateway:
                 "results": results,
             }
 
-        response = self.http.request(
-            "GET",
-            "https://news.google.com/rss/search",
-            params={"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"},
-            headers={"Accept": "application/rss+xml, application/xml, text/xml"},
-        )
-        raw = response.data if isinstance(response.data, str) else str(response.data)
-        try:
-            root = ET.fromstring(raw)
-        except ET.ParseError as exc:
-            raise IntegrationConfigurationError("Google News RSS returned invalid XML") from exc
-
+        # Google News can legitimately return an empty feed for an over-specific
+        # query. Broaden the same user intent before failing, while keeping every
+        # returned source real and attributable to Google News RSS.
+        candidates = [query]
+        tokens = [token for token in query.split() if len(token) >= 4]
+        for width in (5, 3, 2):
+            if len(tokens) >= width:
+                candidate = " ".join(tokens[:width])
+                if candidate not in candidates:
+                    candidates.append(candidate)
         results = []
-        for position, item in enumerate(root.findall("./channel/item")[:8], 1):
-            title = (item.findtext("title") or "").strip()
-            link = (item.findtext("link") or "").strip()
-            description = (item.findtext("description") or "").strip()
-            if not title or not link:
-                continue
-            results.append({
-                "source_id": hashlib.sha256(link.encode()).hexdigest(),
-                "title": title,
-                "link": link,
-                "snippet": description,
-                "position": position,
-            })
+        selected_query = query
+        for candidate in candidates:
+            response = self.http.request(
+                "GET",
+                "https://news.google.com/rss/search",
+                params={"q": candidate, "hl": "en-US", "gl": "US", "ceid": "US:en"},
+                headers={"Accept": "application/rss+xml, application/xml, text/xml"},
+            )
+            raw = response.data if isinstance(response.data, str) else str(response.data)
+            try:
+                root = ET.fromstring(raw)
+            except ET.ParseError as exc:
+                raise IntegrationConfigurationError("Google News RSS returned invalid XML") from exc
+
+            candidate_results = []
+            for position, item in enumerate(root.findall("./channel/item")[:8], 1):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                description = (item.findtext("description") or "").strip()
+                if not title or not link:
+                    continue
+                candidate_results.append({
+                    "source_id": hashlib.sha256(link.encode()).hexdigest(),
+                    "title": title,
+                    "link": link,
+                    "snippet": description,
+                    "position": position,
+                })
+            if candidate_results:
+                results = candidate_results
+                selected_query = candidate
+                break
         if not results:
             raise IntegrationConfigurationError("Google News RSS returned no usable source results")
         return {
             "provider": "google_news_rss",
             "source": "google_news_rss",
-            "query": query,
+            "query": selected_query,
             "results": results,
         }
 
