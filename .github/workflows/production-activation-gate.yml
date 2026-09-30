@@ -76,12 +76,10 @@ jobs:
               echo "CURRENT_REVISION_CI=PASS"
               exit 0
             fi
-            case "$state" in
-              "completed|"*|*"|failure"|"completed|cancelled"|"completed|timed_out"|"completed|action_required")
-                echo "CURRENT_REVISION_CI=FAIL"
-                exit 1
-                ;;
-            esac
+            if [[ "$state" == completed\|* ]]; then
+              echo "CURRENT_REVISION_CI=FAIL"
+              exit 1
+            fi
             [ "$i" -eq 30 ] && { echo "CURRENT_REVISION_CI=TIMEOUT"; exit 1; }
             sleep 20
           done
