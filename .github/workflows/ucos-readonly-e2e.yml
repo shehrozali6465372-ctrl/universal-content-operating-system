@@ -30,7 +30,7 @@ jobs:
           --health-retries 10
     env:
       PYTHONPATH: ${{ github.workspace }}
-      APP_ENV: production
+      APP_ENV: test
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       POSTGRES_DB: aios
