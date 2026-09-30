@@ -40,7 +40,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_API_VERSION: v26.0
-      UCOS_FACEBOOK_TARGET_PAGE_ID: ${{ vars.UCOS_FACEBOOK_TARGET_PAGE_ID }}
+      UCOS_FACEBOOK_TARGET_PAGE_ID: "1238826765982455"
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
