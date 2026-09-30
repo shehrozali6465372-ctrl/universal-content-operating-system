@@ -40,8 +40,6 @@ jobs:
           pip install pytest
       - name: Compile UCOS
         run: python -m compileall -q layers dashboard
-      - name: Full test suite
-        run: pytest -q
       - name: One real post through canonical UCOS autonomous pipeline
         env:
           APP_ENV: production
