@@ -25,7 +25,7 @@ class IntegrationConfig:
     @classmethod
     def from_env(cls) -> "IntegrationConfig":
         return cls(
-            serpapi_key=os.getenv("UCOS_SERPAPI_API_KEY", ""),
+            serpapi_key=os.getenv("UCOS_SERPAPI_API_KEY") or os.getenv("SERPAPI_API_KEY", ""),
             affiliate_base_url=os.getenv("UCOS_AFFILIATE_BASE_URL", "").rstrip("/"),
             affiliate_api_key=os.getenv("UCOS_AFFILIATE_API_KEY", ""),
             affiliate_search_path=os.getenv("UCOS_AFFILIATE_SEARCH_PATH", "/search"),
