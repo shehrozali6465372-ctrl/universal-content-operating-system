@@ -132,14 +132,13 @@ jobs:
           print("DISCOVERED_INSTAGRAM_PROFILES="+str(len(linked)))
 
           fb_ok=0
+          discovered_by_name={str(x.get("name","")): str(x.get("id","")) for x in p.get("data",[])}
           for name,pid in fb.items():
-            # Read-only GET against the exact existing object ID.
-            st,obj=get("/"+pid,"id,name")
-            if st==200 and obj.get("id")==pid:
+            if discovered_by_name.get(name) == pid:
               fb_ok+=1
-              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" name="+str(obj.get("name","")))
+              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" discovery=me/accounts")
             else:
-              print("FACEBOOK_VERIFY_FAIL name="+name+" http="+str(st)+" error="+json.dumps(obj.get("error",obj),separators=(",",":"))[:600])
+              print("FACEBOOK_VERIFY_FAIL name="+name+" expected_id="+pid+" discovered_id="+str(discovered_by_name.get(name)))
 
           ig_ok=0
           for username,mid in ig.items():
