@@ -20,6 +20,8 @@ jobs:
       UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
       UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
       UCOS_AFFILIATE_SEARCH_PATH: ${{ secrets.UCOS_AFFILIATE_SEARCH_PATH }}
+      UCOS_AFFILIATE_SEARCH_URL: ${{ secrets.UCOS_AFFILIATE_SEARCH_URL }}
+      UCOS_AFFILIATE_API_TOKEN: ${{ secrets.UCOS_AFFILIATE_API_TOKEN }}
       UCOS_GA4_PROPERTY_ID: ${{ secrets.UCOS_GA4_PROPERTY_ID }}
       UCOS_GA4_ACCESS_TOKEN: ${{ secrets.UCOS_GA4_ACCESS_TOKEN }}
       UCOS_GA4_PROJECT_ID: ${{ secrets.UCOS_GA4_PROJECT_ID }}
@@ -45,9 +47,21 @@ jobs:
           report UCOS_AFFILIATE_BASE_URL
           report UCOS_AFFILIATE_API_KEY
           report UCOS_AFFILIATE_SEARCH_PATH
+          report UCOS_AFFILIATE_SEARCH_URL
+          report UCOS_AFFILIATE_API_TOKEN
           report UCOS_GA4_PROPERTY_ID
           report UCOS_GA4_ACCESS_TOKEN
           report UCOS_GA4_PROJECT_ID
           report UCOS_WORDPRESS_URL
           report UCOS_WORDPRESS_USERNAME
           report UCOS_WORDPRESS_APPLICATION_PASSWORD
+
+          missing=0
+          for required in UCOS_SERPAPI_API_KEY UCOS_AFFILIATE_SEARCH_URL UCOS_AFFILIATE_API_TOKEN UCOS_GA4_PROPERTY_ID UCOS_GA4_ACCESS_TOKEN; do
+            if ! present "$required"; then missing=$((missing+1)); fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "LIVE_PROVIDER_READINESS=BLOCKED missing_required=$missing"
+            exit 1
+          fi
+          echo "LIVE_PROVIDER_READINESS=PASS"
