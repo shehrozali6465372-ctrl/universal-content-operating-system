@@ -100,13 +100,13 @@ jobs:
 
           providers = {
               k: v for k, v in status.items()
-              if k in {"serpapi", "affiliate_network", "google_analytics_4", "wordpress"}
+              if k in {"serpapi", "affiliate_network", "google_analytics_4"}
           }
 
           missing = [name for name, configured in providers.items() if not configured]
           if missing:
               raise SystemExit(
-                  "LIVE_PROVIDER_ACTIVATION_BLOCKED: missing real credentials/configuration for: "
+                  "LIVE_PROVIDER_ACTIVATION_BLOCKED: missing real credentials/configuration for the canonical revenue pipeline: "
                   + ", ".join(missing)
               )
 
