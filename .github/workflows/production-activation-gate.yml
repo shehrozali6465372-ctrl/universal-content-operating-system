@@ -20,11 +20,30 @@ permissions:
 
 jobs:
   activation-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aios"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      APP_ENV: production
+      APP_ENV: test
       PYTHONPATH: ${{ github.workspace }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
       UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
       UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
