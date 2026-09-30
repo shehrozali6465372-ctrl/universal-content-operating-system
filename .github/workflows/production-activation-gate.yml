@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 20
     env:
       APP_ENV: production
+      PYTHONPATH: ${{ github.workspace }}
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
       UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
       UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
