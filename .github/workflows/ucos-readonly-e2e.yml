@@ -137,3 +137,5 @@ jobs:
             raise SystemExit("EXISTING_OBJECT_VERIFICATION_PARTIAL")
           print("META_READONLY_VERIFICATION=PASS_23_OF_23")
           PY
+
+# Current production-loop verification trigger.
