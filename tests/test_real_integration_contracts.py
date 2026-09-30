@@ -27,11 +27,27 @@ def test_integration_config_is_explicit_and_secret_free(monkeypatch):
     assert status["validation"]["valid"] is True
 
 
-def test_real_gateway_fails_closed_without_credentials(monkeypatch):
+def test_real_gateway_uses_keyless_google_news_fallback(monkeypatch):
     monkeypatch.delenv("UCOS_SERPAPI_API_KEY", raising=False)
-    gateway = IntegrationGateway()
-    with pytest.raises(Exception, match="UCOS_SERPAPI_API_KEY"):
-        gateway.search("test query")
+
+    class FakeHTTP:
+        def request(self, method, url, **kwargs):
+            from layers.layer14_enterprise_integration.modules.real_integrations.http_client import HTTPResponse
+            assert url == "https://news.google.com/rss/search"
+            return HTTPResponse(
+                200,
+                """<?xml version="1.0"?><rss><channel>
+                <item><title>Real source title</title><link>https://example.com/source</link>
+                <description>Real source snippet</description></item>
+                </channel></rss>""",
+                {},
+            )
+
+    gateway = IntegrationGateway(client=FakeHTTP())
+    result = gateway.search("test query")
+    assert result["provider"] == "google_news_rss"
+    assert result["results"][0]["title"] == "Real source title"
+    assert result["results"][0]["source_id"]
 
 
 def test_production_rejects_plain_http_provider(monkeypatch):
@@ -114,16 +130,43 @@ def test_wordpress_requires_all_credentials(monkeypatch):
         IntegrationGateway().wordpress_publish(title="x", content="y")
 
 
-def test_production_pipeline_research_fails_closed_without_real_search(monkeypatch):
+def test_production_pipeline_research_accepts_real_keyless_google_news(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("UCOS_SERPAPI_API_KEY", raising=False)
+    from layers.layer14_enterprise_integration.modules.master_orchestrator import pipeline_wiring
     from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import (
         ContentRequest,
         PipelineWiring,
     )
-    wiring = PipelineWiring()
-    with pytest.raises(Exception, match="UCOS_SERPAPI_API_KEY"):
-        wiring._research(ContentRequest("production research topic"), {})
+
+    class FakeGateway:
+        def search(self, query, *, location=None):
+            return {
+                "provider": "google_news_rss",
+                "results": [{
+                    "source_id": "source-1",
+                    "title": "Real source",
+                    "link": "https://example.com/source",
+                    "snippet": "Useful source",
+                }],
+            }
+
+    monkeypatch.setattr(
+        pipeline_wiring,
+        "IntegrationGateway",
+        FakeGateway,
+        raising=False,
+    )
+    # The implementation imports IntegrationGateway inside _research, so patch
+    # the imported module boundary as well.
+    from layers.layer14_enterprise_integration.modules.real_integrations import gateway as gateway_module
+    monkeypatch.setattr(gateway_module, "IntegrationGateway", FakeGateway)
+
+    ctx = {}
+    result = PipelineWiring()._research(ContentRequest("production research topic"), ctx)
+    assert result["provider"] == "google_news_rss"
+    assert result["result_count"] == 1
+    assert ctx["research_source_id"] == "source-1"
 
 
 def test_account_learning_ignores_unobserved_outcomes(tmp_path):
