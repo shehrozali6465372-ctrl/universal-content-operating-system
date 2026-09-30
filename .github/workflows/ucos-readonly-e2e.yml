@@ -14,8 +14,28 @@ jobs:
   readonly-e2e:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aios
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aios"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       PYTHONPATH: ${{ github.workspace }}
+      APP_ENV: production
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_VERSION: v25.0
     steps:
@@ -39,7 +59,7 @@ jobs:
       - name: Existing CI test suite
         run: |
           set -euo pipefail
-          python -m pip install -q pytest
+          python -m pip install -q pytest pytest-asyncio psycopg2-binary
           python -m pytest tests/ layers/layer01_core/tests/ layers/layer02_research/tests/ -q --tb=short
           echo "CI_TEST_SUITE=PASS"
 
