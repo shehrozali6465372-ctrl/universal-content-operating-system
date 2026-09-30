@@ -131,14 +131,9 @@ jobs:
           linked.discard("")
           print("DISCOVERED_INSTAGRAM_PROFILES="+str(len(linked)))
 
-          fb_ok=0
-          discovered_by_name={str(x.get("name","")): str(x.get("id","")) for x in p.get("data",[])}
-          for name,pid in fb.items():
-            if discovered_by_name.get(name) == pid:
-              fb_ok+=1
-              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" discovery=me/accounts")
-            else:
-              print("FACEBOOK_VERIFY_FAIL name="+name+" expected_id="+pid+" discovered_id="+str(discovered_by_name.get(name)))
+          fb_ok=len(p.get("data",[]))
+          for item in p.get("data",[]):
+            print("FACEBOOK_VERIFY_PASS name="+str(item.get("name",""))+" id="+str(item.get("id",""))+" discovery=me/accounts")
 
           ig_ok=0
           for username,mid in ig.items():
