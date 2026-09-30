@@ -169,7 +169,7 @@ class FacebookPublisher(BasePublisher):
         except Exception: return False
 
     def get_post(self, post_id: str) -> Optional[Dict[str, Any]]:
-        try: return self._api_get(f"/{post_id}", {"fields": "id,message,created_time,shares,reactions.summary(true),comments.summary(true)"})
+        try: return self._api_get(f"/{post_id}", {"fields": "id,message,created_time,from{id,name},shares,reactions.summary(true),comments.summary(true)"})
         except Exception: return None
 
     def get_status(self, post_id: str) -> str:
