@@ -175,6 +175,14 @@ class FacebookPublisher(BasePublisher):
     def get_status(self, post_id: str) -> str:
         return "published" if self.get_post(post_id) else "unknown"
 
+    def get_page_feed(self, limit: int = 100) -> List[Dict[str, Any]]:
+        payload = self._api_get(
+            f"/{self._page_id}/feed",
+            {"fields": "id,message,created_time,from{id,name},is_hidden,is_published,permalink_url", "limit": max(1, min(int(limit), 100)),
+            },
+        )
+        return list(payload.get("data") or [])
+
     def get_analytics(self, post_id: str) -> Dict[str, Any]:
         post = self.get_post(post_id)
         if not post: return {"post_id": post_id, "error": "analytics_unavailable"}
