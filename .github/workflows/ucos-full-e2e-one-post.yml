@@ -11,6 +11,7 @@ on:
       - "layers/layer14_enterprise_integration/modules/real_integrations/gateway.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py"
+      - "tests/test_real_integration_contracts.py"
   workflow_dispatch:
 
 permissions:
