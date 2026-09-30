@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 from typing import Any, Dict, Optional
+import xml.etree.ElementTree as ET
 from urllib.parse import urljoin
 
 from .config import IntegrationConfig
@@ -29,39 +30,73 @@ class IntegrationGateway:
         return {"providers": self.config.status(), "real_only": True}
 
     def search(self, query: str, *, location: Optional[str] = None) -> Dict[str, Any]:
-        if not self.config.serpapi_key:
-            raise IntegrationConfigurationError(
-                "UCOS_SERPAPI_API_KEY is required for real search/SEO data"
-            )
-        if not query.strip():
+        query = query.strip()
+        if not query:
             raise ValueError("query is required")
+
+        if self.config.serpapi_key:
+            response = self.http.request(
+                "GET",
+                "https://serpapi.com/search",
+                params={
+                    "engine": "google",
+                    "q": query,
+                    "api_key": self.config.serpapi_key,
+                    "location": location,
+                },
+            )
+            data = response.data if isinstance(response.data, dict) else {"raw": response.data}
+            results = []
+            for item in data.get("organic_results") or []:
+                link = str(item.get("link") or "").strip()
+                if not link:
+                    continue
+                results.append({
+                    "source_id": hashlib.sha256(link.encode()).hexdigest(),
+                    "title": item.get("title"),
+                    "link": link,
+                    "snippet": item.get("snippet"),
+                    "position": item.get("position"),
+                })
+            return {
+                "provider": "serpapi",
+                "source": "google_search",
+                "query": query,
+                "results": results,
+            }
+
         response = self.http.request(
             "GET",
-            "https://serpapi.com/search",
-            params={
-                "engine": "google",
-                "q": query.strip(),
-                "api_key": self.config.serpapi_key,
-                "location": location,
-            },
+            "https://news.google.com/rss/search",
+            params={"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"},
+            headers={"Accept": "application/rss+xml, application/xml, text/xml"},
         )
-        data = response.data if isinstance(response.data, dict) else {"raw": response.data}
+        raw = response.data if isinstance(response.data, str) else str(response.data)
+        try:
+            root = ET.fromstring(raw)
+        except ET.ParseError as exc:
+            raise IntegrationConfigurationError("Google News RSS returned invalid XML") from exc
+
         results = []
-        for item in data.get("organic_results") or []:
-            link = str(item.get("link") or "").strip()
-            if not link:
+        for position, item in enumerate(root.findall("./channel/item")[:8], 1):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            description = (item.findtext("description") or "").strip()
+            if not title or not link:
                 continue
             results.append({
                 "source_id": hashlib.sha256(link.encode()).hexdigest(),
-                "title": item.get("title"),
+                "title": title,
                 "link": link,
-                "snippet": item.get("snippet"),
-                "position": item.get("position"),
+                "snippet": description,
+                "position": position,
             })
+        if not results:
+            raise IntegrationConfigurationError("Google News RSS returned no usable source results")
         return {
-            "provider": "serpapi",
-            "source": "google_search",
-            "query": query.strip(),
+            "provider": "google_news_rss",
+            "source": "google_news_rss",
+            "query": query,
             "results": results,
         }
 
