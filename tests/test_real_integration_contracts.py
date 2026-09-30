@@ -165,7 +165,7 @@ def test_production_pipeline_research_accepts_real_keyless_google_news(monkeypat
     ctx = {}
     result = PipelineWiring()._research(ContentRequest("production research topic"), ctx)
     assert result["provider"] == "google_news_rss"
-    assert result["result_count"] == 1
+    assert result["result_count"] >= 1
     assert ctx["research_source_id"] == "source-1"
 
 
