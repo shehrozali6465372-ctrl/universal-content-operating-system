@@ -188,10 +188,20 @@ jobs:
           verified_page_name = str(post_from.get("name") or "").strip()
           if verified_page_id != str(page.asset_id):
               raise SystemExit("Facebook post owner mismatch: published page ID does not match verified post owner")
+          if verified.get("is_hidden") is True:
+              raise SystemExit("Facebook post verification failed: post is hidden")
+          if verified.get("is_published") is False:
+              raise SystemExit("Facebook post verification failed: post is not published")
+          permalink = str(verified.get("permalink_url") or "").strip()
+          if not permalink:
+              raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
           print("REAL_FACEBOOK_POST_ID=" + str(pid))
           print("VERIFIED_FACEBOOK_POST_OWNER_ID=" + verified_page_id)
           print("VERIFIED_FACEBOOK_POST_OWNER_NAME=" + verified_page_name)
+          print("VERIFIED_FACEBOOK_POST_IS_HIDDEN=" + str(verified.get("is_hidden")))
+          print("VERIFIED_FACEBOOK_POST_IS_PUBLISHED=" + str(verified.get("is_published")))
+          print("VERIFIED_FACEBOOK_POST_PERMALINK=" + permalink)
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
           print("RESEARCH_PROVIDER=" + str(data["metadata"].get("research_provider") or ""))
           print("ANALYTICS_STAGE=PASS")
