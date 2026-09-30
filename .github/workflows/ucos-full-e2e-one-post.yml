@@ -41,6 +41,8 @@ jobs:
       - name: Compile UCOS
         run: python -m compileall -q layers dashboard
       - name: Full test suite
+        env:
+          APP_ENV: test
         run: pytest -q
       - name: One real post through canonical UCOS autonomous pipeline
         env:
