@@ -31,8 +31,8 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
-      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY || secrets.SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.UCOS_SERPAPI_API_KEY }}
       META_GRAPH_API_VERSION: v26.0
     steps:
       - uses: actions/checkout@v4
