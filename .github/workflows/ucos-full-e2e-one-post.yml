@@ -34,6 +34,8 @@ jobs:
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
       SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
       META_GRAPH_API_VERSION: v26.0
+      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
