@@ -56,3 +56,5 @@ jobs:
 
       - name: Production smoke result
         run: echo "FINAL_LIVE_SMOKE=PASS"
+
+# Re-run against the currently deployed production revision.
