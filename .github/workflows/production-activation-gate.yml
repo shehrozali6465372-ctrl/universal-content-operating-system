@@ -1,7 +1,4 @@
 name: UCOS Production Certificate Gate
-# Final evidence gate: source tests + live endpoints + real-provider readiness.
-
-
 on:
   push:
     branches: [main]
@@ -10,118 +7,54 @@ on:
       - ".github/workflows/production-live-smoke.yml"
       - ".github/workflows/production-browser-live-smoke.yml"
       - ".github/workflows/production-provider-readiness.yml"
+      - ".github/workflows/ucos-full-e2e-one-post.yml"
       - "main.py"
       - "layers/layer14_enterprise_integration/**"
       - "layers/layer07_publishing/**"
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   activation-gate:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: aios
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d aios"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      APP_ENV: test
-      PYTHONPATH: ${{ github.workspace }}
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: aios
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-      UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
-      UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
-      UCOS_AFFILIATE_SEARCH_PATH: ${{ secrets.UCOS_AFFILIATE_SEARCH_PATH }}
-      UCOS_GA4_PROPERTY_ID: ${{ secrets.UCOS_GA4_PROPERTY_ID }}
-      UCOS_GA4_ACCESS_TOKEN: ${{ secrets.UCOS_GA4_ACCESS_TOKEN }}
-      UCOS_GA4_PROJECT_ID: ${{ secrets.UCOS_GA4_PROJECT_ID }}
-      UCOS_WORDPRESS_URL: ${{ secrets.UCOS_WORDPRESS_URL }}
-      UCOS_WORDPRESS_USERNAME: ${{ secrets.UCOS_WORDPRESS_USERNAME }}
-      UCOS_WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.UCOS_WORDPRESS_APPLICATION_PASSWORD }}
-
     steps:
-      - name: Checkout exact revision
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Compile source
         run: python -m compileall -q layers dashboard main.py
-
-      - name: Wait for current-revision CI certification
+      - name: Verify current revision CI
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          for i in {1..30}; do
-            result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=$SHA&per_page=50")"
-            state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; active=[x for x in r if x["status"]!="completed"]; failed=[x for x in r if x["status"]=="completed" and x["conclusion"]!="success"]; print("success" if ok else ("active" if active else ("failed" if failed else "missing")))' "$SHA" <<<"$result")"
-            echo "CI_STATE=$state"
-            if [ "$state" = "success" ]; then
-              echo "CURRENT_REVISION_CI=PASS"
-              exit 0
-            fi
-            if [ "$state" = "failed" ]; then
-              echo "CURRENT_REVISION_CI=FAIL"
-              exit 1
-            fi
-            [ "$i" -eq 30 ] && { echo "CURRENT_REVISION_CI=TIMEOUT"; exit 1; }
-            sleep 20
-          done
-
+          result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+          python - "$result" <<'PY'
+          import json,sys
+          d=json.loads(sys.argv[1])
+          ci=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1] if False]
+          PY
+          state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; print("success" if ok else "failed")' "${{ github.sha }}" <<<"$result")"
+          test "$state" = success
+          echo "CURRENT_REVISION_CI=PASS"
       - name: Verify live production endpoints
         run: |
           set -euo pipefail
-          browser_code="$(curl -sS -o /tmp/browser.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
-          test "$browser_code" = "200"
-          grep -q '"status":"ok"' /tmp/browser.json
-          api_code="$(curl -sS -o /tmp/healthz.json -w '%{http_code}' https://ucos-backend.onrender.com/healthz || true)"
-          test "$api_code" = "200"
-          grep -q '"status": "ok"' /tmp/healthz.json
-          auth_code="$(curl -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
-          test "$auth_code" = "401"
+          curl -fsS https://ucos-personal-browser.onrender.com/ | grep -q '"status":"ok"'
+          curl -fsS https://ucos-backend.onrender.com/healthz | grep -q '"status": "ok"'
+          code="$(curl -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
+          test "$code" = 401
           grep -q 'API authentication required' /tmp/auth.json
           echo "LIVE_ENDPOINTS=PASS"
-
-      - name: Evaluate real integration readiness
+      - name: Require real-provider readiness gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json, os
-          from layers.layer14_enterprise_integration.modules.real_integrations import IntegrationConfig
-
-          status = IntegrationConfig.from_env().status()
-          print(json.dumps(status, indent=2, sort_keys=True))
-
-          providers = {
-              k: v for k, v in status.items()
-              if k in {"serpapi", "affiliate_network", "google_analytics_4"}
-          }
-          missing = [name for name, configured in providers.items() if not configured]
-          if missing:
-              raise SystemExit(
-                  "LIVE_PROVIDER_ACTIVATION_BLOCKED: missing real credentials/configuration for the canonical revenue pipeline: "
-                  + ", ".join(missing)
-              )
-          print("LIVE_PROVIDER_CONFIGURATION=READY")
-          print("NOTE=Credential presence is not provider health. A live E2E run is required for LIVE_PROVIDER_VERIFIED.")
-
+          result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+          state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="UCOS Production Provider Readiness" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; print("success" if ok else "failed")' "${{ github.sha }}" <<<"$result")"
+          test "$state" = success
+          echo "LIVE_PROVIDER_READINESS=PASS"
       - name: Final certificate marker
         run: |
           echo "PRODUCTION_CERTIFICATE=PASS"
-          echo "CERTIFICATION_SCOPE=CI+live-endpoints+real-provider-configuration"
+          echo "CERTIFICATION_SCOPE=CI+live-endpoints+provider-readiness"
