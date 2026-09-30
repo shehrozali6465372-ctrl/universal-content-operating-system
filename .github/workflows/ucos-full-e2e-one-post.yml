@@ -40,6 +40,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_GRAPH_API_VERSION: v26.0
+      UCOS_FACEBOOK_TARGET_PAGE_ID: ${{ vars.UCOS_FACEBOOK_TARGET_PAGE_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -88,7 +89,13 @@ jobs:
               raise SystemExit(f"Expected 11 Instagram profiles, found {len(discovered['instagram'])}")
 
           discovery.provision(registry)
-          page = discovered["facebook"][0]
+          target_page_id = os.environ.get("UCOS_FACEBOOK_TARGET_PAGE_ID", "").strip()
+          if target_page_id != "1238826765982455":
+              raise SystemExit("UCOS_FACEBOOK_TARGET_PAGE_ID is not configured to the requested production Page ID")
+          matches = [p for p in discovered["facebook"] if str(p.asset_id) == target_page_id]
+          if len(matches) != 1:
+              raise SystemExit(f"Configured UCOS_FACEBOOK_TARGET_PAGE_ID was not uniquely discovered: {target_page_id}")
+          page = matches[0]
           account_id = f"facebook:{page.asset_id}"
           account = registry.get(account_id)
           if account is None:
