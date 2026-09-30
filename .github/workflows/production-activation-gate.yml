@@ -35,8 +35,9 @@ jobs:
           PY
           state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; print("success" if ok else "pending")' "${{ github.sha }}" <<<"$result")"
           if [ "$state" != success ]; then
-            echo "CURRENT_REVISION_CI=WAITING"
-            exit 0
+            echo "CURRENT_REVISION_CI=FAIL"
+            echo "The certificate gate must not pass before the current revision CI is green."
+            exit 1
           fi
           echo "CURRENT_REVISION_CI=PASS"
       - name: Verify live production endpoints
@@ -48,6 +49,21 @@ jobs:
           test "$code" = 401
           grep -q 'API authentication required' /tmp/auth.json
           echo "LIVE_ENDPOINTS=PASS"
+      - name: Verify current revision real-provider E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+          python - "$result" "${{ github.sha }}" <<'PY'
+          import json, sys
+          d=json.loads(sys.argv[1]); sha=sys.argv[2]
+          runs=[x for x in d["workflow_runs"] if x["head_sha"]==sha and x["name"]=="UCOS Full End-to-End One Real Autonomous Post"]
+          if not any(x["status"]=="completed" and x["conclusion"]=="success" for x in runs):
+              raise SystemExit("Current revision real-provider E2E is not passing")
+          print("CURRENT_REVISION_REAL_PROVIDER_E2E=PASS")
+          PY
+
       - name: Verify real-provider readiness gate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,4 +82,4 @@ jobs:
       - name: Final certificate marker
         run: |
           echo "PRODUCTION_CERTIFICATE=PASS"
-          echo "CERTIFICATION_SCOPE=CI+live-endpoints+provider-readiness"
+          echo "CERTIFICATION_SCOPE=CI+live-endpoints+current-revision-real-provider-E2E+provider-readiness"
