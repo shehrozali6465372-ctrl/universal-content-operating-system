@@ -41,13 +41,11 @@ jobs:
       - name: Compile UCOS
         run: python -m compileall -q layers dashboard
       - name: Full test suite
-        env:
-          APP_ENV: test
         run: pytest -q
       - name: One real post through canonical UCOS autonomous pipeline
         env:
           APP_ENV: production
-          POSTGRES_HOST: localhost
+              POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: aios
           POSTGRES_USER: postgres
