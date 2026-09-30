@@ -1,4 +1,5 @@
 name: UCOS Full End-to-End One Real Autonomous Post
+# Production certification trigger.
 on:
   push:
     branches: [main]
