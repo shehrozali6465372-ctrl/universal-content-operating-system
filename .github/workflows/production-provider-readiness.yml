@@ -1,0 +1,53 @@
+name: UCOS Production Provider Readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-provider-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
+      UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
+      UCOS_AFFILIATE_SEARCH_PATH: ${{ secrets.UCOS_AFFILIATE_SEARCH_PATH }}
+      UCOS_GA4_PROPERTY_ID: ${{ secrets.UCOS_GA4_PROPERTY_ID }}
+      UCOS_GA4_ACCESS_TOKEN: ${{ secrets.UCOS_GA4_ACCESS_TOKEN }}
+      UCOS_GA4_PROJECT_ID: ${{ secrets.UCOS_GA4_PROJECT_ID }}
+      UCOS_WORDPRESS_URL: ${{ secrets.UCOS_WORDPRESS_URL }}
+      UCOS_WORDPRESS_USERNAME: ${{ secrets.UCOS_WORDPRESS_USERNAME }}
+      UCOS_WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.UCOS_WORDPRESS_APPLICATION_PASSWORD }}
+    steps:
+      - name: Evaluate provider credential presence without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          present() { [ -n "${!1:-}" ]; }
+          report() {
+            local key="$1"
+            local alt="${2:-}"
+            if present "$key" || { [ -n "$alt" ] && present "$alt"; }; then
+              echo "$key=PRESENT"
+            else
+              echo "$key=MISSING"
+            fi
+          }
+          report UCOS_SERPAPI_API_KEY SERPAPI_API_KEY
+          report UCOS_AFFILIATE_BASE_URL
+          report UCOS_AFFILIATE_API_KEY
+          report UCOS_AFFILIATE_SEARCH_PATH
+          report UCOS_GA4_PROPERTY_ID
+          report UCOS_GA4_ACCESS_TOKEN
+          report UCOS_GA4_PROJECT_ID
+          report UCOS_WORDPRESS_URL
+          report UCOS_WORDPRESS_USERNAME
+          report UCOS_WORDPRESS_APPLICATION_PASSWORD
