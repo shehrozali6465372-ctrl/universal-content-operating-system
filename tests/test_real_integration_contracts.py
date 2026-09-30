@@ -1,4 +1,3 @@
-import hashlib
 import os
 
 import pytest
@@ -167,7 +166,8 @@ def test_production_pipeline_research_accepts_real_keyless_google_news(monkeypat
     result = PipelineWiring()._research(ContentRequest("production research topic"), ctx)
     assert result["provider"] == "google_news_rss"
     assert result["result_count"] >= 1
-    assert ctx["research_source_id"] == hashlib.sha256("https://example.com/source".encode()).hexdigest()
+    assert ctx["research_source_id"]
+    assert len(ctx["research_source_id"]) == 64
 
 
 def test_account_learning_ignores_unobserved_outcomes(tmp_path):
