@@ -139,6 +139,8 @@ jobs:
           if data is None:
               raise SystemExit("UCOS could not produce a quality-gated publishable candidate after 5 attempts")
           print("META_DISCOVERY=PASS")
+          print("SELECTED_FACEBOOK_PAGE_ID=" + str(page.asset_id))
+          print("SELECTED_FACEBOOK_PAGE_NAME=" + str(getattr(page, "name", "") or ""))
           print("ACCOUNT_PROVISIONING=PASS")
           print("UCOS_PIPELINE=" + json.dumps(data, sort_keys=True))
 
