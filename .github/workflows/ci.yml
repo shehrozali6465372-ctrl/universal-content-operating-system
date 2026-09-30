@@ -1,4 +1,5 @@
 name: CI
+# Production certification: push-triggered CI must execute on every certification revision.
 
 on:
   push:
