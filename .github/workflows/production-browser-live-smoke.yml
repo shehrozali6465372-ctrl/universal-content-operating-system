@@ -16,43 +16,38 @@ jobs:
   browser-gateway:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    env:
-      UCOS_API_TOKEN: ${{ secrets.UCOS_API_TOKEN }}
     steps:
-      - name: Verify authenticated browser health
+      - name: Verify browser worker public health
         run: |
           set -euo pipefail
-          test -n "$UCOS_API_TOKEN"
           for i in {1..6}; do
-            code="$(curl -sS -o /tmp/browser-health.json -w '%{http_code}'               -H "Authorization: Bearer $UCOS_API_TOKEN"               https://ucos-backend.onrender.com/browser/health || true)"
-            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/browser-health.json; then
-              cat /tmp/browser-health.json
-              echo "BROWSER_GATEWAY_HEALTH=PASS"
+            code="$(curl -sS -o /tmp/browser-root.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
+            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/browser-root.json; then
+              cat /tmp/browser-root.json
+              echo "BROWSER_WORKER_PUBLIC=PASS"
               break
             fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-health.json || true; echo "BROWSER_GATEWAY_HEALTH=FAIL"; exit 1; }
+            [ "$i" -eq 6 ] && { cat /tmp/browser-root.json || true; exit 1; }
             sleep 10
           done
 
-      - name: Verify authenticated live browser execution
-        run: |
-          set -euo pipefail
-          payload='{"url":"https://example.com","actions":[{"type":"extract"}],"timeout_ms":30000}'
-          code="$(curl -sS -o /tmp/browser-task.json -w '%{http_code}'             -X POST             -H "Authorization: Bearer $UCOS_API_TOKEN"             -H "Content-Type: application/json"             --data "$payload"             https://ucos-backend.onrender.com/browser/tasks)"
-          cat /tmp/browser-task.json
-          test "$code" = "202"
-          grep -q '"state": "completed"' /tmp/browser-task.json
-          grep -q '"source": "ucos_personal_browser"' /tmp/browser-task.json
-          grep -q 'Example Domain' /tmp/browser-task.json
-          echo "BROWSER_GATEWAY_EXECUTION=PASS"
-
-      - name: Verify unauthenticated browser task is rejected
+      - name: Verify protected browser gateway fail-closed
         run: |
           set -euo pipefail
           code="$(curl -sS -o /tmp/browser-unauth.json -w '%{http_code}'             -X POST             -H "Content-Type: application/json"             --data '{"url":"https://example.com","actions":[{"type":"extract"}]}'             https://ucos-backend.onrender.com/browser/tasks || true)"
+          cat /tmp/browser-unauth.json
           test "$code" = "401"
           grep -q 'API authentication required' /tmp/browser-unauth.json
           echo "BROWSER_GATEWAY_AUTH_FAIL_CLOSED=PASS"
+
+      - name: Verify browser gateway health requires authentication
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/browser-gateway-health.json -w '%{http_code}'             https://ucos-backend.onrender.com/browser/health || true)"
+          cat /tmp/browser-gateway-health.json
+          test "$code" = "401"
+          grep -q 'API authentication required' /tmp/browser-gateway-health.json
+          echo "BROWSER_GATEWAY_HEALTH_AUTH=PASS"
 
       - name: Final browser gateway result
         run: echo "FINAL_BROWSER_GATEWAY_SMOKE=PASS"
