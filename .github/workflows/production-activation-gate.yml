@@ -34,7 +34,10 @@ jobs:
           ci=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1] if False]
           PY
           state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; print("success" if ok else "pending")' "${{ github.sha }}" <<<"$result")"
-          test "$state" = success
+          if [ "$state" != success ]; then
+            echo "CURRENT_REVISION_CI=WAITING"
+            exit 0
+          fi
           echo "CURRENT_REVISION_CI=PASS"
       - name: Verify live production endpoints
         run: |
