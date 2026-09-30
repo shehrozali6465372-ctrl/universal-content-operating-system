@@ -196,6 +196,15 @@ jobs:
           if not permalink:
               raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
+          page_feed = plugins.registry.get_instance("facebook").get_page_feed(limit=100)
+          feed_matches = [p for p in page_feed if str(p.get("id") or "") == str(pid)]
+          if len(feed_matches) != 1:
+              raise SystemExit("Facebook post verification failed: post was not returned by the target Page /feed")
+          feed_post = feed_matches[0]
+          if feed_post.get("is_hidden") is True or feed_post.get("is_published") is False:
+              raise SystemExit("Facebook post verification failed: Page /feed marks the post hidden or unpublished")
+          print("TARGET_PAGE_FEED_POST=PASS")
+
           print("REAL_FACEBOOK_POST_ID=" + str(pid))
           print("VERIFIED_FACEBOOK_POST_OWNER_ID=" + verified_page_id)
           print("VERIFIED_FACEBOOK_POST_OWNER_NAME=" + verified_page_name)
