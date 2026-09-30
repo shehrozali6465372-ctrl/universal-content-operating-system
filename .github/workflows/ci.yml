@@ -41,6 +41,7 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +82,9 @@ jobs:
             echo "Potential high-confidence secret material found in Layer 1 source/docs."
             exit 1
           fi
+
+      - name: Run Layer 13 Real PostgreSQL Production Gate
+        run: python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py -q --tb=short
 
       - name: Run Layer 11 Production Gate
         run: |
