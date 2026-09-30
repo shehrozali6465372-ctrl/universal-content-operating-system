@@ -1,6 +1,7 @@
 name: UCOS Full End-to-End One Real Autonomous Post
 # Production certification trigger.
 # Live provider credential gate recheck.
+# Production certification execution marker: run exactly once per certification revision.
 on:
   push:
     branches: [main]
