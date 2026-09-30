@@ -13,6 +13,8 @@ This document is the operational gate between repository certification and live 
 
 No state may be promoted to a stronger state without evidence from that state.
 
+**Current loop status (2026-09-30):** CI and targeted layer gates are enforced, including a real PostgreSQL gate. The autonomous real-post gate is intentionally fail-closed until a real SERPAPI credential is configured in GitHub Actions. The gate has recorded successful Meta credential discovery and Gemini-key configuration, but no publication is certified while research prerequisites are unavailable.
+
 ## Current baseline
 
 Implementation source of truth: `production/master-plan-hardening`.
