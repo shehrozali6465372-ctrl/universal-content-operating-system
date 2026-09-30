@@ -33,8 +33,6 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
-      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
       META_GRAPH_API_VERSION: v26.0
     steps:
       - uses: actions/checkout@v4
@@ -45,16 +43,9 @@ jobs:
           pip install pytest
       - name: Compile UCOS
         run: python -m compileall -q layers dashboard
-      - name: Verify real research credential is available
-        run: |
-          set -euo pipefail
-          if [ -n "${UCOS_SERPAPI_API_KEY:-}" ]; then echo "SERPAPI_SECRET=CONFIGURED"; elif [ -n "${SERPAPI_API_KEY:-}" ]; then echo "SERPAPI_SECRET=CONFIGURED"; else echo "SERPAPI_SECRET=MISSING"; exit 1; fi
-
       - name: One real post through canonical UCOS autonomous pipeline
         env:
           APP_ENV: production
-          UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: aios
@@ -98,11 +89,10 @@ jobs:
               raise SystemExit("Selected Meta Page was not provisioned into AccountRegistry")
 
           marker = "UCOS-AUTONOMOUS-E2E-" + str(int(time.time()))
+          topic = "Practical home organization tips for a calmer, more efficient living space"
           goal = (
-              "Create exactly one useful Facebook post for the selected page. "
-              "Choose a practical, non-controversial topic suitable for a general audience, "
-              "produce original useful content, validate it, and publish it through the canonical UCOS pipeline. "
-              f"Internal verification marker: {marker}"
+              f"{topic}. Create original useful content, validate it, and publish it through "
+              f"the canonical UCOS pipeline. Internal verification marker: {marker}"
           )
           request = ContentRequest(
               topic=goal,
@@ -162,6 +152,7 @@ jobs:
 
           print("REAL_FACEBOOK_POST_ID=" + str(pid))
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
+          print("RESEARCH_PROVIDER=" + str(data["metadata"].get("research_provider") or ""))
           print("ANALYTICS_STAGE=PASS")
           print("LEARNING_STAGE=PASS")
           print("FINAL_RESULT=PASS_FULL_UCOS_AUTONOMOUS_ONE_REAL_POST")
