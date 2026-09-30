@@ -202,7 +202,7 @@ class FacebookPublisher(BasePublisher):
         return result
 
     def get_page_info(self) -> Dict[str, Any]:
-        try: return self._api_get(f"/{self._page_id}", {"fields": "id,name,fan_count,followers_count,category"})
+        try: return self._api_get(f"/{self._page_id}", {"fields": "id,name,fan_count,followers_count,category,is_published,link"})
         except Exception: return {}
 
     def get_stats(self) -> Dict[str, Any]:
