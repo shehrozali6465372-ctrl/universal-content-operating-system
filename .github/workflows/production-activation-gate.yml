@@ -8,6 +8,7 @@ on:
       - ".github/workflows/production-browser-live-smoke.yml"
       - ".github/workflows/production-provider-readiness.yml"
       - ".github/workflows/ucos-full-e2e-one-post.yml"
+      - ".github/workflows/ci.yml"
       - "main.py"
       - "layers/layer14_enterprise_integration/**"
       - "layers/layer07_publishing/**"
@@ -17,7 +18,7 @@ permissions:
 jobs:
   activation-gate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Compile source
@@ -28,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           state="pending"
-          for attempt in {1..18}; do
+          for attempt in {1..180}; do
             result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
             state="$(python -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["workflow_runs"] if x["name"]=="CI" and x["head_sha"]==sys.argv[1]]; ok=[x for x in r if x["status"]=="completed" and x["conclusion"]=="success"]; bad=[x for x in r if x["status"]=="completed" and x["conclusion"] not in ("success","cancelled")]; print("success" if ok else ("fail" if bad else "pending"))' "${{ github.sha }}" <<<"$result")"
             [ "$state" = success ] && break
@@ -56,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           state="pending"
-          for attempt in {1..18}; do
+          for attempt in {1..180}; do
             result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
             state="$(python -c 'import json,sys; d=json.load(sys.stdin); sha=sys.argv[1]; r=[x for x in d["workflow_runs"] if x["head_sha"]==sha and x["name"]=="UCOS Full End-to-End One Real Autonomous Post"]; print("success" if any(x["status"]=="completed" and x["conclusion"]=="success" for x in r) else ("fail" if any(x["status"]=="completed" and x["conclusion"] not in ("success","cancelled") for x in r) else "pending"))' "${{ github.sha }}" <<<"$result")"
             [ "$state" = success ] && break
