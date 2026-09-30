@@ -1,5 +1,6 @@
 name: UCOS Live Production Smoke
 # Live endpoint and authentication smoke gate.
+# Production deployment recheck.
 
 on:
   push:
