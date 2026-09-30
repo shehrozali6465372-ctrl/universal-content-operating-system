@@ -134,10 +134,10 @@ jobs:
           fb_ok=0
           for name,pid in fb.items():
             # Read-only GET against the exact existing object ID.
-            st,obj=get("/"+pid,"id,message,created_time,permalink_url,is_hidden")
+            st,obj=get("/"+pid,"id,name")
             if st==200 and obj.get("id")==pid:
               fb_ok+=1
-              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" created="+str(obj.get("created_time",""))+" permalink="+str(obj.get("permalink_url","")))
+              print("FACEBOOK_VERIFY_PASS name="+name+" id="+pid+" name="+str(obj.get("name","")))
             else:
               print("FACEBOOK_VERIFY_FAIL name="+name+" http="+str(st)+" error="+json.dumps(obj.get("error",obj),separators=(",",":"))[:600])
 
