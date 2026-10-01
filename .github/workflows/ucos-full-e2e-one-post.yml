@@ -202,6 +202,30 @@ jobs:
           if not permalink:
               raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
+          # Public-surface verification: Graph API visibility alone is not sufficient.
+          # Fetch the public permalink without authentication and require the canonical
+          # post URL/ID to survive redirects and appear in the public HTML response.
+          import urllib.request
+          public_req = urllib.request.Request(
+              permalink,
+              headers={"User-Agent": "Mozilla/5.0 (compatible; UCOS-Public-Post-Verifier/1.0)"},
+          )
+          try:
+              with urllib.request.urlopen(public_req, timeout=20) as public_resp:
+                  public_html = public_resp.read(2_000_000).decode("utf-8", errors="ignore")
+                  public_final_url = str(public_resp.geturl() or "")
+                  public_status = int(public_resp.status)
+          except Exception as exc:
+              raise SystemExit(f"Facebook public post verification failed: {type(exc).__name__}: {exc}")
+          print("PUBLIC_POST_HTTP_STATUS=" + str(public_status))
+          print("PUBLIC_POST_FINAL_URL=" + public_final_url)
+          if public_status != 200:
+              raise SystemExit("Facebook public post verification failed: public permalink did not return HTTP 200")
+          post_id_tail = str(pid).split("_")[-1]
+          if post_id_tail not in public_html and str(pid) not in public_html:
+              raise SystemExit("Facebook public post verification failed: exact post ID is absent from public permalink HTML")
+          print("PUBLIC_POST_HTML_ID_MATCH=PASS")
+
           page_feed = facebook_plugin.get_page_feed(limit=100)
           feed_matches = [p for p in page_feed if str(p.get("id") or "") == str(pid)]
           if len(feed_matches) != 1:
