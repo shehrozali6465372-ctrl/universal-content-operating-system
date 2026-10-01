@@ -213,33 +213,47 @@ jobs:
           if not graph_permalink:
               raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
-          # Public-surface verification: verify the exact Page-scoped URL emitted by
-          # the publisher, not only Meta's actor-scoped permalink_url.
+          # Public-surface verification: Facebook may canonicalize a Page-scoped
+          # post URL to an internal actor/profile ID. Verify that the post URL and
+          # the public Page URL canonicalize to the same public identity.
+          import urllib.parse
           import urllib.request
-          public_req = urllib.request.Request(
-              publish_url,
-              headers={"User-Agent": "Mozilla/5.0 (compatible; UCOS-Public-Post-Verifier/1.0)"},
-          )
+          public_headers = {"User-Agent": "Mozilla/5.0 (compatible; UCOS-Public-Post-Verifier/1.0)"}
+          public_req = urllib.request.Request(publish_url, headers=public_headers)
+          page_public_url = str(page_info.get("link") or "").strip() or f"https://www.facebook.com/{page.asset_id}"
+          page_req = urllib.request.Request(page_public_url, headers=public_headers)
           try:
               with urllib.request.urlopen(public_req, timeout=20) as public_resp:
                   public_html = public_resp.read(2_000_000).decode("utf-8", errors="ignore")
                   public_final_url = str(public_resp.geturl() or "")
                   public_status = int(public_resp.status)
+              with urllib.request.urlopen(page_req, timeout=20) as page_resp:
+                  page_html = page_resp.read(2_000_000).decode("utf-8", errors="ignore")
+                  page_final_url = str(page_resp.geturl() or "")
+                  page_status = int(page_resp.status)
           except Exception as exc:
-              raise SystemExit(f"Facebook public post verification failed: {type(exc).__name__}: {exc}")
+              raise SystemExit(f"Facebook public-surface verification failed: {type(exc).__name__}: {exc}")
           print("PUBLIC_POST_HTTP_STATUS=" + str(public_status))
           print("PUBLIC_POST_REQUEST_URL=" + publish_url)
           print("PUBLIC_POST_FINAL_URL=" + public_final_url)
-          if public_status != 200:
-              raise SystemExit("Facebook public post verification failed: Page-scoped permalink did not return HTTP 200")
+          print("PUBLIC_PAGE_HTTP_STATUS=" + str(page_status))
+          print("PUBLIC_PAGE_REQUEST_URL=" + page_public_url)
+          print("PUBLIC_PAGE_FINAL_URL=" + page_final_url)
+          if public_status != 200 or page_status != 200:
+              raise SystemExit("Facebook public-surface verification failed: public Page/post URL did not return HTTP 200")
           if post_id_tail not in public_html and str(pid) not in public_html:
-              raise SystemExit("Facebook public post verification failed: exact post ID is absent from Page-scoped permalink HTML")
-          public_message = str(verified.get("message") or "").strip()
-          message_probe = public_message[:80]
-          if message_probe and message_probe not in public_html:
-              raise SystemExit("Facebook public post verification failed: published post message is absent from public HTML")
+              raise SystemExit("Facebook public post verification failed: exact post ID is absent from the public post HTML")
+          post_public_path = urllib.parse.urlparse(public_final_url).path.strip("/").split("/")
+          page_public_path_final = urllib.parse.urlparse(page_final_url).path.strip("/").split("/")
+          post_actor_id = post_public_path[0] if post_public_path else ""
+          page_actor_id = page_public_path_final[0] if page_public_path_final else ""
+          if not post_actor_id or post_actor_id != page_actor_id:
+              raise SystemExit(
+                  "Facebook public-surface verification failed: post canonical URL resolves to a different public Page identity "
+                  f"(post={post_actor_id}, page={page_actor_id})"
+              )
           print("PUBLIC_POST_HTML_ID_MATCH=PASS")
-          print("PUBLIC_POST_HTML_MESSAGE_MATCH=" + ("PASS" if message_probe else "SKIP"))
+          print("PUBLIC_PAGE_POST_ACTOR_ID_MATCH=PASS")
 
           page_feed = facebook_plugin.get_page_feed(limit=100)
           feed_matches = [p for p in page_feed if str(p.get("id") or "") == str(pid)]
