@@ -20,7 +20,7 @@ class TikTokPublisher(BasePublisher):
         try:
             data=self._post("/post/publish/creator_info/query/",{})
             options=(data.get("data") or {}).get("privacy_level_options") or []
-            self.privacy="PUBLIC_TO_EVERYONE" if "PUBLIC_TO_EVERYONE" in options else (options[0] if options else "SELF_ONLY")
+            self.privacy="PUBLIC_TO_EVERYONE" if "PUBLIC_TO_EVERYONE" in options else ""
             self.authenticated=bool(data.get("data"))
         except Exception: self.authenticated=False
         return self.authenticated
@@ -28,6 +28,12 @@ class TikTokPublisher(BasePublisher):
     def publish(self, content, media_paths=None, content_type="video", **kwargs):
         r=PublishResult(platform="tiktok")
         if not self.authenticated: r.error_message="Not authenticated"; return r
+        publish_mode=str(kwargs.get("publish_mode") or "production").strip().lower()
+        if publish_mode not in {"staging","production"}:
+            r.error_message="publish_mode must be 'staging' or 'production'; return r
+        if publish_mode == "production" and self.privacy != "PUBLIC_TO_EVERYONE":
+            r.error_message="TikTok production publish blocked: PUBLIC_TO_EVERYONE is unavailable for this creator"
+            return r
         if not media_paths: r.error_message="TikTok requires a public media URL"; return r
         media=media_paths[0]
         if not media.startswith(("http://","https://")): r.error_message="TikTok Direct Post requires a verified/public media URL for PULL_FROM_URL"; return r
