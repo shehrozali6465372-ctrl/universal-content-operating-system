@@ -28,6 +28,10 @@ class PublishExecutor:
                 media_paths=request.get_media_paths(),
                 content_type=request.content_type,
             )
+        except (TimeoutError, ConnectionError, OSError) as e:
+            result = PublishResult(success=False, platform=request.platform)
+            result.error_message = str(e)[:500]
+            result.metadata = {"outcome": "unknown"}
         except Exception as e:
             result = PublishResult(success=False, platform=request.platform)
             result.error_message = str(e)[:500]
