@@ -172,6 +172,8 @@ class ProductionPipeline(PipelineWiring):
             "product": req.metadata.get("product"),
             "affiliate": req.metadata.get("affiliate"),
             "template_fingerprint": request_template_fingerprint,
+            "publish_mode": publish_mode,
+            "workflow_id": workflow_id,
         })
         if media_for_api:
             asset = MediaAsset(
