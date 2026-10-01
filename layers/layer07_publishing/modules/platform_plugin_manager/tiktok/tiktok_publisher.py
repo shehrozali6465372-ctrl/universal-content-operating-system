@@ -30,7 +30,7 @@ class TikTokPublisher(BasePublisher):
         if not self.authenticated: r.error_message="Not authenticated"; return r
         publish_mode=str(kwargs.get("publish_mode") or "production").strip().lower()
         if publish_mode not in {"staging","production"}:
-            r.error_message="publish_mode must be 'staging' or 'production'; return r
+            r.error_message="publish_mode must be 'staging' or 'production'"; return r
         if publish_mode == "production" and self.privacy != "PUBLIC_TO_EVERYONE":
             r.error_message="TikTok production publish blocked: PUBLIC_TO_EVERYONE is unavailable for this creator"
             return r
