@@ -54,6 +54,8 @@ class TikTokPublisher(BasePublisher):
                 r.error_message="TikTok accepted the publish request; final publication is pending status confirmation"
                 r.metadata={"publish_state":"processing","tracking_id":pid,"privacy_level":self.privacy}
             else: r.error_message=str(data)
+        except (TimeoutError, ConnectionError, OSError, urllib.error.URLError) as e:
+            r.error_message=str(e); r.metadata={"outcome":"unknown"}
         except Exception as e: r.error_message=str(e)
         return r
     def edit(self, post_id, content, **kwargs):
