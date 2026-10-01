@@ -118,7 +118,7 @@ class APIGateway:
         except Exception: checks["database"]="unavailable"
         checks["gemini"]="configured" if os.environ.get("GEMINI_API_KEY_1","") else "not_configured"
         overall="healthy" if checks["database"]=="healthy" else "degraded"
-        return APIResponse(data={"status":overall,"checks":checks})
+        return APIResponse(status_code=200 if overall == "healthy" else 503, data={"status":overall,"checks":checks})
 
     def _handle_heartbeat(self,params):
         return APIResponse(data={"status":"ok","service":"universal-content-operating-system","layer":23,"component":"website_manager"})
@@ -262,10 +262,10 @@ class APIGateway:
         except (TypeError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_generate(self,data):
-        topic=data.get("topic","artificial intelligence"); platform=data.get("platform"); account_id=data.get("account_id"); tone=data.get("tone","professional"); style=data.get("style","educational"); include_image=bool(data.get("include_image",True))
+        topic=data.get("topic","artificial intelligence"); platform=data.get("platform"); account_id=data.get("account_id"); tone=data.get("tone","professional"); style=data.get("style","educational"); include_image=bool(data.get("include_image",True)); publish_mode=data.get("publish_mode")
         try:
             from layers.layer14_enterprise_integration.modules.master_orchestrator.control_plane import ControlPlane
-            result=ControlPlane().execute(topic=topic,platform=platform,account_id=account_id,tone=tone,style=style,include_image=include_image)
+            result=ControlPlane().execute(topic=topic,platform=platform,account_id=account_id,tone=tone,style=style,include_image=include_image,publish_mode=publish_mode)
             return APIResponse(data=result)
         except (LookupError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
