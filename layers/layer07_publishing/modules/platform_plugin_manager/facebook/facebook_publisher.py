@@ -105,6 +105,8 @@ class FacebookPublisher(BasePublisher):
             result.error_message = self._http_error(exc); self._error_count += 1
             if exc.code == 429:
                 self._rate_limit_remaining = 0; self._rate_limit_reset = time.time() + 3600
+        except (TimeoutError, ConnectionError, OSError, urllib.error.URLError) as exc:
+            result.error_message = str(exc); result.metadata = {"outcome": "unknown"}; self._error_count += 1
         except Exception as exc:
             result.error_message = str(exc); self._error_count += 1
         self._request_count += 1
