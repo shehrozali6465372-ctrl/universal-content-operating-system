@@ -118,6 +118,10 @@ class ProductionPipeline(PipelineWiring):
         self._policy_check(req, response)
         workspace = registry.workspace_path(account_id)
         guard = ContentRepetitionGuard(str(workspace / "publishing_history.sqlite3"))
+        if publish_mode == "production" and guard.has_unresolved(account_id, req.platform):
+            raise RuntimeError(
+                f"unresolved publication intent already exists for account={account_id} platform={req.platform}; reconcile before creating a new publish intent"
+            )
         reservation = guard.reserve(account_id=account_id, platform=req.platform, content=response.text, template_id=req.metadata.get("template_id"))
         retries = 0
         while not reservation.allowed and retries < 3:
