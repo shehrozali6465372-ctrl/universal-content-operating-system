@@ -184,6 +184,7 @@ jobs:
           facebook_plugin = plugins.registry.get_instance("facebook")
           page_info = facebook_plugin.get_page_info()
           print("TARGET_PAGE_IS_PUBLISHED=" + str(page_info.get("is_published")))
+          print("TARGET_PAGE_USERNAME=" + str(page_info.get("username") or ""))
           print("TARGET_PAGE_LINK=" + str(page_info.get("link") or ""))
           if page_info.get("is_published") is False:
               raise SystemExit("Facebook target Page itself is unpublished")
@@ -202,7 +203,8 @@ jobs:
           graph_permalink = str(verified.get("permalink_url") or "").strip()
           publish_url = str(data.get("publish_result", {}).get("url") or "").strip()
           post_id_tail = str(pid).split("_")[-1]
-          expected_page_url = f"https://www.facebook.com/{page.asset_id}/posts/{post_id_tail}"
+          page_public_path = str(page_info.get("username") or "").strip() or str(page.asset_id)
+          expected_page_url = f"https://www.facebook.com/{page_public_path}/posts/{post_id_tail}"
           if publish_url != expected_page_url:
               raise SystemExit(
                   "Facebook publish URL mismatch: publisher must return the target Page-scoped URL "
