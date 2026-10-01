@@ -37,6 +37,25 @@ class ProductionPipeline(PipelineWiring):
             return {"access_token": credentials.get("access_token", credentials.get("token", ""))}
         return {}
 
+    def _verify_public_submission(self, publisher: Any, req: ContentRequest, post_id: str) -> bool:
+        """Require provider-side read evidence before consuming a production reservation."""
+        try:
+            post = publisher.get_post(str(post_id))
+        except Exception:
+            return False
+        if not post:
+            return False
+        if req.platform == "facebook":
+            account_id = str(req.metadata.get("account_id") or "")
+            owner = str(((post.get("from") or {}).get("id")) or "")
+            return bool(
+                post.get("is_published") is True
+                and post.get("is_hidden") is not True
+                and (not owner or owner == account_id)
+                and post.get("permalink_url")
+            )
+        return True
+
     def _publisher(self, req: ContentRequest):
         from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
         manager = PublisherManager()
@@ -71,6 +90,11 @@ class ProductionPipeline(PipelineWiring):
         from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
         from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
 
+        publish_mode = str(req.metadata.get("publish_mode") or "production").strip().lower()
+        if publish_mode not in {"staging", "production"}:
+            raise RuntimeError("publish_mode must be 'staging' or 'production'")
+        if publish_mode == "production" and ctx.get("ai_model") == "offline-draft":
+            raise RuntimeError("production publish boundary rejected offline-draft output")
         account_id = str(req.metadata.get("account_id") or "")
         if not account_id:
             raise RuntimeError("production publishing requires account_id")
@@ -109,7 +133,7 @@ class ProductionPipeline(PipelineWiring):
             raise RuntimeError(f"content uniqueness gate rejected after regeneration: {reservation.reason}")
 
         request_template_fingerprint = reservation.template_fingerprint
-        manager, _ = self._publisher(req)
+        manager, publisher = self._publisher(req)
         if manager is None:
             guard.release(reservation.reservation_id)
             response.publish_result = {
@@ -135,7 +159,8 @@ class ProductionPipeline(PipelineWiring):
             media_for_api = media_path
 
         request = PublishRequest(platform=req.platform, content=response.text, content_type=content_type)
-        request.idempotency_key = f"ucos:{account_id}:{req.platform}:{hashlib.sha256(response.text.encode()).hexdigest()[:24]}"
+        workflow_id = str(req.metadata.get("workflow_id") or req.metadata.get("lineage_id") or request.request_id)
+        request.idempotency_key = f"ucos:{account_id}:{req.platform}:{workflow_id}"
         request.metadata.update({
             "account_id": account_id,
             # ProductionPipeline owns the repetition reservation lifecycle.
@@ -173,10 +198,45 @@ class ProductionPipeline(PipelineWiring):
                 if not result.post_id:
                     guard.release(reservation.reservation_id)
                     raise RuntimeError("publisher reported success without a real post_id")
-                guard.finalize(reservation.reservation_id, result.post_id)
-                response.publish_package = request.to_dict()
-                ctx["post_id"] = result.post_id
-                return data
+                if publish_mode == "staging":
+                    guard.release(reservation.reservation_id)
+                    response.publish_package = request.to_dict()
+                    data["metadata"] = dict(data.get("metadata") or {}) | {
+                        "publish_mode": "staging", "production_counted": False
+                    }
+                    return data
+                verified = self._verify_public_submission(publisher, req, result.post_id)
+                if verified:
+                    guard.finalize(reservation.reservation_id, result.post_id)
+                    response.publish_package = request.to_dict()
+                    ctx["post_id"] = result.post_id
+                    data["metadata"] = dict(data.get("metadata") or {}) | {
+                        "verified_public": True, "publish_mode": "production"
+                    }
+                    return data
+                guard.mark_pending(reservation.reservation_id, result.post_id)
+                data.update({
+                    "pending": True,
+                    "metadata": dict(data.get("metadata") or {}) | {
+                        "verified_public": False, "publish_mode": "production"
+                    },
+                })
+                response.publish_result = data
+                return {
+                    "published": False, "pending": True, "platform": req.platform,
+                    "post_id": result.post_id, "reason": "awaiting_public_verification"
+                }
+            if metadata.get("outcome") == "unknown":
+                guard.mark_pending(
+                    reservation.reservation_id,
+                    str(metadata.get("tracking_id") or "outcome-unknown"),
+                )
+                data.update({"pending": True, "reason": "outcome_unknown"})
+                response.publish_result = data
+                return {
+                    "published": False, "pending": True,
+                    "platform": req.platform, "reason": "outcome_unknown"
+                }
             if metadata.get("publish_state") in {"processing", "pending"} and metadata.get("tracking_id"):
                 tracking_id = str(metadata["tracking_id"])
                 guard.mark_pending(reservation.reservation_id, tracking_id)
