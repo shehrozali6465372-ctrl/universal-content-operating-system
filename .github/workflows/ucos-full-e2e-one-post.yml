@@ -9,6 +9,7 @@ on:
     paths:
       - ".github/workflows/ucos-full-e2e-one-post.yml"
       - ".github/workflows/production-activation-gate.yml"
+      - "layers/layer07_publishing/modules/platform_plugin_manager/facebook/facebook_publisher.py"
       - "layers/layer14_enterprise_integration/modules/real_integrations/gateway.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py"
@@ -198,16 +199,23 @@ jobs:
               raise SystemExit("Facebook post verification failed: post is hidden")
           if verified.get("is_published") is False:
               raise SystemExit("Facebook post verification failed: post is not published")
-          permalink = str(verified.get("permalink_url") or "").strip()
-          if not permalink:
+          graph_permalink = str(verified.get("permalink_url") or "").strip()
+          publish_url = str(data.get("publish_result", {}).get("url") or "").strip()
+          post_id_tail = str(pid).split("_")[-1]
+          expected_page_url = f"https://www.facebook.com/{page.asset_id}/posts/{post_id_tail}"
+          if publish_url != expected_page_url:
+              raise SystemExit(
+                  "Facebook publish URL mismatch: publisher must return the target Page-scoped URL "
+                  f"{expected_page_url}, got {publish_url}"
+              )
+          if not graph_permalink:
               raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
 
-          # Public-surface verification: Graph API visibility alone is not sufficient.
-          # Fetch the public permalink without authentication and require the canonical
-          # post URL/ID to survive redirects and appear in the public HTML response.
+          # Public-surface verification: verify the exact Page-scoped URL emitted by
+          # the publisher, not only Meta's actor-scoped permalink_url.
           import urllib.request
           public_req = urllib.request.Request(
-              permalink,
+              publish_url,
               headers={"User-Agent": "Mozilla/5.0 (compatible; UCOS-Public-Post-Verifier/1.0)"},
           )
           try:
@@ -218,13 +226,18 @@ jobs:
           except Exception as exc:
               raise SystemExit(f"Facebook public post verification failed: {type(exc).__name__}: {exc}")
           print("PUBLIC_POST_HTTP_STATUS=" + str(public_status))
+          print("PUBLIC_POST_REQUEST_URL=" + publish_url)
           print("PUBLIC_POST_FINAL_URL=" + public_final_url)
           if public_status != 200:
-              raise SystemExit("Facebook public post verification failed: public permalink did not return HTTP 200")
-          post_id_tail = str(pid).split("_")[-1]
+              raise SystemExit("Facebook public post verification failed: Page-scoped permalink did not return HTTP 200")
           if post_id_tail not in public_html and str(pid) not in public_html:
-              raise SystemExit("Facebook public post verification failed: exact post ID is absent from public permalink HTML")
+              raise SystemExit("Facebook public post verification failed: exact post ID is absent from Page-scoped permalink HTML")
+          public_message = str(verified.get("message") or "").strip()
+          message_probe = public_message[:80]
+          if message_probe and message_probe not in public_html:
+              raise SystemExit("Facebook public post verification failed: published post message is absent from public HTML")
           print("PUBLIC_POST_HTML_ID_MATCH=PASS")
+          print("PUBLIC_POST_HTML_MESSAGE_MATCH=" + ("PASS" if message_probe else "SKIP"))
 
           page_feed = facebook_plugin.get_page_feed(limit=100)
           feed_matches = [p for p in page_feed if str(p.get("id") or "") == str(pid)]
@@ -240,7 +253,8 @@ jobs:
           print("VERIFIED_FACEBOOK_POST_OWNER_NAME=" + verified_page_name)
           print("VERIFIED_FACEBOOK_POST_IS_HIDDEN=" + str(verified.get("is_hidden")))
           print("VERIFIED_FACEBOOK_POST_IS_PUBLISHED=" + str(verified.get("is_published")))
-          print("VERIFIED_FACEBOOK_POST_PERMALINK=" + permalink)
+          print("VERIFIED_FACEBOOK_POST_GRAPH_PERMALINK=" + graph_permalink)
+          print("VERIFIED_FACEBOOK_POST_PAGE_PERMALINK=" + publish_url)
           print("REAL_FACEBOOK_POST_VERIFICATION=PASS")
           print("RESEARCH_PROVIDER=" + str(data["metadata"].get("research_provider") or ""))
           print("ANALYTICS_STAGE=PASS")
