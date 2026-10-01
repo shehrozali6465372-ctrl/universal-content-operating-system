@@ -38,7 +38,7 @@ class ControlPlane:
         except Exception:
             return {}
 
-    def execute(self,topic:str,platform:Optional[str]=None,account_id:Optional[str]=None,tone:str="professional",style:str="educational",include_image:bool=True)->Dict[str,Any]:
+    def execute(self,topic:str,platform:Optional[str]=None,account_id:Optional[str]=None,tone:str="professional",style:str="educational",include_image:bool=True,publish_mode:Optional[str]=None)->Dict[str,Any]:
         accounts=self.registry.list(platform=platform,enabled_only=True)
         account=None
         if account_id:
@@ -54,10 +54,22 @@ class ControlPlane:
         else:
             request=ContentRequest(topic=topic,platform=platform or "facebook",tone=tone,style=style,include_image=include_image); return self.pipeline.execute(request).to_dict()
         request=ContentRequest(topic=decision.topic,platform=decision.platform,tone=tone,style=style,include_image=include_image)
+        if publish_mode is not None:
+            mode = str(publish_mode).strip().lower()
+            if mode not in {"staging", "production"}:
+                raise ValueError("publish_mode must be 'staging' or 'production'")
+            request.metadata["publish_mode"] = mode
         if decision.product: request.style=style+f"; verified affiliate candidate: {decision.product['title']} | {decision.product['url']}. Mention/link it only when relevant and permitted by platform/account policy."
         request.metadata.update({"account_id":decision.account_id,"niche":decision.niche,"credentials_ref":account.credentials_ref if account else "","affiliate_rules":account.affiliate_rules if account else {},"content_type":decision.content_type,"policy_version":decision.policy_version,"product":decision.product,"affiliate":decision.affiliate,"control_plane":"account_decision_engine"})
-        result=self.pipeline.execute(request).to_dict(); published=bool(result.get("publish_result") and result["publish_result"].get("success"))
+        result=self.pipeline.execute(request).to_dict()
+        publish_meta=(result.get("publish_result") or {}).get("metadata") or {}
+        staging = str(request.metadata.get("publish_mode") or "").lower() == "staging"
+        published=bool(result.get("publish_result") and result["publish_result"].get("success") and not staging)
         try:
+            if staging:
+                result["staging"] = True
+                result["production_counted"] = False
+                return result
             local=AccountDataStore(self.registry)
             learning=self._account_learning_store()
             learning.record(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,quality_score=float(result.get("quality_score") or 0.0),published=published,analytics=result.get("analytics"),content_type=decision.content_type,policy_version=decision.policy_version)
