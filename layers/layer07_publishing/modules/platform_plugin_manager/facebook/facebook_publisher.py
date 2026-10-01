@@ -88,7 +88,11 @@ class FacebookPublisher(BasePublisher):
             else:
                 payload = self._post(f"/{self._page_id}/feed", {"message": content})
             if payload.get("id"):
-                result.success = True; result.post_id = str(payload["id"]); result.url = f"https://facebook.com/{result.post_id}"
+                result.success = True; result.post_id = str(payload["id"])
+                post_suffix = result.post_id.rsplit("_", 1)[-1]
+                # Always expose the target Page-scoped permalink. Facebook may return
+                # an actor-scoped permalink_url, which can open outside the Page view.
+                result.url = f"https://www.facebook.com/{self._page_id}/posts/{post_suffix}"
                 result.metadata = {"page_id": self._page_id, "content_type": content_type, "latency_ms": round((time.time()-started)*1000, 1)}
                 self._success_count += 1
             else:
