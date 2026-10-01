@@ -20,7 +20,7 @@ class TikTokPublisher(BasePublisher):
         try:
             data=self._post("/post/publish/creator_info/query/",{})
             options=(data.get("data") or {}).get("privacy_level_options") or []
-            self.privacy="PUBLIC_TO_EVERYONE" if "PUBLIC_TO_EVERYONE" in options else ""
+            self.privacy="PUBLIC_TO_EVERYONE" if "PUBLIC_TO_EVERYONE" in options else (options[0] if options else "")
             self.authenticated=bool(data.get("data"))
         except Exception: self.authenticated=False
         return self.authenticated
