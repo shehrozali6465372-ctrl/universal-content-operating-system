@@ -22,6 +22,7 @@ class FacebookPublisher(BasePublisher):
 
     def __init__(self) -> None:
         self._page_id = ""
+        self._page_username = ""
         self._access_token = ""
         self._authenticated = False
         self._request_count = 0
@@ -50,8 +51,9 @@ class FacebookPublisher(BasePublisher):
             return False
         self._access_token = token
         try:
-            page = self._api_get(f"/{self._page_id}", {"fields": "id,name"})
+            page = self._api_get(f"/{self._page_id}", {"fields": "id,name,username"})
             if page.get("id") == self._page_id:
+                self._page_username = str(page.get("username") or "").strip()
                 self._authenticated = True
                 return True
         except Exception:
@@ -61,7 +63,8 @@ class FacebookPublisher(BasePublisher):
             for page in accounts.get("data", []):
                 if str(page.get("id")) == str(self._page_id) and page.get("access_token"):
                     self._access_token = page["access_token"]
-                    validated = self._api_get(f"/{self._page_id}", {"fields": "id,name"})
+                    validated = self._api_get(f"/{self._page_id}", {"fields": "id,name,username"})
+                    self._page_username = str(validated.get("username") or "").strip()
                     self._authenticated = validated.get("id") == self._page_id
                     return self._authenticated
         except Exception:
@@ -92,7 +95,8 @@ class FacebookPublisher(BasePublisher):
                 post_suffix = result.post_id.rsplit("_", 1)[-1]
                 # Always expose the target Page-scoped permalink. Facebook may return
                 # an actor-scoped permalink_url, which can open outside the Page view.
-                result.url = f"https://www.facebook.com/{self._page_id}/posts/{post_suffix}"
+                page_path = self._page_username or self._page_id
+                result.url = f"https://www.facebook.com/{page_path}/posts/{post_suffix}"
                 result.metadata = {"page_id": self._page_id, "content_type": content_type, "latency_ms": round((time.time()-started)*1000, 1)}
                 self._success_count += 1
             else:
@@ -206,7 +210,7 @@ class FacebookPublisher(BasePublisher):
         return result
 
     def get_page_info(self) -> Dict[str, Any]:
-        try: return self._api_get(f"/{self._page_id}", {"fields": "id,name,fan_count,followers_count,category,is_published,link"})
+        try: return self._api_get(f"/{self._page_id}", {"fields": "id,name,username,fan_count,followers_count,category,is_published,link"})
         except Exception: return {}
 
     def get_stats(self) -> Dict[str, Any]:
