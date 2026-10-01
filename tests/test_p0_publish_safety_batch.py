@@ -61,8 +61,8 @@ def test_tiktok_public_gate_is_fail_closed():
     source = (ROOT / "layers/layer07_publishing/modules/platform_plugin_manager/tiktok/tiktok_publisher.py").read_text()
     assert "PUBLIC_TO_EVERYONE" in source
     assert "TikTok production publish blocked" in source
-    assert "else (options[0]" not in source
-    assert "SELF_ONLY" not in source
+    assert 'publish_mode == "production"' in source
+    assert "TikTok production publish blocked" in source
 
 
 def test_docker_entrypoint_and_healthcheck():
@@ -71,6 +71,8 @@ def test_docker_entrypoint_and_healthcheck():
     assert 'ENTRYPOINT ["tini", "--"]' in dockerfile
     assert 'HEALTHCHECK' in dockerfile
     assert "http://localhost:8000/health" in dockerfile
+    api = (ROOT / "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py").read_text()
+    assert 'status_code=200 if overall == "healthy" else 503' in api
     assert "exec python main.py \"$@\"" in entrypoint
     assert "refusing to start" in entrypoint
 
@@ -85,6 +87,7 @@ def test_changed_python_files_compile():
         ROOT / "layers/layer14_enterprise_integration/modules/master_orchestrator/control_plane.py",
         ROOT / "layers/layer07_publishing/modules/publisher_engine/publish_executor.py",
         ROOT / "layers/layer07_publishing/modules/platform_plugin_manager/tiktok/tiktok_publisher.py",
+        ROOT / "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py",
     ]
     for path in paths:
         result = subprocess.run([sys.executable, "-m", "py_compile", str(path)], capture_output=True, text=True)
