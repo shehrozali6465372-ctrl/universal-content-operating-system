@@ -191,9 +191,65 @@ class WebsiteManager:
                 self._log_operation("delete_article", {"article_id": article_id})
         return result
 
-    def publish_article(self, article_id: str) -> Article:
-        article = self.publisher.publish_article(article_id)
-        self._log_operation("publish_article", {"article_id": article_id})
+    def publish_article(self, article_id: str, publication_metadata: Optional[Dict[str, Any]] = None) -> Article:
+        """Publish through the shared L07 PublicationGateway in production.
+
+        Local in-memory/disk status changes are committed only after L07 reaches
+        VERIFIED_PUBLIC. Non-production retains the historical local CMS behavior.
+        """
+        if os.environ.get("APP_ENV", "development").strip().lower() not in {"production", "prod"}:
+            article = self.publisher.publish_article(article_id)
+            self._log_operation("publish_article", {"article_id": article_id, "mode": "local"})
+            return article
+
+        article = self.publisher.get_article(article_id)
+        if not article:
+            raise PublishError(f"Article {article_id} not found")
+        metadata = dict(publication_metadata or {})
+        required = (
+            "account_id", "tenant_id", "workspace_id", "brand_id",
+            "platform_account_id", "credentials_ref", "workflow_id",
+        )
+        missing = [field for field in required if not str(metadata.get(field) or "").strip()]
+        if missing:
+            raise PublishError(
+                "production website publication requires canonical identity envelope: "
+                + ", ".join(missing)
+            )
+
+        from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
+        from layers.layer07_publishing.modules.publisher_engine.publisher_manager import PublisherManager
+
+        request = PublishRequest(
+            platform="wordpress",
+            content=article.content,
+            content_type="article",
+        )
+        request.idempotency_key = (
+            f"website:{metadata['account_id']}:wordpress:{article.article_id}:v{article.version}"
+        )
+        request.metadata.update({
+            **metadata,
+            "publish_mode": "production",
+            "requested_visibility": "PUBLIC",
+            "title": article.title,
+            "status": "publish",
+            "article_id": article.article_id,
+            "canonical_url": article.canonical_url,
+            "tracked_link_ref": metadata.get("tracked_link_ref", ""),
+        })
+        result = PublisherManager().publish(request)
+        if not result.success:
+            raise PublishError(
+                result.error_message
+                or f"website publication was not verified: {result.metadata.get('publication_state', 'UNKNOWN')}"
+            )
+
+        article = self.publisher.mark_published_after_gateway(article_id)
+        self._log_operation(
+            "publish_article",
+            {"article_id": article_id, "mode": "l07_gateway", "post_id": result.post_id},
+        )
         return article
 
     def get_all_articles(self, status: str = "", category: str = "") -> List[Article]:
