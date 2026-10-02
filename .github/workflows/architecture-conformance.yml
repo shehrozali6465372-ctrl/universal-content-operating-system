@@ -102,8 +102,20 @@ jobs:
         run: pytest -q tests/test_cross_layer_architecture_conformance.py::test_l07_production_publication_separates_provider_effect_from_intent
       - name: Contract 5
         run: pytest -q tests/test_cross_layer_architecture_conformance.py::test_l14_production_pipeline_requires_server_authoritative_mode_and_workflow_identity
-      - name: Existing production architecture contracts
-        run: pytest -q tests/test_production_architecture_contracts.py
+      - name: Existing contract 1
+        run: pytest -q tests/test_production_architecture_contracts.py::test_repository_has_exactly_23_architectural_layers
+      - name: Existing contract 2
+        run: pytest -q tests/test_production_architecture_contracts.py::test_every_architectural_layer_contains_python_implementation
+      - name: Existing contract 3
+        run: pytest -q tests/test_production_architecture_contracts.py::test_image_orchestration_fails_closed_without_real_provider
+      - name: Existing contract 4
+        run: pytest -q tests/test_production_architecture_contracts.py::test_learning_actions_require_observed_outcomes
+      - name: Existing contract 5
+        run: pytest -q tests/test_production_architecture_contracts.py::test_learning_action_completion_uses_explicit_observed_outcome
+      - name: Existing contract 6
+        run: pytest -q tests/test_production_architecture_contracts.py::test_ci_declares_postgres_service
+      - name: Existing contract 7
+        run: pytest -q tests/test_production_architecture_contracts.py::test_production_code_does_not_default_to_mock_image_provider
       - name: Verify PostgreSQL schema and migrations
         run: |
           python - <<'PY'
