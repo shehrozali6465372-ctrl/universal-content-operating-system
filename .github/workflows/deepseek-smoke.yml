@@ -31,7 +31,7 @@ jobs:
             https://api.deepseek.com/chat/completions \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
-            --data '{"model":"deepseek-chat","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
+            --data '{"model":"deepseek-flash","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
           if [ "$status" != "200" ]; then
             echo "DEEPSEEK_API_TEST=FAIL http_status=$status"
             python - "$response_file" <<'PY'
