@@ -91,7 +91,7 @@ class PublisherManager:
                     result.set_error("verified publication has no external post identity", "ledger")
                     return result
                 result.set_success(external_id, external_url)
-                tracker.update("verified", f"Verified existing publication: {external_id}")
+                tracker.update("published", f"Verified existing publication: {external_id}")
                 return result
             result.set_error(
                 f"publication intent remains {state}; reconciliation required before reuse",
@@ -179,7 +179,7 @@ class PublisherManager:
         if state == "VERIFIED_PUBLIC":
             result.set_success(external_id, str(evidence.get("canonical_url") or pub_result.url or ""))
             result.metadata["verified_public"] = True
-            tracker.update("verified", f"Verified public publication: {external_id}")
+            tracker.update("published", f"Verified public publication: {external_id}")
             return result
 
         result.set_error(
