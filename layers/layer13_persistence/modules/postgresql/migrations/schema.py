@@ -145,6 +145,69 @@ TABLES = [
 # v1.2 canonical workflow/publication records. Legacy tables remain during
 # migration, but production business state must use these canonical records.
 TABLES.extend([
+    {"name": "tenants", "columns": [
+        "tenant_id VARCHAR(255) PRIMARY KEY",
+        "name VARCHAR(255) NOT NULL",
+        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": []},
+    {"name": "workspaces", "columns": [
+        "workspace_id VARCHAR(255) PRIMARY KEY",
+        "tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(tenant_id)",
+        "name VARCHAR(255) NOT NULL",
+        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_workspaces_tenant ON workspaces(tenant_id)",
+    ]},
+    {"name": "brands", "columns": [
+        "brand_id VARCHAR(255) PRIMARY KEY",
+        "workspace_id VARCHAR(255) NOT NULL REFERENCES workspaces(workspace_id)",
+        "name VARCHAR(255) NOT NULL",
+        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_brands_workspace ON brands(workspace_id)",
+    ]},
+    {"name": "accounts", "columns": [
+        "account_id VARCHAR(255) PRIMARY KEY",
+        "brand_id VARCHAR(255) NOT NULL REFERENCES brands(brand_id)",
+        "platform VARCHAR(100) NOT NULL",
+        "niche VARCHAR(255) NOT NULL",
+        "display_name VARCHAR(255) NOT NULL DEFAULT ''",
+        "audience TEXT NOT NULL DEFAULT ''",
+        "credentials_ref VARCHAR(512) NOT NULL DEFAULT ''",
+        "affiliate_rules JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "capabilities JSONB NOT NULL DEFAULT '[]'::jsonb",
+        "constraints JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_accounts_brand ON accounts(brand_id)",
+        "CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform)",
+        "CREATE INDEX IF NOT EXISTS idx_accounts_niche ON accounts(niche)",
+    ]},
+    {"name": "platform_accounts", "columns": [
+        "platform_account_id VARCHAR(255) PRIMARY KEY",
+        "account_id VARCHAR(255) NOT NULL REFERENCES accounts(account_id)",
+        "platform VARCHAR(100) NOT NULL",
+        "external_account_id VARCHAR(512) NOT NULL",
+        "display_name VARCHAR(255) NOT NULL DEFAULT ''",
+        "enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "UNIQUE(account_id, platform, external_account_id)",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_platform_accounts_account ON platform_accounts(account_id)",
+        "CREATE INDEX IF NOT EXISTS idx_platform_accounts_external ON platform_accounts(platform, external_account_id)",
+    ]},
+])
+
+TABLES.extend([
     {"name": "workflow_runs", "columns": [
         "workflow_id UUID PRIMARY KEY", "tenant_id VARCHAR(255) NOT NULL",
         "workspace_id VARCHAR(255)", "brand_id VARCHAR(255)", "account_id VARCHAR(255)",
