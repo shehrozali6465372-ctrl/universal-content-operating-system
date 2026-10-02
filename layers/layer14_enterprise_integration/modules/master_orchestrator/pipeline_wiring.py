@@ -300,8 +300,13 @@ class PipelineWiring:
 
     def _ai(self, req: ContentRequest, ctx: Dict[str, Any], response: ContentResponse) -> Dict[str, Any]:
         keywords = ", ".join(map(str, ctx.get("keywords", [])[:8]))
-        configured = bool(self._router and self._gemini and self._key_manager and
-                          self._key_manager.get_stats().get("total_keys", 0))
+        configured = bool(
+            self._router
+            and (
+                (self._key_manager and self._key_manager.get_stats().get("total_keys", 0))
+                or self._hf
+            )
+        )
         production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
         publish_mode = str(req.metadata.get("publish_mode") or "staging").lower()
         if not configured and production and publish_mode == "production":
