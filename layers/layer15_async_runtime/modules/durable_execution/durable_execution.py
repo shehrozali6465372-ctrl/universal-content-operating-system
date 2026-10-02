@@ -13,8 +13,7 @@ import os
 import socket
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, Optional
 from uuid import UUID, uuid4
 
@@ -415,17 +414,32 @@ class DurableWorker:
         if handler is None:
             state = self.store.fail(task.task_id, self.worker_id, f"no handler registered for {task.task_type}")
             return state
+        heartbeat_task = asyncio.create_task(self._heartbeat(task.task_id))
         try:
             value = handler(task)
             if inspect.isawaitable(value):
                 value = await value
-            self.store.complete(task.task_id, self.worker_id, value)
+            if not self.store.complete(task.task_id, self.worker_id, value):
+                raise RuntimeError("durable task completion lost lease ownership")
             return "COMPLETED"
         except asyncio.CancelledError:
             self.store.fail(task.task_id, self.worker_id, "worker coroutine cancelled")
             raise
         except Exception as exc:
             return self.store.fail(task.task_id, self.worker_id, exc)
+        finally:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _heartbeat(self, task_id: str) -> None:
+        interval = max(1.0, self.lease_seconds / 3)
+        while True:
+            await asyncio.sleep(interval)
+            if not self.store.heartbeat(task_id, self.worker_id, self.lease_seconds):
+                return
 
     async def run_forever(self) -> None:
         self._running = True
