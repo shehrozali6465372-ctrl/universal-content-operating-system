@@ -16,13 +16,23 @@ LAYERS = ROOT / "layers"
 
 
 def test_repository_has_exactly_23_architectural_layers():
-    layer_dirs = sorted(
-        p for p in LAYERS.iterdir()
-        if p.is_dir() and p.name.startswith("layer") and p.name[5:7].isdigit()
-    )
-    assert len(layer_dirs) == 23
-    assert [p.name for p in layer_dirs] == [f"layer{i:02d}_" + p.name.split("_", 1)[1]
-                                            for i, p in enumerate(layer_dirs, 1)]
+    actual = {
+        p.name for p in LAYERS.iterdir()
+        if p.is_dir() and p.name.startswith("layer") and len(p.name) >= 7
+        and p.name[5:7].isdigit()
+    }
+    expected = {
+        "layer01_core", "layer02_research", "layer03_intelligence",
+        "layer04_writing", "layer05_image", "layer06_quality",
+        "layer07_publishing", "layer08_analytics", "layer09_learning",
+        "layer10_monetization", "layer11_async_runtime", "layer12_ai_foundation",
+        "layer13_persistence", "layer14_enterprise_integration",
+        "layer15_async_runtime", "layer16_database_engineering",
+        "layer17_security", "layer18_monitoring", "layer19_analytics_engine",
+        "layer20_image_pipeline", "layer21_deployment",
+        "layer22_documentation", "layer23_website_manager",
+    }
+    assert actual == expected
 
 
 def test_every_architectural_layer_contains_python_implementation():
