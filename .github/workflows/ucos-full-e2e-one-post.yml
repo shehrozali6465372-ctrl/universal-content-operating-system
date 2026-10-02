@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/ucos-full-e2e-one-post.yml"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/production-activation-gate.yml"
       - "layers/layer07_publishing/modules/platform_plugin_manager/facebook/facebook_publisher.py"
       - "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py"
