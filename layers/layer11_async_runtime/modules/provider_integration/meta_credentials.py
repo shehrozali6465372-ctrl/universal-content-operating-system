@@ -34,7 +34,6 @@ class MetaCredentialProvider:
         self.api_version = (api_version or self.API_VERSION).strip().strip("/")
 
     def credentials_for(self, platform: str, account_id: str) -> Dict[str, str]:
-        from layers.layer07_publishing.modules.account_control.account_registry import AccountSpec
         account = IdentityRepository().get(account_id)
         if account is None:
             raise LookupError(f"account {account_id!r} is not registered in canonical PostgreSQL identity")
