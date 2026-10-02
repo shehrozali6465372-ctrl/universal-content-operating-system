@@ -79,6 +79,15 @@ class MetaAssetDiscovery:
     def provision(self, registry: AccountRegistry, *, default_niche: str = "general") -> Dict[str, Any]:
         discovered = self.discover()
         provisioned: List[Dict[str, Any]] = []
+        tenant_id = os.getenv("UCOS_TENANT_ID", "").strip()
+        workspace_id = os.getenv("UCOS_WORKSPACE_ID", "").strip()
+        brand_id = os.getenv("UCOS_BRAND_ID", "").strip()
+        if os.getenv("APP_ENV", "development").strip().lower() in {"production", "prod"}:
+            if not all((tenant_id, workspace_id, brand_id)):
+                raise RuntimeError(
+                    "production Meta provisioning requires UCOS_TENANT_ID, "
+                    "UCOS_WORKSPACE_ID and UCOS_BRAND_ID"
+                )
         for asset in discovered["facebook"]:
             account_id = f"facebook:{asset.asset_id}"
             spec = AccountSpec(
@@ -87,6 +96,11 @@ class MetaAssetDiscovery:
                 niche=default_niche,
                 display_name=asset.display_name,
                 credentials_ref="META_ACCESS_TOKEN",
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                brand_id=brand_id,
+                platform_account_id=asset.asset_id,
+                external_account_id=asset.asset_id,
                 capabilities=["post", "photo", "video", "comments", "insights"],
                 constraints={"meta_asset_id": asset.asset_id, "credential_mode": "system_user"},
             )
@@ -101,6 +115,11 @@ class MetaAssetDiscovery:
                 display_name=asset.display_name,
                 audience=asset.username,
                 credentials_ref="META_ACCESS_TOKEN",
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                brand_id=brand_id,
+                platform_account_id=asset.asset_id,
+                external_account_id=asset.asset_id,
                 capabilities=["post", "photo", "video", "reel", "carousel", "comments", "insights"],
                 constraints={"meta_asset_id": asset.asset_id, "page_id": asset.page_id, "credential_mode": "system_user"},
             )
