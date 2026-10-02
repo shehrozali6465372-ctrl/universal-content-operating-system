@@ -6,7 +6,7 @@ from typing import Any, Dict
 from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import (
     PipelineWiring, ContentRequest, ContentResponse,
 )
-from layers.layer07_publishing.modules.media_manager.runtime_media import RuntimeMedia
+from layers.layer20_image_pipeline.modules.media_lifecycle.runtime_media import RuntimeMedia
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
 from layers.layer07_publishing.modules.account_control.policy_registry import PolicyRegistry
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
@@ -101,7 +101,7 @@ class ProductionPipeline(PipelineWiring):
     def _publish(self, req: ContentRequest, response: ContentResponse, ctx: Dict[str, Any]) -> Dict[str, Any]:
         import os
         from layers.layer07_publishing.modules.publisher_engine.publish_request import PublishRequest
-        from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
+        from layers.layer20_image_pipeline.modules.media_lifecycle.media_asset import MediaAsset
 
         publish_mode = str(ctx.get("effective_publish_mode") or req.metadata.get("publish_mode") or "").strip().lower()
         if publish_mode not in {"staging", "production"}:
@@ -123,6 +123,19 @@ class ProductionPipeline(PipelineWiring):
             raise RuntimeError(
                 f"account {account_id!r} is registered for {account.platform}, not {req.platform}"
             )
+
+        registered_identity = {
+            "tenant_id": str(account.tenant_id or ""),
+            "workspace_id": str(account.workspace_id or ""),
+            "brand_id": str(account.brand_id or ""),
+            "platform_account_id": str(account.platform_account_id or ""),
+            "credentials_ref": str(account.credentials_ref or ""),
+        }
+        for field, canonical_value in registered_identity.items():
+            supplied = str(req.metadata.get(field) or "").strip()
+            if supplied and supplied != canonical_value:
+                raise RuntimeError(f"{field} does not match canonical account identity")
+            req.metadata[field] = canonical_value
 
         registered_ref = str(account.credentials_ref or "")
         requested_ref = str(req.metadata.get("credentials_ref") or "")
