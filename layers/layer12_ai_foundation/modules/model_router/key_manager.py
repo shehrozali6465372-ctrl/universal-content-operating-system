@@ -222,7 +222,7 @@ class KeyManager:
         if strategy in valid:
             self._strategy = strategy
 
-    def select_key_with_id(self, capability: str = "text") -> Optional[tuple[str, str]]:
+    def select_key_with_id(self, capability: str = "text", provider: Optional[str] = None) -> Optional[tuple[str, str]]:
         """Select an available credential and return (key_id, actual_key) atomically."""
         with self._lock:
             available = [
@@ -243,7 +243,7 @@ class KeyManager:
             actual = self._actual_keys.get(best)
             return (best, actual) if actual else None
 
-    def select_key(self, capability: str = "text") -> Optional[str]:
+    def select_key(self, capability: str = "text", provider: Optional[str] = None) -> Optional[str]:
         """Best available key select karo (actual key return hoti hai)."""
         with self._lock:
             available = [
