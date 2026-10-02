@@ -49,6 +49,8 @@ class InstagramPublisher(BasePublisher):
             if api_result and "id" in api_result:
                 result.success=True; result.post_id=api_result["id"]; result.url=f"https://instagram.com/p/{api_result['id']}"; result.metadata={"platform":"instagram","content_type":content_type,"account_id":self._account_id}; self._success_count+=1
             else: result.error_message=str(api_result.get("error","Unknown")) if api_result else "No response"; self._error_count+=1
+        except (TimeoutError, ConnectionError, OSError, urllib.error.URLError) as exc:
+            result.error_message=str(exc); result.metadata={"outcome":"unknown"}; self._error_count+=1
         except Exception as exc: result.error_message=str(exc); self._error_count+=1
         self._request_count+=1; self._history.append({"action":"publish","success":result.success,"post_id":result.post_id,"latency_ms":round((time.time()-start)*1000,1),"time":time.time()}); return result
 

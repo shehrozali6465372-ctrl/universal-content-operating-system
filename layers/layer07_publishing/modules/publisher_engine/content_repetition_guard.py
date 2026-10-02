@@ -107,6 +107,16 @@ class ContentRepetitionGuard:
                 return RepetitionDecision(True,"reserved",content_fp,template_fp,cur.lastrowid)
         except sqlite3.IntegrityError: return RepetitionDecision(False,"concurrent_repetition_detected",content_fp,template_fp)
 
+    def has_unresolved(self, account_id: str, platform: str) -> bool:
+        """Return True when this account/platform has an unresolved publication intent."""
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM content_history WHERE account_id=? AND platform=? "
+                "AND status IN ('reserved','pending') LIMIT 1",
+                (account_id.strip(), platform.strip().lower()),
+            ).fetchone()
+        return row is not None
+
     def pending(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return submitted-but-not-finalized reservations for reconciliation."""
         query = "SELECT id,account_id,platform,content_fingerprint,template_fingerprint,post_id,created_at FROM content_history WHERE status='pending'"

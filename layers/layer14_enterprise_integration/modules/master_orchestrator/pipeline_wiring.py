@@ -222,10 +222,27 @@ class PipelineWiring:
         ctx["writing_plan"] = plan
         return {"plan_id": getattr(plan, "plan_id", ""), "structure": getattr(plan, "structure", {})}
 
+    def _preflight(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        """Fail closed before expensive work when production AI publishing is requested."""
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        mode = str(req.metadata.get("publish_mode") or ("production" if production else "staging")).strip().lower()
+        if mode not in {"staging", "production"}:
+            raise RuntimeError("publish_mode must be 'staging' or 'production'")
+        req.metadata["publish_mode"] = mode
+        configured = bool(self._router and self._gemini and self._key_manager and
+                          self._key_manager.get_stats().get("total_keys", 0))
+        if production and mode == "production" and not configured:
+            raise RuntimeError("production publishing requires a configured AI provider; offline draft blocked at preflight")
+        return {"publish_mode": mode, "production": production, "ai_configured": configured}
+
     def _ai(self, req: ContentRequest, ctx: Dict[str, Any], response: ContentResponse) -> Dict[str, Any]:
         keywords = ", ".join(map(str, ctx.get("keywords", [])[:8]))
         configured = bool(self._router and self._gemini and self._key_manager and
                           self._key_manager.get_stats().get("total_keys", 0))
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        publish_mode = str(req.metadata.get("publish_mode") or "staging").lower()
+        if not configured and production and publish_mode == "production":
+            raise RuntimeError("production AI generation cannot create an offline draft without a configured AI provider")
         if not configured:
             response.text = (f"{req.topic}\n\nKey points to investigate and explain: {keywords or req.topic}.\n\n"
                              "Offline draft only; connect a configured AI provider before production publishing.")[:req.max_length]
@@ -355,10 +372,13 @@ class PipelineWiring:
         if not request.topic:
             raise ValueError("topic is required")
         request.metadata.setdefault("lineage_id", str(uuid.uuid4()))
+        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
+        request.metadata.setdefault("publish_mode", "production" if production else "staging")
         response = ContentResponse(request)
         ctx: Dict[str, Any] = {}
         started = time.time()
-        steps = (("L2-Research", lambda: self._research(request, ctx)),
+        steps = (("P0-Preflight", lambda: self._preflight(request, ctx)),
+                 ("L2-Research", lambda: self._research(request, ctx)),
                  ("L3-Intelligence", lambda: self._intelligence(request, ctx)),
                  ("L4-Writing", lambda: self._writing(request, ctx)),
                  ("L12-AI", lambda: self._ai(request, ctx, response)),

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "═══════════════════════════════════════════════════"
 echo " 🤖 Universal AI Content OS v6.0.0"
@@ -26,6 +26,10 @@ finally:
         echo "  Attempt $i/30..."
         sleep 2
     done
+    if ! python -c "import socket; s=socket.socket(); s.settimeout(1); s.connect((\'${POSTGRES_HOST}\', ${POSTGRES_PORT:-5432}))" 2>/dev/null; then
+        echo "PostgreSQL did not become ready; refusing to start."
+        exit 1
+    fi
 fi
 
 # Wait for Redis if configured
@@ -48,6 +52,10 @@ finally:
         fi
         sleep 1
     done
+    if ! python -c "import socket; s=socket.socket(); s.settimeout(1); s.connect((\'${REDIS_HOST}\', ${REDIS_PORT:-6379}))" 2>/dev/null; then
+        echo "Redis did not become ready; refusing to start."
+        exit 1
+    fi
 fi
 
 echo ""

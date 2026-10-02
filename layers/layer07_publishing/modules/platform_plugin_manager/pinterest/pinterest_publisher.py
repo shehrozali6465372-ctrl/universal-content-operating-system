@@ -82,6 +82,9 @@ class PinterestPublisher(BasePublisher):
                 result.metadata = {"board_id": self.board_id}
             else:
                 result.error_message = str(data or "Pinterest returned no pin id")
+        except (TimeoutError, ConnectionError, OSError, urllib.error.URLError) as exc:
+            result.error_message = str(exc)
+            result.metadata = {"outcome": "unknown"}
         except Exception as exc:
             result.error_message = str(exc)
         return result
