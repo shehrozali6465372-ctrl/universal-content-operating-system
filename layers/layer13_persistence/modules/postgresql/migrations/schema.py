@@ -339,4 +339,8 @@ def get_all_migration_sql():
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb",
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS content_asset_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS tracked_link_ref VARCHAR(512)",
+        "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS backoff_seconds INTEGER NOT NULL DEFAULT 5",
+        "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS error_class VARCHAR(100)",
+        "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS dlq_reason TEXT",
     ]
