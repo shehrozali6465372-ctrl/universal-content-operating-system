@@ -257,7 +257,7 @@ TABLES.extend([
         "call_deadline_at TIMESTAMPTZ NOT NULL", "attempt_lease_expires_at TIMESTAMPTZ NOT NULL",
         "provider VARCHAR(100) NOT NULL", "provider_idempotency_key VARCHAR(512) NOT NULL",
         "status VARCHAR(50) NOT NULL", "outcome VARCHAR(50)", "error_class VARCHAR(100)",
-        "error_message TEXT", "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "error_message TEXT", "finished_at TIMESTAMPTZ", "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "UNIQUE(intent_id, attempt_number)",
     ], "indexes": [
@@ -362,6 +362,7 @@ def get_all_migration_sql():
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS tracked_link_ref VARCHAR(512)",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(512)",
         "ALTER TABLE durable_tasks DROP CONSTRAINT IF EXISTS durable_tasks_dedupe_key_key",
+        "ALTER TABLE publish_attempts ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_durable_tasks_dedupe ON durable_tasks(dedupe_key) WHERE dedupe_key IS NOT NULL",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS backoff_seconds INTEGER NOT NULL DEFAULT 5",
