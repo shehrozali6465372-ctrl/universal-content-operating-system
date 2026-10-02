@@ -245,8 +245,8 @@ class SystemVerifier:
         start=time.time();sub=[];score=0.0
         try:
             from layers.layer15_async_runtime.modules.async_event_loop.async_event_loop import AsyncEventLoop
-            ar=AsyncRuntime();sub.append({"test":"AsyncRuntime","status":"PASS","detail":"Instantiable"});score+=1.0
-        except: sub.append({"test":"AsyncRuntime","status":"FALLBACK","detail":"Framework"});score+=0.5
+            ar=AsyncEventLoop();sub.append({"test":"Layer15AsyncEventLoop","status":"PASS","detail":"Instantiable"});score+=1.0
+        except: sub.append({"test":"Layer15AsyncEventLoop","status":"FALLBACK","detail":"Framework"});score+=0.5
         fs=score/1.0; st=LayerStatus.PASS if fs>=0.7 else LayerStatus.FALLBACK
         self.results.append(LayerResult(11,"Async Runtime",st,"Async framework",fs,sub,(time.time()-start)*1000))
         self._p(11,"Async Runtime",st,fs)
