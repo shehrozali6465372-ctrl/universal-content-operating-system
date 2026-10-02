@@ -144,6 +144,7 @@ jobs:
       - name: Hugging Face Image Generation Smoke Test
         if: env.HF_TOKEN != ''
         run: |
+          pip install --break-system-packages --disable-pip-version-check huggingface_hub
           python - <<'PY'
           import os
           from pathlib import Path
