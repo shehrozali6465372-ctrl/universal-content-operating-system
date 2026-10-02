@@ -463,8 +463,8 @@ class PipelineWiring:
                     event = store.record(
                         lineage_id=str(metadata["lineage_id"]), stage="niche",
                         entity_id=str(metadata.get("niche") or "general"),
-                        source=research_provider, source_id=research_source_id,
-                        provider=research_provider, status="observed",
+                        source="ucos", source_id=research_source_id,
+                        provider="ucos", status="derived",
                         payload={"niche": metadata.get("niche")},
                         parent_event_id=parent,
                     )
@@ -473,8 +473,8 @@ class PipelineWiring:
                     event = store.record(
                         lineage_id=str(metadata["lineage_id"]), stage="keyword",
                         entity_id=hashlib.sha256(response.request.topic.encode("utf-8")).hexdigest(),
-                        source=research_provider, source_id=research_source_id,
-                        provider=research_provider, status="observed",
+                        source="ucos", source_id=research_source_id,
+                        provider="ucos", status="derived",
                         payload={"seed_keyword": response.request.topic},
                         parent_event_id=parent,
                     )
@@ -485,7 +485,7 @@ class PipelineWiring:
                         entity_id=hashlib.sha256(response.text.encode("utf-8")).hexdigest(),
                         source="ucos", source_id=str(metadata.get("topic_id") or response.request.topic),
                         provider=str(metadata.get("ai_provider") or metadata.get("ai_model") or "unknown"),
-                        status="observed", payload={"content_length": len(response.text)},
+                        status="derived", payload={"content_length": len(response.text)},
                         parent_event_id=parent,
                     )
                     parent = event.event_id
@@ -501,7 +501,7 @@ class PipelineWiring:
                         entity_id=hashlib.sha256(str(asset_value).encode("utf-8")).hexdigest(),
                         source="ucos", source_id=str(asset_value),
                         provider="runtime-media" if response.image_url else str(metadata.get("ai_provider") or "unknown"),
-                        status="observed", payload=asset_payload,
+                        status="derived", payload=asset_payload,
                         parent_event_id=parent,
                     )
                     parent = event.event_id
@@ -510,7 +510,7 @@ class PipelineWiring:
                         lineage_id=str(metadata["lineage_id"]), stage="platform",
                         entity_id=response.request.platform,
                         source="ucos", source_id=response.request.platform,
-                        provider="ucos", status="observed",
+                        provider="ucos", status="contextual",
                         payload={"platform": response.request.platform},
                         parent_event_id=parent,
                     )
@@ -522,7 +522,7 @@ class PipelineWiring:
                             lineage_id=str(metadata["lineage_id"]), stage="account",
                             entity_id=account_id, source="ucos",
                             source_id=account_id, provider="ucos",
-                            status="observed", payload={"account_id": account_id},
+                            status="contextual", payload={"account_id": account_id},
                             parent_event_id=parent,
                         )
                         parent = event.event_id
