@@ -11,15 +11,46 @@ permissions:
 jobs:
   deepseek:
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
-      - name: Diagnostic
+      - name: Test DeepSeek API without exposing the key
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-            echo "DEEPSEEK_SECRET_INJECTED=true"
-          else
-            echo "DEEPSEEK_SECRET_INJECTED=false"
+          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+            echo "DEEPSEEK_API_TEST=FAIL key_missing"
+            exit 1
           fi
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
+            https://api.deepseek.com/chat/completions \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
+            --data '{"model":"deepseek-flash","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
+          if [ "$status" != "200" ]; then
+            echo "DEEPSEEK_API_TEST=FAIL http_status=$status"
+            python - "$response_file" <<'PY'
+import json, sys
+try:
+    data=json.load(open(sys.argv[1], encoding="utf-8"))
+    err=data.get("error", {})
+    print("provider_error_type=" + str(err.get("type", "unknown")))
+    print("provider_error_code=" + str(err.get("code", "unknown")))
+except Exception:
+    print("provider_error_body=unparseable")
+PY
+            exit 1
+          fi
+          python - "$response_file" <<'PY'
+import json, sys
+data=json.load(open(sys.argv[1], encoding="utf-8"))
+content=(data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+if not content:
+    raise SystemExit("DEEPSEEK_API_TEST=FAIL empty_response")
+print("DEEPSEEK_API_TEST=PASS")
+print("DEEPSEEK_MODEL=" + str(data.get("model", "unknown")))
+print("DEEPSEEK_RESPONSE_NONEMPTY=true")
+PY
