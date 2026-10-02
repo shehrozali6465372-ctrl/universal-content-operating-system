@@ -213,20 +213,20 @@ jobs:
           publish_url = str(data.get("publish_result", {}).get("url") or "").strip()
           post_id_tail = str(pid).split("_")[-1]
           page_username = str(page_info.get("username") or "").strip()
-if page_username:
-    expected_page_url = f"https://www.facebook.com/{page_username}/posts/{post_id_tail}"
-    if publish_url != expected_page_url:
-        raise SystemExit(
-            "Facebook publish URL mismatch: publisher must return the target Page-scoped URL "
-            f"{expected_page_url}, got {publish_url}"
-        )
-else:
-    if not graph_permalink:
-        raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
-    if publish_url != graph_permalink:
-        raise SystemExit(
-            "Facebook publish URL mismatch: publisher URL must equal Graph canonical permalink "
-            f"when Page username is unavailable; got {publish_url}"
-        )
-if not graph_permalink:
-    raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
+          if page_username:
+              expected_page_url = f"https://www.facebook.com/{page_username}/posts/{post_id_tail}"
+              if publish_url != expected_page_url:
+                  raise SystemExit(
+                      "Facebook publish URL mismatch: publisher must return the target Page-scoped URL "
+                      f"{expected_page_url}, got {publish_url}"
+                  )
+          else:
+              if not graph_permalink:
+                  raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
+              if publish_url != graph_permalink:
+                  raise SystemExit(
+                      "Facebook publish URL mismatch: publisher URL must equal Graph canonical permalink "
+                      f"when Page username is unavailable; got {publish_url}"
+                  )
+          if not graph_permalink:
+              raise SystemExit("Facebook post verification failed: Graph API returned no permalink_url")
