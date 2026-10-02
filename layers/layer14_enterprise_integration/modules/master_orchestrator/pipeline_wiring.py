@@ -223,17 +223,37 @@ class PipelineWiring:
         return {"plan_id": getattr(plan, "plan_id", ""), "structure": getattr(plan, "structure", {})}
 
     def _preflight(self, req: ContentRequest, ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """Fail closed before expensive work when production AI publishing is requested."""
-        production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
-        mode = str(req.metadata.get("publish_mode") or ("production" if production else "staging")).strip().lower()
-        if mode not in {"staging", "production"}:
+        """Resolve publish mode from server environment; caller metadata cannot override it."""
+        app_env = os.environ.get("APP_ENV", "development").strip().lower()
+        production = app_env in {"production", "prod"}
+        effective_mode = "production" if production else "staging"
+
+        requested_mode = str(req.metadata.get("publish_mode") or "").strip().lower()
+        if requested_mode and requested_mode not in {"staging", "production"}:
             raise RuntimeError("publish_mode must be 'staging' or 'production'")
-        req.metadata["publish_mode"] = mode
+        if requested_mode and requested_mode != effective_mode:
+            raise RuntimeError(
+                f"caller publish_mode={requested_mode!r} conflicts with server-authoritative "
+                f"effective_mode={effective_mode!r}"
+            )
+
+        req.metadata["requested_publish_mode"] = requested_mode or None
+        req.metadata["publish_mode"] = effective_mode
+        ctx["effective_publish_mode"] = effective_mode
+
         configured = bool(self._router and self._gemini and self._key_manager and
                           self._key_manager.get_stats().get("total_keys", 0))
-        if production and mode == "production" and not configured:
-            raise RuntimeError("production publishing requires a configured AI provider; offline draft blocked at preflight")
-        return {"publish_mode": mode, "production": production, "ai_configured": configured}
+        if production and not configured:
+            raise RuntimeError(
+                "production publishing requires a configured AI provider; "
+                "offline draft blocked at preflight"
+            )
+        return {
+            "publish_mode": effective_mode,
+            "requested_publish_mode": requested_mode or None,
+            "production": production,
+            "ai_configured": configured,
+        }
 
     def _ai(self, req: ContentRequest, ctx: Dict[str, Any], response: ContentResponse) -> Dict[str, Any]:
         keywords = ", ".join(map(str, ctx.get("keywords", [])[:8]))
@@ -372,8 +392,10 @@ class PipelineWiring:
         if not request.topic:
             raise ValueError("topic is required")
         request.metadata.setdefault("lineage_id", str(uuid.uuid4()))
+        # Server-authoritative mode is resolved in preflight. Do not let callers
+        # select production/staging semantics through request metadata.
         production = os.environ.get("APP_ENV", "development").lower() in {"production", "prod"}
-        request.metadata.setdefault("publish_mode", "production" if production else "staging")
+        request.metadata.pop("publish_mode", None)
         response = ContentResponse(request)
         ctx: Dict[str, Any] = {}
         started = time.time()
