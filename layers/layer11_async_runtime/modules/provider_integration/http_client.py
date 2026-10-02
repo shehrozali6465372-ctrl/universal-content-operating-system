@@ -1,6 +1,8 @@
 """L11 external HTTP transport with bounded retries and production TLS enforcement."""
 from __future__ import annotations
-import json, os, time
+import json
+import os
+import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 from urllib.error import HTTPError, URLError
