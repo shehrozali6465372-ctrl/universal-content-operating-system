@@ -72,6 +72,7 @@ def test_production_ai_path_fails_closed_without_provider(monkeypatch):
     )
 
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("HF_TOKEN", raising=False)
     for key in (
         "GEMINI_API_KEY_1",
         "GEMINI_API_KEY_2",
