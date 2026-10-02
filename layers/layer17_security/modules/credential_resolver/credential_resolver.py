@@ -21,7 +21,8 @@ class AccountCredentialResolver:
 
     @classmethod
     def _env_key(cls, reference: str) -> str:
-        safe_reference = cls._SAFE.sub("_", reference).upper()\n        return f"UCOS_CREDENTIALS_{safe_reference}"
+        safe_reference = cls._SAFE.sub("_", reference).upper()
+        return f"UCOS_CREDENTIALS_{safe_reference}"
 
     @classmethod
     def resolve(cls, credentials_ref: str) -> Dict[str, str]:
