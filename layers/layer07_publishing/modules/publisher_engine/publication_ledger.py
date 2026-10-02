@@ -184,10 +184,10 @@ class PublicationLedger:
             ON CONFLICT (idempotency_key) DO NOTHING
             """,
             (
-                uuid4(),
+                str(uuid4()),
                 event_type,
                 "publish_intent",
-                intent_id,
+                str(intent_id),
                 idempotency_key,
                 hashlib.sha256(PublicationLedger._json(payload, {}).encode("utf-8")).hexdigest(),
                 PublicationLedger._json(payload, {}),
@@ -255,7 +255,7 @@ class PublicationLedger:
                 WHERE workflow_id=%s
                 FOR UPDATE
                 """,
-                (workflow_uuid,),
+                (str(workflow_uuid),),
             )
             workflow_row = cursor.fetchone()
             if not workflow_row:
@@ -389,7 +389,7 @@ class PublicationLedger:
                SET state=%s,updated_at=CURRENT_TIMESTAMP
              WHERE intent_id=%s AND state=%s
             """,
-            (next_state, intent_id, prior_state),
+            (next_state, str(intent_id), prior_state),
         )
         if cursor.rowcount != 1:
             raise RuntimeError(f"publication transition lost for {intent_id}")
@@ -409,7 +409,7 @@ class PublicationLedger:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT state FROM publish_intents WHERE intent_id=%s FOR UPDATE",
-                (intent_uuid,),
+                (str(intent_uuid),),
             )
             row = cursor.fetchone()
             if not row:
@@ -480,7 +480,7 @@ class PublicationLedger:
                 VALUES (%s,%s,%s,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '5 minutes',
                         CURRENT_TIMESTAMP + INTERVAL '5 minutes',%s,%s,'STARTED')
                 """,
-                (attempt_uuid, intent_uuid, attempt_number, provider, provider_key),
+                (str(attempt_uuid), str(intent_uuid), attempt_number, provider, provider_key),
             )
             self._transition_locked(
                 cursor,
@@ -702,7 +702,7 @@ class PublicationLedger:
                   (resolution_id,intent_id,actor_id,reason,evidence,prior_state,resulting_state)
                 VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)
                 """,
-                (uuid4(), intent_uuid, actor_id, reason, self._json(evidence, {}), prior_state, resulting_state),
+                (str(uuid4()), str(intent_uuid), actor_id, reason, self._json(evidence, {}), prior_state, resulting_state),
             )
             self._transition_locked(
                 cursor, intent_uuid, prior_state, resulting_state, key,
