@@ -105,6 +105,7 @@ class PipelineWiring:
         self._logger = PipelineLogger()
         self._key_manager = None
         self._gemini = None
+        self._deepseek = None
         self._router = None
         self._hf = None
         self._init_ai()
@@ -114,6 +115,7 @@ class PipelineWiring:
             from layers.layer12_ai_foundation.modules.model_router.key_manager import KeyManager
             from layers.layer12_ai_foundation.modules.model_router.model_router import ModelResponse, ModelRouter, RequestType
             from layers.layer12_ai_foundation.modules.model_router.gemini_provider import GeminiProvider
+            from layers.layer12_ai_foundation.modules.model_router.deepseek_provider import DeepSeekProvider
             self._key_manager = KeyManager()
             for idx, (env_name, secret_name) in enumerate(_GEMINI_KEYS, 1):
                 key = os.environ.get(env_name) or os.environ.get(secret_name)
@@ -121,6 +123,10 @@ class PipelineWiring:
                     self._key_manager.register_key(f"k{idx}", key, "gemini")
             self._gemini = GeminiProvider(self._key_manager)
             self._router = ModelRouter(self._key_manager)
+            deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+            if deepseek_key:
+                self._key_manager.register_key("deepseek-1", deepseek_key, "deepseek")
+            self._deepseek = DeepSeekProvider(self._key_manager) if deepseek_key else None
 
             def gemini_handler(request):
                 result = self._gemini.generate(
@@ -143,6 +149,23 @@ class PipelineWiring:
                 "gemini", handler=gemini_handler,
                 capabilities=[RequestType.TEXT, RequestType.CHAT],
             )
+            if self._deepseek:
+                def deepseek_handler(request):
+                    result = self._deepseek.chat(request.parameters["messages"], model=request.model) if request.parameters.get("messages") else self._deepseek.generate(request.prompt, model=request.model, system_prompt=request.system_prompt)
+                    content = (result.get("content") or "").strip()
+                    if not content:
+                        raise RuntimeError(result.get("error") or "DeepSeek returned empty content")
+                    response = ModelResponse(request.request_id, content)
+                    response.provider = result.get("provider", "deepseek")
+                    response.model_used = result.get("model", request.model or "deepseek")
+                    response.tokens_used = int(result.get("tokens_used") or 0)
+                    response.metadata = {"raw_provider": result.get("provider", "deepseek")}
+                    return response
+
+                self._router.register_provider(
+                    "deepseek", handler=deepseek_handler,
+                    capabilities=[RequestType.TEXT, RequestType.CHAT],
+                )
 
             hf_token = os.environ.get("HF_TOKEN", "").strip() if os.environ.get("UCOS_ENABLE_HF_FALLBACK", "").lower() == "true" else ""
             if hf_token:
@@ -169,9 +192,10 @@ class PipelineWiring:
                     capabilities=[RequestType.TEXT, RequestType.CHAT],
                 )
 
-            has_gemini = bool(self._key_manager.get_stats().get("total_keys", 0))
-            text_route = ["gemini"] if has_gemini else []
-            chat_route = ["gemini"] if has_gemini else []
+            has_gemini = any(item.get("provider") == "gemini" for item in self._key_manager.list_keys())
+            has_deepseek = any(item.get("provider") == "deepseek" for item in self._key_manager.list_keys())
+            text_route = (["deepseek"] if has_deepseek else []) + (["gemini"] if has_gemini else [])
+            chat_route = (["deepseek"] if has_deepseek else []) + (["gemini"] if has_gemini else [])
             if hf_token:
                 text_route.append("huggingface")
                 chat_route.append("huggingface")
@@ -328,8 +352,8 @@ class PipelineWiring:
             detail = routed.metadata.get("error", "No provider returned content")
             raise RuntimeError(f"L12 AI routing failed: {detail}")
         response.text = content[:req.max_length].rstrip()
-        ctx["ai_model"] = routed.model_used or "gemini"
-        ctx["ai_provider"] = routed.provider or "gemini"
+        ctx["ai_model"] = routed.model_used or "unknown"
+        ctx["ai_provider"] = routed.provider or "unknown"
         return {"model": ctx["ai_model"], "provider": ctx["ai_provider"],
                 "content_length": len(response.text), "router_request_id": routed.request_id}
 
@@ -627,6 +651,6 @@ class PipelineWiring:
 
     def status(self) -> Dict[str, Any]:
         stats = self._key_manager.get_stats() if self._key_manager else {}
-        return {"pipeline": "canonical", "ai_engine": "model-router/gemini" if self._router else "unavailable",
+        return {"pipeline": "canonical", "ai_engine": "model-router" if self._router else "unavailable",
                 "ai_router_providers": self._router.list_providers() if self._router else [],
                 "api_keys_configured": stats.get("total_keys", 0), "healthy_keys": stats.get("healthy", 0)}
