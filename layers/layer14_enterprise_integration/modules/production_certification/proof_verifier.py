@@ -414,7 +414,7 @@ class ProofVerifier:
         t0 = time.time()
 
         e = self._test_import_init(
-            "AsyncRuntime", "layers.layer11_async_runtime.modules.async_runtime_engine.runtime", "AsyncRuntime"
+            "AsyncEventLoop", "layers.layer15_async_runtime.modules.async_event_loop.async_event_loop", "AsyncEventLoop"
         )
         tests.append(e); score += 33 if e.status == "PASS" else 0
 
