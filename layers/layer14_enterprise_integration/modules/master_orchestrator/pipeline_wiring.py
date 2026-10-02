@@ -106,6 +106,7 @@ class PipelineWiring:
         self._key_manager = None
         self._gemini = None
         self._router = None
+        self._hf = None
         self._init_ai()
 
     def _init_ai(self) -> None:
@@ -138,10 +139,47 @@ class PipelineWiring:
                 response.metadata = {"raw_provider": result.get("provider", "gemini")}
                 return response
 
-            self._router.register_provider("gemini", handler=gemini_handler,
-                                           capabilities=[RequestType.TEXT, RequestType.CHAT])
-            self._router.set_routing(RequestType.TEXT, ["gemini"])
-            self._router.set_routing(RequestType.CHAT, ["gemini"])
+            self._router.register_provider(
+                "gemini", handler=gemini_handler,
+                capabilities=[RequestType.TEXT, RequestType.CHAT],
+            )
+
+            hf_token = os.environ.get("HF_TOKEN", "").strip()
+            if hf_token:
+                from layers.layer12_ai_foundation.modules.model_router.huggingface_provider import HuggingFaceProvider
+                self._hf = HuggingFaceProvider(hf_token)
+
+                def huggingface_handler(request):
+                    result = self._hf.generate(
+                        request.prompt, model=request.model,
+                        system_prompt=request.system_prompt, **request.parameters,
+                    )
+                    content = (result.get("content") or "").strip()
+                    if not content:
+                        raise RuntimeError(result.get("error") or "Hugging Face returned empty content")
+                    response = ModelResponse(request.request_id, content)
+                    response.provider = result.get("provider", "huggingface_inference")
+                    response.model_used = result.get("model", request.model or self._hf.model)
+                    response.tokens_used = int(result.get("tokens_used") or 0)
+                    response.metadata = {"raw_provider": result.get("provider", "huggingface_inference")}
+                    return response
+
+                self._router.register_provider(
+                    "huggingface", handler=huggingface_handler,
+                    capabilities=[RequestType.TEXT, RequestType.CHAT],
+                )
+
+            has_gemini = bool(self._key_manager.get_stats().get("total_keys", 0))
+            text_route = ["gemini"] if has_gemini else []
+            chat_route = ["gemini"] if has_gemini else []
+            if hf_token:
+                text_route.append("huggingface")
+                chat_route.append("huggingface")
+            if text_route:
+                self._router.set_routing(RequestType.TEXT, text_route)
+                self._router.set_routing(RequestType.CHAT, chat_route)
+            else:
+                self._router = None
         except Exception as exc:
             self._logger.log("L12-AI", f"init unavailable: {exc}")
             self._router = None
@@ -241,8 +279,13 @@ class PipelineWiring:
         req.metadata["publish_mode"] = effective_mode
         ctx["effective_publish_mode"] = effective_mode
 
-        configured = bool(self._router and self._gemini and self._key_manager and
-                          self._key_manager.get_stats().get("total_keys", 0))
+        configured = bool(
+            self._router
+            and (
+                (self._key_manager and self._key_manager.get_stats().get("total_keys", 0))
+                or os.environ.get("HF_TOKEN", "").strip()
+            )
+        )
         if production and not configured:
             raise RuntimeError(
                 "production publishing requires a configured AI provider; "
