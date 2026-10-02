@@ -237,13 +237,7 @@ class PublicationLedger:
                 INSERT INTO workflow_runs
                   (workflow_id,tenant_id,workspace_id,brand_id,account_id,platform,status)
                 VALUES (%s,%s,%s,%s,%s,%s,'RUNNING')
-                ON CONFLICT (workflow_id) DO UPDATE SET
-                  tenant_id=EXCLUDED.tenant_id,
-                  workspace_id=EXCLUDED.workspace_id,
-                  brand_id=EXCLUDED.brand_id,
-                  account_id=EXCLUDED.account_id,
-                  platform=EXCLUDED.platform,
-                  updated_at=CURRENT_TIMESTAMP
+                ON CONFLICT (workflow_id) DO NOTHING
                 """,
                 (
                     workflow_uuid,
@@ -254,6 +248,29 @@ class PublicationLedger:
                     platform,
                 ),
             )
+            cursor.execute(
+                """
+                SELECT tenant_id,workspace_id,brand_id,account_id,platform
+                FROM workflow_runs
+                WHERE workflow_id=%s
+                FOR UPDATE
+                """,
+                (workflow_uuid,),
+            )
+            workflow_row = cursor.fetchone()
+            if not workflow_row:
+                raise RuntimeError("workflow run could not be established")
+            expected_identity = (
+                tenant_id,
+                str(meta.get("workspace_id") or "") or None,
+                str(meta.get("brand_id") or "") or None,
+                account_id,
+                platform,
+            )
+            if tuple(workflow_row) != expected_identity:
+                raise PublicationConflictError(
+                    "workflow identity does not match tenant/workspace/brand/account/platform"
+                )
             cursor.execute(
                 """
                 SELECT intent_id,publish_operation_id,state,idempotency_key,content_hash,
