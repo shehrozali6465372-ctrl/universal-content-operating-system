@@ -1,10 +1,12 @@
 from pathlib import Path
+import os
 
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry, AccountSpec
 from layers.layer07_publishing.modules.account_control.meta_credentials import MetaCredentialProvider
 
 
 def test_meta_provider_derives_page_token_from_one_system_user_token(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
     registry = AccountRegistry(str(tmp_path / "registry.sqlite3"), str(tmp_path / "workspaces"))
     registry.register(AccountSpec(
         account_id="facebook:p1",
