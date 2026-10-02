@@ -105,11 +105,6 @@ class ProductionPipeline(PipelineWiring):
         from layers.layer20_image_pipeline.modules.media_lifecycle.media_asset import MediaAsset
 
         publish_mode = str(ctx.get("effective_publish_mode") or req.metadata.get("publish_mode") or "").strip().lower()
-        if publish_mode not in {"staging", "production"}:
-            raise RuntimeError("effective publish mode was not resolved by server preflight")
-        if publish_mode == "production" and ctx.get("ai_model") == "offline-draft":
-            raise RuntimeError("production publish boundary rejected offline-draft output")
-
         account_id = str(req.metadata.get("account_id") or "").strip()
         if not account_id:
             raise RuntimeError("production publishing requires account_id")
@@ -145,6 +140,11 @@ class ProductionPipeline(PipelineWiring):
         if requested_ref and requested_ref != registered_ref:
             raise RuntimeError(f"credentials_ref does not belong to account {account_id!r}")
         req.metadata["credentials_ref"] = registered_ref
+        if publish_mode not in {"staging", "production"}:
+            raise RuntimeError("effective publish mode was not resolved by server preflight")
+        if publish_mode == "production" and ctx.get("ai_model") == "offline-draft":
+            raise RuntimeError("production publish boundary rejected offline-draft output")
+
 
         if publish_mode == "production":
             for field in ("tenant_id", "workspace_id", "brand_id"):
