@@ -384,6 +384,40 @@ class PublicationLedger:
             f"{base_key}:state:{next_state}",
         )
 
+    def ensure_intent_created(self, reservation: LedgerReservation) -> LedgerReservation:
+        if reservation.state == "INTENT_CREATED" or reservation.reused:
+            return reservation
+        intent_uuid = self._uuid(reservation.intent_id, "intent_id")
+        with self._database._pool.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT state FROM publish_intents WHERE intent_id=%s FOR UPDATE",
+                (intent_uuid,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("publication intent does not exist")
+            state = str(row[0])
+            if state == "RESERVED":
+                self._transition_locked(
+                    cursor, intent_uuid, "RESERVED", "INTENT_CREATED",
+                    reservation.idempotency_key, {"recovered": True},
+                )
+                state = "INTENT_CREATED"
+            if state != "INTENT_CREATED":
+                raise ValueError(f"publication intent is not ready for provider attempt: {state}")
+        return LedgerReservation(
+            intent_id=reservation.intent_id,
+            publish_operation_id=reservation.publish_operation_id,
+            state="INTENT_CREATED",
+            account_id=reservation.account_id,
+            platform=reservation.platform,
+            platform_account_id=reservation.platform_account_id,
+            idempotency_key=reservation.idempotency_key,
+            publish_marker=reservation.publish_marker,
+            reused=reservation.reused,
+        )
+
     def begin_attempt(self, reservation: LedgerReservation, provider: str) -> LedgerAttempt:
         provider = str(provider or "").strip().lower()
         if not provider:
@@ -457,6 +491,10 @@ class PublicationLedger:
         url = str(getattr(result, "url", "") or "").strip()
         outcome_unknown = str(metadata.get("outcome") or "").lower() == "unknown"
         processing = str(metadata.get("publish_state") or "").lower() in {"processing", "pending"}
+        explicit_outcome = str(metadata.get("outcome") or "").strip().lower()
+        confirmed_failure = explicit_outcome in {
+            "confirmed_failure", "failed_confirmed", "rejected", "rejected_confirmed",
+        }
         if outcome_unknown:
             next_state = "OUTCOME_UNKNOWN"
             outcome = "AMBIGUOUS"
@@ -466,9 +504,12 @@ class PublicationLedger:
         elif processing and tracking_id:
             next_state = "SUBMITTED"
             outcome = "ACCEPTED_PROCESSING"
-        else:
+        elif confirmed_failure:
             next_state = "FAILED_CONFIRMED"
             outcome = "FAILED_CONFIRMED"
+        else:
+            next_state = "OUTCOME_UNKNOWN"
+            outcome = "AMBIGUOUS"
         with self._database._pool.transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
