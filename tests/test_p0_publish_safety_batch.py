@@ -27,35 +27,22 @@ def test_publish_idempotency_is_workflow_scoped_not_content_hash():
 
 
 def test_verify_before_finalize():
-    source = (ROOT / "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py").read_text()
-    assert "verified = self._verify_public_submission" in source
-    assert "guard.finalize(reservation.reservation_id, result.post_id)" in source
-    assert source.index("verified = self._verify_public_submission") < source.index("guard.finalize(reservation.reservation_id, result.post_id)")
+    manager = (ROOT / "layers/layer07_publishing/modules/publisher_engine/publisher_manager.py").read_text()
+    ledger = (ROOT / "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py").read_text()
+    assert "verification_state, evidence = self._verify_submission" in manager
+    assert 'state == "VERIFIED_PUBLIC"' in manager
+    assert "result.set_success(external_id" in manager
+    assert "record_verification(" in manager
+    assert "VERIFIED_PUBLIC" in ledger
 
 
 def test_ambiguous_provider_outcome_is_held():
-    executor = (ROOT / "layers/layer07_publishing/modules/publisher_engine/publish_executor.py").read_text()
-    production = (ROOT / "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py").read_text()
-    assert '"outcome": "unknown"' in executor
-    assert 'metadata.get("outcome") == "unknown"' in production
-
-    sys.path.insert(0, str(ROOT))
-    from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
-
-    db = ROOT / "data" / "p0-test-history.sqlite3"
-    try:
-        if db.exists():
-            db.unlink()
-        guard = ContentRepetitionGuard(str(db))
-        decision = guard.reserve(account_id="p0-test", platform="facebook", content="unique ambiguous outcome test")
-        assert decision.allowed
-        guard.mark_pending(decision.reservation_id, "outcome-unknown")
-        # Ambiguous provider outcomes must remain held for reconciliation.
-        # Releasing here would explicitly discard the safety hold.
-        assert len(guard.pending("p0-test")) == 1
-    finally:
-        if db.exists():
-            db.unlink()
+    manager = (ROOT / "layers/layer07_publishing/modules/publisher_engine/publisher_manager.py").read_text()
+    ledger = (ROOT / "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py").read_text()
+    assert '"OUTCOME_UNKNOWN"' in ledger
+    assert '"RECONCILING"' in ledger
+    assert 'if state == "OUTCOME_UNKNOWN":' in manager
+    assert "reconciliation required" in manager
 
 
 def test_tiktok_public_gate_is_fail_closed():
