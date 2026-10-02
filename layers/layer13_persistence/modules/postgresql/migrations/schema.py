@@ -208,6 +208,25 @@ TABLES.extend([
 ])
 
 TABLES.extend([
+    {"name": "credentials", "columns": [
+        "credential_id UUID PRIMARY KEY",
+        "credential_ref VARCHAR(512) NOT NULL UNIQUE",
+        "account_id VARCHAR(255) NOT NULL REFERENCES accounts(account_id)",
+        "platform_account_id VARCHAR(255) REFERENCES platform_accounts(platform_account_id)",
+        "encrypted_payload TEXT NOT NULL",
+        "key_version VARCHAR(100) NOT NULL",
+        "active BOOLEAN NOT NULL DEFAULT TRUE",
+        "revoked_at TIMESTAMPTZ",
+        "expires_at TIMESTAMPTZ",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_credentials_account ON credentials(account_id, active)",
+        "CREATE INDEX IF NOT EXISTS idx_credentials_platform_account ON credentials(platform_account_id, active)",
+    ]},
+])
+
+TABLES.extend([
     {"name": "workflow_runs", "columns": [
         "workflow_id UUID PRIMARY KEY", "tenant_id VARCHAR(255) NOT NULL",
         "workspace_id VARCHAR(255)", "brand_id VARCHAR(255)", "account_id VARCHAR(255)",
