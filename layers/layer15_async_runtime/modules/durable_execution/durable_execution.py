@@ -360,12 +360,12 @@ class DurableExecutionStore:
                 if int(attempt_count) >= int(max_attempts):
                     cur.execute("""
                         UPDATE durable_tasks
-                           SET state='DEAD_LETTER',retry_at=NULL,lease_owner=NULL,
-                               lease_expires_at=NULL,
+                           SET state='DEAD_LETTER',retry_at=NULL,available_at=NULL,
+                               lease_owner=NULL,lease_expires_at=NULL,
                                dlq_reason=COALESCE(last_error,'lease expired'),
                                updated_at=CURRENT_TIMESTAMP
                          WHERE task_id=%s AND state='RUNNING'
-                    """, (delay, delay, task_id))
+                    """, (task_id,))
                 else:
                     delay = min(3600, int(backoff_seconds) * (2 ** max(0, int(attempt_count) - 1)))
                     cur.execute("""
@@ -378,7 +378,7 @@ class DurableExecutionStore:
                                error_class='LeaseExpired',
                                updated_at=CURRENT_TIMESTAMP
                          WHERE task_id=%s AND state='RUNNING'
-                    """, (task_id,))
+                    """, (delay, delay, task_id))
             return len(rows)
 
     def get(self, task_id: str) -> Optional[DurableTask]:
