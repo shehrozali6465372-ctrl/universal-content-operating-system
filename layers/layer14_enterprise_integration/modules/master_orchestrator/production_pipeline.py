@@ -12,6 +12,7 @@ from layers.layer07_publishing.modules.account_control.policy_registry import Po
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
 from layers.layer07_publishing.modules.account_control.meta_credentials import MetaCredentialProvider
 from layers.layer17_security.modules.credential_resolver.credential_resolver import AccountCredentialResolver
+from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 
 
 class ProductionPipeline(PipelineWiring):
@@ -214,8 +215,28 @@ class ProductionPipeline(PipelineWiring):
             asset.platform_ready = True
             request.media_assets.append(asset)
 
+        guard = ContentRepetitionGuard()
+        reservation = guard.reserve(
+            account_id=account_id,
+            platform=req.platform,
+            content=response.text,
+            template_id=str(req.metadata.get("template_id") or ""),
+        )
+        if not reservation.allowed:
+            raise RuntimeError(reservation.reason or "content repetition guard blocked publication")
         result = manager.publish(request)
         metadata = dict(result.metadata or {})
+        if metadata.get("outcome") == "unknown":
+            guard.mark_pending(reservation.reservation_id, "outcome-unknown")
+            response.publish_result = {
+                "success": False,
+                "platform": req.platform,
+                "post_id": None,
+                "url": None,
+                "error": result.error_message or "provider outcome unknown; reconciliation required",
+                "metadata": metadata,
+            }
+            return {"published": False, "pending": True, "reason": "reconciliation_required"}
         data = {
             "success": bool(result.success),
             "platform": req.platform,
@@ -227,6 +248,11 @@ class ProductionPipeline(PipelineWiring):
         response.publish_result = data
 
         if result.success:
+            verified = self._verify_public_submission(req, result)
+            if not verified:
+                guard.mark_pending(reservation.reservation_id, result.post_id or "verification-pending")
+                raise RuntimeError("provider effect not independently verified; reconciliation required")
+            guard.finalize(reservation.reservation_id, result.post_id)
             response.publish_package = request.to_dict()
             ctx["post_id"] = result.post_id
             return data
@@ -245,6 +271,10 @@ class ProductionPipeline(PipelineWiring):
         if metadata.get("publication_blocked"):
             raise RuntimeError(result.error_message or "publication blocked by canonical ledger")
         raise RuntimeError(result.error_message or "publisher returned failure")
+
+    def _verify_public_submission(self, request: ContentRequest, result: Any) -> bool:
+        metadata = dict(getattr(result, "metadata", {}) or {})
+        return metadata.get("verified") is True
 
     def execute(self, request: ContentRequest) -> ContentResponse:
         # Make the workflow identity explicit for the frozen durable contracts.
