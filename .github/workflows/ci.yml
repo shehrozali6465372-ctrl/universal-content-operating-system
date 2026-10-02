@@ -65,7 +65,7 @@ jobs:
           npm install --ignore-scripts --no-audit --no-fund
 
       - name: Test DeepSeek API credential
-        if: github.event_name == 'push' && env.DEEPSEEK_API_KEY != ''
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && env.DEEPSEEK_API_KEY != ''
         shell: bash
         run: |
           set -euo pipefail
