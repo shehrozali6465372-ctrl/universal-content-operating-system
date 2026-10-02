@@ -15,6 +15,7 @@ class PluginManager:
             "pinterest":("layers.layer07_publishing.modules.platform_plugin_manager.pinterest.pinterest_publisher","PinterestPublisher"),
             "youtube":("layers.layer07_publishing.modules.platform_plugin_manager.youtube.youtube_publisher","YouTubePublisher"),
             "tiktok":("layers.layer07_publishing.modules.platform_plugin_manager.tiktok.tiktok_publisher","TikTokPublisher"),
+            "wordpress":("layers.layer11_async_runtime.modules.provider_integration.wordpress_publisher","WordPressPublisher"),
         }
         import importlib
         for platform,(module,name) in builtins.items():
