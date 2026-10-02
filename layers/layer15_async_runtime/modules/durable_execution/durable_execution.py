@@ -365,13 +365,14 @@ class DurableExecutionStore:
                                dlq_reason=COALESCE(last_error,'lease expired'),
                                updated_at=CURRENT_TIMESTAMP
                          WHERE task_id=%s AND state='RUNNING'
-                    """, (task_id,))
+                    """, (delay, delay, task_id))
                 else:
+                    delay = min(3600, int(backoff_seconds) * (2 ** max(0, int(attempt_count) - 1)))
                     cur.execute("""
                         UPDATE durable_tasks
                            SET state='RETRY_WAIT',
-                               retry_at=CURRENT_TIMESTAMP,
-                               available_at=CURRENT_TIMESTAMP,
+                               retry_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
+                               available_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
                                lease_owner=NULL,lease_expires_at=NULL,
                                last_error=COALESCE(last_error,'lease expired'),
                                error_class='LeaseExpired',
