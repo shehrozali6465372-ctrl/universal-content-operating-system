@@ -332,9 +332,9 @@ class PublicationLedger:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'RESERVED',%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
                 """,
                 (
-                    intent_id,
-                    workflow_uuid,
-                    operation_uuid,
+                    str(intent_id),
+                    str(workflow_uuid),
+                    str(operation_uuid),
                     tenant_id,
                     str(meta.get("workspace_id") or "") or None,
                     str(meta.get("brand_id") or "") or None,
