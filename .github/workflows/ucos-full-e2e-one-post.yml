@@ -57,6 +57,9 @@ jobs:
       - name: One real post through canonical UCOS autonomous pipeline
         env:
           APP_ENV: production
+          UCOS_TENANT_ID: ucos-cert-tenant
+          UCOS_WORKSPACE_ID: ucos-cert-workspace
+          UCOS_BRAND_ID: ucos-cert-brand
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: aios
