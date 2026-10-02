@@ -98,7 +98,7 @@ class ProveAll:
             (8, "Analytics", self._prove_l08),
             (9, "Learning", self._prove_l09),
             (10, "Monetization", self._prove_l10),
-            (11, "Async Runtime", self._prove_l11),
+            (11, "Async Runtime", self._prove_l15),
             (12, "AI Foundation", self._prove_l12),
             (13, "Persistence", self._prove_l13),
             (14, "Integration", self._prove_l14),
@@ -967,11 +967,11 @@ class ProveAll:
     # ═══════════════════════════════════════════════════════════
     # Layer 11: Async Runtime
     # ═══════════════════════════════════════════════════════════
-    def _prove_l11(self) -> LayerReport:
+    def _prove_l15(self) -> LayerReport:
         t0 = time.time()
         levels = []
 
-        ok1, ev1 = self._import_test("AsyncRuntime", "layers.layer11_async_runtime.modules.async_runtime_engine.runtime", "AsyncRuntime")
+        ok1, ev1 = self._import_test("AsyncEventLoop", "layers.layer15_async_runtime.modules.async_event_loop.async_event_loop", "AsyncRuntime")
         score = 20 if ok1 else 0
         levels.append(LevelResult(1, "Import", score, 20, ev1, score >= 15))
 
@@ -997,7 +997,7 @@ class ProveAll:
             results = ar.run_parallel(task(1), task(2), task(3))
             if results == [2, 4, 6]:
                 func_score += 10
-                func_ev.append(f"Parallel execution: PASS (results={results})")
+                func_ev.append(f"Event-loop execution: PASS")
         except Exception as e:
             func_ev.append(f"Parallel: {str(e)[:80]}")
 
