@@ -7,10 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from layers.layer05_image.modules.image_orchestrator.image_orchestrator import ImageOrchestrator
-from layers.layer09_learning.modules.self_improvement.self_improvement_manager import SelfImprovementManager
-
-
 ROOT = Path(__file__).resolve().parents[1]
 LAYERS = ROOT / "layers"
 
@@ -41,11 +37,13 @@ def test_every_architectural_layer_contains_python_implementation():
 
 
 def test_image_orchestration_fails_closed_without_real_provider():
+    from layers.layer05_image.modules.image_orchestrator.image_orchestrator import ImageOrchestrator
     with pytest.raises(RuntimeError, match="real image provider"):
         ImageOrchestrator()
 
 
 def test_learning_actions_require_observed_outcomes():
+    from layers.layer09_learning.modules.self_improvement.self_improvement_manager import SelfImprovementManager
     manager = SelfImprovementManager()
     result = manager.run_improvement_cycle(
         feedback=[{"negative": True, "category": "content", "description": "weak CTA"}],
@@ -58,6 +56,7 @@ def test_learning_actions_require_observed_outcomes():
 
 
 def test_learning_action_completion_uses_explicit_observed_outcome(monkeypatch):
+    from layers.layer09_learning.modules.self_improvement.self_improvement_manager import SelfImprovementManager
     manager = SelfImprovementManager()
     action = manager.action_manager.create(
         "fix", "medium", "Observed outcome test", target_area="content", source_id="test"
