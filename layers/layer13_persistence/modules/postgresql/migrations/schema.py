@@ -288,8 +288,10 @@ TABLES.extend([
         "dedupe_key VARCHAR(512) UNIQUE", "task_type VARCHAR(255) NOT NULL", "state VARCHAR(50) NOT NULL",
         "available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP", "lease_owner VARCHAR(255)",
         "lease_expires_at TIMESTAMPTZ", "attempt_count INTEGER NOT NULL DEFAULT 0",
+        "max_attempts INTEGER NOT NULL DEFAULT 3", "backoff_seconds INTEGER NOT NULL DEFAULT 5",
         "retry_at TIMESTAMPTZ", "cancel_requested BOOLEAN NOT NULL DEFAULT FALSE",
-        "last_error TEXT", "payload JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "last_error TEXT", "error_class VARCHAR(100)", "dlq_reason TEXT",
+        "payload JSONB NOT NULL DEFAULT '{}'::jsonb",
         "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
     ], "indexes": [
