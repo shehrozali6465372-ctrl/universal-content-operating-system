@@ -285,7 +285,7 @@ TABLES.extend([
     ]},
     {"name": "durable_tasks", "columns": [
         "task_id UUID PRIMARY KEY", "workflow_id UUID REFERENCES workflow_runs(workflow_id)",
-        "task_type VARCHAR(255) NOT NULL", "state VARCHAR(50) NOT NULL",
+        "dedupe_key VARCHAR(512) UNIQUE", "task_type VARCHAR(255) NOT NULL", "state VARCHAR(50) NOT NULL",
         "available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP", "lease_owner VARCHAR(255)",
         "lease_expires_at TIMESTAMPTZ", "attempt_count INTEGER NOT NULL DEFAULT 0",
         "retry_at TIMESTAMPTZ", "cancel_requested BOOLEAN NOT NULL DEFAULT FALSE",
@@ -339,6 +339,8 @@ def get_all_migration_sql():
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb",
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS content_asset_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS tracked_link_ref VARCHAR(512)",
+        "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(512)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_durable_tasks_dedupe ON durable_tasks(dedupe_key) WHERE dedupe_key IS NOT NULL",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS backoff_seconds INTEGER NOT NULL DEFAULT 5",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS error_class VARCHAR(100)",
