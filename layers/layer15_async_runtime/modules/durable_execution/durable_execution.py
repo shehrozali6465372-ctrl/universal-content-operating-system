@@ -371,8 +371,8 @@ class DurableExecutionStore:
                     cur.execute("""
                         UPDATE durable_tasks
                            SET state='RETRY_WAIT',
-                               retry_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
-                               available_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
+                               retry_at=CURRENT_TIMESTAMP,
+                               available_at=CURRENT_TIMESTAMP,
                                lease_owner=NULL,lease_expires_at=NULL,
                                last_error=COALESCE(last_error,'lease expired'),
                                error_class='LeaseExpired',
