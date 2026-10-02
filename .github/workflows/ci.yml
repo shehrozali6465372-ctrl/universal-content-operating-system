@@ -44,6 +44,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
       SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -139,7 +140,41 @@ jobs:
               raise SystemExit("Gemini smoke test: persisted image is missing or empty")
           print(f"Gemini smoke PASS: bytes={len(result.image_data)} sha256={digest}")
           PY
-        
+
+      - name: Hugging Face Image Generation Smoke Test
+        if: env.HF_TOKEN != ''
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from huggingface_hub import InferenceClient
+
+          token = os.environ.get("HF_TOKEN")
+          if not token:
+              raise SystemExit("HF smoke test: HF_TOKEN is missing")
+
+          client = InferenceClient(provider="auto", api_key=token)
+          image = client.text_to_image(
+              "A clean professional abstract digital marketing background, geometric shapes, subtle gradients, no text",
+              model="black-forest-labs/FLUX.1-schnell",
+              width=512,
+              height=512,
+          )
+          output = Path("hf-smoke-image.png")
+          image.save(output)
+          if not output.is_file() or output.stat().st_size == 0:
+              raise SystemExit("HF smoke test: generated image is missing or empty")
+          print(f"HF image smoke PASS: bytes={output.stat().st_size}")
+          PY
+
+      - name: Upload HF Image Smoke Artifact
+        if: always() && env.HF_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-image-smoke
+          path: hf-smoke-image.png
+          if-no-files-found: ignore
+
       - name: Run Layer 14 Production Gate
         run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
 
