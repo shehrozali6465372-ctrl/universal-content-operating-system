@@ -144,7 +144,7 @@ class PipelineWiring:
                 capabilities=[RequestType.TEXT, RequestType.CHAT],
             )
 
-            hf_token = os.environ.get("HF_TOKEN", "").strip()
+            hf_token = os.environ.get("HF_TOKEN", "").strip() if os.environ.get("UCOS_ENABLE_HF_FALLBACK", "").lower() == "true" else ""
             if hf_token:
                 from layers.layer12_ai_foundation.modules.model_router.huggingface_provider import HuggingFaceProvider
                 self._hf = HuggingFaceProvider(hf_token)
@@ -283,7 +283,7 @@ class PipelineWiring:
             self._router
             and (
                 (self._key_manager and self._key_manager.get_stats().get("total_keys", 0))
-                or os.environ.get("HF_TOKEN", "").strip()
+                or (os.environ.get("HF_TOKEN", "").strip() and os.environ.get("UCOS_ENABLE_HF_FALLBACK", "").lower() == "true")
             )
         )
         if production and not configured:
