@@ -18,7 +18,7 @@ from threading import RLock
 from datetime import datetime, timezone
 
 from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionPool, ConnectionConfig
-from layers.layer13_persistence.modules.postgresql.migrations.schema import TABLES, get_all_indexes_sql
+from layers.layer13_persistence.modules.postgresql.migrations.schema import TABLES, get_all_indexes_sql, get_all_migration_sql
 from layers.layer13_persistence.modules.postgresql.repositories.repositories import (
     ConfigRepository, MemoryRepository, LogRepository,
     PostRepository, AnalyticsRepository, LearningRepository, JobRepository,
@@ -121,6 +121,8 @@ class PostgreSQLManager:
             for table in TABLES:
                 cols = ", ".join(table["columns"])
                 cursor.execute(f"CREATE TABLE IF NOT EXISTS {table['name']} ({cols})")
+            for migration_sql in get_all_migration_sql():
+                cursor.execute(migration_sql)
             for idx_sql in get_all_indexes_sql():
                 cursor.execute(idx_sql)
 
