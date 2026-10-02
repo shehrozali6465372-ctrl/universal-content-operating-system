@@ -71,13 +71,18 @@ class WordPressPublisher:
         self._base_url = base
         self._username = username
         self._application_password = password
-        response = self.http.request(
-            "GET",
-            urljoin(self._base_url + "/", "wp-json/wp/v2/users/me"),
-            headers=self._auth_header(),
-            accepted_statuses=(200,),
-        )
-        return isinstance(response.data, dict) and bool(response.data.get("id"))
+        try:
+            response = self.http.request(
+                "GET",
+                urljoin(self._base_url + "/", "wp-json/wp/v2/users/me"),
+                headers=self._auth_header(),
+                accepted_statuses=(200,),
+            )
+        except Exception:
+            self._authenticated = False
+            return False
+        self._authenticated = isinstance(response.data, dict) and bool(response.data.get("id"))
+        return self._authenticated
 
     def validate(self, content: str, content_type: str = "post") -> bool:
         return bool(str(content or "").strip()) and content_type in {"post", "article"}
