@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List
 
-PUBLISH_STATUSES = ("pending", "uploading", "publishing", "published", "failed", "cancelled", "rollback")
+PUBLISH_STATUSES = ("pending", "uploading", "publishing", "published", "verified", "failed", "cancelled", "rollback")
 
 
 class StatusRecord:
