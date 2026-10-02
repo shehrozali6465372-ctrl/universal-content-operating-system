@@ -917,52 +917,59 @@ class ProofVerifier:
     def _test_async_runtime_functional(self) -> TestEvidence:
         t0 = time.time()
         try:
-            from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncRuntime
-            ar = AsyncRuntime()
-            ar.start()
-            assert ar.is_running
-            ar.stop()
+            from layers.layer15_async_runtime.modules.async_event_loop.async_event_loop import AsyncEventLoop
+            manager = AsyncEventLoop()
+            info = manager.create_loop("proof-verifier")
+            value = manager.run_until_complete(manager.run_coroutine(_proof_value()))
+            stopped = manager.stop_loop(info.loop_id)
             return TestEvidence(
-                test_name="AsyncRuntime Start/Stop",
-                status="PASS",
+                test_name="AsyncEventLoop Lifecycle",
+                status="PASS" if value == 42 and stopped else "FAIL",
                 duration_ms=(time.time() - t0) * 1000,
-                evidence={"start_stop": True, "running": ar.is_running}
+                evidence={"value": value, "stopped": stopped},
             )
         except Exception as e:
             return TestEvidence(
-                test_name="AsyncRuntime Start/Stop",
+                test_name="AsyncEventLoop Lifecycle",
                 status="FAIL",
                 duration_ms=(time.time() - t0) * 1000,
                 evidence={},
-                error=str(e)[:200]
+                error=str(e)[:200],
             )
+
 
     def _test_async_parallel(self) -> TestEvidence:
         t0 = time.time()
         try:
+            from layers.layer15_async_runtime.modules.async_scheduler.async_scheduler import AsyncScheduler
             import asyncio
-            from layers.layer11_async_runtime.modules.async_runtime_engine.runtime import AsyncRuntime
-            ar = AsyncRuntime()
+            scheduler = AsyncScheduler(max_concurrent=3)
 
-            async def slow_task(n):
+            async def task(n):
                 await asyncio.sleep(0.01)
                 return n * 2
 
-            results = ar.run_parallel(slow_task(1), slow_task(2), slow_task(3))
+            scheduled = [scheduler.schedule(task, i) for i in (1, 2, 3)]
+            results = asyncio.run(scheduler.run_all())
+            correct = [r.get("result") for r in results] == [2, 4, 6]
             return TestEvidence(
-                test_name="AsyncRuntime Parallel",
-                status="PASS" if results == [2, 4, 6] else "WARN",
+                test_name="Layer 15 Async Scheduler",
+                status="PASS" if correct and len(scheduled) == 3 else "FAIL",
                 duration_ms=(time.time() - t0) * 1000,
-                evidence={"results": results, "correct": results == [2, 4, 6]}
+                evidence={"results": results, "correct": correct},
             )
         except Exception as e:
             return TestEvidence(
-                test_name="AsyncRuntime Parallel",
+                test_name="Layer 15 Async Scheduler",
                 status="FAIL",
                 duration_ms=(time.time() - t0) * 1000,
                 evidence={},
-                error=str(e)[:200]
+                error=str(e)[:200],
             )
+
+
+async def _proof_value():
+    return 42
 
     def _test_key_rotation(self) -> TestEvidence:
         t0 = time.time()
