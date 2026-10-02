@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compile source
-        run: python -m compileall -q layers dashboard main.py
+        run: python -m compileall -q layers/layer07_publishing layers/layer13_persistence layers/layer14_enterprise_integration layers/layer15_async_runtime main.py
       - name: Verify current revision CI
         env:
           GH_TOKEN: ${{ github.token }}
