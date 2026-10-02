@@ -160,7 +160,7 @@ jobs:
           print("UCOS_PIPELINE=" + json.dumps(data, sort_keys=True))
 
           required = ["L2-Research","L3-Intelligence","L4-Writing","L12-AI","L5-Image","L6-Quality","L7-Publish","L8-Analytics","L9-Learning"]
-          actual = [s["layer"] for s in data["steps"]]
+          actual = [s["layer"] for s in data["steps"] if s["layer"] != "P0-Preflight"]
           print("EXPECTED_CANONICAL_STEPS=" + json.dumps(required))
           print("ACTUAL_CANONICAL_STEPS=" + json.dumps(actual))
           if actual != required:
