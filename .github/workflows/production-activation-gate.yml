@@ -14,6 +14,11 @@ on:
       - "main.py"
       - "layers/layer14_enterprise_integration/**"
       - "layers/layer07_publishing/**"
+      - "layers/layer11_async_runtime/**"
+      - "layers/layer13_persistence/**"
+      - "layers/layer15_async_runtime/**"
+      - "tests/test_production_architecture_contracts.py"
+      - "scripts/check_l11_boundary.py"
   workflow_dispatch:
 permissions:
   contents: read
