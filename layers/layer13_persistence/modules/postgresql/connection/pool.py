@@ -104,6 +104,10 @@ class ConnectionPool:
             try:
                 import psycopg2
                 import psycopg2.pool
+                import psycopg2.extras
+
+                # Register UUID adaptation at the canonical L13 database boundary.
+                psycopg2.extras.register_uuid()
 
                 self._pg_conn_pool = psycopg2.pool.ThreadedConnectionPool(
                     self._config.min_connections,
