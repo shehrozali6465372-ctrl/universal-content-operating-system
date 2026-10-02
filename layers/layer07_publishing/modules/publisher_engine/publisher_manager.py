@@ -1,5 +1,7 @@
 """L07 PublicationGateway orchestration.
 
+Certification: Graph owner identity is authoritative for provider verification.
+
 Production publication uses the frozen v1.2 PostgreSQL publication ledger:
 reserve -> PublishAttempt -> provider mutation -> provider effect -> verification.
 Legacy SQLite repetition state is retained only for non-production migration/test
