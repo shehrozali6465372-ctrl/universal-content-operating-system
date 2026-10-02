@@ -3,6 +3,7 @@ name: UCOS Full End-to-End One Real Autonomous Post
 # Live provider credential gate recheck.
 # Production certification execution marker: run exactly once per certification revision.
 # Research provider: SerpAPI when configured, Google News RSS fallback otherwise.
+# Certification conformance: exclude P0 preflight from canonical layer list.
 on:
   push:
     branches: [main]
