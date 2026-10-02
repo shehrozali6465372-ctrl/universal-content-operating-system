@@ -367,7 +367,6 @@ class DurableExecutionStore:
                          WHERE task_id=%s AND state='RUNNING'
                     """, (task_id,))
                 else:
-                    delay = min(3600, int(backoff_seconds) * (2 ** max(0, int(attempt_count) - 1)))
                     cur.execute("""
                         UPDATE durable_tasks
                            SET state='RETRY_WAIT',
@@ -378,7 +377,7 @@ class DurableExecutionStore:
                                error_class='LeaseExpired',
                                updated_at=CURRENT_TIMESTAMP
                          WHERE task_id=%s AND state='RUNNING'
-                    """, (delay, delay, task_id))
+                    """, (task_id,))
             return len(rows)
 
     def get(self, task_id: str) -> Optional[DurableTask]:
