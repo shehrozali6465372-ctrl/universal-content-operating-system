@@ -515,7 +515,7 @@ class ProductionCertifier:
             ("PlannerManager", "layers.layer04_writing.modules.content_planner.planner_manager", "PlannerManager"),
             ("QualityOrchestrator", "layers.layer06_quality.modules.quality_orchestrator.quality_orchestrator", "QualityOrchestrator"),
             ("LessonGenerator", "layers.layer09_learning.modules.learning_engine.lesson_generator", "LessonGenerator"),
-            ("AsyncRuntime", "layers.layer11_async_runtime.modules.async_runtime_engine.runtime", "AsyncRuntime"),
+            ("AsyncRuntime", "layers.layer15_async_runtime.modules.async_event_loop.async_event_loop", "AsyncEventLoop"),
         ]
 
         for name, mod_path, cls_name in components:
