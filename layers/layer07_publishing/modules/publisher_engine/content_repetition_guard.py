@@ -18,6 +18,14 @@ class RepetitionDecision:
 class ContentRepetitionGuard:
     """Reject repeated content/templates and retain pending real publications."""
     def __init__(self, db_path: Optional[str] = None) -> None:
+        production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
+        # v1.2: PostgreSQL is the production source of truth. This legacy
+        # SQLite guard remains available only for development/test migration.
+        if production and not db_path:
+            raise RuntimeError(
+                "L07 repetition guard cannot use SQLite in production; "
+                "use the canonical PostgreSQL publication ledger"
+            )
         self.db_path = db_path or os.environ.get("UCOS_CONTENT_HISTORY_DB") or _DEFAULT_DB
         parent = os.path.dirname(os.path.abspath(self.db_path))
         if parent: os.makedirs(parent, exist_ok=True)
