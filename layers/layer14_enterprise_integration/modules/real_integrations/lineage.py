@@ -99,7 +99,7 @@ class LineageStore:
     ) -> LineageEvent:
         if stage not in STAGES:
             raise ValueError(f"unsupported lineage stage: {stage}")
-        if status not in {"observed", "pending", "failed"}:
+        if status not in {"observed", "derived", "contextual", "pending", "failed"}:
             raise ValueError(f"unsupported lineage status: {status}")
         if not lineage_id.strip() or not entity_id.strip() or not source.strip() or not source_id.strip():
             raise ValueError("lineage_id, entity_id, source and source_id are required")
