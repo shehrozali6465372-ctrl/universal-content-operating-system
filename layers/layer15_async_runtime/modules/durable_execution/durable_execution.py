@@ -13,6 +13,7 @@ import os
 import socket
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, Optional
 from uuid import UUID, uuid4
@@ -113,7 +114,7 @@ class DurableExecutionStore:
                 cur.execute(
                     """
                     SELECT task_id,workflow_id,task_type,state,attempt_count,max_attempts,
-                           COALESCE(lease_owner,''),lease_expires_at,retry_at,cancel_requested,payload
+                           COALESCE(lease_owner,'') AS lease_owner,lease_expires_at,retry_at,cancel_requested,payload
                     FROM durable_tasks WHERE dedupe_key=%s
                     FOR UPDATE
                     """,
@@ -129,7 +130,7 @@ class DurableExecutionStore:
                         state=str(row["state"]),
                         attempt_count=int(row["attempt_count"]),
                         max_attempts=int(row["max_attempts"]),
-                        lease_owner=str(row["coalesce"] if "coalesce" in row else row.get("lease_owner") or ""),
+                        lease_owner=str(row.get("lease_owner") or ""),
                         lease_expires_at=row.get("lease_expires_at"),
                         retry_at=row.get("retry_at"),
                         cancel_requested=bool(row["cancel_requested"]),
@@ -320,7 +321,7 @@ class DurableExecutionStore:
             else:
                 delay = min(3600, int(backoff_seconds) * (2 ** max(0, int(attempt_count) - 1)))
                 next_state = "RETRY_WAIT"
-                retry_at = datetime.now(timezone.utc) + __import__("datetime").timedelta(seconds=delay)
+                retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
                 dlq_reason = None
             cur.execute(
                 """
