@@ -281,6 +281,24 @@ class PublisherManager:
                 return "VERIFIED_PUBLIC", evidence
             return "VERIFICATION_UNKNOWN", evidence
 
+        if platform == "wordpress":
+            provider_status = str(post.get("status") or "").lower()
+            canonical_url = str(post.get("link") or post.get("url") or "")
+            evidence.update({
+                "provider_status": provider_status,
+                "canonical_url": canonical_url,
+                "post_id": str(post.get("id") or external_id),
+            })
+            if (
+                str(post.get("id") or external_id) == external_id
+                and provider_status == "publish"
+                and canonical_url
+            ):
+                return "VERIFIED_PUBLIC", evidence
+            if provider_status in {"draft", "pending", "future", "private"}:
+                return "PUBLISHED_NOT_PUBLIC", evidence
+            return "VERIFICATION_UNKNOWN", evidence
+
         canonical_url = str(post.get("url") or metadata.get("url") or "")
         evidence["canonical_url"] = canonical_url
         if canonical_url:
