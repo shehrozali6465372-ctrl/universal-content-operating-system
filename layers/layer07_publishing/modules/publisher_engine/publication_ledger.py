@@ -226,8 +226,34 @@ class PublicationLedger:
         assets = meta.get("content_asset_refs")
         if assets is None:
             assets = [getattr(asset, "asset_id", "") or getattr(asset, "file_path", "") for asset in getattr(request, "media_assets", [])]
+        if production and not str(meta.get("workspace_id") or "").strip():
+            raise ValueError("workspace_id is required for production publication")
+        if production and not str(meta.get("brand_id") or "").strip():
+            raise ValueError("brand_id is required for production publication")
         with self._database._pool.transaction() as conn:
             cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO workflow_runs
+                  (workflow_id,tenant_id,workspace_id,brand_id,account_id,platform,status)
+                VALUES (%s,%s,%s,%s,%s,%s,'RUNNING')
+                ON CONFLICT (workflow_id) DO UPDATE SET
+                  tenant_id=EXCLUDED.tenant_id,
+                  workspace_id=EXCLUDED.workspace_id,
+                  brand_id=EXCLUDED.brand_id,
+                  account_id=EXCLUDED.account_id,
+                  platform=EXCLUDED.platform,
+                  updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    workflow_uuid,
+                    tenant_id,
+                    str(meta.get("workspace_id") or "") or None,
+                    str(meta.get("brand_id") or "") or None,
+                    account_id,
+                    platform,
+                ),
+            )
             cursor.execute(
                 """
                 SELECT intent_id,publish_operation_id,state,idempotency_key,content_hash,
@@ -571,6 +597,60 @@ class PublicationLedger:
                 {"verification": evidence},
             )
         return state
+
+    def get_provider_effect(self, intent_id: str) -> Optional[Dict[str, Any]]:
+        intent_uuid = self._uuid(intent_id, "intent_id")
+        return self._database._pool.query_one(
+            """
+            SELECT pe.*
+            FROM provider_effects pe
+            JOIN publish_attempts pa ON pa.attempt_id = pe.attempt_id
+            WHERE pa.intent_id=%s
+            ORDER BY pe.observed_at DESC
+            LIMIT 1
+            """,
+            (intent_uuid,),
+        )
+
+    def record_operator_resolution(
+        self,
+        intent_id: str,
+        actor_id: str,
+        reason: str,
+        evidence: Dict[str, Any],
+        resulting_state: str,
+    ) -> str:
+        resulting_state = str(resulting_state or "").strip().upper()
+        if resulting_state not in {"VERIFIED_PUBLIC", "FAILED_CONFIRMED", "RECONCILING"}:
+            raise ValueError("operator resolution may only result in VERIFIED_PUBLIC, FAILED_CONFIRMED or RECONCILING")
+        intent_uuid = self._uuid(intent_id, "intent_id")
+        with self._database._pool.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT state,idempotency_key FROM publish_intents WHERE intent_id=%s FOR UPDATE",
+                (intent_uuid,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("publication intent does not exist")
+            prior_state, key = str(row[0]), str(row[1])
+            if prior_state not in _UNRESOLVED | {"EXPIRED_UNVERIFIED"}:
+                raise ValueError(f"operator resolution is not applicable to {prior_state}")
+            if resulting_state == "RECONCILING" and prior_state not in {"EXPIRED_UNVERIFIED", "IDENTITY_MISMATCH", "VERIFICATION_FAILED", "VERIFICATION_UNKNOWN"}:
+                raise ValueError(f"cannot reopen {prior_state} as RECONCILING")
+            cursor.execute(
+                """
+                INSERT INTO operator_resolutions
+                  (resolution_id,intent_id,actor_id,reason,evidence,prior_state,resulting_state)
+                VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)
+                """,
+                (uuid4(), intent_uuid, actor_id, reason, self._json(evidence, {}), prior_state, resulting_state),
+            )
+            self._transition_locked(
+                cursor, intent_uuid, prior_state, resulting_state, key,
+                {"actor_id": actor_id, "reason": reason, "operator_evidence": evidence},
+            )
+        return resulting_state
 
     def get_intent(self, intent_id: str) -> Optional[Dict[str, Any]]:
         intent_uuid = self._uuid(intent_id, "intent_id")
