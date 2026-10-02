@@ -121,6 +121,6 @@ def test_production_pipeline_rejects_credentials_from_another_account(monkeypatc
         try:
             production_pipeline.ProductionPipeline()._publish(req, response, {})
         except RuntimeError as exc:
-            assert "credentials_ref does not belong" in str(exc)
+            assert "credentials_ref does not match canonical account identity" in str(exc)
         else:
             raise AssertionError("cross-account credentials_ref was accepted")
