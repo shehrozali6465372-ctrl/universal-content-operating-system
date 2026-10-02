@@ -12,6 +12,10 @@ from layers.layer23_website_manager.models.article import Article, ArticleStatus
 from layers.layer23_website_manager.exceptions import DuplicateArticleError, PublishError, WebsiteNotFoundError
 
 
+def _production() -> bool:
+    return os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
+
+
 class Publisher:
     """Manage article lifecycle with durable atomic disk persistence."""
 
@@ -28,6 +32,8 @@ class Publisher:
     def create_article(self, title: str, content: str = "", slug: str = "",
                        category_id: str = "", tags: Optional[List[str]] = None,
                        author: str = "Admin", status: ArticleStatus = ArticleStatus.DRAFT) -> Article:
+        if _production() and status == ArticleStatus.PUBLISHED:
+            raise PublishError("direct published status is disabled in production; use WebsiteManager.publish_article")
         article = Article(title=title, content=content, slug=slug or self._generate_slug(title),
                           category_id=category_id, tags=tags or [], author=author, status=status)
         return self.save_article(article)
@@ -99,6 +105,8 @@ class Publisher:
             return True
 
     def publish_article(self, article_id: str) -> Article:
+        if _production():
+            raise PublishError("direct local article publication is disabled in production; use WebsiteManager.publish_article")
         article = self.get_article(article_id)
         if not article:
             raise WebsiteNotFoundError(f"Article {article_id} not found")
@@ -142,6 +150,8 @@ class Publisher:
                     if a.status == ArticleStatus.SCHEDULED and 0 < a.scheduled_at <= now]
 
     def process_scheduled(self) -> int:
+        if _production():
+            raise PublishError("direct scheduled publication is disabled in production; route scheduled work through L15 -> L07")
         count = 0
         for article in self.get_due_articles():
             try:
