@@ -88,7 +88,7 @@ class GeminiProvider:
         max_attempts = self._max_key_attempts()
 
         for _ in range(max_attempts):
-            selected = self._key_manager.select_key_with_id("text") if self._key_manager else None
+            selected = self._key_manager.select_key_with_id("text", provider="gemini") if self._key_manager else None
             if not selected:
                 break
             key_id_used, api_key = selected
@@ -152,7 +152,7 @@ class GeminiProvider:
         max_attempts = self._max_key_attempts()
 
         for _ in range(max_attempts):
-            selected = self._key_manager.select_key_with_id("chat") if self._key_manager else None
+            selected = self._key_manager.select_key_with_id("chat", provider="gemini") if self._key_manager else None
             if not selected:
                 break
             key_id_used, api_key = selected
