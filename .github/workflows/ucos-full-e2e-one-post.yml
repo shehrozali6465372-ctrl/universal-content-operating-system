@@ -10,6 +10,8 @@ on:
       - ".github/workflows/ucos-full-e2e-one-post.yml"
       - ".github/workflows/production-activation-gate.yml"
       - "layers/layer07_publishing/modules/platform_plugin_manager/facebook/facebook_publisher.py"
+      - "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py"
+      - "layers/layer07_publishing/modules/publisher_engine/publisher_manager.py"
       - "layers/layer13_persistence/**"
       - "layers/layer17_security/**"
       - "layers/layer15_async_runtime/**"
