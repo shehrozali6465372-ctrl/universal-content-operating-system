@@ -68,6 +68,7 @@ jobs:
           GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINIAPIKEY2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINIAPIKEY3 }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           UCOS_ACCOUNT_REGISTRY_DB: ${{ runner.temp }}/ucos-e2e/accounts/registry.sqlite3
           UCOS_ACCOUNT_WORKSPACES: ${{ runner.temp }}/ucos-e2e/accounts/workspaces
           UCOS_CONTENT_HISTORY_DB: ${{ runner.temp }}/ucos-e2e/content-history.sqlite3
