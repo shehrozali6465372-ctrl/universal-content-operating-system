@@ -1,16 +1,18 @@
 """Publish Request — Data model for publishing requests."""
 from __future__ import annotations
 import time
-import itertools
+import uuid
 from typing import Any, Dict, List, Optional
 
 from layers.layer07_publishing.modules.media_manager.media_asset import MediaAsset
 
-_REQUEST_COUNTER = itertools.count(1)
-
 
 class PublishRequest:
-    """A validated, ready-to-execute publishing request."""
+    """A validated, ready-to-execute publishing request.
+
+    Request identity is durable-safe: UUID4 is generated per logical request
+    instead of a process-local counter, so worker restarts cannot recycle IDs.
+    """
 
     __slots__ = (
         "request_id", "platform", "content", "content_type",
@@ -24,7 +26,7 @@ class PublishRequest:
         content: str = "",
         content_type: str = "post",
     ) -> None:
-        self.request_id: str = f"req_{next(_REQUEST_COUNTER)}"
+        self.request_id: str = f"req_{uuid.uuid4()}"
         self.platform = platform
         self.content = content
         self.content_type = content_type
