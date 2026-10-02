@@ -1,0 +1,83 @@
+name: UCOS Cross-Layer Architecture Conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "layers/**"
+      - "tests/test_cross_layer_architecture_conformance.py"
+      - "tests/test_production_architecture_contracts.py"
+      - "requirements.txt"
+      - ".github/workflows/architecture-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-conformance:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ucos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ucos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      APP_ENV: test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ucos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install production test dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile complete repository
+        run: python -m compileall -q layers dashboard main.py tests
+      - name: Run frozen architecture contracts
+        run: pytest -q tests/test_cross_layer_architecture_conformance.py tests/test_production_architecture_contracts.py
+      - name: Verify PostgreSQL schema and migrations
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg2
+          from layers.layer13_persistence.modules.postgresql.migrations.schema import (
+              TABLES, get_all_indexes_sql, get_all_migration_sql
+          )
+          conn = psycopg2.connect(
+              host=os.environ["POSTGRES_HOST"], port=os.environ["POSTGRES_PORT"],
+              dbname=os.environ["POSTGRES_DB"], user=os.environ["POSTGRES_USER"],
+              password=os.environ["POSTGRES_PASSWORD"],
+          )
+          try:
+              with conn:
+                  with conn.cursor() as cur:
+                      for table in TABLES:
+                          cur.execute(
+                              f"CREATE TABLE IF NOT EXISTS {table['name']} ({', '.join(table['columns'])})"
+                          )
+                      for sql in get_all_migration_sql():
+                          cur.execute(sql)
+                      for sql in get_all_indexes_sql():
+                          cur.execute(sql)
+                      cur.execute("SELECT indexname FROM pg_indexes WHERE tablename='durable_tasks' AND indexname='uq_durable_tasks_dedupe'")
+                      assert cur.fetchone(), "canonical durable-task dedupe index missing"
+                      cur.execute("SELECT 1 FROM pg_constraint WHERE conname='durable_tasks_dedupe_key_key'")
+                      assert cur.fetchone() is None, "redundant durable_tasks dedupe constraint remains"
+          finally:
+              conn.close()
+          print("POSTGRES_SCHEMA_MIGRATION=PASS")
