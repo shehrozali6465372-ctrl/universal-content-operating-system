@@ -222,6 +222,8 @@ class DurableExecutionStore:
                 return None
             values = dict(zip([d[0] for d in cur.description], row))
             next_attempt = int(values["attempt_count"]) + 1
+            if next_attempt > int(values["max_attempts"]):
+                return None
             cur.execute(
                 """
                 UPDATE durable_tasks
