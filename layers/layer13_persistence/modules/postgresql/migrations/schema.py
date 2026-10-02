@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.2.0"
 
 TABLES = [
     {
@@ -139,6 +139,109 @@ TABLES = [
         ],
     },
 ]
+
+
+
+# v1.2 canonical workflow/publication records. Legacy tables remain during
+# migration, but production business state must use these canonical records.
+TABLES.extend([
+    {"name": "workflow_runs", "columns": [
+        "workflow_id UUID PRIMARY KEY", "tenant_id VARCHAR(255) NOT NULL",
+        "workspace_id VARCHAR(255)", "brand_id VARCHAR(255)", "account_id VARCHAR(255)",
+        "platform VARCHAR(100)", "status VARCHAR(50) NOT NULL",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_workflow_runs_account ON workflow_runs(account_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status, updated_at DESC)",
+    ]},
+    {"name": "publish_intents", "columns": [
+        "intent_id UUID PRIMARY KEY", "workflow_id UUID REFERENCES workflow_runs(workflow_id)",
+        "publish_operation_id UUID NOT NULL UNIQUE", "tenant_id VARCHAR(255) NOT NULL",
+        "workspace_id VARCHAR(255)", "brand_id VARCHAR(255)", "account_id VARCHAR(255) NOT NULL",
+        "platform VARCHAR(100) NOT NULL", "platform_account_id VARCHAR(255) NOT NULL",
+        "publish_mode VARCHAR(20) NOT NULL", "state VARCHAR(50) NOT NULL",
+        "idempotency_key VARCHAR(512) NOT NULL", "content_hash VARCHAR(128)",
+        "reserved_at TIMESTAMPTZ", "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "UNIQUE(account_id, platform, platform_account_id, idempotency_key)",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_publish_intents_state ON publish_intents(state, updated_at)",
+        "CREATE INDEX IF NOT EXISTS idx_publish_intents_account ON publish_intents(account_id, platform, platform_account_id)",
+    ]},
+    {"name": "publish_attempts", "columns": [
+        "attempt_id UUID PRIMARY KEY", "intent_id UUID NOT NULL REFERENCES publish_intents(intent_id)",
+        "attempt_number INTEGER NOT NULL", "started_at TIMESTAMPTZ NOT NULL",
+        "call_deadline_at TIMESTAMPTZ NOT NULL", "attempt_lease_expires_at TIMESTAMPTZ NOT NULL",
+        "provider VARCHAR(100) NOT NULL", "provider_idempotency_key VARCHAR(512) NOT NULL",
+        "status VARCHAR(50) NOT NULL", "outcome VARCHAR(50)", "error_class VARCHAR(100)",
+        "error_message TEXT", "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "UNIQUE(intent_id, attempt_number)",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_publish_attempts_reconcile ON publish_attempts(status, attempt_lease_expires_at)",
+    ]},
+    {"name": "provider_effects", "columns": [
+        "effect_id UUID PRIMARY KEY", "attempt_id UUID NOT NULL REFERENCES publish_attempts(attempt_id)",
+        "provider_tracking_id VARCHAR(512)", "external_post_id VARCHAR(512)", "external_url TEXT",
+        "provider_status VARCHAR(100)", "evidence JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "observed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_provider_effects_attempt ON provider_effects(attempt_id)",
+        "CREATE INDEX IF NOT EXISTS idx_provider_effects_external ON provider_effects(external_post_id)",
+    ]},
+    {"name": "publication_verifications", "columns": [
+        "verification_id UUID PRIMARY KEY", "intent_id UUID NOT NULL REFERENCES publish_intents(intent_id)",
+        "state VARCHAR(50) NOT NULL", "evidence JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "verified_at TIMESTAMPTZ", "next_reconcile_at TIMESTAMPTZ", "expires_at TIMESTAMPTZ",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_publication_verifications_reconcile ON publication_verifications(next_reconcile_at, state)",
+    ]},
+    {"name": "inbox_events", "columns": [
+        "inbox_id UUID PRIMARY KEY", "provider VARCHAR(100) NOT NULL",
+        "platform VARCHAR(100) NOT NULL", "platform_account_id VARCHAR(255) NOT NULL",
+        "external_event_id VARCHAR(512) NOT NULL", "payload_hash VARCHAR(128) NOT NULL",
+        "payload JSONB NOT NULL", "status VARCHAR(50) NOT NULL DEFAULT 'RECEIVED'",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "UNIQUE(provider, platform, platform_account_id, external_event_id)",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_inbox_events_status ON inbox_events(status, created_at)",
+    ]},
+    {"name": "outbox_events", "columns": [
+        "outbox_id UUID PRIMARY KEY", "event_type VARCHAR(255) NOT NULL",
+        "aggregate_type VARCHAR(100) NOT NULL", "aggregate_id UUID NOT NULL",
+        "idempotency_key VARCHAR(512) NOT NULL UNIQUE", "payload_hash VARCHAR(128) NOT NULL",
+        "payload JSONB NOT NULL", "available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "attempt_count INTEGER NOT NULL DEFAULT 0", "lease_owner VARCHAR(255)",
+        "lease_expires_at TIMESTAMPTZ", "status VARCHAR(50) NOT NULL DEFAULT 'PENDING'",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_outbox_events_dispatch ON outbox_events(status, available_at)",
+    ]},
+    {"name": "durable_tasks", "columns": [
+        "task_id UUID PRIMARY KEY", "workflow_id UUID REFERENCES workflow_runs(workflow_id)",
+        "task_type VARCHAR(255) NOT NULL", "state VARCHAR(50) NOT NULL",
+        "available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP", "lease_owner VARCHAR(255)",
+        "lease_expires_at TIMESTAMPTZ", "attempt_count INTEGER NOT NULL DEFAULT 0",
+        "retry_at TIMESTAMPTZ", "cancel_requested BOOLEAN NOT NULL DEFAULT FALSE",
+        "last_error TEXT", "payload JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_durable_tasks_dispatch ON durable_tasks(state, available_at)",
+        "CREATE INDEX IF NOT EXISTS idx_durable_tasks_lease ON durable_tasks(lease_expires_at)",
+    ]},
+    {"name": "operator_resolutions", "columns": [
+        "resolution_id UUID PRIMARY KEY", "intent_id UUID NOT NULL REFERENCES publish_intents(intent_id)",
+        "actor_id VARCHAR(255) NOT NULL", "reason TEXT NOT NULL", "evidence JSONB NOT NULL",
+        "prior_state VARCHAR(50) NOT NULL", "resulting_state VARCHAR(50) NOT NULL",
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    ], "indexes": [
+        "CREATE INDEX IF NOT EXISTS idx_operator_resolutions_intent ON operator_resolutions(intent_id, created_at DESC)",
+    ]},
+])
 
 
 def get_create_table_sql(table):
