@@ -361,6 +361,7 @@ def get_all_migration_sql():
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS content_asset_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS tracked_link_ref VARCHAR(512)",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(512)",
+        "ALTER TABLE durable_tasks DROP CONSTRAINT IF EXISTS durable_tasks_dedupe_key_key",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_durable_tasks_dedupe ON durable_tasks(dedupe_key) WHERE dedupe_key IS NOT NULL",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3",
         "ALTER TABLE durable_tasks ADD COLUMN IF NOT EXISTS backoff_seconds INTEGER NOT NULL DEFAULT 5",
