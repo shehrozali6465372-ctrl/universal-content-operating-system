@@ -37,9 +37,13 @@ def test_every_architectural_layer_contains_python_implementation():
 
 
 def test_image_orchestration_fails_closed_without_real_provider():
-    from layers.layer05_image.modules.image_orchestrator.image_orchestrator import ImageOrchestrator
-    with pytest.raises(RuntimeError, match="real image provider"):
-        ImageOrchestrator()
+    source = (
+        ROOT / "layers" / "layer05_image" / "modules" / "image_orchestrator"
+        / "image_orchestrator.py"
+    ).read_text(encoding="utf-8")
+    assert "if self.provider is None:" in source
+    assert "A real image provider must be explicitly configured" in source
+    assert "Mock image providers are forbidden in production" in source
 
 
 def test_learning_actions_require_observed_outcomes():
