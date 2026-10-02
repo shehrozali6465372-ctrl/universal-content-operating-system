@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-SCHEMA_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.2.1"
 
 TABLES = [
     {
@@ -257,4 +257,23 @@ def get_all_indexes_sql():
     indexes = []
     for t in TABLES:
         indexes.extend(t.get("indexes", []))
+    indexes.extend([
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_publish_intents_active_content "
+        "ON publish_intents(account_id, platform, content_hash) "
+        "WHERE content_hash IS NOT NULL AND state <> 'FAILED_CONFIRMED'",
+        "CREATE INDEX IF NOT EXISTS idx_publish_intents_unresolved "
+        "ON publish_intents(account_id, platform, platform_account_id, state, updated_at)",
+    ])
     return indexes
+
+
+def get_all_migration_sql():
+    """Return idempotent PostgreSQL migrations for databases created pre-v1.2.1."""
+    return [
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS template_hash VARCHAR(128)",
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS publish_marker VARCHAR(512)",
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS requested_visibility VARCHAR(100)",
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS policy_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS content_asset_refs JSONB NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE publish_intents ADD COLUMN IF NOT EXISTS tracked_link_ref VARCHAR(512)",
+    ]
