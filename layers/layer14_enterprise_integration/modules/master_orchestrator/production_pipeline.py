@@ -12,7 +12,6 @@ from layers.layer07_publishing.modules.account_control.policy_registry import Po
 from layers.layer07_publishing.modules.account_control.policy_bootstrap import ensure_default_snapshots
 from layers.layer07_publishing.modules.account_control.meta_credentials import MetaCredentialProvider
 from layers.layer17_security.modules.credential_resolver.credential_resolver import AccountCredentialResolver
-from layers.layer07_publishing.modules.publisher_engine.content_repetition_guard import ContentRepetitionGuard
 
 
 class ProductionPipeline(PipelineWiring):
@@ -250,9 +249,7 @@ class ProductionPipeline(PipelineWiring):
         if result.success:
             verified = self._verify_public_submission(req, result)
             if not verified:
-                guard.mark_pending(reservation.reservation_id, result.post_id or "verification-pending")
                 raise RuntimeError("provider effect not independently verified; reconciliation required")
-            guard.finalize(reservation.reservation_id, result.post_id)
             response.publish_package = request.to_dict()
             ctx["post_id"] = result.post_id
             return data
