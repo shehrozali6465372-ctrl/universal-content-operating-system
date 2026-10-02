@@ -65,12 +65,12 @@ def test_durable_task_restart_safe_claim_complete_and_dedupe() -> None:
         if pool:
             with pool.transaction() as conn:
                 conn.cursor().execute(
-                    "DELETE FROM durable_tasks WHERE workflow_id=%s",
+                    "DELETE FROM outbox_events WHERE aggregate_type='durable_task' "
+                    "AND aggregate_id IN (SELECT task_id FROM durable_tasks WHERE workflow_id=%s)",
                     (uuid.UUID(workflow),),
                 )
                 conn.cursor().execute(
-                    "DELETE FROM outbox_events WHERE aggregate_type='durable_task' "
-                    "AND aggregate_id IN (SELECT task_id FROM durable_tasks WHERE workflow_id=%s)",
+                    "DELETE FROM durable_tasks WHERE workflow_id=%s",
                     (uuid.UUID(workflow),),
                 )
                 conn.cursor().execute(
