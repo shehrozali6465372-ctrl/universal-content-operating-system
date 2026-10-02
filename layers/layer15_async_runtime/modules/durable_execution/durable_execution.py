@@ -337,25 +337,42 @@ class DurableExecutionStore:
             return next_state
 
     def reap_expired(self) -> int:
+        """Recover expired leases while preserving attempt and retry accounting."""
         with self._pool.transaction() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                UPDATE durable_tasks
-                   SET state=CASE WHEN attempt_count >= max_attempts
-                                  THEN 'DEAD_LETTER' ELSE 'READY' END,
-                       retry_at=NULL,
-                       lease_owner=NULL,
-                       lease_expires_at=NULL,
-                       dlq_reason=CASE WHEN attempt_count >= max_attempts
-                                      THEN COALESCE(last_error,'lease expired') ELSE NULL END,
-                       updated_at=CURRENT_TIMESTAMP
+            cur.execute("""
+                SELECT task_id,attempt_count,max_attempts,backoff_seconds,last_error
+                  FROM durable_tasks
                  WHERE state='RUNNING'
                    AND lease_expires_at IS NOT NULL
                    AND lease_expires_at < CURRENT_TIMESTAMP
-                """
-            )
-            return cur.rowcount
+                 FOR UPDATE SKIP LOCKED
+            """)
+            rows = cur.fetchall()
+            for task_id, attempt_count, max_attempts, backoff_seconds, last_error in rows:
+                if int(attempt_count) >= int(max_attempts):
+                    cur.execute("""
+                        UPDATE durable_tasks
+                           SET state='DEAD_LETTER',retry_at=NULL,lease_owner=NULL,
+                               lease_expires_at=NULL,
+                               dlq_reason=COALESCE(last_error,'lease expired'),
+                               updated_at=CURRENT_TIMESTAMP
+                         WHERE task_id=%s AND state='RUNNING'
+                    """, (task_id,))
+                else:
+                    delay = min(3600, int(backoff_seconds) * (2 ** max(0, int(attempt_count) - 1)))
+                    cur.execute("""
+                        UPDATE durable_tasks
+                           SET state='RETRY_WAIT',
+                               retry_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
+                               available_at=CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
+                               lease_owner=NULL,lease_expires_at=NULL,
+                               last_error=COALESCE(last_error,'lease expired'),
+                               error_class='LeaseExpired',
+                               updated_at=CURRENT_TIMESTAMP
+                         WHERE task_id=%s AND state='RUNNING'
+                    """, (delay, delay, task_id))
+            return len(rows)
 
     def get(self, task_id: str) -> Optional[DurableTask]:
         row = self._pool.query_one(
