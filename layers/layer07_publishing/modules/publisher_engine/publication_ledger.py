@@ -446,7 +446,7 @@ class PublicationLedger:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT state FROM publish_intents WHERE intent_id=%s FOR UPDATE",
-                (intent_uuid,),
+                (str(intent_uuid),),
             )
             row = cursor.fetchone()
             if not row:
@@ -551,7 +551,7 @@ class PublicationLedger:
                     outcome,
                     None if success else str(getattr(result, "error_message", "") or "")[:100],
                     str(getattr(result, "error_message", "") or "")[:2000],
-                    attempt_uuid,
+                    str(attempt_uuid),
                 ),
             )
             cursor.execute(
@@ -561,8 +561,8 @@ class PublicationLedger:
                 VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)
                 """,
                 (
-                    uuid4(),
-                    attempt_uuid,
+                    str(uuid4()),
+                    str(attempt_uuid),
                     tracking_id or None,
                     external_post_id or None,
                     url or None,
@@ -632,8 +632,8 @@ class PublicationLedger:
                 VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s)
                 """,
                 (
-                    uuid4(),
-                    intent_uuid,
+                    str(uuid4()),
+                    str(intent_uuid),
                     state,
                     self._json(evidence, {}),
                     self._now_iso() if state == "VERIFIED_PUBLIC" else None,
