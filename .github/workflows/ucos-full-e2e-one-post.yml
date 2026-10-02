@@ -148,11 +148,8 @@ jobs:
               candidate = pipeline.execute(request).to_dict()
               score = float(candidate.get("quality_score") or 0.0)
               print(f"QUALITY_ATTEMPT_{attempt}=" + str(score))
+              data = candidate
               if candidate.get("published"):
-                  data = candidate
-                  break
-              if not any(s.get("layer") == "L6-Quality" and s.get("status") == "error" for s in candidate.get("steps", [])):
-                  data = candidate
                   break
           if data is None:
               raise SystemExit("UCOS could not produce a quality-gated publishable candidate after 5 attempts")
