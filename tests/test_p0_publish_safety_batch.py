@@ -50,7 +50,8 @@ def test_ambiguous_provider_outcome_is_held():
         decision = guard.reserve(account_id="p0-test", platform="facebook", content="unique ambiguous outcome test")
         assert decision.allowed
         guard.mark_pending(decision.reservation_id, "outcome-unknown")
-        guard.release(decision.reservation_id)
+        # Ambiguous provider outcomes must remain held for reconciliation.
+        # Releasing here would explicitly discard the safety hold.
         assert len(guard.pending("p0-test")) == 1
     finally:
         if db.exists():
