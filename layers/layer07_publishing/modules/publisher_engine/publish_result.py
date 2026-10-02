@@ -1,13 +1,11 @@
 """Publish Result — Extended result model for the publisher engine."""
 from __future__ import annotations
-import itertools
+import uuid
 from typing import Any, Dict, List
-
-_RESULT_COUNTER = itertools.count(1)
 
 
 class PublisherResult:
-    """Extended result for a publishing operation."""
+    """Extended result for a publishing operation with durable-safe identity."""
 
     __slots__ = (
         "result_id", "success", "post_id", "url", "platform",
@@ -16,7 +14,7 @@ class PublisherResult:
     )
 
     def __init__(self, success: bool = False, platform: str = "") -> None:
-        self.result_id: str = f"res_{next(_RESULT_COUNTER)}"
+        self.result_id: str = f"res_{uuid.uuid4()}"
         self.success = success
         self.post_id: str = ""
         self.url: str = ""
