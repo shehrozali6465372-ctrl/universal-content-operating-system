@@ -181,6 +181,7 @@ class PublisherManager:
         if state == "VERIFIED_PUBLIC":
             result.set_success(external_id, str(evidence.get("canonical_url") or pub_result.url or ""))
             result.metadata["verified_public"] = True
+            result.metadata["verified"] = True
             tracker.update("published", f"Verified public publication: {external_id}")
             return result
 
