@@ -136,27 +136,35 @@ class DurableExecutionStore:
                         payload=row.get("payload") if isinstance(row.get("payload"), dict) else {},
                     )
             task_id = uuid4()
-            available_sql = "CURRENT_TIMESTAMP" if delay_seconds <= 0 else "CURRENT_TIMESTAMP + (%s * INTERVAL '1 second')"
-            params = (
-                task_id, workflow_uuid, dedupe_key, task_type, "READY",
-                max_attempts, backoff_seconds, payload or {},
-            )
             if delay_seconds > 0:
-                params = params + (delay_seconds,)
-            cur.execute(
-                f"""
-                INSERT INTO durable_tasks(
-                  task_id,workflow_id,dedupe_key,task_type,state,available_at,
-                  max_attempts,backoff_seconds,payload
-                ) VALUES (
-                  %s,%s,%s,%s,%s,{available_sql},%s,%s,%s::jsonb
+                cur.execute(
+                    """
+                    INSERT INTO durable_tasks(
+                      task_id,workflow_id,dedupe_key,task_type,state,available_at,
+                      max_attempts,backoff_seconds,payload
+                    ) VALUES (
+                      %s,%s,%s,%s,'READY',
+                      CURRENT_TIMESTAMP + (%s * INTERVAL '1 second'),
+                      %s,%s,%s::jsonb
+                    )
+                    """,
+                    (task_id, workflow_uuid, dedupe_key, task_type, delay_seconds,
+                     max_attempts, backoff_seconds, self._json(payload)),
                 )
-                """,
-                params if delay_seconds <= 0 else (
-                    task_id, workflow_uuid, dedupe_key, task_type, "READY",
-                    delay_seconds, max_attempts, backoff_seconds, self._json(payload),
-                ),
-            )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO durable_tasks(
+                      task_id,workflow_id,dedupe_key,task_type,state,available_at,
+                      max_attempts,backoff_seconds,payload
+                    ) VALUES (
+                      %s,%s,%s,%s,'READY',CURRENT_TIMESTAMP,
+                      %s,%s,%s::jsonb
+                    )
+                    """,
+                    (task_id, workflow_uuid, dedupe_key, task_type,
+                     max_attempts, backoff_seconds, self._json(payload)),
+                )
             cur.execute(
                 """
                 INSERT INTO outbox_events(
