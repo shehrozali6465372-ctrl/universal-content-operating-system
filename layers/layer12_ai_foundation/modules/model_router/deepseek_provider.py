@@ -72,28 +72,44 @@ class DeepSeekProvider:
             },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
-                body = json.loads(response.read().decode("utf-8"))
-            content = str(((body.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
-            if not content:
-                raise RuntimeError("DeepSeek returned empty content")
-            usage = body.get("usage") or {}
-            tokens = int(usage.get("total_tokens") or 0)
-            latency = (time.time() - started) * 1000
-            self._key_manager.report_success(key_id, latency, tokens)
-            return {
-                "content": content,
-                "provider": "deepseek",
-                "model": str(body.get("model") or model),
-                "tokens_used": tokens,
-            }
-        except urllib.error.HTTPError as exc:
-            self._key_manager.report_error(key_id, f"DeepSeek HTTP {exc.code}", is_rate_limit=exc.code == 429)
-            return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek HTTP {exc.code}"}
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            self._key_manager.report_error(key_id, f"DeepSeek network error: {type(exc).__name__}")
-            return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek network error: {type(exc).__name__}"}
+        last_error = "DeepSeek returned empty content"
+        for attempt in range(1, 3):
+            try:
+                with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                content = str(((body.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+                if not content:
+                    last_error = "DeepSeek returned empty content"
+                    if attempt < 2:
+                        time.sleep(1)
+                        continue
+                    raise RuntimeError(last_error)
+                usage = body.get("usage") or {}
+                tokens = int(usage.get("total_tokens") or 0)
+                latency = (time.time() - started) * 1000
+                self._key_manager.report_success(key_id, latency, tokens)
+                return {
+                    "content": content,
+                    "provider": "deepseek",
+                    "model": str(body.get("model") or model),
+                    "tokens_used": tokens,
+                }
+            except urllib.error.HTTPError as exc:
+                self._key_manager.report_error(key_id, f"DeepSeek HTTP {exc.code}", is_rate_limit=exc.code == 429)
+                return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek HTTP {exc.code}"}
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last_error = f"DeepSeek network error: {type(exc).__name__}"
+                if attempt < 2:
+                    time.sleep(1)
+                    continue
+                self._key_manager.report_error(key_id, last_error)
+                return {"content": "", "provider": "deepseek", "model": model, "error": last_error}
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
+                self._key_manager.report_error(key_id, f"DeepSeek response parse error: {type(exc).__name__}")
+                return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek response parse error: {type(exc).__name__}"}
+            except RuntimeError as exc:
+                self._key_manager.report_error(key_id, str(exc))
+                return {"content": "", "provider": "deepseek", "model": model, "error": str(exc)}
         except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
             self._key_manager.report_error(key_id, f"DeepSeek response parse error: {type(exc).__name__}")
             return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek response parse error: {type(exc).__name__}"}
