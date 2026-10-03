@@ -110,6 +110,3 @@ class DeepSeekProvider:
             except RuntimeError as exc:
                 self._key_manager.report_error(key_id, str(exc))
                 return {"content": "", "provider": "deepseek", "model": model, "error": str(exc)}
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
-            self._key_manager.report_error(key_id, f"DeepSeek response parse error: {type(exc).__name__}")
-            return {"content": "", "provider": "deepseek", "model": model, "error": f"DeepSeek response parse error: {type(exc).__name__}"}
