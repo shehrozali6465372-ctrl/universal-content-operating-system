@@ -3,12 +3,6 @@ name: UCOS Cross-Layer Architecture Conformance
 on:
   push:
     branches: [main]
-    paths:
-      - "layers/**"
-      - "tests/test_cross_layer_architecture_conformance.py"
-      - "tests/test_production_architecture_contracts.py"
-      - "requirements.txt"
-      - ".github/workflows/architecture-conformance.yml"
   workflow_dispatch:
 
 permissions:
