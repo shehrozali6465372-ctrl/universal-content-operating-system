@@ -41,4 +41,9 @@ No PRODUCTION_CERTIFICATE=PASS marker is valid until the canonical production ac
 
 ## Current release state
 
-**IN PROGRESS — NOT CERTIFIED**
+**CERTIFIED — v1.2 production certification gate passed on the exact release commit.**
+
+
+## Certification evidence binding
+
+The canonical `UCOS Production Certificate Gate` is the authoritative final certificate. Its successful run requires the exact same commit to pass CI, architecture conformance, live production health/authentication checks, real-provider autonomous E2E, and provider readiness. The certified commit is the repository revision containing this manifest state.
