@@ -1,0 +1,239 @@
+name: UCOS Single Real Facebook Product Post
+
+on:
+  workflow_dispatch:
+    inputs:
+      page_name:
+        description: "Facebook Page name exactly as shown in Meta"
+        required: true
+        default: "DealNest Daily"
+      product_link:
+        description: "Real product/affiliate URL to include in the post"
+        required: true
+      post_text:
+        description: "Post text"
+        required: true
+        default: "Smart shopping starts with comparing useful features, reviews, and price before buying."
+      image_prompt:
+        description: "Image prompt for the real Layer 5 image provider"
+        required: true
+        default: "A clean premium lifestyle product recommendation image for a modern shopping page, realistic commercial photography, vertical composition, no text or logos"
+      negative_prompt:
+        description: "Optional negative image prompt"
+        required: false
+        default: "blurry, distorted, watermark, text, logo, low quality"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ucos-single-facebook-product-post
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: production
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v26.0
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_IMAGE_MODEL: ${{ secrets.CLOUDFLARE_IMAGE_MODEL }}
+      PUTER_AUTH_TOKEN: ${{ secrets.PUTER_AUTH_TOKEN }}
+
+    steps:
+      - name: Checkout UCOS
+        uses: actions/checkout@v4
+
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet requests pillow
+
+      - name: Generate real image through Layer 5
+        shell: bash
+        env:
+          POST_TEXT: ${{ inputs.post_text }}
+          IMAGE_PROMPT: ${{ inputs.image_prompt }}
+          NEGATIVE_PROMPT: ${{ inputs.negative_prompt }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, sys
+          from pathlib import Path
+
+          sys.path.insert(0, ".")
+          prompt=os.environ["IMAGE_PROMPT"].strip()
+          negative=os.environ.get("NEGATIVE_PROMPT","").strip()
+
+          cf_token=os.environ.get("CLOUDFLARE_API_TOKEN","").strip()
+          cf_account=os.environ.get("CLOUDFLARE_ACCOUNT_ID","").strip()
+          puter=os.environ.get("PUTER_AUTH_TOKEN","").strip()
+
+          if cf_token and cf_account:
+              from layers.layer05_image.modules.image_provider.cloudflare_image_provider import CloudflareImageProvider
+              provider=CloudflareImageProvider()
+              provider_name="cloudflare_workers_ai"
+          elif puter:
+              from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider
+              provider=PuterImageProvider()
+              provider_name="puter"
+          else:
+              raise SystemExit("NO_REAL_LAYER5_PROVIDER_CONFIGURED")
+
+          result=provider.generate(
+              prompt=prompt,
+              size="1024x1024",
+              negative_prompt=negative or None,
+          )
+          data=getattr(result,"image_data",None)
+          if not data:
+              raise SystemExit("LAYER5_RETURNED_NO_IMAGE_BYTES")
+
+          path=Path(getattr(result,"file_path",""))
+          if not path.exists():
+              raise SystemExit("LAYER5_IMAGE_FILE_MISSING")
+
+          digest=hashlib.sha256(data).hexdigest()
+          persisted=path.read_bytes()
+          if persisted != data:
+              raise SystemExit("LAYER5_PERSISTED_BYTES_MISMATCH")
+
+          print("LAYER5_REAL_IMAGE=PASS")
+          print("LAYER5_PROVIDER="+provider_name)
+          print("LAYER5_IMAGE_SHA256="+digest)
+          print("LAYER5_IMAGE_PATH="+str(path))
+          with open("/tmp/ucos_image_path","w") as f:
+              f.write(str(path))
+          PY
+
+      - name: Validate product link through Layer 10
+        shell: bash
+        env:
+          PRODUCT_LINK: ${{ inputs.product_link }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, sys
+          from urllib.parse import urlparse
+          sys.path.insert(0, ".")
+          url=os.environ["PRODUCT_LINK"].strip()
+          parsed=urlparse(url)
+          if parsed.scheme not in {"http","https"} or not parsed.netloc:
+              raise SystemExit("INVALID_PRODUCT_LINK")
+          if "amazon." in parsed.netloc.lower():
+              from layers.layer10_monetization.modules.amazon_product_intake import normalize_amazon_product
+              product=normalize_amazon_product(
+                  product_name="UCOS Product",
+                  product_url=url,
+                  affiliate_link=url,
+                  asin="",
+                  niche="shopping",
+                  marketplace=parsed.netloc,
+                  metadata={"source":"workflow_input"},
+              )
+              if not product.tracking_id:
+                  raise SystemExit("AMAZON_LINK_MUST_INCLUDE_ASSOCIATES_TRACKING_TAG")
+              print("LAYER10_PRODUCT_LINK=PASS_AMAZON_ASSOCIATES")
+          else:
+              print("LAYER10_PRODUCT_LINK=PASS_EXTERNAL_HTTP_URL")
+          PY
+
+      - name: Publish one real Facebook photo with product link
+        shell: bash
+        env:
+          PAGE_NAME: ${{ inputs.page_name }}
+          PRODUCT_LINK: ${{ inputs.product_link }}
+          POST_TEXT: ${{ inputs.post_text }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys, urllib.parse, urllib.request, urllib.error, uuid
+          from pathlib import Path
+
+          TOKEN=os.environ["META_ACCESS_TOKEN"].strip()
+          if not TOKEN:
+              raise SystemExit("META_ACCESS_TOKEN_MISSING")
+          base=f"https://graph.facebook.com/{os.environ['META_GRAPH_VERSION']}"
+          page_name=os.environ["PAGE_NAME"].strip().lower()
+          product=os.environ["PRODUCT_LINK"].strip()
+          text=os.environ["POST_TEXT"].strip()
+          image=Path(open("/tmp/ucos_image_path").read().strip())
+          marker="UCOS-V1.2-SINGLE-PRODUCT-" + uuid.uuid4().hex[:12].upper()
+          message=f"{text}\n\nShop / learn more: {product}\n\n{marker}"
+
+          def get(path, params):
+              req=urllib.request.Request(base+path+"?"+urllib.parse.urlencode(params), method="GET")
+              try:
+                  with urllib.request.urlopen(req, timeout=45) as r:
+                      return r.status, json.loads(r.read().decode())
+              except urllib.error.HTTPError as e:
+                  raw=e.read().decode("utf-8","replace")
+                  try: return e.code,json.loads(raw)
+                  except Exception: return e.code,{"error":{"message":raw[:1000]}}
+
+          status,payload=get("/me/accounts",{
+              "fields":"id,name,access_token,tasks",
+              "limit":"100",
+              "access_token":TOKEN,
+          })
+          if status!=200 or "data" not in payload:
+              raise SystemExit("META_PAGE_DISCOVERY_FAILED")
+
+          target=next((p for p in payload["data"] if str(p.get("name","")).strip().lower()==page_name),None)
+          if not target:
+              raise SystemExit("TARGET_FACEBOOK_PAGE_NOT_FOUND")
+
+          tasks=set(target.get("tasks") or [])
+          if "CREATE_CONTENT" not in tasks and "MANAGE" not in tasks:
+              raise SystemExit("FACEBOOK_CREATE_CONTENT_TASK_MISSING")
+
+          page_token=target.get("access_token")
+          boundary="----UCOS"+uuid.uuid4().hex
+          body=[]
+          body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\n{message}\r\n".encode())
+          body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"access_token\"\r\n\r\n{page_token}\r\n".encode())
+          body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"source\"; filename=\"ucos-image.png\"\r\nContent-Type: image/png\r\n\r\n".encode())
+          body.append(image.read_bytes())
+          body.append(f"\r\n--{boundary}--\r\n".encode())
+          raw=b"".join(body)
+
+          req=urllib.request.Request(
+              f"{base}/{target['id']}/photos",
+              data=raw,
+              headers={"Content-Type":f"multipart/form-data; boundary={boundary}"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=90) as r:
+                  status=json.loads(r.read().decode())
+          except urllib.error.HTTPError as e:
+              err=e.read().decode("utf-8","replace")
+              print(err[:2000])
+              raise SystemExit("FACEBOOK_REAL_POST_FAILED")
+
+          post_id=status.get("post_id") or status.get("id")
+          if not post_id:
+              print(json.dumps(status,separators=(",",":"))[:2000])
+              raise SystemExit("FACEBOOK_POST_ID_MISSING")
+
+          vst,verified=get(f"/{post_id}",{
+              "fields":"id,message,created_time,permalink_url",
+              "access_token":page_token,
+          })
+          if vst!=200 or verified.get("id")!=post_id or marker not in verified.get("message",""):
+              raise SystemExit("FACEBOOK_POST_VERIFICATION_FAILED")
+
+          print("UCOS_SINGLE_FACEBOOK_POST=PASS")
+          print("FACEBOOK_PAGE="+str(target.get("name")))
+          print("FACEBOOK_POST_ID="+str(post_id))
+          print("PRODUCT_LINK_ATTACHED=PASS")
+          print("REAL_IMAGE_ATTACHED=PASS")
+          print("FACEBOOK_POST_VERIFIED=PASS")
+          print("POST_MARKER="+marker)
+          if verified.get("permalink_url"):
+              print("FACEBOOK_PERMALINK="+str(verified["permalink_url"]))
+          PY
