@@ -170,7 +170,9 @@ def test_production_pipeline_research_accepts_real_keyless_google_news(monkeypat
     assert len(ctx["research_source_id"]) == 64
 
 
-def test_account_learning_ignores_unobserved_outcomes(tmp_path):
+def test_account_learning_ignores_unobserved_outcomes(tmp_path, monkeypatch):
+    # This test exercises the explicit local SQLite fixture path; production persistence is PostgreSQL.
+    monkeypatch.setenv("APP_ENV", "test")
     from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry, AccountSpec
     from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
     from layers.layer09_learning.modules.learning_engine.account_learning import AccountLearningStore
