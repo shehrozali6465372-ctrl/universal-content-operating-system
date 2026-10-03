@@ -214,19 +214,11 @@ class ProductionPipeline(PipelineWiring):
             asset.platform_ready = True
             request.media_assets.append(asset)
 
-        guard = ContentRepetitionGuard()
-        reservation = guard.reserve(
-            account_id=account_id,
-            platform=req.platform,
-            content=response.text,
-            template_id=str(req.metadata.get("template_id") or ""),
-        )
-        if not reservation.allowed:
-            raise RuntimeError(reservation.reason or "content repetition guard blocked publication")
+        # Repetition protection is owned by the canonical PostgreSQL publication ledger.
+        # Do not reintroduce the removed SQLite/content-history guard here.
         result = manager.publish(request)
         metadata = dict(result.metadata or {})
         if metadata.get("outcome") == "unknown":
-            guard.mark_pending(reservation.reservation_id, "outcome-unknown")
             response.publish_result = {
                 "success": False,
                 "platform": req.platform,
