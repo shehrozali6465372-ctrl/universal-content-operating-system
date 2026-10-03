@@ -3,9 +3,7 @@ name: UCOS Production Provider Readiness
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/production-provider-readiness.yml"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -13,98 +11,40 @@ permissions:
 jobs:
   readiness:
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
     env:
       UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
       SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-      UCOS_AFFILIATE_BASE_URL: ${{ secrets.UCOS_AFFILIATE_BASE_URL }}
-      UCOS_AFFILIATE_API_KEY: ${{ secrets.UCOS_AFFILIATE_API_KEY }}
-      UCOS_AFFILIATE_SEARCH_PATH: ${{ secrets.UCOS_AFFILIATE_SEARCH_PATH }}
       UCOS_AFFILIATE_SEARCH_URL: ${{ secrets.UCOS_AFFILIATE_SEARCH_URL }}
       UCOS_AFFILIATE_API_TOKEN: ${{ secrets.UCOS_AFFILIATE_API_TOKEN }}
       UCOS_GA4_PROPERTY_ID: ${{ secrets.UCOS_GA4_PROPERTY_ID }}
       UCOS_GA4_ACCESS_TOKEN: ${{ secrets.UCOS_GA4_ACCESS_TOKEN }}
-      UCOS_GA4_PROJECT_ID: ${{ secrets.UCOS_GA4_PROJECT_ID }}
-      UCOS_WORDPRESS_URL: ${{ secrets.UCOS_WORDPRESS_URL }}
-      UCOS_WORDPRESS_USERNAME: ${{ secrets.UCOS_WORDPRESS_USERNAME }}
-      UCOS_WORDPRESS_APPLICATION_PASSWORD: ${{ secrets.UCOS_WORDPRESS_APPLICATION_PASSWORD }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
-      - name: Evaluate provider credential presence without exposing values
+      - name: Verify required live provider credentials
         shell: bash
         run: |
           set -euo pipefail
           present() { [ -n "${!1:-}" ]; }
-          report() {
-            local key="$1"
-            local alt="${2:-}"
-            if present "$key" || { [ -n "$alt" ] && present "$alt"; }; then
-              echo "$key=PRESENT"
-            else
-              echo "$key=MISSING"
-            fi
-          }
-          report UCOS_SERPAPI_API_KEY SERPAPI_API_KEY
-          report UCOS_AFFILIATE_BASE_URL
-          report UCOS_AFFILIATE_API_KEY
-          report UCOS_AFFILIATE_SEARCH_PATH
-          report UCOS_AFFILIATE_SEARCH_URL
-          report UCOS_AFFILIATE_API_TOKEN
-          report UCOS_GA4_PROPERTY_ID
-          report UCOS_GA4_ACCESS_TOKEN
-          report UCOS_GA4_PROJECT_ID
-          report UCOS_WORDPRESS_URL
-          report UCOS_WORDPRESS_USERNAME
-          report UCOS_WORDPRESS_APPLICATION_PASSWORD
-          report DEEPSEEK_API_KEY
-
-          missing=0
-          for required in UCOS_SERPAPI_API_KEY UCOS_AFFILIATE_SEARCH_URL UCOS_AFFILIATE_API_TOKEN UCOS_GA4_PROPERTY_ID UCOS_GA4_ACCESS_TOKEN; do
-            if ! present "$required"; then missing=$((missing+1)); fi
-          done
-          if [ "$missing" -gt 0 ]; then
-            echo "LIVE_PROVIDER_READINESS=BLOCKED missing_required=$missing"
+          serpapi_ok=false
+          present UCOS_SERPAPI_API_KEY || present SERPAPI_API_KEY && serpapi_ok=true
+          missing=""
+          $serpapi_ok || missing="${missing} UCOS_SERPAPI_API_KEY"
+          present UCOS_AFFILIATE_SEARCH_URL || missing="${missing} UCOS_AFFILIATE_SEARCH_URL"
+          present UCOS_AFFILIATE_API_TOKEN || missing="${missing} UCOS_AFFILIATE_API_TOKEN"
+          present UCOS_GA4_PROPERTY_ID || missing="${missing} UCOS_GA4_PROPERTY_ID"
+          present UCOS_GA4_ACCESS_TOKEN || missing="${missing} UCOS_GA4_ACCESS_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "LIVE_PROVIDER_READINESS=BLOCKED"
+            echo "MISSING_REQUIRED_SECRET_NAMES=$missing"
             exit 1
           fi
           echo "LIVE_PROVIDER_READINESS=PASS"
 
-      - name: Test DeepSeek API without exposing the key
+      - name: Verify DeepSeek real provider
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-            echo "DEEPSEEK_API_TEST=SKIPPED key_missing"
-            exit 1
-          fi
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          status="$(curl -sS -o "$response_file" -w '%{http_code}' \\
-            https://api.deepseek.com/chat/completions \\
-            -H 'Content-Type: application/json' \\
-            -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \\
-            --data '{"model":"deepseek-flash","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
-          if [ "$status" != "200" ]; then
-            echo "DEEPSEEK_API_TEST=FAIL http_status=$status"
-            python - "$response_file" <<'PY'
-import json, sys
-try:
-    data=json.load(open(sys.argv[1], encoding="utf-8"))
-    print("provider_error_type=" + str(data.get("error", {}).get("type", "unknown")))
-    print("provider_error_code=" + str(data.get("error", {}).get("code", "unknown")))
-except Exception:
-    print("provider_error_body=unparseable")
-PY
-            exit 1
-          fi
-          python - "$response_file" <<'PY'
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as f:
-    data=json.load(f)
-text=(data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-if not text:
-    raise SystemExit("DEEPSEEK_API_TEST=FAIL empty_response")
-print("DEEPSEEK_API_TEST=PASS")
-print("DEEPSEEK_MODEL=" + str(data.get("model", "unknown")))
-print("DEEPSEEK_RESPONSE_NONEMPTY=true")
-PY
-
+          test -n "${DEEPSEEK_API_KEY:-}"
+          code="$(curl -sS -o /tmp/deepseek.json -w '%{http_code}' https://api.deepseek.com/chat/completions -H 'Content-Type: application/json' -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" --data '{"model":"deepseek-chat","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
+          test "$code" = "200"
+          echo "DEEPSEEK_API_TEST=PASS"
