@@ -12,3 +12,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: echo UCOS_ACTIONS_CANARY_PASS
+
+# Certification infrastructure canary revision.
