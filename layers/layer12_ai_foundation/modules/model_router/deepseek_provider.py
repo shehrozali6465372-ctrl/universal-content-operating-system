@@ -56,7 +56,7 @@ class DeepSeekProvider:
         payload = {
             "model": model,
             "messages": messages,
-            "max_tokens": int(kwargs.get("max_tokens", 8192)),
+            "max_tokens": int(kwargs.get("max_tokens", 2048)),
             "stream": False,
         }
         if "temperature" in kwargs:
