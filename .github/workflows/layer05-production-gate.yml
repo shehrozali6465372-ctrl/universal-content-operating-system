@@ -31,8 +31,10 @@ jobs:
       GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 || secrets.GEMINIAPIKEY3 }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       PUTER_AUTH_TOKEN: ${{ secrets.PUTER_AUTH_TOKEN }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CLOUDFLARE_IMAGE_MODEL: ${{ secrets.CLOUDFLARE_IMAGE_MODEL }}
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +66,7 @@ jobs:
 
       - name: Require at least one real Layer 5 provider
         run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if { [ -n "$CLOUDFLARE_API_TOKEN" ] || [ -n "$CF_API_TOKEN" ]; } && { [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || [ -n "$CF_ACCOUNT_ID" ]; }; then
             echo "LAYER5_PROVIDER=cloudflare"
           elif [ -n "$PUTER_AUTH_TOKEN" ]; then
             echo "LAYER5_PROVIDER=puter"
@@ -77,4 +79,4 @@ jobs:
         env:
           UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
         run: |
-          python -c 'import os; from hashlib import sha256; from pathlib import Path; from layers.layer05_image.modules.image_provider.cloudflare_image_provider import CloudflareImageProvider; from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider; p=CloudflareImageProvider() if os.environ.get("CLOUDFLARE_API_TOKEN") and os.environ.get("CLOUDFLARE_ACCOUNT_ID") else PuterImageProvider(); r=p.generate("Create a simple professional abstract geometric marketing background", size="512x512"); assert r.image_data and r.metadata.get("sha256")==sha256(r.image_data).hexdigest(); q=Path(r.image_url); assert q.is_file() and q.read_bytes()==r.image_data; print("REAL_LAYER5_SMOKE_PASS provider="+r.provider+" bytes="+str(len(r.image_data)))'
+          python -c 'import os; from hashlib import sha256; from pathlib import Path; from layers.layer05_image.modules.image_provider.cloudflare_image_provider import CloudflareImageProvider; from layers.layer05_image.modules.image_provider.puter_image_provider import PuterImageProvider; p=CloudflareImageProvider() if (os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get("CF_API_TOKEN")) and (os.environ.get("CLOUDFLARE_ACCOUNT_ID") or os.environ.get("CF_ACCOUNT_ID")) else PuterImageProvider(); r=p.generate("Create a simple professional abstract geometric marketing background", size="512x512"); assert r.image_data and r.metadata.get("sha256")==sha256(r.image_data).hexdigest(); q=Path(r.image_url); assert q.is_file() and q.read_bytes()==r.image_data; print("REAL_LAYER5_SMOKE_PASS provider="+r.provider+" bytes="+str(len(r.image_data)))'
