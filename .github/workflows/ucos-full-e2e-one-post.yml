@@ -1,7 +1,7 @@
 name: UCOS Full End-to-End One Real Autonomous Post
 # Final production certification revision marker: 2026-10-02
 # Production certification trigger.
-# L12 DeepSeek transient-empty response retry is part of this certification revision.
+# L12 DeepSeek provider changes are part of this certification revision.
 # Live provider credential gate recheck.
 # Production certification execution marker: run exactly once per certification revision.
 # Research provider: SerpAPI when configured, Google News RSS fallback otherwise.
@@ -21,6 +21,7 @@ on:
       - "layers/layer17_security/**"
       - "layers/layer15_async_runtime/**"
       - "layers/layer14_enterprise_integration/modules/real_integrations/gateway.py"
+      - "layers/layer12_ai_foundation/**"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py"
       - "tests/test_real_integration_contracts.py"
