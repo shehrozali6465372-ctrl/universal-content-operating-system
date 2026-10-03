@@ -104,16 +104,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
-          python - "$result" "${{ github.sha }}" <<'PY'
-          import json, sys
-          d=json.loads(sys.argv[1])
-          sha=sys.argv[2]
-          runs=[x for x in d["workflow_runs"] if x["head_sha"]==sha and x["name"]=="UCOS Production Provider Readiness"]
-          if runs and not any(x["status"]=="completed" and x["conclusion"]=="success" for x in runs):
-              raise SystemExit("Provider readiness exists but is not passing")
-          print("LIVE_PROVIDER_READINESS=PASS_OR_NOT_REQUIRED")
-          PY
+          state="pending"
+          for attempt in {1..180}; do
+            result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
+            state="$(python -c 'import json,sys; d=json.load(sys.stdin); sha=sys.argv[1]; r=[x for x in d["workflow_runs"] if x["head_sha"]==sha and x["name"]=="UCOS Production Provider Readiness"]; print("success" if any(x["status"]=="completed" and x["conclusion"]=="success" for x in r) else ("fail" if any(x["status"]=="completed" and x["conclusion"] not in ("success","cancelled") for x in r) else "pending"))' "${{ github.sha }}" <<<"$result")"
+            [ "$state" = success ] && break
+            [ "$state" = fail ] && { echo "LIVE_PROVIDER_READINESS=FAIL"; exit 1; }
+            sleep 10
+          done
+          if [ "$state" != success ]; then
+            echo "LIVE_PROVIDER_READINESS=FAIL"
+            exit 1
+          fi
+          echo "LIVE_PROVIDER_READINESS=PASS"
       - name: Final certificate marker
         run: |
           echo "PRODUCTION_CERTIFICATE=PASS"
