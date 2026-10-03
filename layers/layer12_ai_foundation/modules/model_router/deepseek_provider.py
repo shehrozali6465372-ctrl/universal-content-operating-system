@@ -57,6 +57,8 @@ class DeepSeekProvider:
             "model": model,
             "messages": messages,
             "max_tokens": int(kwargs.get("max_tokens", 2048)),
+            "thinking": {"type": "disabled"},
+            "reasoning_effort": "none",
             "stream": False,
         }
         if "temperature" in kwargs:
