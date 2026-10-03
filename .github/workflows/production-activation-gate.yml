@@ -12,6 +12,7 @@ on:
       - ".github/workflows/architecture-conformance.yml"
       - "tests/test_cross_layer_architecture_conformance.py"
       - "main.py"
+      - "layers/layer12_ai_foundation/**"
       - "layers/layer14_enterprise_integration/**"
       - "layers/layer07_publishing/**"
       - "layers/layer11_async_runtime/**"
