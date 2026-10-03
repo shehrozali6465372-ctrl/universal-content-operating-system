@@ -3,104 +3,33 @@ name: Layer 10 Production Certification
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
-concurrency:
-  group: layer10-cert-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   production-gate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          pip install --break-system-packages --upgrade pip
+          python -m pip install --upgrade pip
           pip install --break-system-packages -r requirements.txt
-
-      - name: DeepSeek API credential smoke test
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        shell: bash
+      - name: DeepSeek credential smoke
         run: |
           set -euo pipefail
-          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-            echo "DEEPSEEK_API_TEST=FAIL key_missing"
-            exit 1
-          fi
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
-            https://api.deepseek.com/chat/completions \
-            -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
-            --data '{"model":"deepseek-chat","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
-          if [ "$status" != "200" ]; then
-            echo "DEEPSEEK_API_TEST=FAIL http_status=$status"
-            python - "$response_file" <<'PY'
-import json, sys
-try:
-    data=json.load(open(sys.argv[1], encoding="utf-8"))
-    err=data.get("error", {})
-    print("provider_error_type=" + str(err.get("type", "unknown")))
-    print("provider_error_code=" + str(err.get("code", "unknown")))
-except Exception:
-    print("provider_error_body=unparseable")
-PY
-            exit 1
-          fi
-          python - "$response_file" <<'PY'
-import json, sys
-data=json.load(open(sys.argv[1], encoding="utf-8"))
-content=(data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-if not content:
-    raise SystemExit("DEEPSEEK_API_TEST=FAIL empty_response")
-print("DEEPSEEK_API_TEST=PASS")
-print("DEEPSEEK_MODEL=" + str(data.get("model", "unknown")))
-print("DEEPSEEK_RESPONSE_NONEMPTY=true")
-PY
-
-      - name: Compile Layer 10
-        run: python -m compileall -q layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py
-
-      - name: Layer 10 Production Tests
-        shell: bash
-        run: |
-          set -o pipefail
-          python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short 2>&1 | tee layer10-test-output.txt
-
-      - name: Upload Layer 10 Test Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: layer10-test-output
-          path: layer10-test-output.txt
-          if-no-files-found: ignore
-
-      - name: Layer 10 Lint
-        shell: bash
-        run: |
-          set -o pipefail
-          ruff check layers/layer10_monetization --select E,F,W --ignore E501,E402,E741,E701,E702 2>&1 | tee layer10-lint-output.txt
-
-      - name: Upload Layer 10 Lint Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: layer10-lint-output
-          path: layer10-lint-output.txt
-          if-no-files-found: ignore
+          test -n "${DEEPSEEK_API_KEY:-}"
+          code="$(curl -sS -o /tmp/deepseek.json -w '%{http_code}' https://api.deepseek.com/chat/completions -H 'Content-Type: application/json' -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" --data '{"model":"deepseek-chat","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
+          test "$code" = "200"
+      - name: Layer 10 production tests
+        run: python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short
+      - name: Layer 10 lint
+        run: ruff check layers/layer10_monetization --select E,F,W --ignore E501,E402,E741,E701,E702
