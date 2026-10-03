@@ -25,7 +25,8 @@ on:
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py"
       - "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py"
       - "tests/test_real_integration_contracts.py"
-      - "docs/releases/UCOS_V1_2_RELEASE_MANIFEST.md"
+      - "docs/releases/UCOS_V1_2_RELEASE_MANIFEST.md"      - "docs/architecture/UCOS_V1_2_PRODUCTION_CROSSCHECK.md"
+
   workflow_dispatch:
 
 permissions:
