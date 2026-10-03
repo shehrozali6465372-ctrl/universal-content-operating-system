@@ -154,6 +154,7 @@ jobs:
               request.metadata["test_marker"] = f"{marker}-attempt-{attempt}"
               candidate = pipeline.execute(request).to_dict()
               score = float(candidate.get("quality_score") or 0.0)
+              print("QUALITY_REPORT=" + json.dumps(candidate.get("quality_report") or {}, sort_keys=True))
               print(f"QUALITY_ATTEMPT_{attempt}=" + str(score))
               data = candidate
               if candidate.get("published"):
