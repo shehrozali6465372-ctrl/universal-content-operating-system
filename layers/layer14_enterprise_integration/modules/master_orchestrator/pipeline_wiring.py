@@ -361,15 +361,29 @@ class PipelineWiring:
         if not req.include_image:
             return {"generated": False, "skipped": True, "reason": "disabled"}
         from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
-        from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
         plans = ImagePlanner().plan(req.topic, platform=req.platform, image_type="photo", count=1)
         image_type = getattr(plans[0], "image_type", "photo") if plans else "photo"
         prompt = f"Create a {image_type} image for a {req.platform} post about '{req.topic}'. Professional, factual, engaging, no misleading text."
         response.image_prompt = prompt
-        result = GeminiImageProvider().generate(prompt, size="1024x1024", style=req.tone)
+
+        # Provider selection stays inside Layer 5. Cloudflare Workers AI is
+        # preferred when its production credentials are configured; Gemini
+        # remains the existing provider fallback.
+        from layers.layer05_image.modules.image_provider.cloudflare_image_provider import CloudflareImageProvider
+        cloudflare = CloudflareImageProvider()
+        if cloudflare.is_configured():
+            result = cloudflare.generate(prompt, size="1024x1024")
+        else:
+            from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
+            result = GeminiImageProvider().generate(prompt, size="1024x1024", style=req.tone)
+
         response.image_url = getattr(result, "image_url", "") or ""
-        ctx["image_generated"] = bool(response.image_url or getattr(result, "image_data", None))
-        return {"generated": ctx["image_generated"], "provider": getattr(result, "provider", ""), "image_url": response.image_url}
+        image_data = getattr(result, "image_data", b"") or b""
+        if not response.image_url and not image_data:
+            raise RuntimeError("Layer 5 image provider returned no image artifact")
+        ctx["image_generated"] = bool(response.image_url or image_data)
+        ctx["image_provider"] = getattr(result, "provider", "")
+        return {"generated": ctx["image_generated"], "provider": ctx["image_provider"], "image_url": response.image_url}
 
     def _quality(self, req: ContentRequest, response: ContentResponse) -> Dict[str, Any]:
         from layers.layer06_quality.modules.content_quality_analyzer.quality_analyzer import ContentQualityAnalyzer
