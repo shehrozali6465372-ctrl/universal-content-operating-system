@@ -143,11 +143,12 @@ jobs:
 
           pipeline = ProductionPipeline()
           data = None
-          for attempt in range(1, 6):
+          for attempt in range(1, 7):
               request.topic = (
                   f"{topic}. Write a practical Facebook post with a clear opening, "
                   "three concise actionable tips, short explanatory sentences, and a useful closing question. "
-                  f"Internal verification marker: {marker}-attempt-{attempt}"
+                  "Use simple sentences of about 10 to 15 words, avoid filler, avoid long compound sentences, "
+                  "and keep the post between 90 and 140 words."
               )
               request.metadata["test_marker"] = f"{marker}-attempt-{attempt}"
               candidate = pipeline.execute(request).to_dict()
