@@ -71,6 +71,18 @@ A v1.2 production certificate is valid only when all required architecture gates
 
 ## Certification state
 
-Current state is **NOT CERTIFIED** until the exact v1.2 release commit has green CI and all required real-provider/security evidence.
+**CERTIFIED — v1.2 production certification gate passed on exact release commit `11280d0a13bda55043c563323ab66c4609cd226d`.**
 
-This document intentionally does not convert missing external credentials into a pass and does not weaken any layer boundary to obtain a green workflow.
+Evidence on that exact commit:
+- CI: run `37088842822` — success.
+- Cross-layer architecture conformance: run `37088842932` — success.
+- Layer 10: run `37088842852` — success.
+- Layer 14: run `37088842898` — success.
+- Layer 15: run `37088842837` — success.
+- DeepSeek smoke: run `37088842909` — success.
+- Meta/System User: run `37088842851` — success.
+- Provider readiness: run `37088842881` — success.
+- Real autonomous E2E: run `37088842827` — success.
+- Canonical production certificate gate: run `37088842896` — success, including live health/authentication fail-closed checks.
+
+This certificate is evidence-bound to the exact commit above. A subsequent architecture/runtime change invalidates this exact-commit certificate until the certification gate passes again. Missing optional providers remain explicitly classified as optional; no external availability is fabricated.
