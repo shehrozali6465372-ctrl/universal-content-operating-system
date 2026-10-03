@@ -19,6 +19,8 @@ on:
       - "layers/layer15_async_runtime/**"
       - "tests/test_production_architecture_contracts.py"
       - "scripts/check_l11_boundary.py"
+      - "docs/architecture/UCOS_V1_2_PRODUCTION_CROSSCHECK.md"
+      - "docs/releases/UCOS_V1_2_RELEASE_MANIFEST.md"
   workflow_dispatch:
 permissions:
   contents: read
