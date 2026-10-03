@@ -75,6 +75,7 @@ jobs:
           GEMINI_API_KEY_2: ${{ secrets.GEMINIAPIKEY2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINIAPIKEY3 }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           UCOS_ENABLE_HF_FALLBACK: "true"
           UCOS_ACCOUNT_REGISTRY_DB: ${{ runner.temp }}/ucos-e2e/accounts/registry.sqlite3
           UCOS_ACCOUNT_WORKSPACES: ${{ runner.temp }}/ucos-e2e/accounts/workspaces
