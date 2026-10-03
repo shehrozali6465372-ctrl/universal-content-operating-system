@@ -83,12 +83,12 @@ def test_production_ai_path_fails_closed_without_provider(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
     pipeline = PipelineWiring()
-    response = ContentResponse(ContentRequest("production gate", include_image=False))
+    request = ContentRequest("production gate", include_image=False)
+    request.metadata["publish_mode"] = "production"
+    response = ContentResponse(request)
     ctx = {}
-    result = pipeline._ai(response.request, ctx, response)
-
-    assert result["offline"] is True
-    assert ctx["ai_model"] == "offline-draft"
+    with pytest.raises(RuntimeError, match="production AI generation cannot create an offline draft"):
+        pipeline._ai(response.request, ctx, response)
 
 
 def test_aios_hmac_nonce_replay_is_rejected(monkeypatch):
