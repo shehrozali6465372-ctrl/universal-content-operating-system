@@ -179,7 +179,11 @@ def test_account_learning_ignores_unobserved_outcomes(tmp_path):
         db_path=str(tmp_path / "registry.sqlite3"),
         workspace_root=str(tmp_path / "workspaces"),
     )
-    registry.register(AccountSpec(account_id="acct-1", platform="facebook", niche="technology"))
+    registry.register(AccountSpec(\
+        account_id="acct-1", platform="facebook", niche="technology",\
+        tenant_id="tenant-test", workspace_id="workspace-test", brand_id="brand-test",\
+        platform_account_id="page-test",\
+    ))
     store = AccountLearningStore(AccountDataStore(registry))
     store.record(
         "acct-1", platform="facebook", niche="technology", topic="x",
