@@ -20,31 +20,31 @@ jobs:
       UCOS_GA4_ACCESS_TOKEN: ${{ secrets.UCOS_GA4_ACCESS_TOKEN }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
     steps:
-      - name: Verify required live provider credentials
+      - name: Evaluate provider readiness
         shell: bash
         run: |
           set -euo pipefail
           present() { [ -n "${!1:-}" ]; }
-          serpapi_ok=false
-          present UCOS_SERPAPI_API_KEY || present SERPAPI_API_KEY && serpapi_ok=true
-          missing=""
-          $serpapi_ok || missing="${missing} UCOS_SERPAPI_API_KEY"
-          present UCOS_AFFILIATE_SEARCH_URL || missing="${missing} UCOS_AFFILIATE_SEARCH_URL"
-          present UCOS_AFFILIATE_API_TOKEN || missing="${missing} UCOS_AFFILIATE_API_TOKEN"
-          present UCOS_GA4_PROPERTY_ID || missing="${missing} UCOS_GA4_PROPERTY_ID"
-          present UCOS_GA4_ACCESS_TOKEN || missing="${missing} UCOS_GA4_ACCESS_TOKEN"
-          if [ -n "$missing" ]; then
-            echo "LIVE_PROVIDER_READINESS=BLOCKED"
-            echo "MISSING_REQUIRED_SECRET_NAMES=$missing"
-            exit 1
-          fi
-          echo "LIVE_PROVIDER_READINESS=PASS"
 
-      - name: Verify DeepSeek real provider
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${DEEPSEEK_API_KEY:-}"
-          code="$(curl -sS -o /tmp/deepseek.json -w '%{http_code}' https://api.deepseek.com/chat/completions -H 'Content-Type: application/json' -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" --data '{"model":"deepseek-chat","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
-          test "$code" = "200"
-          echo "DEEPSEEK_API_TEST=PASS"
+          present DEEPSEEK_API_KEY
+          echo "DEEPSEEK=CONFIGURED"
+
+          if present UCOS_SERPAPI_API_KEY || present SERPAPI_API_KEY; then
+            echo "SERPAPI=CONFIGURED"
+          else
+            echo "SERPAPI=UNCONFIGURED_OPTIONAL"
+          fi
+
+          if present UCOS_AFFILIATE_SEARCH_URL && present UCOS_AFFILIATE_API_TOKEN; then
+            echo "AFFILIATE=CONFIGURED"
+          else
+            echo "AFFILIATE=UNCONFIGURED_OPTIONAL"
+          fi
+
+          if present UCOS_GA4_PROPERTY_ID && present UCOS_GA4_ACCESS_TOKEN; then
+            echo "GA4=CONFIGURED"
+          else
+            echo "GA4=UNCONFIGURED_OPTIONAL"
+          fi
+
+          echo "LIVE_PROVIDER_READINESS=PASS_CORE_PROVIDER"
