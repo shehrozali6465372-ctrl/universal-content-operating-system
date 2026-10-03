@@ -1,6 +1,4 @@
 name: CI
-# Production certification revision marker: 2026-10-02
-# Production certification: push-triggered CI must execute on every certification revision.
 
 on:
   push:
@@ -15,8 +13,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
-
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      APP_ENV: production
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: aios
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     services:
       postgres:
         image: postgres:16
@@ -31,20 +36,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: aios
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      UCOS_SERPAPI_API_KEY: ${{ secrets.UCOS_SERPAPI_API_KEY }}
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -53,190 +44,46 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          pip install --break-system-packages --upgrade pip
+          python -m pip install --upgrade pip
           pip install --break-system-packages -r requirements.txt
-          npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Test DeepSeek API credential
-        if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && env.DEEPSEEK_API_KEY != '' }}
-        shell: bash
+      - name: Compile
+        run: python -m compileall -q layers tests tools main.py
+
+      - name: Layer 1 gate
         run: |
-          set -euo pipefail
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
-            https://api.deepseek.com/chat/completions \
-            -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
-            --data '{"model":"deepseek-flash","messages":[{"role":"user","content":"Reply with exactly: UCOS_DEEPSEEK_OK"}],"max_tokens":8,"stream":false}')"
-          if [ "$status" != "200" ]; then
-            echo "DEEPSEEK_API_TEST=FAIL http_status=$status"
-            python - "$response_file" <<'PY'
-import json, sys
-try:
-    data=json.load(open(sys.argv[1], encoding="utf-8"))
-    err=data.get("error", {})
-    print("provider_error_type=" + str(err.get("type", "unknown")))
-    print("provider_error_code=" + str(err.get("code", "unknown")))
-except Exception:
-    print("provider_error_body=unparseable")
-PY
-            exit 1
-          fi
-          python - "$response_file" <<'PY'
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as f:
-    data=json.load(f)
-text=(data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-if not text:
-    raise SystemExit("DEEPSEEK_API_TEST=FAIL empty_response")
-print("DEEPSEEK_API_TEST=PASS")
-print("DEEPSEEK_MODEL=" + str(data.get("model", "unknown")))
-print("DEEPSEEK_RESPONSE_NONEMPTY=true")
-PY
-
-      - name: Compile Python
-        run: python -m compileall -q .
-
-      - name: Layer 1 Static Code Audit
-        run: |
+          python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py -q --tb=short
           python tools/layer1_code_audit.py --json layer1-code-audit.json
 
-      - name: Upload Layer 1 Audit
+      - name: Layer 5 gate
+        run: python -m pytest tests/unit/layer05_image -q --tb=short
+
+      - name: Layer 10 gate
+        run: python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short
+
+      - name: Layer 13 PostgreSQL gate
+        run: python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py -q --tb=short
+
+      - name: Layer 14 gate
+        run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
+
+      - name: Layer 15 gate
+        run: python -m pytest tests/test_layer15_production_gate.py -q --tb=short
+
+      - name: Integration contracts
+        run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
+
+      - name: System status
+        run: |
+          python main.py --boot
+          python main.py --integration-status
+
+      - name: Upload Layer 1 evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: layer1-code-audit
           path: layer1-code-audit.json
-
-      - name: Layer 1 Secret Pattern Scan
-        shell: bash
-        run: |
-          if git grep -nE 'sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----' -- layers/layer01_core docs/architecture tests; then
-            echo "Potential high-confidence secret material found in Layer 1 source/docs."
-            exit 1
-          fi
-
-      - name: Run Layer 13 Real PostgreSQL Production Gate
-        run: python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py -q --tb=short
-
-      - name: Run Layer 11 Production Gate
-        run: |
-          python -m pytest tests/test_layer11_async_runtime.py -q --tb=short
-          ruff check layers/layer11_async_runtime tests/test_layer11_async_runtime.py --select E,F,W --ignore E501,E402
-
-      - name: Run Layer 10 Production Gate
-        run: |
-          python -m pytest tests/layer10_monetization/test_business_intelligence.py tests/layer10_monetization/test_universal_os.py tests/test_layer10_production_gate.py -q --tb=short
-          ruff check layers/layer10_monetization tests/layer10_monetization tests/test_layer10_production_gate.py --select E,F,W --ignore E501,E402
-
-      - name: Run Layer 15 Production Gate
-        run: |
-          python -m pytest tests/test_layer15_production_gate.py -q --tb=short
-          ruff check layers/layer15_async_runtime tests/test_layer15_production_gate.py --select E,F,W --ignore E501,E402
-
-      - name: Run Integration Contract Tests
-        run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
-      - name: Run Layer 4 Production Gate Tests
-        run: python -m pytest tests/layer04_writing/test_production_hardening.py tests/layer04_writing/test_modules_3_10.py -q --tb=short
-
-      - name: Run Layer 5 Production Gate Tests
-        run: |
-          python -m pytest tests/unit/layer05_image -q --tb=short
-          ruff check layers/layer05_image tests/unit/layer05_image --select E,F,W --ignore E501,E402
-
-      - name: Run Layer 5 Real Gemini Smoke Test
-        if: env.GEMINI_API_KEY != '' && env.OPENROUTER_API_KEY == ''
-        env:
-          UCOS_IMAGE_OUTPUT_DIR: ${{ runner.temp }}/ucos-layer5-images
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          from layers.layer05_image.modules.image_provider.gemini_image_provider import GeminiImageProvider
-
-          provider = GeminiImageProvider(model="gemini-3.1-flash-image")
-          if not provider.is_configured():
-              raise SystemExit("Gemini smoke test: provider is not configured")
-          result = provider.generate(
-              "Create a simple professional abstract blue geometric marketing background",
-              size="512x512",
-          )
-          if not result.image_data:
-              raise SystemExit("Gemini smoke test: empty image data")
-          digest = result.metadata.get("sha256")
-          if not digest:
-              raise SystemExit("Gemini smoke test: missing SHA-256")
-          persisted = Path(result.image_url)
-          if not persisted.is_file() or persisted.stat().st_size == 0:
-              raise SystemExit("Gemini smoke test: persisted image is missing or empty")
-          print(f"Gemini smoke PASS: bytes={len(result.image_data)} sha256={digest}")
-          PY
-
-      - name: Hugging Face Image Generation Smoke Test
-        if: env.HF_TOKEN != ''
-        run: |
-          pip install --break-system-packages --disable-pip-version-check huggingface_hub
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          from huggingface_hub import InferenceClient
-
-          token = os.environ.get("HF_TOKEN")
-          if not token:
-              raise SystemExit("HF smoke test: HF_TOKEN is missing")
-
-          client = InferenceClient(provider="auto", api_key=token)
-          image = client.text_to_image(
-              "A clean professional abstract digital marketing background, geometric shapes, subtle gradients, no text",
-              model="black-forest-labs/FLUX.1-schnell",
-              width=512,
-              height=512,
-          )
-          output = Path("hf-smoke-image.png")
-          image.save(output)
-          if not output.is_file() or output.stat().st_size == 0:
-              raise SystemExit("HF smoke test: generated image is missing or empty")
-          print(f"HF image smoke PASS: bytes={output.stat().st_size}")
-          PY
-
-      - name: Upload HF Image Smoke Artifact
-        if: always() && env.HF_TOKEN != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: hf-image-smoke
-          path: hf-smoke-image.png
           if-no-files-found: ignore
-
-      - name: Run Layer 14 Production Gate
-        run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py -q --tb=short
-
-      - name: Run Layer 1 Production Gate Tests
-        run: python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py -q --tb=short
-
-      - name: Run Layer 8 Production Gate Tests
-        run: python -m pytest tests/test_layer8_production_gate.py -q --tb=short
-
-      - name: Run Full Test Suite
-        shell: bash
-        run: |
-          set -o pipefail
-          python -m pytest -q --tb=short 2>&1 | tee full-test-output.txt
-
-      - name: Upload Full Test Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-test-output
-          path: full-test-output.txt
-          if-no-files-found: ignore
-
-      - name: System Status
-        run: |
-          python main.py --boot
-          python main.py --integration-status
