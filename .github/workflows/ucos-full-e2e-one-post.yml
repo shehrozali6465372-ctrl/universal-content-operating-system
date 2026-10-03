@@ -147,9 +147,11 @@ jobs:
               request.topic = (
                   f"{topic}. Write a practical Facebook post that starts with the exact words \"Discover three simple ways\" and gives three concise actionable tips. "
                   "Use simple sentences of about 10 to 15 words, avoid filler and long compound sentences, "
-                  "avoid the phrase \"a one-in, one-out\", and keep the post between 90 and 140 words. "
-                  "Use the words proven, essential, powerful, your, and today naturally without hype, "
-                  "and end with a useful question."
+                  "avoid the phrase \"a one-in, one-out\", avoid the article \"a\" immediately before words "
+                  "starting with a vowel, and keep the post between 90 and 140 words. "
+                  "Use the words proven, essential, powerful, your, and today naturally without hype. "
+                  "Separate the opening, each tip, and the closing into short paragraphs with blank lines. "
+                  "Include the word \"Overall\" in the conclusion and end with a useful question."
               )
               request.metadata["test_marker"] = f"{marker}-attempt-{attempt}"
               candidate = pipeline.execute(request).to_dict()
