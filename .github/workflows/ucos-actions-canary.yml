@@ -1,0 +1,14 @@
+name: UCOS Actions Canary
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  canary:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo UCOS_ACTIONS_CANARY_PASS
