@@ -38,6 +38,47 @@ class ControlPlane:
         except Exception:
             return {}
 
+    def _affiliate_evidence(self, topic: str, niche: str, platform: str, account: Any):
+        """Prefer an account-scoped authenticated browser affiliate flow when configured."""
+        rules = dict(getattr(account, "affiliate_rules", {}) or {})
+        provider = str(rules.get("browser_provider") or "").strip().lower()
+        account_ref = str(rules.get("browser_account_ref") or "").strip()
+        marketplace = str(rules.get("marketplace") or "www.amazon.com").strip().lower()
+        if provider == "amazon" and account_ref:
+            try:
+                from layers.layer10_monetization.modules.affiliate_browser import (
+                    AffiliateBrowserClient, AffiliateSearchRequest,
+                )
+                from layers.layer14_enterprise_integration.modules.affiliate_browser_gateway import (
+                    PersonalBrowserAffiliateGateway, browser_request_from_environment,
+                )
+                link = AffiliateBrowserClient(
+                    PersonalBrowserAffiliateGateway(browser_request_from_environment)
+                ).search_and_get_link(
+                    AffiliateSearchRequest(
+                        provider="amazon",
+                        query=topic,
+                        account_ref=account_ref,
+                        marketplace=marketplace,
+                    )
+                )
+                return {
+                    "product_id": link.product_ref,
+                    "title": link.evidence.get("product_title") or link.product_ref,
+                    "url": link.evidence.get("product_url") or "",
+                    "affiliate_url": link.affiliate_url,
+                    "selection_score": 1.0,
+                    "evidence": "authenticated_browser",
+                    "metadata": dict(link.evidence),
+                }
+            except Exception:
+                # Browser affiliate acquisition is fail-closed. Do not replace a
+                # configured browser account with synthetic data; fall back only
+                # to the normal verified provider when it is independently configured.
+                if str(rules.get("browser_required", "false")).lower() == "true":
+                    raise
+        return AffiliateEvidenceProvider().select(topic, niche, platform)
+
     def execute(self,topic:str,platform:Optional[str]=None,account_id:Optional[str]=None,tone:str="professional",style:str="educational",include_image:bool=True,publish_mode:Optional[str]=None)->Dict[str,Any]:
         accounts=self.registry.list(platform=platform,enabled_only=True)
         account=None
@@ -49,7 +90,7 @@ class ControlPlane:
             decision=Decision(account_id=account.account_id,platform=account.platform,niche=account.niche,topic=topic.strip(),content_type=self.decisions.choose_content_type(account,topic),product=product,affiliate=product,policy_version=policy.version if policy else None,reasons=["explicit account_id","account-scoped affiliate evidence"])
         elif accounts:
             learning_scores=self._learning_scores(accounts)
-            decision=self.decisions.decide(topic,platform=platform,learning_scores=learning_scores); account=self.registry.get(decision.account_id); product=AffiliateEvidenceProvider().select(decision.topic,decision.niche,decision.platform)
+            decision=self.decisions.decide(topic,platform=platform,learning_scores=learning_scores); account=self.registry.get(decision.account_id); product=self._affiliate_evidence(decision.topic,decision.niche,decision.platform,account)
             decision=Decision(account_id=decision.account_id,platform=decision.platform,niche=decision.niche,topic=decision.topic,content_type=decision.content_type,product=product,affiliate=product,policy_version=decision.policy_version,reasons=decision.reasons+["account-scoped affiliate evidence"])
         else:
             request=ContentRequest(topic=topic,platform=platform or "facebook",tone=tone,style=style,include_image=include_image); return self.pipeline.execute(request).to_dict()
