@@ -420,7 +420,20 @@ class PipelineWiring:
             response.publish_result = {"success": False, "platform": req.platform, "post_id": None,
                                        "url": None, "error": "No real publisher credentials/adapter configured"}
             return {"published": False, "skipped": True, "reason": "publisher_unconfigured"}
-        request = PublishRequest(platform=req.platform, content=response.text,
+        affiliate = req.metadata.get("affiliate") if isinstance(req.metadata.get("affiliate"), dict) else {}
+        affiliate_url = str(
+            req.metadata.get("affiliate_url") or affiliate.get("affiliate_url") or ""
+        ).strip()
+        publish_text = response.text
+        if affiliate_url:
+            disclosure = str(
+                req.metadata.get(
+                    "affiliate_disclosure",
+                    "As an Amazon Associate I earn from qualifying purchases. #ad",
+                )
+            ).strip()
+            publish_text = f"{publish_text.rstrip()}\\n\\n{disclosure}\\n{affiliate_url}"
+        request = PublishRequest(platform=req.platform, content=publish_text,
                                  content_type="photo" if response.image_url else "post")
         digest = hashlib.sha256(response.text.encode("utf-8")).hexdigest()[:24]
         request.idempotency_key = f"ucos:{req.platform}:{digest}"
