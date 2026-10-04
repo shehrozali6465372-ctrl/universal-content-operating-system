@@ -14,6 +14,8 @@ import os
 import socket
 import time
 import threading
+import re
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -55,8 +57,23 @@ def _assert_public_page(page) -> None:
     validate_url(page.url)
 
 
+def _profile_ref(value: str) -> str:
+    ref = re.sub(r"[^A-Za-z0-9._-]", "-", str(value or "").strip())
+    if not ref or len(ref) > 80:
+        raise ValueError("profile_ref must be 1..80 safe characters")
+    return ref
+
+
+def _profile_dir(profile_ref: str) -> str:
+    root = Path(os.getenv("UCOS_BROWSER_PROFILE_DIR", "/var/lib/ucos-browser/profiles"))
+    path = root / _profile_ref(profile_ref)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def execute_task(task: dict) -> dict:
     url = validate_url(task.get("url", ""))
+    profile_ref = _profile_ref(task.get("profile_ref", "default"))
     actions = task.get("actions") or [{"type": "extract"}]
     if not isinstance(actions, list) or len(actions) > MAX_ACTIONS:
         raise ValueError(f"actions must be a list of at most {MAX_ACTIONS} items")
@@ -71,11 +88,14 @@ def execute_task(task: dict) -> dict:
         except ImportError as exc:
             raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
         with sync_playwright() as pw:
-            browser: Browser = pw.chromium.launch(
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=_profile_dir(profile_ref),
                 headless=True,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
+                ignore_https_errors=False,
+                accept_downloads=False,
             )
-            context = browser.new_context(ignore_https_errors=False, accept_downloads=False)
+            browser = None
             page = context.new_page()
             page.set_default_timeout(timeout)
             try:
@@ -124,12 +144,15 @@ def execute_task(task: dict) -> dict:
                         result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
                     else:
                         raise ValueError(f"unsupported browser action: {kind}")
+                result["profile_ref"] = profile_ref
+                result["persistent_profile"] = True
                 result["final_url"] = page.url
                 result["duration_ms"] = int((time.monotonic() - started) * 1000)
                 return result
             finally:
                 context.close()
-                browser.close()
+                if browser is not None:
+                    browser.close()
     finally:
         _BROWSER_SLOTS.release()
 def _authorized(headers) -> bool:
@@ -157,6 +180,26 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_GET(self):
+        if self.path.startswith("/session/health"):
+            if not _authorized(self.headers):
+                self._send(401, {"error": "authentication required"})
+                return
+            from urllib.parse import parse_qs
+            query = parse_qs(urlsplit(self.path).query)
+            profile_ref = query.get("profile_ref", ["default"])[0]
+            try:
+                path = Path(_profile_dir(profile_ref))
+                has_state = any(path.iterdir())
+            except (OSError, ValueError):
+                has_state = False
+            self._send(200, {
+                "status": "ok",
+                "profile_ref": _profile_ref(profile_ref),
+                "persistent": True,
+                "profile_initialized": has_state,
+                "authentication": "UNKNOWN",
+            })
+            return
         if self.path.rstrip("/") == "":
             self._send(200, {"status": "ok", "service": "ucos-personal-browser"})
             return
