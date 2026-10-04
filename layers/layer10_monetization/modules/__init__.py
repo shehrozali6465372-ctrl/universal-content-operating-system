@@ -8,6 +8,12 @@ from .affiliate_browser import (
     AffiliateSearchResult,
     BrowserAffiliateError,
 )
+from .affiliate_browser_session import (
+    AffiliateAccountProfile,
+    AffiliateAccountService,
+    AffiliateSessionError,
+    AffiliateSessionStatus,
+)
 
 __all__ = [
     "AffiliateBrowserClient",
@@ -16,4 +22,8 @@ __all__ = [
     "AffiliateSearchRequest",
     "AffiliateSearchResult",
     "BrowserAffiliateError",
+    "AffiliateAccountProfile",
+    "AffiliateAccountService",
+    "AffiliateSessionError",
+    "AffiliateSessionStatus",
 ]
