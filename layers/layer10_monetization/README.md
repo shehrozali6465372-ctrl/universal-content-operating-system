@@ -1,8 +1,8 @@
 # Monetization
 
 **Layer:** layer 10 monetization
-**Status:** 🔜 Planned
-**Version:** See [VERSION](../../VERSION)
+**Status:** Production contract implemented
+**Version:** v1.2
 
 ## Description
 
