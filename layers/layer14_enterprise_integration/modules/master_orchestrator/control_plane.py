@@ -75,7 +75,7 @@ class ControlPlane:
                 # Browser affiliate acquisition is fail-closed. Do not replace a
                 # configured browser account with synthetic data; fall back only
                 # to the normal verified provider when it is independently configured.
-                if str(rules.get("browser_required", "false")).lower() == "true":
+                if str(rules.get("browser_required", "true")).lower() == "true":
                     raise
         return AffiliateEvidenceProvider().select(topic, niche, platform)
 
