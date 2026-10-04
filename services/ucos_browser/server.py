@@ -65,7 +65,7 @@ def _profile_ref(value: str) -> str:
 
 
 def _profile_dir(profile_ref: str) -> str:
-    root = Path(os.getenv("UCOS_BROWSER_PROFILE_DIR", "/var/lib/ucos-browser/profiles"))
+    root = Path(os.getenv("UCOS_BROWSER_PROFILE_DIR", "/var/data/ucos-browser/profiles"))
     path = root / _profile_ref(profile_ref)
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
