@@ -162,6 +162,7 @@ class PersonalBrowserAffiliateGateway(AffiliateBrowserGateway):
             source="authenticated_browser",
             evidence={
                 "method": "amazon_sitestripe",
+                "product_title": product.title,
                 "product_url": product.product_url,
                 "profile_ref": account_ref,
                 "final_url": result.get("final_url"),
