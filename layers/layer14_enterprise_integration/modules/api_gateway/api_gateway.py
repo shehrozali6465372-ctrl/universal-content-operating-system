@@ -1,6 +1,6 @@
 """APIGateway — Universal REST API for the AI Operating System."""
 from __future__ import annotations
-import hashlib, hmac, json, logging, os, time, threading, glob
+import hashlib, hmac, json, logging, os, time, threading, glob, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse, parse_qs
@@ -29,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -172,6 +172,69 @@ class APIGateway:
             return exc.code, data
         except URLError as exc:
             raise RuntimeError(f"browser worker unavailable: {exc.reason}") from exc
+
+    def _handle_amazon_browser_status(self,params):
+        """Return evidence-backed authentication state for an affiliate browser profile."""
+        account_ref=str(params.get("account_ref",[""])[0] or "").strip()
+        marketplace=str(params.get("marketplace",["www.amazon.com"])[0] or "www.amazon.com").strip().lower()
+        if not account_ref:
+            return APIResponse(status_code=400,error="account_ref is required")
+        if len(account_ref) > 80 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for ch in account_ref):
+            return APIResponse(status_code=400,error="account_ref contains unsafe characters")
+        try:
+            base=f"https://{marketplace}"
+            status_code,result=self._browser_request("POST","/execute",{
+                "url":base,
+                "profile_ref":account_ref,
+                "actions":[{"type":"extract"}],
+            })
+            if status_code >= 400:
+                return APIResponse(status_code=503,error=str(result.get("error","browser worker unavailable")))
+            payload=result.get("result",result)
+            text=str(payload.get("text",""))
+            authenticated=bool(re.search(r"Get Link|SiteStripe|Associates",text,re.I))
+            return APIResponse(data={
+                "provider":"amazon",
+                "account_ref":account_ref,
+                "marketplace":marketplace,
+                "persistent_profile":bool(payload.get("persistent_profile")),
+                "authenticated":authenticated,
+                "evidence":{"final_url":payload.get("final_url"),"signals":["amazon_associates_ui"] if authenticated else []},
+                "state":"authenticated" if authenticated else "requires_login",
+            })
+        except Exception as exc:
+            return APIResponse(status_code=503,error=str(exc))
+
+    def _handle_amazon_browser_search(self,data):
+        """Search Amazon and obtain a real tagged affiliate URL via SiteStripe."""
+        account_ref=str(data.get("account_ref","")).strip()
+        query=str(data.get("query","")).strip()
+        marketplace=str(data.get("marketplace","www.amazon.com") or "www.amazon.com").strip().lower()
+        if not account_ref or not query:
+            return APIResponse(status_code=400,error="account_ref and query are required")
+        try:
+            from layers.layer10_monetization.modules.affiliate_browser import AffiliateBrowserClient, AffiliateSearchRequest
+            from layers.layer14_enterprise_integration.modules.affiliate_browser_gateway import PersonalBrowserAffiliateGateway
+            client=AffiliateBrowserClient(PersonalBrowserAffiliateGateway(self._browser_request))
+            link=client.search_and_get_link(AffiliateSearchRequest(
+                provider="amazon",query=query,account_ref=account_ref,marketplace=marketplace
+            ))
+            return APIResponse(status_code=200,data={
+                "state":"verified",
+                "provider":"amazon",
+                "account_ref":account_ref,
+                "affiliate_url":link.affiliate_url,
+                "product_ref":link.product_ref,
+                "source":link.source,
+                "evidence":dict(link.evidence),
+            })
+        except RuntimeError as exc:
+            return APIResponse(status_code=409,error=str(exc))
+        except (TypeError,ValueError) as exc:
+            return APIResponse(status_code=400,error=str(exc))
+        except Exception as exc:
+            logger.exception("Amazon browser affiliate search failed")
+            return APIResponse(status_code=502,error=str(exc))
 
     def _handle_browser_health(self,params):
         try:
