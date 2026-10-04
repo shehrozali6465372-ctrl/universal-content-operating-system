@@ -6,7 +6,11 @@ creates affiliate URLs locally.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from typing import Any, Mapping
 from urllib.parse import quote_plus, urlsplit
 
@@ -17,6 +21,34 @@ from layers.layer10_monetization.modules.affiliate_browser import (
     AffiliateSearchRequest,
     AffiliateSearchResult,
 )
+
+
+
+def browser_request_from_environment(method: str, path: str, payload: dict[str, Any] | None = None, timeout: float = 75.0):
+    """Call the authenticated UCOS browser worker without exposing credentials to Layer 10."""
+    base=os.environ.get("UCOS_BROWSER_WORKER_URL", "").strip().rstrip("/")
+    token=os.environ.get("UCOS_BROWSER_TOKEN", "").strip()
+    if not base or not token:
+        raise RuntimeError("UCOS browser worker is not configured")
+    body=json.dumps(payload or {}).encode("utf-8")
+    request=Request(
+        f"{base}{path}",
+        data=body if method != "GET" else None,
+        method=method,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return response.status, json.loads(response.read(2_000_000).decode("utf-8"))
+    except HTTPError as exc:
+        raw=exc.read(2_000_000)
+        try:
+            data=json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            data={"error": str(exc)}
+        return exc.code, data
+    except URLError as exc:
+        raise RuntimeError(f"browser worker unavailable: {exc.reason}") from exc
 
 
 class PersonalBrowserAffiliateGateway(AffiliateBrowserGateway):
@@ -137,4 +169,4 @@ class PersonalBrowserAffiliateGateway(AffiliateBrowserGateway):
         )
 
 
-__all__ = ["PersonalBrowserAffiliateGateway"]
+__all__ = ["PersonalBrowserAffiliateGateway", "browser_request_from_environment"]
