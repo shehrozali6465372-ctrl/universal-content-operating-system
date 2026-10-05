@@ -188,23 +188,54 @@ def dispatch_job(data: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError("content jobs require real context.title and context.content")
             if publish and not bool(context.get("publish_authorized")):
                 raise ValueError("publishing requires explicit publish_authorized=true")
-            article = site.create_article(
-                title=title,
-                content=body,
-                category=str(context.get("category") or ""),
-                tags=list(context.get("tags") or []),
-                author=str(context.get("author") or "AtozProductHub"),
-                featured_image=str(context.get("featured_image") or ""),
-                meta_title=str(context.get("meta_title") or ""),
-                meta_description=str(context.get("meta_description") or ""),
-                status="published" if publish else "draft",
-            )
-            response = {
-                "job_id": job_id, "request_id": request_id, "niche_id": niche_id,
-                "state": "succeeded",
-                "result_ref": f"layer23:article:{article.article_id}",
-                "result": article.to_dict(),
-            }
+            if publish:
+                from layers.layer23_website_manager.integration.atoz_content_api_client import (
+                    AtozContentApiClient,
+                )
+
+                api = AtozContentApiClient.from_env()
+                article = api.create_article(
+                    niche_id,
+                    {
+                        "title": title,
+                        "excerpt": str(context.get("excerpt") or ""),
+                        "body": body,
+                        "slug": str(context.get("slug") or "") or None,
+                        "category_ids": list(context.get("category_ids") or []),
+                        "primary_category_id": context.get("primary_category_id"),
+                        "tag_ids": list(context.get("tag_ids") or []),
+                    },
+                )
+                article_id = str(article.get("id") or "")
+                if not article_id:
+                    raise RuntimeError("AtoZ Content API returned no article id.")
+                published_article = api.lifecycle(niche_id, article_id, "publish")
+                response = {
+                    "job_id": job_id, "request_id": request_id, "niche_id": niche_id,
+                    "state": "succeeded",
+                    "result_ref": f"atoz:article:{article_id}",
+                    "result": published_article,
+                    "transport": "atoz_content_api",
+                }
+            else:
+                article = site.create_article(
+                    title=title,
+                    content=body,
+                    category=str(context.get("category") or ""),
+                    tags=list(context.get("tags") or []),
+                    author=str(context.get("author") or "AtozProductHub"),
+                    featured_image=str(context.get("featured_image") or ""),
+                    meta_title=str(context.get("meta_title") or ""),
+                    meta_description=str(context.get("meta_description") or ""),
+                    status="draft",
+                )
+                response = {
+                    "job_id": job_id, "request_id": request_id, "niche_id": niche_id,
+                    "state": "succeeded",
+                    "result_ref": f"layer23:article:{article.article_id}",
+                    "result": article.to_dict(),
+                    "transport": "local_layer23",
+                }
         elif job_type == "seo_metadata":
             article_id = str(context.get("article_id") or "").strip()
             if not article_id:
