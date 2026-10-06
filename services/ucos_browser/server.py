@@ -127,6 +127,26 @@ def execute_task(task: dict) -> dict:
                         page.locator(selector).first.press(key)
                         _assert_public_page(page)
                         result["events"].append({"type": "press", "selector": selector, "key": key})
+                    elif kind == "fill":
+                        selector = str(action.get("selector", "")).strip()
+                        value = str(action.get("value", ""))
+                        if not selector or len(selector) > 500 or len(value) > 10_000:
+                            raise ValueError("fill requires a valid selector and value <= 10000 chars")
+                        page.locator(selector).first.fill(value)
+                        _assert_public_page(page)
+                        result["events"].append({"type": "fill", "selector": selector})
+                    elif kind == "inspect":
+                        result["elements"] = page.locator("input,button,textarea,select,[role='button'],a").evaluate_all(
+                            """els => els.slice(0, 200).map((e, i) => {
+                                const out = {index:i, tag:e.tagName.toLowerCase(), text:(e.innerText||e.value||'').trim().slice(0,200)};
+                                for (const a of ['id','name','type','aria-label','placeholder','role']) if (e.getAttribute(a)) out[a]=e.getAttribute(a);
+                                if (e.id && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.id)) out.selector='#'+e.id;
+                                else if (e.name && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.name)) out.selector=e.tagName.toLowerCase()+'[name="'+e.name+'"]';
+                                return out;
+                            })"""
+                        )
+                        result["title"] = page.title()[:500]
+                        result["final_url"] = page.url
                     elif kind == "extract":
                         text = page.locator("body").inner_text(timeout=timeout)
                         result["text"] = text[:MAX_TEXT]
@@ -201,7 +221,19 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
         if self.path.rstrip("/") == "":
-            self._send(200, {"status": "ok", "service": "ucos-personal-browser"})
+            self._send(200, {"status": "ok", "service": "ucos-personal-browser", "console": "/console"})
+            return
+        if self.path.rstrip("/") == "/console":
+            try:
+                raw = Path(__file__).with_name("console.html").read_bytes()
+            except OSError:
+                self._send(500, {"error": "console unavailable"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
             return
         if self.path.rstrip("/") != "/health":
             self._send(404, {"error": "not found"})
