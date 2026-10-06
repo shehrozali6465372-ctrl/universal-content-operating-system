@@ -199,6 +199,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def _serve_console(self):
+        try:
+            raw = Path(__file__).with_name("console.html").read_bytes()
+        except OSError:
+            self._send(500, {"error": "console unavailable"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(raw)
+
     def do_GET(self):
         if self.path.startswith("/session/health"):
             if not _authorized(self.headers):
@@ -221,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
         if self.path.rstrip("/") == "":
-            self._send(200, {"status": "ok", "service": "ucos-personal-browser", "console": "/console"})
+            self._serve_console()
             return
         if self.path.rstrip("/") == "/console":
             try:
