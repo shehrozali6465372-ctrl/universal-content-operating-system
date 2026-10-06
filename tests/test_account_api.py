@@ -38,3 +38,41 @@ def test_account_api_rejects_missing_identity_fields():
     response = gateway._handle_account_create({"platform": "instagram", "niche": "food"})
     assert response.status_code == 400
     assert "account_id" in response.error
+
+
+def test_account_api_forwards_production_identity_hierarchy(monkeypatch):
+    import layers.layer07_publishing.modules.account_control.account_registry as registry_module
+
+    captured = {}
+
+    class FakeRegistry:
+        def register(self, spec):
+            captured["spec"] = spec
+            return Path("/tmp/ucos-account")
+
+    monkeypatch.setattr(registry_module, "AccountRegistry", FakeRegistry)
+    monkeypatch.setenv("APP_ENV", "production")
+
+    gateway = APIGateway()
+    response = gateway._handle_account_create({
+        "account_id": "atoz:content-publishing",
+        "platform": "website",
+        "niche": "kitchen",
+        "tenant_id": "tenant:atoz-product-hub",
+        "workspace_id": "workspace:production",
+        "brand_id": "brand:atoz-product-hub",
+        "platform_account_id": "platform-account:atoz-website",
+        "external_account_id": "atozproducthub-website.onrender.com",
+        "tenant_name": "AtoZ Product Hub",
+        "workspace_name": "Production",
+        "brand_name": "AtoZ Product Hub",
+        "platform_account_name": "AtoZ Product Hub Website",
+    })
+
+    assert response.status_code == 201
+    spec = captured["spec"]
+    assert spec.tenant_id == "tenant:atoz-product-hub"
+    assert spec.workspace_id == "workspace:production"
+    assert spec.brand_id == "brand:atoz-product-hub"
+    assert spec.platform_account_id == "platform-account:atoz-website"
+    assert spec.external_account_id == "atozproducthub-website.onrender.com"
