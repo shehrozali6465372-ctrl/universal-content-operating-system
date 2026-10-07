@@ -57,6 +57,41 @@ def _assert_public_page(page) -> None:
     validate_url(page.url)
 
 
+def _resolve_form_selector(page, selector: str):
+    """Resolve common login-form selectors without bypassing site controls."""
+    requested = selector.strip()
+    candidates = [requested]
+    if requested == "#ap_email":
+        candidates += [
+            "input#ap_email",
+            "input[name='email']",
+            "input[type='email']",
+        ]
+    elif requested == "#ap_password":
+        candidates += [
+            "input#ap_password",
+            "input[name='password']",
+            "input[type='password']",
+        ]
+    elif requested == "#signInSubmit":
+        candidates += [
+            "input#signInSubmit",
+            "button#signInSubmit",
+            "input[type='submit']",
+        ]
+    for candidate in candidates:
+        locator = page.locator(candidate).first
+        try:
+            locator.wait_for(state="visible", timeout=5_000)
+            return locator, candidate
+        except Exception:
+            continue
+    raise ValueError(
+        f"selector not found on current page: {requested}; "
+        "inspect the current page before retrying"
+    )
+
+
 def _profile_ref(value: str) -> str:
     ref = re.sub(r"[^A-Za-z0-9._-]", "-", str(value or "").strip())
     if not ref or len(ref) > 80:
@@ -126,9 +161,10 @@ def execute_task(task: dict) -> dict:
                         selector = str(action.get("selector", "")).strip()
                         if not selector or len(selector) > 500:
                             raise ValueError("click selector is required and must be <= 500 chars")
-                        page.locator(selector).first.click()
+                        locator, resolved_selector = _resolve_form_selector(page, selector)
+                        locator.click()
                         _assert_public_page(page)
-                        result["events"].append({"type": "click", "selector": selector})
+                        result["events"].append({"type": "click", "selector": resolved_selector})
                     elif kind == "wait":
                         ms = max(0, min(int(action.get("ms", 250)), 10_000))
                         page.wait_for_timeout(ms)
@@ -137,17 +173,19 @@ def execute_task(task: dict) -> dict:
                         key = str(action.get("key", "")).strip()
                         if not selector or not key or len(key) > 100:
                             raise ValueError("press requires selector and key")
-                        page.locator(selector).first.press(key)
+                        locator, resolved_selector = _resolve_form_selector(page, selector)
+                        locator.press(key)
                         _assert_public_page(page)
-                        result["events"].append({"type": "press", "selector": selector, "key": key})
+                        result["events"].append({"type": "press", "selector": resolved_selector, "key": key})
                     elif kind == "fill":
                         selector = str(action.get("selector", "")).strip()
                         value = str(action.get("value", ""))
                         if not selector or len(selector) > 500 or len(value) > 10_000:
                             raise ValueError("fill requires a valid selector and value <= 10000 chars")
-                        page.locator(selector).first.fill(value)
+                        locator, resolved_selector = _resolve_form_selector(page, selector)
+                        locator.fill(value)
                         _assert_public_page(page)
-                        result["events"].append({"type": "fill", "selector": selector})
+                        result["events"].append({"type": "fill", "selector": resolved_selector})
                     elif kind == "inspect":
                         result["elements"] = page.locator("input,button,textarea,select,[role='button'],a").evaluate_all(
                             """els => els.slice(0, 200).map((e, i) => {
