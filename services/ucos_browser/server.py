@@ -58,38 +58,52 @@ def _assert_public_page(page) -> None:
 
 
 def _resolve_form_selector(page, selector: str):
-    """Resolve common login-form selectors without bypassing site controls."""
+    """Resolve a user-supplied form locator without masking Playwright errors."""
+    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
     requested = selector.strip()
-    candidates = [requested]
+    if not requested or len(requested) > 500:
+        raise ValueError("selector is required and must be <= 500 chars")
+
+    # Keep the caller's selector first, then use stable semantic fallbacks for
+    # known login controls. No CAPTCHA or anti-bot control is bypassed.
+    candidates = [(requested, page.locator(requested).first)]
     if requested == "#ap_email":
         candidates += [
-            "input#ap_email",
-            "input[name='email']",
-            "input[type='email']",
+            ("input#ap_email", page.locator("input#ap_email").first),
+            ("input[name='email']", page.locator("input[name='email']").first),
+            ("input[type='email']", page.locator("input[type='email']").first),
+            ("label:has-text('Email')", page.get_by_label(re.compile(r"email", re.I)).first),
         ]
     elif requested == "#ap_password":
         candidates += [
-            "input#ap_password",
-            "input[name='password']",
-            "input[type='password']",
+            ("input#ap_password", page.locator("input#ap_password").first),
+            ("input[name='password']", page.locator("input[name='password']").first),
+            ("input[type='password']", page.locator("input[type='password']").first),
+            ("label:has-text('Password')", page.get_by_label(re.compile(r"password", re.I)).first),
         ]
     elif requested == "#signInSubmit":
         candidates += [
-            "input#signInSubmit",
-            "button#signInSubmit",
-            "input[type='submit']",
+            ("input#signInSubmit", page.locator("input#signInSubmit").first),
+            ("button#signInSubmit", page.locator("button#signInSubmit").first),
+            ("input[type='submit']", page.locator("input[type='submit']").first),
+            ("button[type='submit']", page.locator("button[type='submit']").first),
         ]
-    for candidate in candidates:
-        locator = page.locator(candidate).first
+
+    last_error = None
+    for candidate, locator in candidates:
         try:
-            locator.wait_for(state="visible", timeout=5_000)
+            locator.wait_for(state="visible", timeout=3_000)
             return locator, candidate
-        except Exception:
+        except (PlaywrightTimeoutError, PlaywrightError) as exc:
+            last_error = exc
             continue
+
     raise ValueError(
-        f"selector not found on current page: {requested}; "
-        "inspect the current page before retrying"
-    )
+        f"selector not found or not visible on current page: {requested}; "
+        "use Inspect to identify the current form control"
+    ) from last_error
 
 
 def _profile_ref(value: str) -> str:
@@ -139,11 +153,10 @@ def execute_task(task: dict) -> dict:
             context = pw.chromium.launch_persistent_context(
                 user_data_dir=profile_dir,
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote"],
                 ignore_https_errors=False,
                 accept_downloads=False,
             )
-            browser = None
             page = context.new_page()
             page.set_default_timeout(timeout)
             try:
@@ -222,8 +235,7 @@ def execute_task(task: dict) -> dict:
                 return result
             finally:
                 context.close()
-                if browser is not None:
-                    browser.close()
+
     finally:
         _BROWSER_SLOTS.release()
 
