@@ -25,7 +25,7 @@ class ProductionPipeline(PipelineWiring):
     def _credentials(self, platform: str, account_id: str, credentials_ref: str) -> Dict[str, str]:
         if credentials_ref == "META_ACCESS_TOKEN" and platform in ("facebook", "instagram"):
             return MetaCredentialProvider().credentials_for(platform, account_id)
-        credentials = AccountCredentialResolver.resolve(credentials_ref)
+        credentials = AccountCredentialResolver.resolve(credentials_ref, account_id)
         if not credentials:
             return {}
         if platform == "facebook":
