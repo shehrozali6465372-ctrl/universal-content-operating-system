@@ -7,6 +7,7 @@ CAPTCHA/anti-bot bypass instructions.
 """
 from __future__ import annotations
 
+import atexit
 import ipaddress
 import json
 import logging
@@ -26,6 +27,9 @@ MAX_TEXT = 200_000
 MAX_LINKS = 2_000
 DEFAULT_TIMEOUT_MS = 30_000
 _BROWSER_SLOTS = threading.BoundedSemaphore(1)
+_SESSION_LOCK = threading.RLock()
+_BROWSER_RUNTIME = None
+SESSION_IDLE_TTL_SECONDS = 15 * 60
 
 
 def _is_public_host(hostname: str) -> bool:
