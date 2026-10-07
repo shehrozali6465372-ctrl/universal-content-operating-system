@@ -17,7 +17,7 @@ import time
 import threading
 import re
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
 
 
@@ -439,7 +439,7 @@ def main() -> None:
     port = int(os.getenv("PORT", "10000"))
     if not os.getenv("UCOS_BROWSER_TOKEN", "").strip():
         raise RuntimeError("UCOS_BROWSER_TOKEN is required")
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server = HTTPServer(("0.0.0.0", port), Handler)
     LOG.info("UCOS Personal Browser listening on 0.0.0.0:%s", port)
     server.serve_forever()
 
