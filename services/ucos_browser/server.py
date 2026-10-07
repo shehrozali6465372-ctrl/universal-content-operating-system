@@ -136,6 +136,88 @@ def _profile_dir(profile_ref: str) -> tuple[str, bool]:
         return str(fallback), False
 
 
+def _close_browser_runtime_locked() -> None:
+    global _BROWSER_RUNTIME
+    runtime = _BROWSER_RUNTIME
+    _BROWSER_RUNTIME = None
+    if not runtime:
+        return
+    try:
+        runtime["context"].close()
+    except Exception:
+        LOG.exception("failed to close browser context")
+    try:
+        runtime["pw"].stop()
+    except Exception:
+        LOG.exception("failed to stop Playwright runtime")
+
+
+def _close_browser_runtime() -> None:
+    with _SESSION_LOCK:
+        _close_browser_runtime_locked()
+
+
+def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
+    global _BROWSER_RUNTIME
+    now = time.monotonic()
+    with _SESSION_LOCK:
+        runtime = _BROWSER_RUNTIME
+        if runtime and (
+            runtime["profile_ref"] != profile_ref
+            or now - runtime["last_used"] > SESSION_IDLE_TTL_SECONDS
+        ):
+            _close_browser_runtime_locked()
+            runtime = None
+
+        if runtime:
+            page = runtime["page"]
+            if page.is_closed():
+                page = runtime["context"].new_page()
+                runtime["page"] = page
+            page.set_default_timeout(timeout)
+            runtime["last_used"] = now
+            return runtime, False
+
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:
+            raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
+
+        profile_dir, persistent_profile = _profile_dir(profile_ref)
+        pw = sync_playwright().start()
+        try:
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote"],
+                ignore_https_errors=False,
+                accept_downloads=False,
+            )
+            page = context.pages[0] if context.pages else context.new_page()
+            page.set_default_timeout(timeout)
+        except Exception:
+            try:
+                pw.stop()
+            except Exception:
+                LOG.exception("failed to stop Playwright after launch failure")
+            raise
+
+        runtime = {
+            "profile_ref": profile_ref,
+            "persistent_profile": persistent_profile,
+            "profile_dir": profile_dir,
+            "pw": pw,
+            "context": context,
+            "page": page,
+            "last_used": now,
+        }
+        _BROWSER_RUNTIME = runtime
+        return runtime, True
+
+
+atexit.register(_close_browser_runtime)
+
+
 def execute_task(task: dict) -> dict:
     url = validate_url(task.get("url", ""))
     profile_ref = _profile_ref(task.get("profile_ref", "default"))
