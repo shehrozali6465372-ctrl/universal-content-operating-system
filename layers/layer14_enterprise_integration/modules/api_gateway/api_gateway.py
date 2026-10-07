@@ -29,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -324,6 +324,88 @@ class APIGateway:
             return APIResponse(status_code=201,data={"account":asdict(spec),"workspace":str(workspace),"provisioned_stores":["memory","content","analytics","learning"]})
         except (TypeError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
+    def _handle_pinterest_credential_store(self, data):
+        """Store a Pinterest OAuth credential in the canonical encrypted L13 vault."""
+        try:
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+            from layers.layer13_persistence.modules.postgresql.repositories.credential_repository import CredentialRepository
+
+            required = ("account_id", "platform_account_id", "credential_ref", "access_token")
+            missing = [k for k in required if not str(data.get(k) or "").strip()]
+            if missing:
+                return APIResponse(400, error=f"missing required fields: {', '.join(missing)}")
+
+            account_id = str(data["account_id"]).strip()
+            platform_account_id = str(data["platform_account_id"]).strip()
+            credential_ref = str(data["credential_ref"]).strip()
+            account = AccountRegistry().get(account_id)
+            if account is None:
+                return APIResponse(404, error="unknown account_id")
+            if not account.enabled or account.platform != "pinterest":
+                return APIResponse(409, error="account is not an enabled Pinterest account")
+            if account.platform_account_id != platform_account_id:
+                return APIResponse(409, error="platform_account_id does not match canonical account identity")
+            if account.credentials_ref != credential_ref:
+                return APIResponse(409, error="credential_ref does not match canonical account identity")
+
+            key = os.environ.get("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
+            if not key:
+                return APIResponse(503, error="credential encryption is not configured")
+
+            payload = {
+                "access_token": str(data["access_token"]),
+                "refresh_token": str(data.get("refresh_token") or ""),
+                "token_type": str(data.get("token_type") or "bearer"),
+                "scope": str(data.get("scope") or ""),
+                "pinterest_user_id": str(data.get("pinterest_user_id") or ""),
+                "username": str(data.get("username") or ""),
+                "board_id": str(data.get("board_id") or ""),
+            }
+            expires_at = data.get("expires_at")
+            credential_id = CredentialRepository(encryption_key=key).upsert(
+                credential_ref=credential_ref,
+                account_id=account_id,
+                platform_account_id=platform_account_id,
+                payload=payload,
+                key_version="v1",
+                expires_at=expires_at,
+            )
+            return APIResponse(status_code=201, data={
+                "stored": True,
+                "credential_id": credential_id,
+                "credential_ref": credential_ref,
+                "account_id": account_id,
+                "platform_account_id": platform_account_id,
+            })
+        except (TypeError, ValueError) as exc:
+            return APIResponse(400, error=str(exc))
+        except Exception:
+            logger.exception("Pinterest credential vault write failed")
+            return APIResponse(500, error="Pinterest credential vault write failed")
+
+    def _handle_pinterest_credentials(self, params):
+        """Return non-secret Pinterest credential metadata only."""
+        try:
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+            account_id = str(params.get("account_id", [""])[0] or "").strip()
+            if not account_id:
+                return APIResponse(400, error="account_id is required")
+            account = AccountRegistry().get(account_id)
+            if account is None:
+                return APIResponse(404, error="unknown account_id")
+            if account.platform != "pinterest":
+                return APIResponse(409, error="account is not a Pinterest account")
+            return APIResponse(data={
+                "account_id": account.account_id,
+                "platform": account.platform,
+                "platform_account_id": account.platform_account_id,
+                "credential_ref": account.credentials_ref,
+                "enabled": account.enabled,
+            })
+        except Exception:
+            logger.exception("Pinterest credential metadata lookup failed")
+            return APIResponse(500, error="Pinterest credential metadata lookup failed")
+
     def _handle_generate(self,data):
         topic=data.get("topic","artificial intelligence"); platform=data.get("platform"); account_id=data.get("account_id"); tone=data.get("tone","professional"); style=data.get("style","educational"); include_image=bool(data.get("include_image",True)); publish_mode=data.get("publish_mode")
         try:
