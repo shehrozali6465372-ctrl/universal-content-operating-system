@@ -219,7 +219,8 @@ atexit.register(_close_browser_runtime)
 
 
 def execute_task(task: dict) -> dict:
-    url = validate_url(task.get("url", ""))
+    requested_url = str(task.get("url", "")).strip()
+    url = validate_url(requested_url) if requested_url else ""
     profile_ref = _profile_ref(task.get("profile_ref", "default"))
     actions = task.get("actions") or [{"type": "extract"}]
     if not isinstance(actions, list) or len(actions) > MAX_ACTIONS:
@@ -230,101 +231,110 @@ def execute_task(task: dict) -> dict:
     if not _BROWSER_SLOTS.acquire(blocking=False):
         raise RuntimeError("browser worker is busy; retry the task")
     try:
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as exc:
-            raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
-        with sync_playwright() as pw:
-            profile_dir, persistent_profile = _profile_dir(profile_ref)
-            context = pw.chromium.launch_persistent_context(
-                user_data_dir=profile_dir,
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote"],
-                ignore_https_errors=False,
-                accept_downloads=False,
-            )
-            page = context.new_page()
-            page.set_default_timeout(timeout)
-            try:
-                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-                _assert_public_page(page)
-                result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
-                for action in actions:
-                    kind = str(action.get("type", "")).strip().lower()
-                    if kind == "navigate":
-                        target = validate_url(action.get("url", ""))
-                        response = page.goto(target, wait_until="domcontentloaded", timeout=timeout)
-                        _assert_public_page(page)
-                        result["events"].append({"type": "navigate", "status": response.status if response else None, "url": page.url})
-                    elif kind == "click":
-                        selector = str(action.get("selector", "")).strip()
-                        if not selector or len(selector) > 500:
-                            raise ValueError("click selector is required and must be <= 500 chars")
-                        locator, resolved_selector = _resolve_form_selector(page, selector)
-                        locator.click()
-                        _assert_public_page(page)
-                        result["events"].append({"type": "click", "selector": resolved_selector})
-                    elif kind == "wait":
-                        ms = max(0, min(int(action.get("ms", 250)), 10_000))
-                        page.wait_for_timeout(ms)
-                    elif kind == "press":
-                        selector = str(action.get("selector", "")).strip()
-                        key = str(action.get("key", "")).strip()
-                        if not selector or not key or len(key) > 100:
-                            raise ValueError("press requires selector and key")
-                        locator, resolved_selector = _resolve_form_selector(page, selector)
-                        locator.press(key)
-                        _assert_public_page(page)
-                        result["events"].append({"type": "press", "selector": resolved_selector, "key": key})
-                    elif kind == "fill":
-                        selector = str(action.get("selector", "")).strip()
-                        value = str(action.get("value", ""))
-                        if not selector or len(selector) > 500 or len(value) > 10_000:
-                            raise ValueError("fill requires a valid selector and value <= 10000 chars")
-                        locator, resolved_selector = _resolve_form_selector(page, selector)
-                        locator.fill(value)
-                        _assert_public_page(page)
-                        result["events"].append({"type": "fill", "selector": resolved_selector})
-                    elif kind == "inspect":
-                        result["elements"] = page.locator("input,button,textarea,select,[role='button'],a").evaluate_all(
-                            """els => els.slice(0, 200).map((e, i) => {
-                                const out = {index:i, tag:e.tagName.toLowerCase(), text:(e.innerText||e.value||'').trim().slice(0,200)};
-                                for (const a of ['id','name','type','aria-label','placeholder','role']) if (e.getAttribute(a)) out[a]=e.getAttribute(a);
-                                if (e.id && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.id)) out.selector='#'+e.id;
-                                else if (e.name && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.name)) out.selector=e.tagName.toLowerCase()+'[name="'+e.name+'"]';
-                                return out;
-                            })"""
-                        )
-                        result["title"] = page.title()[:500]
-                        result["final_url"] = page.url
-                    elif kind == "extract":
-                        text = page.locator("body").inner_text(timeout=timeout)
-                        result["text"] = text[:MAX_TEXT]
-                        result["title"] = page.title()[:500]
-                        hrefs = page.locator("a[href]").evaluate_all(
-                            "els => els.map(e => ({text:(e.innerText||'').trim(), href:e.href}))"
-                        )
-                        result["links"] = hrefs[:MAX_LINKS]
-                    elif kind == "extract_selector":
-                        selector = str(action.get("selector", "")).strip()
-                        if not selector or len(selector) > 500:
-                            raise ValueError("extract_selector selector is required and must be <= 500 chars")
-                        result["text"] = page.locator(selector).first.inner_text(timeout=timeout)[:MAX_TEXT]
-                    elif kind == "screenshot":
-                        result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
-                    else:
-                        raise ValueError(f"unsupported browser action: {kind}")
-                result["profile_ref"] = profile_ref
-                result["persistent_profile"] = persistent_profile
-                result["final_url"] = page.url
-                result["duration_ms"] = int((time.monotonic() - started) * 1000)
-                return result
-            finally:
-                context.close()
+        runtime, created = _get_browser_runtime(profile_ref, timeout)
+        page = runtime["page"]
+        explicit_navigation = any(
+            str(action.get("type", "")).strip().lower() == "navigate"
+            for action in actions
+            if isinstance(action, dict)
+        )
+        if created and url and not explicit_navigation:
+            response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+            _assert_public_page(page)
+            result["events"].append({
+                "type": "navigate",
+                "status": response.status if response else None,
+                "url": page.url,
+                "reason": "session_init",
+            })
 
+        for action in actions:
+            kind = str(action.get("type", "")).strip().lower()
+            if kind == "navigate":
+                target = validate_url(action.get("url", ""))
+                response = page.goto(target, wait_until="domcontentloaded", timeout=timeout)
+                _assert_public_page(page)
+                result["events"].append({
+                    "type": "navigate",
+                    "status": response.status if response else None,
+                    "url": page.url,
+                })
+            elif kind == "click":
+                selector = str(action.get("selector", "")).strip()
+                if not selector or len(selector) > 500:
+                    raise ValueError("click selector is required and must be <= 500 chars")
+                locator, resolved_selector = _resolve_form_selector(page, selector)
+                locator.click()
+                _assert_public_page(page)
+                result["events"].append({"type": "click", "selector": resolved_selector})
+            elif kind == "wait":
+                ms = max(0, min(int(action.get("ms", 250)), 10_000))
+                page.wait_for_timeout(ms)
+            elif kind == "press":
+                selector = str(action.get("selector", "")).strip()
+                key = str(action.get("key", "")).strip()
+                if not selector or not key or len(key) > 100:
+                    raise ValueError("press requires selector and key")
+                locator, resolved_selector = _resolve_form_selector(page, selector)
+                locator.press(key)
+                _assert_public_page(page)
+                result["events"].append({
+                    "type": "press",
+                    "selector": resolved_selector,
+                    "key": key,
+                })
+            elif kind == "fill":
+                selector = str(action.get("selector", "")).strip()
+                value = str(action.get("value", ""))
+                if not selector or len(selector) > 500 or len(value) > 10_000:
+                    raise ValueError("fill requires a valid selector and value <= 10000 chars")
+                locator, resolved_selector = _resolve_form_selector(page, selector)
+                locator.fill(value)
+                _assert_public_page(page)
+                result["events"].append({"type": "fill", "selector": resolved_selector})
+            elif kind == "inspect":
+                result["elements"] = page.locator("input,button,textarea,select,[role='button'],a").evaluate_all(
+                    """els => els.slice(0, 200).map((e, i) => {
+                        const out = {index:i, tag:e.tagName.toLowerCase(), text:(e.innerText||e.value||'').trim().slice(0,200)};
+                        for (const a of ['id','name','type','aria-label','placeholder','role']) if (e.getAttribute(a)) out[a]=e.getAttribute(a);
+                        if (e.id && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.id)) out.selector='#'+e.id;
+                        else if (e.name && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(e.name)) out.selector=e.tagName.toLowerCase()+'[name="'+e.name+'"]';
+                        return out;
+                    })"""
+                )
+                result["title"] = page.title()[:500]
+                result["final_url"] = page.url
+            elif kind == "extract":
+                text_value = page.locator("body").inner_text(timeout=timeout)
+                result["text"] = text_value[:MAX_TEXT]
+                result["title"] = page.title()[:500]
+                hrefs = page.locator("a[href]").evaluate_all(
+                    """els => els.slice(0, 2000).map(e => ({
+                        text:(e.innerText||'').trim(),
+                        href:e.href
+                    }))"""
+                )
+                result["links"] = hrefs
+            elif kind == "extract_selector":
+                selector = str(action.get("selector", "")).strip()
+                if not selector or len(selector) > 500:
+                    raise ValueError("extract_selector selector is required and must be <= 500 chars")
+                result["text"] = page.locator(selector).first.inner_text(timeout=timeout)[:MAX_TEXT]
+            elif kind == "screenshot":
+                result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
+            else:
+                raise ValueError(f"unsupported browser action: {kind}")
+
+        runtime["last_used"] = time.monotonic()
+        result["profile_ref"] = profile_ref
+        result["persistent_profile"] = runtime["persistent_profile"]
+        result["session_reused"] = not created
+        result["final_url"] = page.url
+        result["url"] = page.url
+        result["duration_ms"] = int((time.monotonic() - started) * 1000)
+        return result
     finally:
         _BROWSER_SLOTS.release()
-
 
 def _authorized(headers) -> bool:
     token = os.getenv("UCOS_BROWSER_TOKEN", "").strip()
