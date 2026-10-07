@@ -64,11 +64,23 @@ def _profile_ref(value: str) -> str:
     return ref
 
 
-def _profile_dir(profile_ref: str) -> str:
-    root = Path(os.getenv("UCOS_BROWSER_PROFILE_DIR", "/var/data/ucos-browser/profiles"))
+def _profile_dir(profile_ref: str) -> tuple[str, bool]:
+    configured = os.getenv("UCOS_BROWSER_PROFILE_DIR", "").strip()
+    root = Path(configured or "/var/data/ucos-browser/profiles")
     path = root / _profile_ref(profile_ref)
-    path.mkdir(parents=True, exist_ok=True)
-    return str(path)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return str(path), True
+    except OSError as exc:
+        if configured:
+            raise RuntimeError("configured browser profile directory is not writable") from exc
+        fallback = Path("/tmp/ucos-browser/profiles") / _profile_ref(profile_ref)
+        fallback.mkdir(parents=True, exist_ok=True)
+        LOG.warning("browser profile storage %s is not writable; using ephemeral fallback %s", root, fallback)
+        return str(fallback), False
 
 
 def execute_task(task: dict) -> dict:
@@ -88,8 +100,9 @@ def execute_task(task: dict) -> dict:
         except ImportError as exc:
             raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
         with sync_playwright() as pw:
+            profile_dir, persistent_profile = _profile_dir(profile_ref)
             context = pw.chromium.launch_persistent_context(
-                user_data_dir=_profile_dir(profile_ref),
+                user_data_dir=profile_dir,
                 headless=True,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-zygote", "--single-process"],
                 ignore_https_errors=False,
@@ -165,7 +178,7 @@ def execute_task(task: dict) -> dict:
                     else:
                         raise ValueError(f"unsupported browser action: {kind}")
                 result["profile_ref"] = profile_ref
-                result["persistent_profile"] = True
+                result["persistent_profile"] = persistent_profile
                 result["final_url"] = page.url
                 result["duration_ms"] = int((time.monotonic() - started) * 1000)
                 return result
@@ -175,6 +188,8 @@ def execute_task(task: dict) -> dict:
                     browser.close()
     finally:
         _BROWSER_SLOTS.release()
+
+
 def _authorized(headers) -> bool:
     token = os.getenv("UCOS_BROWSER_TOKEN", "").strip()
     supplied = str(headers.get("Authorization", ""))
@@ -221,14 +236,15 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(urlsplit(self.path).query)
             profile_ref = query.get("profile_ref", ["default"])[0]
             try:
-                path = Path(_profile_dir(profile_ref))
-                has_state = any(path.iterdir())
-            except (OSError, ValueError):
+                path, persistent_profile = _profile_dir(profile_ref)
+                has_state = any(Path(path).iterdir())
+            except (OSError, ValueError, RuntimeError):
                 has_state = False
+                persistent_profile = False
             self._send(200, {
                 "status": "ok",
                 "profile_ref": _profile_ref(profile_ref),
-                "persistent": True,
+                "persistent": persistent_profile,
                 "profile_initialized": has_state,
                 "authentication": "UNKNOWN",
             })
@@ -237,16 +253,7 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_console()
             return
         if self.path.rstrip("/") == "/console":
-            try:
-                raw = Path(__file__).with_name("console.html").read_bytes()
-            except OSError:
-                self._send(500, {"error": "console unavailable"})
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
+            self._serve_console()
             return
         if self.path.rstrip("/") != "/health":
             self._send(404, {"error": "not found"})
