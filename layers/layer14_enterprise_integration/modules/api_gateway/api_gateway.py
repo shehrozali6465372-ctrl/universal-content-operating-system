@@ -29,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -382,6 +382,98 @@ class APIGateway:
         except Exception:
             logger.exception("Pinterest credential vault write failed")
             return APIResponse(500, error="Pinterest credential vault write failed")
+
+    def _handle_pinterest_operation(self, data):
+        """Execute a safe Pinterest operation without exposing the stored OAuth token."""
+        try:
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+            from layers.layer17_security.modules.credential_resolver.credential_resolver import AccountCredentialResolver
+            from urllib.request import Request, urlopen
+            import urllib.error
+
+            account_id = str(data.get("account_id") or "").strip()
+            operation = str(data.get("operation") or "").strip().lower()
+            if not account_id or not operation:
+                return APIResponse(400, error="account_id and operation are required")
+
+            account = AccountRegistry().get(account_id)
+            if account is None:
+                return APIResponse(404, error="unknown account_id")
+            if not account.enabled or account.platform != "pinterest":
+                return APIResponse(409, error="account is not an enabled Pinterest account")
+
+            credentials = AccountCredentialResolver.resolve(account.credentials_ref, account_id)
+            token = str(credentials.get("access_token") or "").strip()
+            if not token:
+                return APIResponse(401, error="Pinterest credential is not configured")
+
+            base = "https://api.pinterest.com/v5"
+            method = "GET"
+            path = "/user_account"
+            body = None
+            payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+
+            if operation == "account":
+                method, path = "GET", "/user_account"
+            elif operation == "boards":
+                method, path = "GET", "/boards"
+            elif operation == "create_board":
+                name = str(payload.get("name") or "").strip()
+                if not name:
+                    return APIResponse(400, error="board name is required")
+                method, path = "POST", "/boards"
+                body = {"name": name, "description": str(payload.get("description") or "")}
+            elif operation == "create_pin":
+                required = ("board_id", "title", "image_url")
+                missing = [k for k in required if not str(payload.get(k) or "").strip()]
+                if missing:
+                    return APIResponse(400, error=f"missing required fields: {', '.join(missing)}")
+                method, path = "POST", "/pins"
+                body = {
+                    "board_id": str(payload["board_id"]),
+                    "title": str(payload["title"]),
+                    "description": str(payload.get("description") or ""),
+                    "media_source": {
+                        "source_type": "image_url",
+                        "url": str(payload["image_url"]),
+                        "is_standard": True,
+                    },
+                }
+                if str(payload.get("destination_url") or "").strip():
+                    body["link"] = str(payload["destination_url"])
+            else:
+                return APIResponse(400, error="unsupported Pinterest operation")
+
+            encoded = json.dumps(body).encode("utf-8") if body is not None else None
+            request = Request(
+                f"{base}{path}",
+                data=encoded,
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+            try:
+                with urlopen(request, timeout=30) as response:
+                    raw = response.read(2_000_000)
+                    result = json.loads(raw.decode("utf-8")) if raw else {}
+                    return APIResponse(status_code=response.status, data=result)
+            except urllib.error.HTTPError as exc:
+                raw = exc.read(2_000_000)
+                try:
+                    detail = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    detail = {}
+                return APIResponse(status_code=exc.code, error=str(
+                    detail.get("message") or detail.get("error_description") or detail.get("error") or
+                    f"Pinterest HTTP {exc.code}"
+                ))
+            except (urllib.error.URLError, TimeoutError) as exc:
+                return APIResponse(502, error=f"Pinterest API unavailable: {type(exc).__name__}")
+        except Exception:
+            logger.exception("Pinterest operation failed")
+            return APIResponse(500, error="Pinterest operation failed")
 
     def _handle_pinterest_credentials(self, params):
         """Return non-secret Pinterest credential metadata only."""
