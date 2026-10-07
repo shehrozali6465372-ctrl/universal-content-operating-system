@@ -29,7 +29,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /credentials/pinterest/revoke":self._handle_pinterest_credential_revoke,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -382,6 +382,29 @@ class APIGateway:
         except Exception:
             logger.exception("Pinterest credential vault write failed")
             return APIResponse(500, error="Pinterest credential vault write failed")
+
+    def _handle_pinterest_credential_revoke(self, data):
+        """Revoke a Pinterest credential without returning or exposing its secret."""
+        try:
+            from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
+            from layers.layer13_persistence.modules.postgresql.repositories.credential_repository import CredentialRepository
+            account_id = str(data.get("account_id") or "").strip()
+            credential_ref = str(data.get("credential_ref") or "").strip()
+            if not account_id or not credential_ref:
+                return APIResponse(400, error="account_id and credential_ref are required")
+            account = AccountRegistry().get(account_id)
+            if account is None:
+                return APIResponse(404, error="unknown account_id")
+            if account.credentials_ref != credential_ref or account.platform != "pinterest":
+                return APIResponse(409, error="credential identity mismatch")
+            key = os.environ.get("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
+            if not key:
+                return APIResponse(503, error="credential encryption is not configured")
+            revoked = CredentialRepository(encryption_key=key).revoke(credential_ref, account_id)
+            return APIResponse(data={"revoked": bool(revoked), "account_id": account_id, "credential_ref": credential_ref})
+        except Exception:
+            logger.exception("Pinterest credential revoke failed")
+            return APIResponse(500, error="Pinterest credential revoke failed")
 
     def _handle_pinterest_operation(self, data):
         """Execute a safe Pinterest operation without exposing the stored OAuth token."""
