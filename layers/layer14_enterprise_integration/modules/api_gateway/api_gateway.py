@@ -34,10 +34,10 @@ class APIGateway:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
         if not self._requires_auth(): return True
-        configured=os.getenv("UCOS_API_TOKEN", "").strip()
-        if not configured: return False
+        configured_tokens=[v for v in (os.getenv("UCOS_API_TOKEN", "").strip(), os.getenv("UCOS_MLH_SERVICE_TOKEN", "").strip()) if v]
+        if not configured_tokens: return False
         supplied=str(headers.get("Authorization", ""))
-        return hmac.compare_digest(supplied, f"Bearer {configured}")
+        return any(hmac.compare_digest(supplied, f"Bearer {token}") for token in configured_tokens)
 
     def _aios_authorized(self, method: str, path: str, raw_body: bytes, headers: Any) -> bool:
         """Verify the AtoZ/AI OS Bridge HMAC transport contract and reject nonce replay."""
