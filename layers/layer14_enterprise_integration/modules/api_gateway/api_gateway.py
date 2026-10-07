@@ -360,6 +360,7 @@ class APIGateway:
                 "pinterest_user_id": str(data.get("pinterest_user_id") or ""),
                 "username": str(data.get("username") or ""),
                 "board_id": str(data.get("board_id") or ""),
+                "refresh_token_expires_at": str(data.get("refresh_token_expires_at") or ""),
             }
             expires_at = data.get("expires_at")
             credential_id = CredentialRepository(encryption_key=key).upsert(
