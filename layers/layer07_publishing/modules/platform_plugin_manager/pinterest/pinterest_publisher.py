@@ -1,8 +1,8 @@
 """Pinterest API v5 publisher.
 
-Requires account-scoped OAuth credentials with pins:write/pins:read and a
-board_id. The current publisher implements image Pins only; it does not claim
-video publishing or native scheduling.
+Requires account-scoped OAuth credentials with pins:write/pins:read and an
+explicit board_id before publishing. The publisher implements image Pins only;
+it does not claim video publishing or native scheduling.
 """
 from __future__ import annotations
 import json
@@ -34,13 +34,11 @@ class PinterestPublisher(BasePublisher):
         return c
 
     def authenticate(self, credentials):
-        # Credentials are supplied by the account-scoped credential resolver.
-        # Do not fall back to process-global Pinterest credentials: doing so can
-        # silently publish one account's content through another account.
+        # Account-scoped credentials only; never fall back to process-global tokens.
         self.token = str(credentials.get("access_token") or "")
         self.board_id = str(credentials.get("board_id") or "")
-        if not self.token or not self.board_id:
-            self.authenticated = False
+        self.authenticated = False
+        if not self.token:
             return False
         try:
             response = self._request("GET", "/user_account", None)
@@ -57,6 +55,13 @@ class PinterestPublisher(BasePublisher):
         if not self.authenticated:
             result.error_message = "Not authenticated"
             return result
+        # Prefer a board explicitly selected for this post; otherwise use the
+        # board stored with this account's credential. Never silently pick one.
+        selected_board = str(kwargs.get("board_id") or self.board_id or "").strip()
+        if not selected_board:
+            result.error_message = "Pinterest board selection required: provide board_id or save a selected board to the account credential"
+            return result
+        self.board_id = selected_board
         if not self.validate(content, content_type):
             result.error_message = "Pinterest validation failed"
             return result
@@ -118,8 +123,6 @@ class PinterestPublisher(BasePublisher):
         return "published" if self.get_post(post_id) else "unknown"
 
     def get_analytics(self, post_id):
-        # A Pin object is not analytics. Never reinterpret object metadata as
-        # impressions/clicks/etc. until the required analytics endpoint is wired.
         return {"post_id": str(post_id), "analytics": "UNKNOWN"}
 
     def schedule(self, content, scheduled_time, media_paths=None, **kwargs):
