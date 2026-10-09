@@ -259,6 +259,19 @@ def execute_task(task: dict) -> dict:
                     "status": response.status if response else None,
                     "url": page.url,
                 })
+            elif kind in {"back", "forward", "reload"}:
+                if kind == "back":
+                    response = page.go_back(wait_until="domcontentloaded", timeout=timeout)
+                elif kind == "forward":
+                    response = page.go_forward(wait_until="domcontentloaded", timeout=timeout)
+                else:
+                    response = page.reload(wait_until="domcontentloaded", timeout=timeout)
+                _assert_public_page(page)
+                result["events"].append({
+                    "type": kind,
+                    "status": response.status if response else None,
+                    "url": page.url,
+                })
             elif kind == "click":
                 selector = str(action.get("selector", "")).strip()
                 if not selector or len(selector) > 500:
