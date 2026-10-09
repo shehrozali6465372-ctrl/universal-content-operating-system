@@ -306,12 +306,17 @@ class APIGateway:
             return APIResponse(data={"version":self.VERSION,"layers":len(layers),"source_files":files,"test_files":tests})
         except Exception as exc: return APIResponse(500,error=str(exc))
     def _handle_accounts(self,params):
+        started = time.monotonic()
+        platform = params.get("platform", [None])[0]
         try:
             from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
-            registry=AccountRegistry(); platform=params.get("platform",[None])[0]; enabled=params.get("enabled",["true"])[0].lower()!="false"
+            registry=AccountRegistry(); enabled=params.get("enabled",["true"])[0].lower()!="false"
             accounts=registry.list(platform=platform,enabled_only=enabled)
+            logger.info("Account lookup succeeded platform=%s count=%d elapsed_ms=%d", platform or "all", len(accounts), int((time.monotonic()-started)*1000))
             return APIResponse(data={"accounts":[a.__dict__ for a in accounts],"count":len(accounts)})
-        except Exception as exc: return APIResponse(500,error=str(exc))
+        except Exception as exc:
+            logger.exception("Account lookup failed platform=%s elapsed_ms=%d", platform or "all", int((time.monotonic()-started)*1000))
+            return APIResponse(500,error=str(exc))
     def _handle_account_create(self,data):
         try:
             from dataclasses import asdict
