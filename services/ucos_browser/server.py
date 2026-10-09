@@ -272,6 +272,42 @@ def execute_task(task: dict) -> dict:
                     "status": response.status if response else None,
                     "url": page.url,
                 })
+            elif kind == "new_tab":
+                if len(runtime["context"].pages) >= 10:
+                    raise ValueError("maximum of 10 tabs per profile reached")
+                page = runtime["context"].new_page()
+                page.set_default_timeout(timeout)
+                runtime["page"] = page
+                target = str(action.get("url", "")).strip()
+                if target:
+                    response = page.goto(validate_url(target), wait_until="domcontentloaded", timeout=timeout)
+                    _assert_public_page(page)
+                result["events"].append({"type": "new_tab", "url": page.url})
+            elif kind == "switch_tab":
+                try:
+                    index = int(action.get("index", -1))
+                except (TypeError, ValueError):
+                    raise ValueError("tab index must be an integer")
+                pages = [p for p in runtime["context"].pages if not p.is_closed()]
+                if index < 0 or index >= len(pages):
+                    raise ValueError(f"tab index out of range; open tabs: 0..{max(0, len(pages)-1)}")
+                page = pages[index]
+                page.set_default_timeout(timeout)
+                runtime["page"] = page
+                result["events"].append({"type": "switch_tab", "index": index, "url": page.url})
+            elif kind == "close_tab":
+                pages = [p for p in runtime["context"].pages if not p.is_closed()]
+                if len(pages) <= 1:
+                    raise ValueError("cannot close the last open tab")
+                page.close()
+                pages = [p for p in runtime["context"].pages if not p.is_closed()]
+                runtime["page"] = pages[-1]
+                page = runtime["page"]
+                result["events"].append({"type": "close_tab", "url": page.url})
+            elif kind == "list_tabs":
+                pages = [p for p in runtime["context"].pages if not p.is_closed()]
+                result["tabs"] = [{"index": i, "url": p.url, "title": p.title()[:160], "active": p == page} for i, p in enumerate(pages)]
+                result["events"].append({"type": "list_tabs", "count": len(pages)})
             elif kind == "click":
                 selector = str(action.get("selector", "")).strip()
                 if not selector or len(selector) > 500:
