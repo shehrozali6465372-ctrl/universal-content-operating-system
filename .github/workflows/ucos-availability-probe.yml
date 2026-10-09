@@ -2,7 +2,7 @@ name: UCOS Free-tier availability probe
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,6 @@ jobs:
           python - <<'PY'
           import os
           import sys
-          import time
           import urllib.error
           import urllib.request
 
