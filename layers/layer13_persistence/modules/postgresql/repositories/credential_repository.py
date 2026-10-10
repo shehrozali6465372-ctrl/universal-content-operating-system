@@ -81,7 +81,7 @@ class CredentialRepository:
             )
             return str(cur.fetchone()[0])
 
-    def get_for_account(self, credential_ref: str, account_id: str) -> Optional[Dict[str, str]]:
+    def get_for_account(self, credential_ref: str, account_id: str, include_expired: bool = False) -> Optional[Dict[str, str]]:
         ref = str(credential_ref or "").strip()
         account = str(account_id or "").strip()
         if not ref or not account:
@@ -91,11 +91,11 @@ class CredentialRepository:
             SELECT encrypted_payload,key_version,platform_account_id,expires_at
             FROM credentials
             WHERE credential_ref=%s AND account_id=%s AND active=TRUE
-              AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+              AND (%s OR expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
               AND revoked_at IS NULL
             LIMIT 1
             """,
-            (ref, account),
+            (ref, account, bool(include_expired)),
         )
         if not row:
             return None
