@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlparse, unquote
 
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
 from layers.layer13_persistence.modules.postgresql.repositories.credential_repository import CredentialRepository
@@ -21,6 +22,21 @@ REFRESH_WINDOW_SECONDS = 72 * 60 * 60
 
 
 def main() -> int:
+    database_url = os.getenv("NEON_DATABASE_URL", "").strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.path.strip("/"):
+            logger.error("NEON_DATABASE_URL is not a valid PostgreSQL URL")
+            return 2
+        os.environ["POSTGRES_HOST"] = parsed.hostname
+        os.environ["POSTGRES_PORT"] = str(parsed.port or 5432)
+        os.environ["POSTGRES_DB"] = unquote(parsed.path.lstrip("/"))
+        os.environ["POSTGRES_USER"] = unquote(parsed.username or "")
+        os.environ["POSTGRES_PASSWORD"] = unquote(parsed.password or "")
+    elif not all(os.getenv(name, "").strip() for name in ("POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")):
+        logger.error("NEON_DATABASE_URL or complete POSTGRES_* connection settings are required")
+        return 2
+
     client_id = os.getenv("PINTEREST_CLIENT_ID", "").strip()
     client_secret = os.getenv("PINTEREST_CLIENT_SECRET", "").strip()
     encryption_key = os.getenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
