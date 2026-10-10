@@ -72,3 +72,29 @@ jobs:
             fi
             sleep 5
           done
+
+      - name: Smoke-test Pinterest OAuth preflight without following the external redirect
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -uo pipefail
+          url="https://modern-living-hub.onrender.com/auth/pinterest"
+          status="$(curl --silent --show-error --dump-header /tmp/pinterest-oauth-headers --output /dev/null --write-out '%{http_code}' --max-time 180 "$url" || true)"
+          location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }' /tmp/pinterest-oauth-headers 2>/dev/null || true)"
+          if [ "$status" = "302" ] && [[ "$location" == https://www.pinterest.com/oauth/* ]]; then
+            echo "Pinterest OAuth gate passed: MLH reached UCOS health and authenticated account preflight, then returned the Pinterest authorization redirect."
+            echo "The external redirect was not followed; no authorization code was issued or exchanged by this test."
+            exit 0
+          fi
+          if [ "$status" = "302" ] && [[ "$location" == https://modernlivinghub.vercel.app/pinterest.html?* ]]; then
+            python - "$location" <<'PY'
+          import sys
+          from urllib.parse import urlsplit, parse_qs
+          location = sys.argv[1]
+          error = parse_qs(urlsplit(location).query).get("pinterest_error", ["Unknown preflight error"])[0]
+          print("Pinterest OAuth preflight rejected the flow before contacting Pinterest:", error)
+          PY
+          else
+            echo "Pinterest OAuth gate returned unexpected HTTP status ${status:-no-response}; redirect contents not printed."
+          fi
+          exit 1
