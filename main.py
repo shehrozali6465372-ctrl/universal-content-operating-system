@@ -128,6 +128,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps(history(limit, platform), indent=2, default=str)); return 0
     if "--analytics" in args:
         print(json.dumps(analytics(), indent=2, default=str)); return 0
+    if "--api" in args and os.getenv("UCOS_NEON_MIGRATION_ON_BOOT", "").strip().lower() in {"1", "true", "yes"}:
+        try:
+            from layers.layer13_persistence.modules.postgresql.neon_migration import migrate_to_neon
+            outcome = migrate_to_neon()
+            print(json.dumps({"neon_migration": outcome}, separators=(",", ":"), default=str), flush=True)
+        except Exception as exc:
+            # Never log exception messages here: database drivers may include connection details.
+            print(json.dumps({
+                "neon_migration": "failed",
+                "error_type": type(exc).__name__,
+            }, separators=(",", ":")), flush=True)
     if "--api" in args:
         from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
         port = 8000
