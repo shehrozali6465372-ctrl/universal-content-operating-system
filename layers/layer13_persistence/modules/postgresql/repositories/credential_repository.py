@@ -109,6 +109,11 @@ class CredentialRepository:
         result = {str(k): str(v) for k, v in payload.items()}
         if row.get("platform_account_id"):
             result.setdefault("platform_account_id", str(row["platform_account_id"]))
+        # Expiry is metadata, not a secret; return it to the resolver so the
+        # Pinterest integration can refresh before the access token expires.
+        expires_at = row.get("expires_at")
+        if expires_at is not None:
+            result["expires_at"] = expires_at.isoformat() if hasattr(expires_at, "isoformat") else str(expires_at)
         result.setdefault("key_version", str(row.get("key_version") or ""))
         return result
 

@@ -3,11 +3,17 @@ from __future__ import annotations
 import hashlib, hmac, json, logging, os, time, threading, glob, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Any
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
+from datetime import datetime, timezone, timedelta
+from base64 import b64encode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 logger = logging.getLogger(__name__)
+
+class PinterestCredentialRefreshError(Exception):
+    """Safe, client-facing Pinterest credential refresh failure."""
+
 
 class APIResponse:
     __slots__=("status_code","data","error","headers")
@@ -412,6 +418,98 @@ class APIGateway:
             logger.exception("Pinterest credential revoke failed")
             return APIResponse(500, error="Pinterest credential revoke failed")
 
+    def _refresh_pinterest_token_if_needed(self, account, credentials, client_id, client_secret):
+        """Refresh a Pinterest access token shortly before expiry and rotate it in L13."""
+        expires_raw = str(credentials.get("expires_at") or "").strip()
+        if not expires_raw:
+            # Legacy credentials without expiry metadata remain usable, but cannot
+            # be proactively refreshed until a new OAuth grant records the expiry.
+            return credentials
+        try:
+            expiry = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise PinterestCredentialRefreshError("Pinterest credential expiry metadata is invalid")
+
+        if expiry.timestamp() > time.time() + 300:
+            return credentials
+
+        refresh_token = str(credentials.get("refresh_token") or "").strip()
+        client_id = str(client_id or "").strip()
+        client_secret = str(client_secret or "").strip()
+        if not refresh_token:
+            raise PinterestCredentialRefreshError("Pinterest refresh token is missing; reconnect Pinterest")
+        if not client_id or not client_secret:
+            raise PinterestCredentialRefreshError("Pinterest token refresh is not configured")
+
+        form = urlencode({"grant_type": "refresh_token", "refresh_token": refresh_token})
+        basic = b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+        request = Request(
+            "https://api.pinterest.com/v5/oauth/token",
+            data=form.encode("utf-8"),
+            method="POST",
+            headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        try:
+            with urlopen(request, timeout=20) as response:
+                raw = response.read(1_000_000)
+                token_data = json.loads(raw.decode("utf-8")) if raw else {}
+        except HTTPError as exc:
+            # Never include provider response bodies in logs or client responses;
+            # they may contain sensitive diagnostics.
+            logger.warning("Pinterest token refresh rejected status=%s account_id=%s", exc.code, account.account_id)
+            raise PinterestCredentialRefreshError("Pinterest token refresh failed; reconnect Pinterest if it persists")
+        except (URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            logger.warning("Pinterest token refresh unavailable account_id=%s cause=%s", account.account_id, type(exc).__name__)
+            raise PinterestCredentialRefreshError("Pinterest token refresh is temporarily unavailable")
+
+        new_access = str(token_data.get("access_token") or "").strip()
+        if not new_access:
+            raise PinterestCredentialRefreshError("Pinterest did not return a refreshed access token")
+        try:
+            expires_in = max(1, int(token_data.get("expires_in") or 2592000))
+        except (TypeError, ValueError):
+            expires_in = 2592000
+        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+        rotated_refresh = str(token_data.get("refresh_token") or refresh_token)
+        refresh_expiry = credentials.get("refresh_token_expires_at") or ""
+        if token_data.get("refresh_token_expires_at"):
+            try:
+                refresh_expiry = datetime.fromtimestamp(float(token_data["refresh_token_expires_at"]), timezone.utc).isoformat()
+            except (TypeError, ValueError, OverflowError):
+                pass
+        elif token_data.get("refresh_token_expires_in"):
+            try:
+                refresh_expiry = (datetime.now(timezone.utc) + timedelta(seconds=int(token_data["refresh_token_expires_in"]))).isoformat()
+            except (TypeError, ValueError, OverflowError):
+                pass
+
+        payload = {
+            "access_token": new_access,
+            "refresh_token": rotated_refresh,
+            "token_type": str(token_data.get("token_type") or credentials.get("token_type") or "bearer"),
+            "scope": str(token_data.get("scope") or credentials.get("scope") or ""),
+            "pinterest_user_id": str(credentials.get("pinterest_user_id") or ""),
+            "username": str(credentials.get("username") or ""),
+            "board_id": str(credentials.get("board_id") or ""),
+            "refresh_token_expires_at": str(refresh_expiry),
+        }
+        from layers.layer13_persistence.modules.postgresql.repositories.credential_repository import CredentialRepository
+        key = os.environ.get("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
+        if not key:
+            raise PinterestCredentialRefreshError("Credential encryption is not configured")
+        CredentialRepository(encryption_key=key).upsert(
+            credential_ref=account.credentials_ref,
+            account_id=account.account_id,
+            platform_account_id=account.platform_account_id,
+            payload=payload,
+            key_version=str(credentials.get("key_version") or "v1"),
+            expires_at=new_expiry,
+        )
+        payload["expires_at"] = new_expiry.isoformat()
+        return payload
+
     def _handle_pinterest_operation(self, data):
         """Execute a safe Pinterest operation without exposing the stored OAuth token."""
         try:
@@ -432,6 +530,12 @@ class APIGateway:
                 return APIResponse(409, error="account is not an enabled Pinterest account")
 
             credentials = AccountCredentialResolver.resolve(account.credentials_ref, account_id)
+            credentials = self._refresh_pinterest_token_if_needed(
+                account,
+                credentials,
+                data.get("pinterest_client_id"),
+                data.get("pinterest_client_secret"),
+            )
             token = str(credentials.get("access_token") or "").strip()
             if not token:
                 return APIResponse(401, error="Pinterest credential is not configured")
@@ -500,6 +604,8 @@ class APIGateway:
                 ))
             except (urllib.error.URLError, TimeoutError) as exc:
                 return APIResponse(502, error=f"Pinterest API unavailable: {type(exc).__name__}")
+        except PinterestCredentialRefreshError as exc:
+            return APIResponse(503 if "temporarily unavailable" in str(exc) else 401, error=str(exc))
         except Exception:
             logger.exception("Pinterest operation failed")
             return APIResponse(500, error="Pinterest operation failed")
