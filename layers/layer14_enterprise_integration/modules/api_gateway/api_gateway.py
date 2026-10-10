@@ -418,8 +418,8 @@ class APIGateway:
             logger.exception("Pinterest credential revoke failed")
             return APIResponse(500, error="Pinterest credential revoke failed")
 
-    def _refresh_pinterest_token_if_needed(self, account, credentials, client_id, client_secret):
-        """Refresh a Pinterest access token shortly before expiry and rotate it in L13."""
+    def _refresh_pinterest_token_if_needed(self, account, credentials, client_id, client_secret, refresh_window_seconds=300):
+        """Refresh a Pinterest access token within the requested expiry window and rotate it in L13."""
         expires_raw = str(credentials.get("expires_at") or "").strip()
         if not expires_raw:
             # Legacy credentials without expiry metadata remain usable, but cannot
@@ -432,7 +432,11 @@ class APIGateway:
         except ValueError:
             raise PinterestCredentialRefreshError("Pinterest credential expiry metadata is invalid")
 
-        if expiry.timestamp() > time.time() + 300:
+        try:
+            refresh_window_seconds = max(300, int(refresh_window_seconds))
+        except (TypeError, ValueError):
+            refresh_window_seconds = 300
+        if expiry.timestamp() > time.time() + refresh_window_seconds:
             return credentials
 
         refresh_token = str(credentials.get("refresh_token") or "").strip()
