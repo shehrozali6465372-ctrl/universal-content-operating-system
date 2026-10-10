@@ -44,9 +44,6 @@ class AccountCredentialResolver:
                 return {}
 
         # Non-production compatibility for local tests/dev only.
-        import json
-        import re
-        from pathlib import Path
         safe = re.sub(r"[^A-Za-z0-9_]+", "_", reference).upper()
         for key in (reference, f"UCOS_CREDENTIALS_{safe}"):
             raw = os.environ.get(key, "").strip()
