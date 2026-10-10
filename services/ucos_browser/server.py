@@ -16,6 +16,7 @@ import socket
 import time
 import threading
 import re
+import uuid
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
@@ -385,6 +386,48 @@ def execute_task(task: dict) -> dict:
     finally:
         _BROWSER_SLOTS.release()
 
+
+def _record_task_run(task_id: str, task: dict, state: str, result=None, error=None, duration_ms=None) -> None:
+    """Persist minimal browser task audit metadata; never store page text, screenshots, cookies, or credentials."""
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if not dsn:
+        return
+    try:
+        import psycopg
+        requested_host = urlsplit(str(task.get("url", "") or "")).hostname
+        final_host = urlsplit(str((result or {}).get("final_url", "") or "")).hostname
+        profile_ref = _profile_ref(task.get("profile_ref", "default"))
+        persistent_profile = (result or {}).get("persistent_profile")
+        with psycopg.connect(dsn, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS browser_task_runs (
+                        task_id TEXT PRIMARY KEY,
+                        profile_ref TEXT NOT NULL,
+                        requested_host TEXT,
+                        final_host TEXT,
+                        state TEXT NOT NULL CHECK (state IN ('completed', 'rejected', 'failed')),
+                        duration_ms INTEGER,
+                        persistent_profile BOOLEAN,
+                        error_type TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    INSERT INTO browser_task_runs
+                        (task_id, profile_ref, requested_host, final_host, state,
+                         duration_ms, persistent_profile, error_type)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (task_id) DO NOTHING
+                """, (
+                    task_id, profile_ref, requested_host, final_host, state,
+                    duration_ms, persistent_profile, type(error).__name__ if error else None,
+                ))
+    except Exception as exc:
+        # Audit persistence must not expose DSNs or interrupt browser execution.
+        LOG.warning("browser task audit write failed (%s)", type(exc).__name__)
+
+
 def _authorized(headers) -> bool:
     token = os.getenv("UCOS_BROWSER_TOKEN", "").strip()
     supplied = str(headers.get("Authorization", ""))
@@ -465,6 +508,9 @@ class Handler(BaseHTTPRequestHandler):
         if not _authorized(self.headers):
             self._send(401, {"error": "authentication required"})
             return
+        task_id = uuid.uuid4().hex
+        started = time.monotonic()
+        payload = {}
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size <= 0 or size > 1_000_000:
@@ -472,12 +518,21 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError("request body must be an object")
-            self._send(200, {"state": "completed", "result": execute_task(payload)})
+            result = execute_task(payload)
+            duration_ms = int((time.monotonic() - started) * 1000)
+            _record_task_run(task_id, payload, "completed", result=result, duration_ms=duration_ms)
+            self._send(200, {"state": "completed", "task_id": task_id, "result": result})
         except (ValueError, TypeError) as exc:
-            self._send(400, {"state": "rejected", "error": str(exc)})
+            duration_ms = int((time.monotonic() - started) * 1000)
+            if isinstance(payload, dict):
+                _record_task_run(task_id, payload, "rejected", error=exc, duration_ms=duration_ms)
+            self._send(400, {"state": "rejected", "task_id": task_id, "error": str(exc)})
         except Exception as exc:
+            duration_ms = int((time.monotonic() - started) * 1000)
+            if isinstance(payload, dict):
+                _record_task_run(task_id, payload, "failed", error=exc, duration_ms=duration_ms)
             LOG.exception("browser task failed")
-            self._send(502, {"state": "failed", "error": str(exc)[:1000]})
+            self._send(502, {"state": "failed", "task_id": task_id, "error": str(exc)[:1000]})
 
     def log_message(self, fmt, *args):
         LOG.info("%s - %s", self.address_string(), fmt % args)
