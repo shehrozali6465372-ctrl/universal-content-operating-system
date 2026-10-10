@@ -6,9 +6,9 @@ on:
     paths:
       - ".github/workflows/ucos-keepalive.yml"
   schedule:
-    # Check every ten minutes to prevent Render Free's 15-minute idle spin-down.
-    # Offset from the hour to reduce GitHub schedule contention.
-    - cron: "3,13,23,33,43,53 * * * *"
+    # Free-tier services sleep after 15 minutes; this periodic probe checks recovery
+    # while reserving instance-hours for the other services in this Render workspace.
+    - cron: "3,33 * * * *"
   workflow_dispatch: {}
 
 permissions:
