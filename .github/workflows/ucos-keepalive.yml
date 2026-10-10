@@ -1,8 +1,13 @@
 name: UCOS Free-Tier Keepalive
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ucos-keepalive.yml"
   schedule:
-    # Stay away from the top of the hour to reduce GitHub schedule contention.
+    # Check every ten minutes to prevent Render Free's 15-minute idle spin-down.
+    # Offset from the hour to reduce GitHub schedule contention.
     - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch: {}
 
@@ -16,7 +21,7 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 4
     steps:
       - name: Wake and verify UCOS health endpoint
         shell: bash
