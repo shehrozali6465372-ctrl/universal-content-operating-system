@@ -14,7 +14,6 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import Json, execute_values, register_default_json, register_default_jsonb
 
-from layers.layer13_persistence.modules.postgresql.connection.pool import ConnectionConfig
 from layers.layer13_persistence.modules.postgresql.migrations.schema import (
     TABLES,
     get_all_create_sql,
@@ -40,8 +39,8 @@ def _source_dsn() -> str:
         )
     # Some deployments inject only a PostgreSQL URL. Do not guess localhost.
     fallback = (env.get("UCOS_SOURCE_DATABASE_URL") or env.get("DATABASE_URL") or "").strip()
-    if fallback.startswith(("postgres://", "postgresql://")):
-        return fallback
+    if fallback.startswith(("postgres://", "postgresql://", "postgresql+psycopg2://", "postgresql+asyncpg://")):
+        return fallback.replace("postgresql+psycopg2://", "postgresql://").replace("postgresql+asyncpg://", "postgresql://")
     raise RuntimeError("source PostgreSQL settings are not configured")
 
 
@@ -129,6 +128,9 @@ def migrate_to_neon() -> dict[str, Any]:
             for table in TABLES:
                 name = table["name"]
                 if name not in source_tables:
+                    actual = _count(target, name)
+                    if actual != 0:
+                        raise RuntimeError(f"target-only rows found for {name}: target={actual}")
                     row_counts[name] = 0
                     continue
                 source_columns = _columns(source, name)
