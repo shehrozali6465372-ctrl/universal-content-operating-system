@@ -1,0 +1,38 @@
+name: UCOS Free-Tier Keepalive
+
+on:
+  schedule:
+    # Stay away from the top of the hour to reduce GitHub schedule contention.
+    - cron: "3,13,23,33,43,53 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ucos-free-tier-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Wake and verify UCOS health endpoint
+        shell: bash
+        run: |
+          set -uo pipefail
+          url="https://ucos-backend.onrender.com/healthz"
+          for attempt in 1 2 3; do
+            status="$(curl --silent --show-error --output /tmp/ucos-health.json --write-out '%{http_code}' --max-time 45 "$url" || true)"
+            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/ucos-health.json; then
+              echo "UCOS health check passed (HTTP 200)."
+              cat /tmp/ucos-health.json
+              exit 0
+            fi
+            echo "UCOS health check attempt $attempt failed (HTTP ${status:-no-response})."
+            cat /tmp/ucos-health.json 2>/dev/null || true
+            sleep 5
+          done
+          echo "UCOS did not become healthy after three attempts." >&2
+          exit 1
