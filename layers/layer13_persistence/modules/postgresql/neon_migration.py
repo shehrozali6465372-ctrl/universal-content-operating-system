@@ -76,8 +76,15 @@ def migrate_to_neon() -> dict[str, Any]:
         raise RuntimeError("NEON_DATABASE_URL must be a PostgreSQL URI")
 
     source_dsn = _source_dsn()
-    source = psycopg2.connect(source_dsn)
-    target = psycopg2.connect(target_dsn)
+    print("{\"neon_migration_stage\":\"connecting_source\"}", flush=True)
+    source = psycopg2.connect(source_dsn, connect_timeout=8)
+    print("{\"neon_migration_stage\":\"source_connected\"}", flush=True)
+    try:
+        target = psycopg2.connect(target_dsn, connect_timeout=8)
+    except Exception:
+        source.close()
+        raise
+    print("{\"neon_migration_stage\":\"target_connected\"}", flush=True)
     try:
         # JSON/JSONB values are returned as JSON text, avoiding accidental
         # plaintext serialization or custom adapters for credential payloads.
@@ -127,6 +134,7 @@ def migrate_to_neon() -> dict[str, Any]:
             row_counts: dict[str, int] = {}
             for table in TABLES:
                 name = table["name"]
+                print("{\"neon_migration_stage\":\"copy_table\",\"table\":\"%s\"}" % name, flush=True)
                 if name not in source_tables:
                     actual = _count(target, name)
                     if actual != 0:
@@ -166,6 +174,7 @@ def migrate_to_neon() -> dict[str, Any]:
                         f"row-count verification failed for {name}: source={copied_source}, target={actual}"
                     )
                 row_counts[name] = actual
+                print("{\"neon_migration_stage\":\"table_verified\",\"table\":\"%s\",\"rows\":%d}" % (name, actual), flush=True)
 
             # Keep serial sequences aligned after copying explicit IDs.
             cur.execute(
