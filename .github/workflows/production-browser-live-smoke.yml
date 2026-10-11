@@ -17,24 +17,32 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
-      - name: Verify browser worker public health
+      - name: Verify browser worker public console
         run: |
           set -euo pipefail
           for i in {1..6}; do
-            code="$(curl -sS -o /tmp/browser-root.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
-            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/browser-root.json; then
-              cat /tmp/browser-root.json
-              echo "BROWSER_WORKER_PUBLIC=PASS"
+            code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
+            if [ "$code" = "200" ] && grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html; then
+              echo "BROWSER_WORKER_PUBLIC_CONSOLE=PASS"
               break
             fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-root.json || true; exit 1; }
+            [ "$i" -eq 6 ] && { cat /tmp/browser-console.html || true; exit 1; }
             sleep 10
           done
+
+      - name: Verify browser worker health endpoint is protected
+        run: |
+          set -euo pipefail
+          code="$(curl --max-time 20 -sS -o /tmp/browser-worker-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
+          cat /tmp/browser-worker-health.json
+          test "$code" = "401"
+          grep -q 'authentication required' /tmp/browser-worker-health.json
+          echo "BROWSER_WORKER_HEALTH_AUTH_FAIL_CLOSED=PASS"
 
       - name: Verify protected browser gateway fail-closed
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/browser-unauth.json -w '%{http_code}'             -X POST             -H "Content-Type: application/json"             --data '{"url":"https://example.com","actions":[{"type":"extract"}]}'             https://ucos-backend.onrender.com/browser/tasks || true)"
+          code="$(curl --max-time 20 -sS -o /tmp/browser-unauth.json -w '%{http_code}' -X POST -H "Content-Type: application/json" --data '{"url":"https://example.com","actions":[{"type":"extract"}]}' https://ucos-backend.onrender.com/browser/tasks || true)"
           cat /tmp/browser-unauth.json
           test "$code" = "401"
           grep -q 'API authentication required' /tmp/browser-unauth.json
@@ -43,7 +51,7 @@ jobs:
       - name: Verify browser gateway health requires authentication
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/browser-gateway-health.json -w '%{http_code}'             https://ucos-backend.onrender.com/browser/health || true)"
+          code="$(curl --max-time 20 -sS -o /tmp/browser-gateway-health.json -w '%{http_code}' https://ucos-backend.onrender.com/browser/health || true)"
           cat /tmp/browser-gateway-health.json
           test "$code" = "401"
           grep -q 'API authentication required' /tmp/browser-gateway-health.json
