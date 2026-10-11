@@ -1,0 +1,64 @@
+name: Pinterest OAuth Token Guardian
+
+on:
+  schedule:
+    # Run hourly away from the top of the hour; GitHub scheduled runs are best-effort.
+    - cron: "13 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/refresh_pinterest_tokens.py"
+      - ".github/workflows/pinterest-token-refresh.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pinterest-oauth-token-guardian
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Check and refresh expiring Pinterest credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_ENV: production
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY }}
+      PINTEREST_CLIENT_ID: ${{ secrets.PINTEREST_CLIENT_ID }}
+      PINTEREST_CLIENT_SECRET: ${{ secrets.PINTEREST_CLIENT_SECRET }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate configuration without printing secrets
+        env:
+          HAS_NEON_URL: ${{ secrets.NEON_DATABASE_URL != '' }}
+          HAS_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY != '' }}
+          HAS_PINTEREST_CLIENT_ID: ${{ secrets.PINTEREST_CLIENT_ID != '' }}
+          HAS_PINTEREST_CLIENT_SECRET: ${{ secrets.PINTEREST_CLIENT_SECRET != '' }}
+        run: |
+          test "$HAS_NEON_URL" = "true" || { echo "::error::Missing NEON_DATABASE_URL repository secret"; exit 2; }
+          test "$HAS_ENCRYPTION_KEY" = "true" || { echo "::error::Missing UCOS_CREDENTIAL_ENCRYPTION_KEY repository secret"; exit 2; }
+          test "$HAS_PINTEREST_CLIENT_ID" = "true" || { echo "::error::Missing PINTEREST_CLIENT_ID repository secret"; exit 2; }
+          test "$HAS_PINTEREST_CLIENT_SECRET" = "true" || { echo "::error::Missing PINTEREST_CLIENT_SECRET repository secret"; exit 2; }
+
+      - name: Validate refresh script syntax
+        run: python -m py_compile scripts/refresh_pinterest_tokens.py
+
+      - name: Check and refresh credentials due within the safety window
+        run: python scripts/refresh_pinterest_tokens.py
