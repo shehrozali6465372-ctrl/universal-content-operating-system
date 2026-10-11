@@ -8,6 +8,7 @@ on:
       - "tests/test_ucos_personal_browser.py"
       - "tests/test_personal_browser_gateway.py"
       - "tests/test_browser_audit_storage.py"
+      - "tests/test_browser_profile_persistence.py"
       - ".github/workflows/ucos-browser-ci.yml"
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py"
       - "tests/test_ucos_personal_browser.py"
       - "tests/test_personal_browser_gateway.py"
+      - "tests/test_browser_profile_persistence.py"
       - ".github/workflows/ucos-browser-ci.yml"
 
 permissions:
@@ -33,7 +35,7 @@ jobs:
       - name: Install Chromium matching Playwright
         run: playwright install chromium
       - name: Browser contract tests
-        run: PYTHONPATH=. pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py tests/test_browser_audit_storage.py
+        run: PYTHONPATH=. pytest -q tests/test_ucos_personal_browser.py tests/test_personal_browser_gateway.py tests/test_browser_audit_storage.py tests/test_browser_profile_persistence.py
       - name: Real Chromium smoke test
         env:
           UCOS_BROWSER_TOKEN: ci-smoke-token
