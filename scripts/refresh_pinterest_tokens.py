@@ -7,8 +7,17 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, unquote
+
+# A script launched as `python scripts/refresh_pinterest_tokens.py` gets the
+# scripts/ directory as sys.path[0], not the repository root. Add the root so
+# UCOS layer packages resolve consistently in GitHub Actions and Render jobs.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
 from layers.layer13_persistence.modules.postgresql.repositories.credential_repository import CredentialRepository
