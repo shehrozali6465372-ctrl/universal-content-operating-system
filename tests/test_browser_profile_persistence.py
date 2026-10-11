@@ -30,6 +30,9 @@ class _Cursor:
         elif "insert into browser_profile_states" in statement:
             self.rows[params[0]] = bytes(params[1])
             self.result = None
+        elif "delete from browser_profile_states" in statement:
+            self.rows.pop(params[0], None)
+            self.result = None
         else:
             self.result = None
 
@@ -214,3 +217,33 @@ def test_browser_specific_database_url_enables_store_without_shared_database_url
     monkeypatch.setenv("UCOS_BROWSER_STATE_DATABASE_URL", "postgresql://session-db.example/test")
     monkeypatch.setenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", "configured-key")
     assert persistence.is_configured() is True
+
+
+
+def test_database_self_test_round_trips_encrypted_state_and_cleans_up(encrypted_store):
+    rows, _key = encrypted_store
+    assert persistence.self_test() is True
+    assert rows == {}
+
+
+def test_startup_self_test_failure_stops_service_when_durability_required(monkeypatch):
+    monkeypatch.setenv("UCOS_BROWSER_SESSION_SELF_TEST", "true")
+    monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
+
+    def fail():
+        raise RuntimeError("simulated Neon connection failure")
+
+    monkeypatch.setattr(browser_server.profile_persistence, "self_test", fail)
+    with pytest.raises(RuntimeError, match="startup self-test failed"):
+        browser_server._run_profile_persistence_startup_self_test()
+
+
+def test_startup_self_test_is_opt_in(monkeypatch):
+    monkeypatch.delenv("UCOS_BROWSER_SESSION_SELF_TEST", raising=False)
+    monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
+
+    def should_not_run():
+        raise AssertionError("self-test must remain opt-in")
+
+    monkeypatch.setattr(browser_server.profile_persistence, "self_test", should_not_run)
+    browser_server._run_profile_persistence_startup_self_test()
