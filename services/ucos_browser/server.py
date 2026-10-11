@@ -446,7 +446,10 @@ def execute_task(task: dict) -> dict:
 
 def _record_task_run(task_id: str, task: dict, state: str, result=None, error=None, duration_ms=None) -> None:
     """Persist minimal browser task audit metadata; never store page text, screenshots, cookies, or credentials."""
-    dsn = (\n        os.getenv("UCOS_BROWSER_STATE_DATABASE_URL", "").strip()\n        or os.getenv("DATABASE_URL", "").strip()\n    )
+    dsn = (
+        os.getenv("UCOS_BROWSER_STATE_DATABASE_URL", "").strip()
+        or os.getenv("DATABASE_URL", "").strip()
+    )
     if not dsn:
         return
     try:
