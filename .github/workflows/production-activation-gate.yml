@@ -77,16 +77,46 @@ jobs:
       - name: Verify live production endpoints
         run: |
           set -euo pipefail
-          code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
-          test "$code" = 200
-          grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html
-          code="$(curl --max-time 20 -sS -o /tmp/browser-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
-          test "$code" = 401
-          grep -q 'authentication required' /tmp/browser-health.json
-          curl --max-time 20 -fsS https://ucos-backend.onrender.com/healthz | grep -q '"status": "ok"'
-          code="$(curl --max-time 20 -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
-          test "$code" = 401
-          grep -q 'API authentication required' /tmp/auth.json
+          for i in {1..6}; do
+            rm -f /tmp/browser-console.html
+            code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
+            if [ "$code" = "200" ] && grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html; then
+              echo "BROWSER_PUBLIC_CONSOLE=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/browser-console.html || true; echo "BROWSER_PUBLIC_CONSOLE=FAIL"; exit 1; }
+            sleep 10
+          done
+          for i in {1..6}; do
+            rm -f /tmp/browser-health.json
+            code="$(curl --max-time 20 -sS -o /tmp/browser-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
+            if [ "$code" = "401" ] && grep -q 'authentication required' /tmp/browser-health.json; then
+              echo "BROWSER_HEALTH_AUTH_FAIL_CLOSED=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/browser-health.json || true; echo "BROWSER_HEALTH_AUTH_FAIL_CLOSED=FAIL"; exit 1; }
+            sleep 10
+          done
+          for i in {1..6}; do
+            rm -f /tmp/healthz.json
+            code="$(curl --max-time 20 -sS -o /tmp/healthz.json -w '%{http_code}' https://ucos-backend.onrender.com/healthz || true)"
+            if [ "$code" = "200" ] && grep -q '"status": "ok"' /tmp/healthz.json; then
+              echo "UCOS_API_HEALTHZ=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/healthz.json || true; echo "UCOS_API_HEALTHZ=FAIL"; exit 1; }
+            sleep 10
+          done
+          for i in {1..6}; do
+            rm -f /tmp/auth.json
+            code="$(curl --max-time 20 -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
+            if [ "$code" = "401" ] && grep -q 'API authentication required' /tmp/auth.json; then
+              echo "UCOS_API_AUTH_FAIL_CLOSED=PASS"
+              break
+            fi
+            [ "$i" -eq 6 ] && { cat /tmp/auth.json || true; echo "UCOS_API_AUTH_FAIL_CLOSED=FAIL"; exit 1; }
+            sleep 10
+          done
           echo "LIVE_ENDPOINTS=PASS"
       - name: Verify current revision real-provider E2E
         env:
