@@ -35,6 +35,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Compile source
         run: python -m compileall -q layers/layer07_publishing layers/layer13_persistence layers/layer14_enterprise_integration layers/layer15_async_runtime main.py
       - name: Verify current revision CI
@@ -118,11 +120,42 @@ jobs:
             sleep 10
           done
           echo "LIVE_ENDPOINTS=PASS"
+      - name: Determine whether publishing pipeline E2E is required
+        id: e2e-scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before || '' }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "REAL_PROVIDER_E2E_SCOPE=MANUAL_DISPATCH"
+            exit 0
+          fi
+          required=false
+          if [[ -z "$EVENT_BEFORE" || "$EVENT_BEFORE" =~ ^0+$ ]]; then
+            EVENT_BEFORE="$(git rev-list --max-parents=0 "$EVENT_SHA")"
+          fi
+          while IFS= read -r path; do
+            case "$path" in
+              layers/layer07_publishing/*|layers/layer10_monetization/*|layers/layer12_ai_foundation/*|layers/layer13_persistence/*|layers/layer15_async_runtime/*|layers/layer17_security/*|layers/layer14_enterprise_integration/modules/real_integrations/gateway.py|layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py|layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py)
+                required=true
+                ;;
+            esac
+          done < <(git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA")
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "REAL_PROVIDER_E2E_REQUIRED=$required"
       - name: Verify current revision real-provider E2E
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if [[ "${{ steps.e2e-scope.outputs.required }}" != "true" ]]; then
+            echo "CURRENT_REVISION_REAL_PROVIDER_E2E=NOT_REQUIRED_PUBLISHING_PIPELINE_UNCHANGED"
+            exit 0
+          fi
           state="pending"
           for attempt in {1..180}; do
             result="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=50")"
