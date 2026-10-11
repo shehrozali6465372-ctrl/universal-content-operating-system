@@ -34,7 +34,44 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    runs-on: ubuntu-22.04
+    outputs:
+      run_e2e: ${{ steps.scope.outputs.run_e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Decide whether to publish the certification post
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before || '' }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+            echo "E2E_SCOPE=MANUAL_DISPATCH"
+            exit 0
+          fi
+          if [[ -z "$EVENT_BEFORE" || "$EVENT_BEFORE" =~ ^0+$ ]]; then
+            EVENT_BEFORE="$(git rev-list --max-parents=0 "$EVENT_SHA")"
+          fi
+          run_e2e=false
+          while IFS= read -r path; do
+            case "$path" in
+              layers/layer07_publishing/*|layers/layer10_monetization/*|layers/layer12_ai_foundation/*|layers/layer13_persistence/*|layers/layer15_async_runtime/*|layers/layer17_security/*|layers/layer14_enterprise_integration/modules/real_integrations/gateway.py|layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py|layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py)
+                run_e2e=true
+                ;;
+            esac
+          done < <(git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA")
+          echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
+          echo "E2E_REAL_SOCIAL_POST_REQUIRED=$run_e2e"
   e2e:
+    needs: scope
+    if: needs.scope.outputs.run_e2e == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     services:
