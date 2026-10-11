@@ -144,7 +144,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         port = 8000
         if "--port" in args:
             i = args.index("--port"); port = int(args[i + 1])
-        gateway = APIGateway(host=os.environ.get("APP_HOST", "0.0.0.0"), port=port); gateway.start()
+        gateway = APIGateway(host=os.environ.get("APP_HOST", "0.0.0.0"), port=port)
+        if os.getenv("APP_ENV", "development").strip().lower() in {"production", "prod"}:
+            try:
+                from layers.layer14_enterprise_integration.modules.agents.pinterest_token_guardian import start_pinterest_token_guardian
+                start_pinterest_token_guardian()
+            except Exception as exc:
+                # The API must still start, but the missing guardian is visible in logs.
+                print(json.dumps({"pinterest_token_guardian": "startup_failed", "error_type": type(exc).__name__}), flush=True)
+        gateway.start()
         print(f"UCOS API listening on http://{gateway._host}:{port}")
         try:
             while gateway.is_running(): time.sleep(1)
