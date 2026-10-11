@@ -151,6 +151,7 @@ def test_local_storage_restore_is_origin_scoped_and_script_safe():
 
 def test_required_mode_without_database_and_encryption_key_fails_closed(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("UCOS_BROWSER_STATE_DATABASE_URL", raising=False)
     monkeypatch.delenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", raising=False)
     monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
     assert persistence.is_configured() is False
@@ -183,3 +184,33 @@ def test_writable_default_profile_directory_is_not_certified_as_durable(monkeypa
     path, persistent = browser_server._profile_dir("account-1")
     assert path.startswith(str(tmp_path))
     assert persistent is False
+
+
+
+def test_browser_specific_database_url_is_preferred(monkeypatch):
+    monkeypatch.setenv("UCOS_BROWSER_STATE_DATABASE_URL", "postgresql://session-db.example/test")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://shared-db.example/app")
+    monkeypatch.setenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", "configured-key")
+    captured = {}
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg",
+        SimpleNamespace(
+            connect=lambda dsn, connect_timeout: captured.update(
+                dsn=dsn, connect_timeout=connect_timeout
+            ) or object()
+        ),
+    )
+
+    persistence._connect()
+    assert captured == {
+        "dsn": "postgresql://session-db.example/test",
+        "connect_timeout": 3,
+    }
+
+
+def test_browser_specific_database_url_enables_store_without_shared_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("UCOS_BROWSER_STATE_DATABASE_URL", "postgresql://session-db.example/test")
+    monkeypatch.setenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", "configured-key")
+    assert persistence.is_configured() is True
