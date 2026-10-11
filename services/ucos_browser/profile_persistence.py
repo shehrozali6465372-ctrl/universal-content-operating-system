@@ -28,9 +28,17 @@ def durable_required() -> bool:
     }
 
 
+def _database_url() -> str:
+    """Prefer the browser-specific Neon URL without overriding the service's shared DATABASE_URL."""
+    return (
+        os.getenv("UCOS_BROWSER_STATE_DATABASE_URL", "").strip()
+        or os.getenv("DATABASE_URL", "").strip()
+    )
+
+
 def is_configured() -> bool:
     return bool(
-        os.getenv("DATABASE_URL", "").strip()
+        _database_url()
         and os.getenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", "").strip()
     )
 
@@ -50,7 +58,7 @@ def _fernet():
 
 
 def _connect():
-    dsn = os.getenv("DATABASE_URL", "").strip()
+    dsn = _database_url()
     if not dsn:
         raise RuntimeError("browser session database is not configured")
     try:
