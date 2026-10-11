@@ -131,6 +131,11 @@ def _profile_dir(profile_ref: str) -> tuple[str, bool]:
     except OSError as exc:
         if configured:
             raise RuntimeError("configured browser profile directory is not writable") from exc
+        if os.getenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            raise RuntimeError(
+                "durable browser profile storage is required; configure UCOS_BROWSER_PROFILE_DIR "
+                "to a writable persistent volume"
+            ) from exc
         fallback = Path("/tmp/ucos-browser/profiles") / _profile_ref(profile_ref)
         fallback.mkdir(parents=True, exist_ok=True)
         LOG.warning("browser profile storage %s is not writable; using ephemeral fallback %s", root, fallback)
