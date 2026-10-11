@@ -31,7 +31,7 @@ REFRESH_WINDOW_SECONDS = 72 * 60 * 60
 
 
 def main() -> int:
-    database_url = os.getenv("NEON_DATABASE_URL", "").strip()
+    database_url = (os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL") or "").strip()
     if database_url:
         parsed = urlparse(database_url)
         if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.path.strip("/"):
@@ -46,8 +46,8 @@ def main() -> int:
         logger.error("NEON_DATABASE_URL or complete POSTGRES_* connection settings are required")
         return 2
 
-    client_id = os.getenv("PINTEREST_CLIENT_ID", "").strip()
-    client_secret = os.getenv("PINTEREST_CLIENT_SECRET", "").strip()
+    client_id = (os.getenv("PINTEREST_CLIENT_ID") or os.getenv("PINTEREST_APP_ID") or "").strip()
+    client_secret = (os.getenv("PINTEREST_CLIENT_SECRET") or os.getenv("PINTEREST_APP_SECRET") or "").strip()
     encryption_key = os.getenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
     if not all((client_id, client_secret, encryption_key)):
         logger.error("Required Pinterest client credentials or L13 encryption key are not configured")
@@ -68,34 +68,47 @@ def main() -> int:
     for account in accounts:
         accounts_seen += 1
         if not account.credentials_ref or not account.platform_account_id:
-            skipped += 1
-            logger.warning("account=%s state=skipped_missing_credential_identity", account.account_id)
+            failures += 1
+            logger.error("account=%s state=unprotected_missing_credential_identity", account.account_id)
             continue
         try:
             credentials = repository.get_for_account(
                 account.credentials_ref, account.account_id, include_expired=True
             )
             if not credentials:
-                skipped += 1
-                logger.warning("account=%s state=no_active_credential", account.account_id)
+                failures += 1
+                logger.error("account=%s state=unprotected_no_active_credential", account.account_id)
                 continue
             credentials_found += 1
             if not credentials.get("expires_at"):
-                skipped += 1
-                logger.warning("account=%s state=missing_expiry_metadata", account.account_id)
+                failures += 1
+                logger.error("account=%s state=unprotected_missing_access_expiry", account.account_id)
+                continue
+            if not credentials.get("refresh_token"):
+                failures += 1
+                logger.error("account=%s state=unprotected_missing_refresh_token", account.account_id)
                 continue
             expiry = datetime.fromisoformat(str(credentials["expires_at"]).replace("Z", "+00:00"))
             if expiry.tzinfo is None:
                 expiry = expiry.replace(tzinfo=timezone.utc)
-            hours_until_expiry = (expiry - now).total_seconds() / 3600
-            if expiry > now + timedelta(seconds=REFRESH_WINDOW_SECONDS):
-                logger.info("account=%s state=not_due hours_until_expiry=%.1f", account.account_id, hours_until_expiry)
+            refresh_expiry = None
+            if credentials.get("refresh_token_expires_at"):
+                refresh_expiry = datetime.fromisoformat(str(credentials["refresh_token_expires_at"]).replace("Z", "+00:00"))
+                if refresh_expiry.tzinfo is None:
+                    refresh_expiry = refresh_expiry.replace(tzinfo=timezone.utc)
+            # Protect both the access token and Pinterest's rotating refresh token.
+            due_expiry = min([value for value in (expiry, refresh_expiry) if value is not None])
+            hours_until_due = (due_expiry - now).total_seconds() / 3600
+            if due_expiry > now + timedelta(seconds=REFRESH_WINDOW_SECONDS):
+                logger.info("account=%s state=not_due hours_until_next_expiry=%.1f", account.account_id, hours_until_due)
                 continue
 
             due += 1
             prior_expiry = expiry.isoformat()
+            refresh_input = dict(credentials)
+            refresh_input["expires_at"] = due_expiry.isoformat()
             gateway._refresh_pinterest_token_if_needed(
-                account, credentials, client_id, client_secret,
+                account, refresh_input, client_id, client_secret,
                 refresh_window_seconds=REFRESH_WINDOW_SECONDS,
             )
             # Verify persistence by reading back encrypted vault metadata only.
@@ -123,6 +136,8 @@ def main() -> int:
     if not accounts_seen:
         logger.error("No enabled Pinterest accounts found in canonical Neon identity tables")
         return 2
+    if failures:
+        logger.error("Pinterest Token Guardian detected accounts that are not protected; inspect account states above")
     return 1 if failures else 0
 
 
