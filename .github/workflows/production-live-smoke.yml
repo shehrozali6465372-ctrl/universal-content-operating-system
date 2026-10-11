@@ -20,24 +20,32 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
-      - name: Verify public browser worker
+      - name: Verify public browser worker console
         run: |
           set -euo pipefail
           for i in {1..6}; do
-            code="$(curl -sS -o /tmp/browser-root.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/ || true)"
-            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/browser-root.json; then
-              echo "BROWSER_PUBLIC_ROOT=PASS"
+            code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
+            if [ "$code" = "200" ] && grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html; then
+              echo "BROWSER_PUBLIC_CONSOLE=PASS"
               break
             fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-root.json || true; echo "BROWSER_PUBLIC_ROOT=FAIL"; exit 1; }
+            [ "$i" -eq 6 ] && { cat /tmp/browser-console.html || true; echo "BROWSER_PUBLIC_CONSOLE=FAIL"; exit 1; }
             sleep 10
           done
+
+      - name: Verify browser worker health is protected
+        run: |
+          set -euo pipefail
+          code="$(curl --max-time 20 -sS -o /tmp/browser-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
+          test "$code" = "401"
+          grep -q "authentication required" /tmp/browser-health.json
+          echo "BROWSER_HEALTH_AUTH_FAIL_CLOSED=PASS"
 
       - name: Verify public UCOS API health probe
         run: |
           set -euo pipefail
           for i in {1..6}; do
-            code="$(curl -sS -o /tmp/ucos-healthz.json -w '%{http_code}' https://ucos-backend.onrender.com/healthz || true)"
+            code="$(curl --max-time 20 -sS -o /tmp/ucos-healthz.json -w '%{http_code}' https://ucos-backend.onrender.com/healthz || true)"
             if [ "$code" = "200" ] && grep -q '"success": true' /tmp/ucos-healthz.json && grep -q '"status": "ok"' /tmp/ucos-healthz.json; then
               cat /tmp/ucos-healthz.json
               echo "UCOS_API_HEALTHZ=PASS"
@@ -50,7 +58,7 @@ jobs:
       - name: Verify API authentication remains fail-closed
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/ucos-auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
+          code="$(curl --max-time 20 -sS -o /tmp/ucos-auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
           test "$code" = "401"
           grep -q "API authentication required" /tmp/ucos-auth.json
           echo "UCOS_API_AUTH_FAIL_CLOSED=PASS"
