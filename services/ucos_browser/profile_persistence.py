@@ -193,7 +193,7 @@ def restore_storage_state(context, state: dict[str, Any]) -> None:
   const originState = {origins_json};
   const marker = {_RESTORE_MARKER!r};
   try {{
-    if (localStorage.getItem(marker) === "1") return;
+    if (sessionStorage.getItem(marker) === "1") return;
     const saved = originState.find((item) => item.origin === window.location.origin);
     if (saved && Array.isArray(saved.localStorage)) {{
       for (const entry of saved.localStorage) {{
@@ -202,7 +202,7 @@ def restore_storage_state(context, state: dict[str, Any]) -> None:
         }}
       }}
     }}
-    localStorage.setItem(marker, "1");
+    sessionStorage.setItem(marker, "1");
   }} catch (_) {{}}
 }})();
 """
