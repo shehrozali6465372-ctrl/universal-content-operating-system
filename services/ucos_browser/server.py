@@ -21,6 +21,22 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
 
+try:
+    from . import profile_persistence
+except ImportError:  # direct execution or tests importing server.py by file path
+    try:
+        import profile_persistence
+    except ImportError:
+        import importlib.util
+        _profile_module_path = Path(__file__).with_name("profile_persistence.py")
+        _profile_spec = importlib.util.spec_from_file_location(
+            "ucos_browser_profile_persistence", _profile_module_path
+        )
+        if _profile_spec is None or _profile_spec.loader is None:
+            raise RuntimeError("UCOS browser profile persistence module is unavailable")
+        profile_persistence = importlib.util.module_from_spec(_profile_spec)
+        _profile_spec.loader.exec_module(profile_persistence)
+
 
 LOG = logging.getLogger("ucos.browser")
 MAX_ACTIONS = 20
@@ -120,6 +136,13 @@ def _profile_ref(value: str) -> str:
 
 def _profile_dir(profile_ref: str) -> tuple[str, bool]:
     configured = os.getenv("UCOS_BROWSER_PROFILE_DIR", "").strip()
+    durable_required = profile_persistence.durable_required()
+    state_store_configured = profile_persistence.is_configured()
+    if durable_required and not configured and not state_store_configured:
+        raise RuntimeError(
+            "durable browser profile storage is required; configure UCOS_BROWSER_PROFILE_DIR "
+            "to a persistent volume or set DATABASE_URL and UCOS_BROWSER_STATE_ENCRYPTION_KEY"
+        )
     root = Path(configured or "/var/data/ucos-browser/profiles")
     path = root / _profile_ref(profile_ref)
     try:
@@ -127,14 +150,15 @@ def _profile_dir(profile_ref: str) -> tuple[str, bool]:
         probe = path / ".write-test"
         probe.write_text("ok", encoding="utf-8")
         probe.unlink(missing_ok=True)
-        return str(path), True
+        # A writable default path does not prove that Render mounted durable storage.
+        return str(path), bool(configured)
     except OSError as exc:
         if configured:
             raise RuntimeError("configured browser profile directory is not writable") from exc
-        if os.getenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        if durable_required and not state_store_configured:
             raise RuntimeError(
                 "durable browser profile storage is required; configure UCOS_BROWSER_PROFILE_DIR "
-                "to a writable persistent volume"
+                "to a persistent volume or set DATABASE_URL and UCOS_BROWSER_STATE_ENCRYPTION_KEY"
             ) from exc
         fallback = Path("/tmp/ucos-browser/profiles") / _profile_ref(profile_ref)
         fallback.mkdir(parents=True, exist_ok=True)
@@ -189,7 +213,9 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
         except ImportError as exc:
             raise RuntimeError("Playwright is required by the UCOS Personal Browser worker") from exc
 
-        profile_dir, persistent_profile = _profile_dir(profile_ref)
+        profile_dir, disk_persistent = _profile_dir(profile_ref)
+        state_store_enabled = profile_persistence.is_configured()
+        saved_state = profile_persistence.load_profile_state(profile_ref) if state_store_enabled else None
         pw = sync_playwright().start()
         try:
             context = pw.chromium.launch_persistent_context(
@@ -199,6 +225,8 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
                 ignore_https_errors=False,
                 accept_downloads=False,
             )
+            if saved_state:
+                profile_persistence.restore_storage_state(context, saved_state)
             page = context.pages[0] if context.pages else context.new_page()
             page.set_default_timeout(timeout)
         except Exception:
@@ -210,7 +238,15 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
 
         runtime = {
             "profile_ref": profile_ref,
-            "persistent_profile": persistent_profile,
+            "disk_persistent": disk_persistent,
+            "state_store_enabled": state_store_enabled,
+            "persistent_profile": bool(disk_persistent or state_store_enabled),
+            "profile_persistence_backend": (
+                "neon_postgres" if state_store_enabled and not disk_persistent
+                else "disk+neon_postgres" if state_store_enabled
+                else "disk" if disk_persistent
+                else "ephemeral"
+            ),
             "profile_dir": profile_dir,
             "pw": pw,
             "context": context,
@@ -381,8 +417,24 @@ def execute_task(task: dict) -> dict:
                 raise ValueError(f"unsupported browser action: {kind}")
 
         runtime["last_used"] = time.monotonic()
+        if runtime["state_store_enabled"]:
+            try:
+                profile_persistence.save_profile_state(
+                    profile_ref, runtime["context"].storage_state()
+                )
+            except Exception as exc:
+                if runtime["disk_persistent"]:
+                    LOG.warning(
+                        "encrypted browser profile snapshot failed; continuing with durable disk (%s)",
+                        type(exc).__name__,
+                    )
+                else:
+                    raise RuntimeError(
+                        "browser session state could not be persisted; profile durability is unconfirmed"
+                    ) from exc
         result["profile_ref"] = profile_ref
         result["persistent_profile"] = runtime["persistent_profile"]
+        result["profile_persistence_backend"] = runtime["profile_persistence_backend"]
         result["session_reused"] = not created
         result["final_url"] = page.url
         result["url"] = page.url
@@ -479,16 +531,28 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(urlsplit(self.path).query)
             try:
                 profile_ref = _profile_ref(query.get("profile_ref", ["default"])[0])
-                path, persistent_profile = _profile_dir(profile_ref)
-                has_state = any(Path(path).iterdir())
+                path, disk_persistent = _profile_dir(profile_ref)
+                has_disk_state = any(Path(path).iterdir())
+                state_store_enabled = profile_persistence.is_configured()
+                has_saved_state = (
+                    profile_persistence.has_profile_state(profile_ref) if state_store_enabled else False
+                )
+                persistent_profile = bool(disk_persistent or state_store_enabled)
             except (OSError, ValueError, RuntimeError):
                 self._send(400, {"error": "invalid or unavailable browser profile"})
                 return
+            backend = (
+                "neon_postgres" if state_store_enabled and not disk_persistent
+                else "disk+neon_postgres" if state_store_enabled
+                else "disk" if disk_persistent
+                else "ephemeral"
+            )
             self._send(200, {
                 "status": "ok",
                 "profile_ref": profile_ref,
                 "persistent": persistent_profile,
-                "profile_initialized": has_state,
+                "persistence_backend": backend,
+                "profile_initialized": bool(has_disk_state or has_saved_state),
                 "authentication": "UNKNOWN",
             })
             return
