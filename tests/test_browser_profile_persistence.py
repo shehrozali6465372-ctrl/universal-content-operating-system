@@ -247,3 +247,108 @@ def test_startup_self_test_is_opt_in(monkeypatch):
 
     monkeypatch.setattr(browser_server.profile_persistence, "self_test", should_not_run)
     browser_server._run_profile_persistence_startup_self_test()
+
+
+
+def test_new_browser_runtime_restores_saved_neon_state_on_each_creation(monkeypatch, tmp_path):
+    saved_state = {
+        "cookies": [{
+            "name": "session",
+            "value": "restored-cookie",
+            "domain": ".example.test",
+            "path": "/",
+            "expires": -1,
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "Lax",
+        }],
+        "origins": [{
+            "origin": "https://example.test",
+            "localStorage": [{"name": "access", "value": "restored-local-storage"}],
+        }],
+    }
+    load_calls = []
+    contexts = []
+
+    class FakePage:
+        def __init__(self):
+            self.timeout = None
+
+        def set_default_timeout(self, timeout):
+            self.timeout = timeout
+
+        def is_closed(self):
+            return False
+
+    class FakeContext:
+        def __init__(self):
+            self.cookies = []
+            self.scripts = []
+            self.pages = [FakePage()]
+
+        def add_cookies(self, cookies):
+            self.cookies.extend(cookies)
+
+        def add_init_script(self, script=None, path=None):
+            self.scripts.append(script)
+
+        def close(self):
+            return None
+
+        def new_page(self):
+            page = FakePage()
+            self.pages.append(page)
+            return page
+
+    class FakeChromium:
+        def launch_persistent_context(self, **kwargs):
+            assert kwargs["headless"] is True
+            context = FakeContext()
+            contexts.append(context)
+            return context
+
+    class FakePlaywright:
+        def __init__(self):
+            self.chromium = FakeChromium()
+
+        def stop(self):
+            return None
+
+    class FakePlaywrightFactory:
+        def start(self):
+            return FakePlaywright()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "playwright.sync_api",
+        SimpleNamespace(sync_playwright=lambda: FakePlaywrightFactory()),
+    )
+    monkeypatch.setattr(browser_server, "_profile_dir", lambda _ref: (str(tmp_path), False))
+    monkeypatch.setattr(persistence, "is_configured", lambda: True)
+
+    def load(profile_ref):
+        load_calls.append(profile_ref)
+        return saved_state
+
+    monkeypatch.setattr(persistence, "load_profile_state", load)
+    monkeypatch.setenv("UCOS_BROWSER_STATE_ENCRYPTION_KEY", "test-key")
+    previous_runtime = browser_server._BROWSER_RUNTIME
+    browser_server._BROWSER_RUNTIME = None
+    try:
+        first, created = browser_server._get_browser_runtime("amazon-primary", 5000)
+        assert created is True
+        assert first["persistent_profile"] is True
+        assert first["profile_persistence_backend"] == "neon_postgres"
+        assert contexts[0].cookies == saved_state["cookies"]
+        assert "restored-local-storage" in contexts[0].scripts[0]
+
+        browser_server._close_browser_runtime()
+        second, recreated = browser_server._get_browser_runtime("amazon-primary", 5000)
+        assert recreated is True
+        assert second["persistent_profile"] is True
+        assert contexts[1].cookies == saved_state["cookies"]
+        assert "restored-local-storage" in contexts[1].scripts[0]
+        assert load_calls == ["amazon-primary", "amazon-primary"]
+    finally:
+        browser_server._close_browser_runtime()
+        browser_server._BROWSER_RUNTIME = previous_runtime
