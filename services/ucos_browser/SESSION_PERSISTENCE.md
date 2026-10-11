@@ -10,7 +10,7 @@ The snapshot does **not** contain page text, screenshots, passwords typed into f
 
 Configure these environment variables on the `ucos-personal-browser` Render service:
 
-- `DATABASE_URL`: the existing Neon Postgres connection string used by this service.
+- `UCOS_BROWSER_STATE_DATABASE_URL`: a dedicated Neon Postgres connection string for encrypted browser session snapshots. This variable takes precedence and avoids changing the application’s existing database configuration. If it is absent, the service falls back to `DATABASE_URL`.
 - `UCOS_BROWSER_STATE_ENCRYPTION_KEY`: a Fernet key generated in a trusted terminal with:
   ```bash
   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
