@@ -86,7 +86,7 @@ class ControlPlane:
             account=self.registry.get(account_id)
             if account is None or not account.enabled: raise LookupError(f"unknown or disabled account_id: {account_id}")
             if platform and account.platform!=platform.strip().lower(): raise ValueError(f"account {account_id} belongs to {account.platform}, not {platform}")
-            policy=self.policies.get(account.platform); product=AffiliateEvidenceProvider().select(topic,account.niche,account.platform)
+            policy=self.policies.get(account.platform); product=self._affiliate_evidence(topic.strip(),account.niche,account.platform,account)
             decision=Decision(account_id=account.account_id,platform=account.platform,niche=account.niche,topic=topic.strip(),content_type=self.decisions.choose_content_type(account,topic),product=product,affiliate=product,policy_version=policy.version if policy else None,reasons=["explicit account_id","account-scoped affiliate evidence"])
         elif accounts:
             learning_scores=self._learning_scores(accounts)
