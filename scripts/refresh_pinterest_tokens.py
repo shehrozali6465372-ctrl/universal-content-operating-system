@@ -61,41 +61,68 @@ def main() -> int:
         logger.error("Pinterest refresh job initialization failed (%s)", type(exc).__name__)
         return 2
 
-    checked = refreshed = failures = 0
+    accounts_seen = credentials_found = due = refreshed = failures = skipped = 0
     now = datetime.now(timezone.utc)
+    logger.info("Pinterest refresh scan started enabled_accounts=%d refresh_window_hours=%d", len(accounts), REFRESH_WINDOW_SECONDS // 3600)
 
     for account in accounts:
+        accounts_seen += 1
         if not account.credentials_ref or not account.platform_account_id:
+            skipped += 1
+            logger.warning("account=%s state=skipped_missing_credential_identity", account.account_id)
             continue
         try:
             credentials = repository.get_for_account(
                 account.credentials_ref, account.account_id, include_expired=True
             )
             if not credentials:
-                logger.info("account=%s state=no_active_credential", account.account_id)
+                skipped += 1
+                logger.warning("account=%s state=no_active_credential", account.account_id)
                 continue
+            credentials_found += 1
             if not credentials.get("expires_at"):
+                skipped += 1
                 logger.warning("account=%s state=missing_expiry_metadata", account.account_id)
                 continue
             expiry = datetime.fromisoformat(str(credentials["expires_at"]).replace("Z", "+00:00"))
             if expiry.tzinfo is None:
                 expiry = expiry.replace(tzinfo=timezone.utc)
+            hours_until_expiry = (expiry - now).total_seconds() / 3600
             if expiry > now + timedelta(seconds=REFRESH_WINDOW_SECONDS):
+                logger.info("account=%s state=not_due hours_until_expiry=%.1f", account.account_id, hours_until_expiry)
                 continue
 
-            checked += 1
+            due += 1
             prior_expiry = expiry.isoformat()
             gateway._refresh_pinterest_token_if_needed(
                 account, credentials, client_id, client_secret,
                 refresh_window_seconds=REFRESH_WINDOW_SECONDS,
             )
+            # Verify persistence by reading back encrypted vault metadata only.
+            # Do not emit access or refresh token values into logs.
+            persisted = repository.get_for_account(
+                account.credentials_ref, account.account_id, include_expired=True
+            )
+            if not persisted or not persisted.get("expires_at"):
+                raise RuntimeError("refreshed credential metadata was not persisted")
+            persisted_expiry = datetime.fromisoformat(str(persisted["expires_at"]).replace("Z", "+00:00"))
+            if persisted_expiry.tzinfo is None:
+                persisted_expiry = persisted_expiry.replace(tzinfo=timezone.utc)
+            if persisted_expiry <= expiry:
+                raise RuntimeError("credential expiry did not advance after refresh")
             refreshed += 1
-            logger.info("account=%s state=refresh_succeeded prior_expiry=%s", account.account_id, prior_expiry)
+            logger.info("account=%s state=refresh_succeeded prior_expiry=%s new_expiry=%s", account.account_id, prior_expiry, persisted_expiry.isoformat())
         except Exception as exc:
             failures += 1
             logger.error("account=%s state=refresh_failed error_type=%s", account.account_id, type(exc).__name__)
 
-    logger.info("Pinterest refresh run complete checked=%d refreshed=%d failures=%d", checked, refreshed, failures)
+    logger.info(
+        "Pinterest refresh run complete accounts_seen=%d credentials_found=%d due=%d refreshed=%d skipped=%d failures=%d",
+        accounts_seen, credentials_found, due, refreshed, skipped, failures,
+    )
+    if not accounts_seen:
+        logger.error("No enabled Pinterest accounts found in canonical Neon identity tables")
+        return 2
     return 1 if failures else 0
 
 
