@@ -1,12 +1,14 @@
 """Long-running Pinterest Token Guardian for the UCOS API service.
 
-Runs a scan at process startup and every hour thereafter. The refresh logic is
-shared with scripts/refresh_pinterest_tokens.py; credentials stay encrypted in
-the canonical Neon vault and tokens are never written to logs.
+Can run a scan at process startup and every hour. In the selected deployment,
+GitHub Actions owns the hourly refresh schedule, so this in-process guardian can
+be disabled to avoid duplicate scans and misleading configuration errors.
+Credentials stay encrypted in the canonical Neon vault; tokens are never logged.
 """
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 
@@ -34,8 +36,12 @@ def _run_forever() -> None:
 
 
 def start_pinterest_token_guardian() -> bool:
-    """Start one daemon worker per API process; repeated calls are harmless."""
+    """Start the worker unless an external scheduler owns refresh."""
     global _guardian_thread
+    enabled = os.getenv("UCOS_PINTEREST_GUARDIAN_ENABLED", "true").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        logger.info("Pinterest Token Guardian disabled; external scheduler owns refresh")
+        return False
     with _guardian_lock:
         if _guardian_thread is not None and _guardian_thread.is_alive():
             return False
