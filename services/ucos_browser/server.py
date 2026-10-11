@@ -472,16 +472,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             from urllib.parse import parse_qs
             query = parse_qs(urlsplit(self.path).query)
-            profile_ref = query.get("profile_ref", ["default"])[0]
             try:
+                profile_ref = _profile_ref(query.get("profile_ref", ["default"])[0])
                 path, persistent_profile = _profile_dir(profile_ref)
                 has_state = any(Path(path).iterdir())
             except (OSError, ValueError, RuntimeError):
-                has_state = False
-                persistent_profile = False
+                self._send(400, {"error": "invalid or unavailable browser profile"})
+                return
             self._send(200, {
                 "status": "ok",
-                "profile_ref": _profile_ref(profile_ref),
+                "profile_ref": profile_ref,
                 "persistent": persistent_profile,
                 "profile_initialized": has_state,
                 "authentication": "UNKNOWN",
