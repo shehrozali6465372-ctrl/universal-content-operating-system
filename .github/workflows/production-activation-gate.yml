@@ -77,9 +77,14 @@ jobs:
       - name: Verify live production endpoints
         run: |
           set -euo pipefail
-          curl -fsS https://ucos-personal-browser.onrender.com/ | grep -q '"status":"ok"'
-          curl -fsS https://ucos-backend.onrender.com/healthz | grep -q '"status": "ok"'
-          code="$(curl -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
+          code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
+          test "$code" = 200
+          grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html
+          code="$(curl --max-time 20 -sS -o /tmp/browser-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
+          test "$code" = 401
+          grep -q 'authentication required' /tmp/browser-health.json
+          curl --max-time 20 -fsS https://ucos-backend.onrender.com/healthz | grep -q '"status": "ok"'
+          code="$(curl --max-time 20 -sS -o /tmp/auth.json -w '%{http_code}' https://ucos-backend.onrender.com/health || true)"
           test "$code" = 401
           grep -q 'API authentication required' /tmp/auth.json
           echo "LIVE_ENDPOINTS=PASS"
