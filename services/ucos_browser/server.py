@@ -23,8 +23,19 @@ from urllib.parse import urlsplit
 
 try:
     from . import profile_persistence
-except ImportError:  # direct execution by Render start command
-    import profile_persistence
+except ImportError:  # direct execution or tests importing server.py by file path
+    try:
+        import profile_persistence
+    except ImportError:
+        import importlib.util
+        _profile_module_path = Path(__file__).with_name("profile_persistence.py")
+        _profile_spec = importlib.util.spec_from_file_location(
+            "ucos_browser_profile_persistence", _profile_module_path
+        )
+        if _profile_spec is None or _profile_spec.loader is None:
+            raise RuntimeError("UCOS browser profile persistence module is unavailable")
+        profile_persistence = importlib.util.module_from_spec(_profile_spec)
+        _profile_spec.loader.exec_module(profile_persistence)
 
 
 LOG = logging.getLogger("ucos.browser")
