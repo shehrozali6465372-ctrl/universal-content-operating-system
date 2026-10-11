@@ -20,6 +20,8 @@ Configure these environment variables on the `ucos-personal-browser` Render serv
 
 The database table `browser_profile_states` is created on demand. It stores an encrypted blob keyed by `profile_ref`, plus an update timestamp. The same encryption key must remain available to decrypt existing rows. Rotating the key without re-encrypting or deleting saved rows will intentionally fail closed.
 
+For a live database-connection check, set `UCOS_BROWSER_SESSION_SELF_TEST=true`. On each worker startup, it writes a random non-sensitive test snapshot, verifies the ciphertext contains no test marker in plaintext, decrypts and reads the row back, then deletes the temporary row. With `UCOS_BROWSER_REQUIRE_DURABLE_PROFILE=true`, a failed startup self-test prevents the worker from starting.
+
 ## Validation required before certification
 
 1. Confirm the service has the database and encryption-key variables without displaying either secret.

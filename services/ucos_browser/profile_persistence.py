@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import uuid
 from typing import Any
 
 _TABLE_SQL = """
@@ -215,3 +216,77 @@ def restore_storage_state(context, state: dict[str, Any]) -> None:
 }})();
 """
     context.add_init_script(script=script)
+
+
+
+def delete_profile_state(profile_ref: str) -> None:
+    """Delete one explicitly named browser-state record, used for smoke-test cleanup."""
+    try:
+        with _connect() as connection:
+            with connection.cursor() as cursor:
+                _ensure_table(cursor)
+                cursor.execute(
+                    "DELETE FROM browser_profile_states WHERE profile_ref = %s",
+                    (profile_ref,),
+                )
+    except Exception as exc:
+        raise RuntimeError(
+            f"browser session database cleanup failed ({type(exc).__name__})"
+        ) from None
+
+
+def self_test() -> bool:
+    """Verify encrypted write/read/decrypt against the configured database without retaining a test row."""
+    if not is_configured():
+        raise RuntimeError(
+            "browser session persistence self-test requires a database URL and encryption key"
+        )
+
+    profile_ref = f"ucos-smoke-{uuid.uuid4().hex}"
+    marker = f"smoke-{uuid.uuid4().hex}"
+    state = {
+        "cookies": [{
+            "name": "__ucos_persistence_smoke",
+            "value": marker,
+            "domain": ".example.com",
+            "path": "/",
+            "expires": -1,
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "Lax",
+        }],
+        "origins": [{
+            "origin": "https://example.com",
+            "localStorage": [{"name": "__ucos_persistence_smoke", "value": marker}],
+        }],
+    }
+    expected = _normalise_state(state)
+    try:
+        save_profile_state(profile_ref, state)
+        with _connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT encrypted_state FROM browser_profile_states WHERE profile_ref = %s",
+                    (profile_ref,),
+                )
+                row = cursor.fetchone()
+        if not row:
+            raise RuntimeError("browser session persistence self-test could not read its written row")
+        encrypted = bytes(row[0])
+        if marker.encode("utf-8") in encrypted:
+            raise RuntimeError("browser session persistence self-test detected plaintext in database")
+        decrypted = _fernet().decrypt(encrypted)
+        if json.loads(decrypted.decode("utf-8")) != expected:
+            raise RuntimeError("browser session persistence self-test decrypt/compare mismatch")
+        restored = load_profile_state(profile_ref)
+        if restored != expected:
+            raise RuntimeError("browser session persistence self-test read-back mismatch")
+        return True
+    except Exception as exc:
+        if isinstance(exc, RuntimeError) and "self-test" in str(exc):
+            raise
+        raise RuntimeError(
+            f"browser session persistence self-test failed ({type(exc).__name__})"
+        ) from None
+    finally:
+        delete_profile_state(profile_ref)

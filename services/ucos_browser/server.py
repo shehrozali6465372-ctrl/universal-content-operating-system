@@ -607,11 +607,33 @@ class Handler(BaseHTTPRequestHandler):
         LOG.info("%s - %s", self.address_string(), fmt % args)
 
 
+def _env_enabled(name: str) -> bool:
+    return os.getenv(name, "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_profile_persistence_startup_self_test() -> None:
+    if not _env_enabled("UCOS_BROWSER_SESSION_SELF_TEST"):
+        return
+    try:
+        profile_persistence.self_test()
+        LOG.info("UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=PASS backend=encrypted_postgres")
+    except Exception as exc:
+        LOG.error(
+            "UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=FAIL error_type=%s",
+            type(exc).__name__,
+        )
+        if profile_persistence.durable_required():
+            raise RuntimeError(
+                "durable browser profile storage is required but its startup self-test failed"
+            ) from exc
+
+
 def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     port = int(os.getenv("PORT", "10000"))
     if not os.getenv("UCOS_BROWSER_TOKEN", "").strip():
         raise RuntimeError("UCOS_BROWSER_TOKEN is required")
+    _run_profile_persistence_startup_self_test()
     server = HTTPServer(("0.0.0.0", port), Handler)
     LOG.info("UCOS Personal Browser listening on 0.0.0.0:%s", port)
     server.serve_forever()
