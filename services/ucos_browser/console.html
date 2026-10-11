@@ -33,7 +33,7 @@ details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summar
     <button aria-label="Forward" title="Forward" onclick="navAction('forward')">→</button>
     <button aria-label="Reload" title="Reload" onclick="navAction('reload')">↻</button>
     <div class="address"><input id="url" aria-label="Website address" value="https://www.amazon.com/ap/signin" placeholder="Enter website address"></div>
-    <button class="primary" id="go" onclick="go()">Go</button>
+    <button class="primary" id="go" onclick="navigateAddress()">Go</button>
   </div>
   <div class="tabs"><button class="tab active" id="tabLabel">Tab 1 · Amazon sign in</button><button class="tab" onclick="newTab()">＋ New tab</button><button class="tab" onclick="listTabs()">Show tabs</button></div>
   <p class="note">Profile: <strong>amazon-primary</strong> · CAPTCHA and two-factor verification must be completed by you.</p>
@@ -71,7 +71,7 @@ function show(x){const r=x?.result||{};const h=r.screenshot;if(h){const b=new Ui
 function setError(e){$('status').textContent=e.message||String(e);$('status').className='status error'}
 function saveHistory(url){try{if(!url)return;const k='ucos_browser_history';const xs=JSON.parse(localStorage.getItem(k)||'[]');const next=[{url,at:new Date().toISOString()},...xs.filter(x=>x.url!==url)].slice(0,100);localStorage.setItem(k,JSON.stringify(next))}catch(e){}}
 async function runAndShow(actions){try{const x=await task(actions);show(x);if(x?.result?.final_url)saveHistory(x.result.final_url);return x}catch(e){setError(e);return null}}
-async function go(){let url=$('url').value.trim();if(url&&!/^https?:\/\//i.test(url))url='https://'+url;$('url').value=url;await runAndShow([{type:'navigate',url},{type:'inspect'},{type:'screenshot'}])}
+async function navigateAddress(){let url=$('url').value.trim();if(url&&!/^https?:\/\//i.test(url))url='https://'+url;$('url').value=url;await runAndShow([{type:'navigate',url},{type:'inspect'},{type:'screenshot'}])}
 async function newTab(){await runAndShow([{type:'new_tab',url:$('url').value.trim()},{type:'inspect'},{type:'screenshot'},{type:'list_tabs'}])}
 async function listTabs(){const x=await runAndShow([{type:'list_tabs'}]);if(x?.result?.tabs)$('elements').textContent=JSON.stringify(x.result.tabs,null,2)}
 async function switchTab(){await runAndShow([{type:'switch_tab',index:Number($('tabIndex').value)},{type:'inspect'},{type:'screenshot'},{type:'list_tabs'}])}
@@ -87,6 +87,6 @@ function bookmarkCurrent(){const url=$('status').textContent||$('url').value.tri
 function showBookmarks(){const xs=JSON.parse(localStorage.getItem('ucos_browser_bookmarks')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
 function showHistory(){const xs=JSON.parse(localStorage.getItem('ucos_browser_history')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
 function clearToken(){sessionStorage.removeItem(key);$('token').value='';$('status').textContent='Token cleared from this tab.';$('status').className='status'}
-$('url').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')navigateAddress()});
 </script>
 </body></html>
