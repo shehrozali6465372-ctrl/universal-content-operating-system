@@ -6,9 +6,10 @@ on:
     paths:
       - ".github/workflows/ucos-keepalive.yml"
   schedule:
-    # Free-tier services sleep after 15 minutes; this periodic probe checks recovery
-    # while reserving instance-hours for the other services in this Render workspace.
-    - cron: "3,33 * * * *"
+    # Render Free sleeps after 15 minutes idle. Probe every 10 minutes and avoid
+    # minute 0 to reduce GitHub scheduler congestion; the separate probe workflow
+    # runs at offset minutes so health checks are staggered across the hour.
+    - cron: "2,12,22,32,42,52 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
           url="https://ucos-backend.onrender.com/healthz"
           for attempt in 1 2 3; do
             status="$(curl --silent --show-error --output /tmp/ucos-health.json --write-out '%{http_code}' --max-time 45 "$url" || true)"
-            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/ucos-health.json; then
+            if [ "$status" = "200" ] && jq -e '.success == true and .status == 200 and .data.status == "ok"' /tmp/ucos-health.json >/dev/null 2>&1; then
               echo "UCOS health check passed (HTTP 200)."
               cat /tmp/ucos-health.json
               break
