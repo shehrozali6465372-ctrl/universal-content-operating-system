@@ -164,7 +164,14 @@ def test_startup_validation_decrypts_existing_profile_without_logging_session_va
         "load_profile_state",
         lambda profile_ref: {
             "cookies": [{"name": "session-cookie-secret", "value": "must-not-be-logged"}],
-            "origins": [{"origin": "https://example.com", "localStorage": [{"name": "private-key", "value": "must-not-be-logged"}]}],
+            "origins": [
+                {
+                    "origin": "https://example.com",
+                    "localStorage": [
+                        {"name": "private-key", "value": "must-not-be-logged"}
+                    ],
+                }
+            ],
         },
     )
 
@@ -184,7 +191,7 @@ def test_startup_validation_fails_closed_when_saved_profile_cannot_be_decrypted(
     monkeypatch.setattr(browser_server.profile_persistence, "durable_required", lambda: True)
     monkeypatch.setattr(browser_server.profile_persistence, "self_test", lambda: True)
 
-    def fail_to_load(profile_ref):
+    def fail_to_load(_profile_ref):
         raise RuntimeError("ciphertext unavailable")
 
     monkeypatch.setattr(browser_server.profile_persistence, "load_profile_state", fail_to_load)
