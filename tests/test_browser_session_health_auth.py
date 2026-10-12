@@ -200,7 +200,7 @@ def test_startup_validation_fails_closed_when_saved_profile_cannot_be_decrypted(
         try:
             browser_server._run_profile_persistence_startup_self_test()
         except RuntimeError as exc:
-            assert "startup validation failed" in str(exc)
+            assert "saved profile could not be validated" in str(exc)
         else:
             raise AssertionError("required durable mode must fail closed on unreadable saved state")
 
