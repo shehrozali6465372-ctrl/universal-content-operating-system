@@ -18,7 +18,7 @@ input,button{font:inherit;border:1px solid #c5ced8;border-radius:10px;padding:10
 input{width:100%;background:#fff;color:var(--ink)}button{background:#fff;cursor:pointer;font-weight:600}button:hover{background:#f2f6fa}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button:disabled{opacity:.55;cursor:wait}
 .tabs{display:flex;gap:8px;overflow:auto;padding:10px 2px 0}.tab{white-space:nowrap;border-radius:9px;background:#f3f6f9;padding:8px 12px;font-size:13px}.tab.active{background:#dce9ff;border-color:#a8c8ff}
 .note{color:var(--muted);font-size:13px;margin:8px 0 0}.status{font-weight:600;margin-top:8px}.status.error{color:var(--danger)}.status.ok{color:#17663a}
-.browser-view{min-height:240px;background:#111a24;border-radius:12px;display:grid;place-items:center;overflow:hidden}.browser-view img{display:block;width:100%;max-height:68vh;object-fit:contain}.empty{color:#e2e8f0;text-align:center;padding:28px}.empty strong{display:block;font-size:18px;margin-bottom:6px}
+.browser-view{min-height:240px;background:#111a24;border-radius:12px;display:grid;place-items:center;overflow:hidden;user-select:none}.browser-view img{display:block;width:100%;max-height:68vh;object-fit:contain;touch-action:none;user-select:none;-webkit-user-drag:none;cursor:crosshair}.empty{color:#e2e8f0;text-align:center;padding:28px}.empty strong{display:block;font-size:18px;margin-bottom:6px}.remote-typing{margin-top:10px;padding:10px;background:#f3f6f9;border-radius:12px}.remote-type-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.remote-type-row input{flex:1;min-width:150px}.remote-typing[hidden]{display:none}
 .section-title{margin:0 0 10px;font-size:16px}.quick-actions{display:flex;gap:8px;flex-wrap:wrap}.quick-actions button{min-height:38px;padding:7px 12px}
 details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summary{font-weight:700;cursor:pointer}label{display:block;font-size:13px;color:var(--muted);margin:8px 0 5px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}pre{white-space:pre-wrap;overflow:auto;max-height:260px;background:#111a24;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px}
 @media(max-width:720px){.toolbar{grid-template-columns:repeat(4,auto)}.address{grid-column:1/-1;grid-row:2}.toolbar #go{grid-column:1/-1}.grid{grid-template-columns:1fr}header{align-items:flex-start}}
@@ -32,15 +32,26 @@ details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summar
     <button aria-label="Back" title="Back" onclick="navAction('back')">←</button>
     <button aria-label="Forward" title="Forward" onclick="navAction('forward')">→</button>
     <button aria-label="Reload" title="Reload" onclick="navAction('reload')">↻</button>
-    <div class="address"><input id="url" aria-label="Website address" value="https://www.amazon.com/ap/signin" placeholder="Enter website address"></div>
+    <div class="address"><input id="url" aria-label="Website address" value="https://www.amazon.com/" placeholder="Enter website address"></div>
     <button class="primary" id="go" onclick="navigateAddress()">Go</button>
   </div>
-  <div class="tabs"><button class="tab active" id="tabLabel">Tab 1 · Amazon sign in</button><button class="tab" onclick="newTab()">＋ New tab</button><button class="tab" onclick="listTabs()">Show tabs</button></div>
+  <div class="tabs"><button class="tab active" id="tabLabel">Tab 1 · Amazon</button><button class="tab" onclick="newTab()">＋ New tab</button><button class="tab" onclick="listTabs()">Show tabs</button></div>
   <p class="note">Profile: <strong>amazon-primary</strong> · CAPTCHA and two-factor verification must be completed by you.</p>
 </section>
 <section class="panel">
-  <div class="browser-view" id="browserView"><div class="empty"><strong>Your browser is ready</strong>Press Go to open Amazon in the remote browser.</div></div>
+  <div class="browser-view" id="browserView"><div class="empty"><strong>Your browser is ready</strong>Press Go to open Amazon in the remote browser. If a direct sign-in URL returns 404, UCOS will retry Amazon Home.</div></div>
   <div id="status" class="status" role="status" aria-live="polite">Ready.</div>
+  <div class="remote-typing" id="remoteTyping" hidden>
+    <label for="remoteInput">Type into the selected website field</label>
+    <div class="remote-type-row">
+      <input id="remoteInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tap a field in the page, then type here">
+      <button onclick="sendRemoteText(false)">Type</button>
+      <button class="primary" onclick="sendRemoteText(true)">Type + Enter</button>
+      <button onclick="sendRemoteKey('Tab')">Tab</button>
+      <button onclick="sendRemoteKey('Backspace')" aria-label="Backspace">⌫</button>
+    </div>
+    <p class="note" id="typingHint">Your typing is sent to the focused remote page field. It is not sent to this chat.</p>
+  </div>
 </section>
 <section class="panel">
   <h2 class="section-title">Browser actions</h2>
@@ -67,11 +78,115 @@ details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summar
 const $=id=>document.getElementById(id);const key='ucos_browser_console_token';$('token').value=sessionStorage.getItem(key)||'';
 function headers(){const t=$('token').value.trim();if(!t)throw Error('Open Advanced controls and enter the existing UCOS Browser Token. Do not use your Amazon password here.');sessionStorage.setItem(key,t);return {'Authorization':'Bearer '+t,'Content-Type':'application/json'}}
 async function task(actions){const r=await fetch('/execute',{method:'POST',headers:headers(),body:JSON.stringify({profile_ref:'amazon-primary',url:$('url').value.trim(),actions})});let x;try{x=await r.json()}catch{x={error:'The browser service returned an unreadable response.'}}const safe=JSON.parse(JSON.stringify(x));const sr=safe?.result;if(sr){if(sr.screenshot)sr.screenshot='[PNG rendered in browser view; omitted from diagnostics]';if(typeof sr.text==='string'&&sr.text.length>12000)sr.text=sr.text.slice(0,12000)+'\\n[truncated in diagnostics; '+sr.text.length+' total characters]';if(Array.isArray(sr.links)){sr.links_count=sr.links.length;sr.links='[omitted from diagnostics; use extracted page details]'}}$('result').textContent=JSON.stringify(safe,null,2);if(r.status===401)throw Error('Authentication required: UCOS Browser Token does not match the Render service token. Check the existing value in Render; do not change Amazon credentials.');if(!r.ok)throw Error(x.error||'Browser request failed ('+r.status+').');return x}
-function show(x){const r=x?.result||{};const h=r.screenshot;if(h){const b=new Uint8Array(h.match(/../g).map(v=>parseInt(v,16)));const view=$('browserView');view.replaceChildren();const img=document.createElement('img');img.alt='Remote browser screenshot';img.src=URL.createObjectURL(new Blob([b],{type:'image/png'}));view.append(img)}if(r.final_url){const nav=(r.events||[]).find(e=>e.type==='navigate'||e.type==='reload'||e.type==='back'||e.type==='forward');$('status').textContent=(nav&&nav.status?'HTTP '+nav.status+' · ':'')+r.final_url;$('status').className='status ok';$('url').value=r.final_url}if(typeof r.text==='string'&&r.text.trim())$('elements').textContent=JSON.stringify({title:r.title,final_url:r.final_url,text:r.text.slice(0,12000),links_count:(r.links||[]).length,events:r.events||[]},null,2);if(r.elements)$('elements').textContent=JSON.stringify(r.elements,null,2);if(r.tabs)$('elements').textContent=JSON.stringify(r.tabs,null,2)}
+let viewportSize={width:1280,height:720};
+function show(x){
+ const r=x?.result||{};
+ if(r.viewport&&Number(r.viewport.width)>0&&Number(r.viewport.height)>0)viewportSize={width:Number(r.viewport.width),height:Number(r.viewport.height)};
+ const h=r.screenshot;
+ if(h){
+   const b=new Uint8Array(h.match(/../g).map(v=>parseInt(v,16)));
+   const view=$('browserView');view.replaceChildren();
+   const img=document.createElement('img');img.alt='Interactive remote browser screen';img.draggable=false;
+   img.src=URL.createObjectURL(new Blob([b],{type:'image/png'}));
+   img.addEventListener('pointerdown',screenPointerDown);
+   img.addEventListener('pointerup',screenPointerUp);
+   img.addEventListener('pointercancel',()=>{pointerStart=null});
+   img.addEventListener('contextmenu',e=>e.preventDefault());
+   img.addEventListener('dragstart',e=>e.preventDefault());
+   img.addEventListener('wheel',screenWheel,{passive:false});
+   view.append(img);
+ }
+ if(r.focused){
+   const focus=r.focused;
+   $('remoteTyping').hidden=!focus.editable;
+   if(focus.editable){
+     const input=$('remoteInput');
+     const desiredType=focus.password?'password':'text';
+     if(input.type!==desiredType)input.type=desiredType;
+     input.placeholder=focus.placeholder||focus.label||'Type into selected website field';
+     $('typingHint').textContent=focus.password
+       ? 'Password field selected. Enter credentials here; they stay in this browser session.'
+       : 'Type here to send text to the selected website field. Use Type + Enter to submit.';
+     if(document.activeElement!==input)input.focus({preventScroll:true});
+   }
+ }
+ if(r.final_url){
+   const nav=(r.events||[]).find(e=>['navigate','reload','back','forward','click_at','tap'].includes(e.type));
+   $('status').textContent=(nav&&nav.status?'HTTP '+nav.status+' · ':'')+r.final_url;
+   $('status').className='status ok';$('url').value=r.final_url;
+ }
+ if(typeof r.text==='string'&&r.text.trim())$('elements').textContent=JSON.stringify({title:r.title,final_url:r.final_url,text:r.text.slice(0,12000),links_count:(r.links||[]).length,events:r.events||[]},null,2);
+ if(r.elements)$('elements').textContent=JSON.stringify(r.elements,null,2);
+ if(r.tabs)$('elements').textContent=JSON.stringify(r.tabs,null,2);
+}
+let pointerStart=null,wheelX=0,wheelY=0,wheelTimer=null;
+function screenGeometry(img){
+ const rect=img.getBoundingClientRect(),nw=img.naturalWidth||viewportSize.width,nh=img.naturalHeight||viewportSize.height;
+ const scale=Math.min(rect.width/nw,rect.height/nh);
+ const contentWidth=nw*scale,contentHeight=nh*scale;
+ return {rect,nw,nh,contentWidth,contentHeight,offsetX:(rect.width-contentWidth)/2,offsetY:(rect.height-contentHeight)/2};
+}
+function screenPoint(e){
+ const g=screenGeometry(e.currentTarget);
+ const lx=e.clientX-g.rect.left-g.offsetX,ly=e.clientY-g.rect.top-g.offsetY;
+ return {x:lx/g.contentWidth*viewportSize.width,y:ly/g.contentHeight*viewportSize.height,
+   inside:lx>=0&&ly>=0&&lx<=g.contentWidth&&ly<=g.contentHeight,
+   scaleX:viewportSize.width/g.contentWidth,scaleY:viewportSize.height/g.contentHeight};
+}
+function screenPointerDown(e){
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ if(!e.isPrimary)return;
+ e.preventDefault();
+ pointerStart={id:e.pointerId,clientX:e.clientX,clientY:e.clientY,point:screenPoint(e)};
+ try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}
+}
+async function screenPointerUp(e){
+ if(!pointerStart||pointerStart.id!==e.pointerId)return;
+ const start=pointerStart;pointerStart=null;
+ const dx=e.clientX-start.clientX,dy=e.clientY-start.clientY;
+ if(Math.hypot(dx,dy)>9){
+   await interact([{type:'scroll',delta_x:-dx*start.point.scaleX,delta_y:-dy*start.point.scaleY}]);
+   return;
+ }
+ if(!start.point.inside)return;
+ await interact([{type:'click_at',x:start.point.x,y:start.point.y}]);
+}
+async function screenWheel(e){
+ e.preventDefault();
+ const p=screenPoint(e);wheelX+=e.deltaX*p.scaleX;wheelY+=e.deltaY*p.scaleY;
+ if(wheelTimer)clearTimeout(wheelTimer);
+ wheelTimer=setTimeout(async()=>{
+   const dx=wheelX,dy=wheelY;wheelX=0;wheelY=0;wheelTimer=null;
+   await interact([{type:'scroll',delta_x:dx,delta_y:dy}]);
+ },120);
+}
+async function interact(actions){
+ await runAndShow([...actions,{type:'wait',ms:350},{type:'extract'},{type:'inspect'},{type:'screenshot'}]);
+}
+async function sendRemoteText(pressEnter=false){
+ const input=$('remoteInput'),value=input.value;
+ if(!value&&!pressEnter)return;
+ input.value='';
+ const actions=[];
+ if(value)actions.push({type:'type_text',text:value});
+ if(pressEnter)actions.push({type:'press_key',key:'Enter'});
+ await interact(actions);
+}
+async function sendRemoteKey(key){
+ await interact([{type:'press_key',key}]);
+}
 function setError(e){$('status').textContent=e.message||String(e);$('status').className='status error'}
 function saveHistory(url){try{if(!url)return;const k='ucos_browser_history';const xs=JSON.parse(localStorage.getItem(k)||'[]');const next=[{url,at:new Date().toISOString()},...xs.filter(x=>x.url!==url)].slice(0,100);localStorage.setItem(k,JSON.stringify(next))}catch(e){}}
 async function runAndShow(actions){try{const x=await task(actions);show(x);if(x?.result?.final_url)saveHistory(x.result.final_url);return x}catch(e){setError(e);return null}}
-async function navigateAddress(){let url=$('url').value.trim();if(url&&!/^https?:\/\//i.test(url))url='https://'+url;$('url').value=url;await runAndShow([{type:'navigate',url},{type:'wait',ms:1000},{type:'extract'},{type:'inspect'},{type:'screenshot'}])}
+function resolveAddress(raw){
+ const value=String(raw||'').trim();
+ if(!value)throw Error('Enter a website address or search term.');
+ if(/^https?:\/\//i.test(value))return value;
+ const looksLikeHost=/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?(?:[/?#][^\s]*)?$/i.test(value)
+   || /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/.test(value);
+ return looksLikeHost?'https://'+value:'https://www.google.com/search?q='+encodeURIComponent(value);
+}
+async function navigateAddress(){let url;try{url=resolveAddress($('url').value)}catch(e){setError(e);return}$('url').value=url;let x=await runAndShow([{type:'navigate',url},{type:'wait',ms:1000},{type:'extract'},{type:'inspect'},{type:'screenshot'}]);const nav=x?.result?.events?.find(e=>e.type==='navigate');if(nav?.status===404){try{const u=new URL(url);if(['amazon.com','www.amazon.com'].includes(u.hostname)&&u.pathname.replace(/\/$/,'')==='/ap/signin'){ $('status').textContent='Amazon direct sign-in returned 404; retrying Amazon Home…';$('status').className='status';$('url').value='https://www.amazon.com/';await runAndShow([{type:'navigate',url:'https://www.amazon.com/'},{type:'wait',ms:1200},{type:'extract'},{type:'inspect'},{type:'screenshot'}]);}}catch(e){setError(e)}}}
 async function newTab(){await runAndShow([{type:'new_tab',url:$('url').value.trim()},{type:'wait',ms:1000},{type:'extract'},{type:'inspect'},{type:'screenshot'},{type:'list_tabs'}])}
 async function listTabs(){const x=await runAndShow([{type:'list_tabs'}]);if(x?.result?.tabs)$('elements').textContent=JSON.stringify(x.result.tabs,null,2)}
 async function switchTab(){await runAndShow([{type:'switch_tab',index:Number($('tabIndex').value)},{type:'inspect'},{type:'screenshot'},{type:'list_tabs'}])}
@@ -88,5 +203,6 @@ function showBookmarks(){const xs=JSON.parse(localStorage.getItem('ucos_browser_
 function showHistory(){const xs=JSON.parse(localStorage.getItem('ucos_browser_history')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
 function clearToken(){sessionStorage.removeItem(key);$('token').value='';$('status').textContent='Token cleared from this tab.';$('status').className='status'}
 $('url').addEventListener('keydown',e=>{if(e.key==='Enter')navigateAddress()});
+$('remoteInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendRemoteText(true)}});
 </script>
 </body></html>

@@ -32,3 +32,122 @@ def test_profile_ref_rejects_empty():
     from services.ucos_browser.server import _profile_ref
     with pytest.raises(ValueError):
         _profile_ref("")
+
+
+
+class _FakeBrowserMouse:
+    def __init__(self):
+        self.calls = []
+
+    def click(self, x, y):
+        self.calls.append(("click", x, y))
+
+    def wheel(self, delta_x, delta_y):
+        self.calls.append(("wheel", delta_x, delta_y))
+
+
+class _FakeBrowserKeyboard:
+    def __init__(self):
+        self.calls = []
+
+    def insert_text(self, value):
+        self.calls.append(("insert_text", value))
+
+    def press(self, key):
+        self.calls.append(("press", key))
+
+
+class _FakeBrowserPage:
+    url = "https://example.com/"
+    viewport_size = {"width": 640, "height": 480}
+
+    def __init__(self):
+        self.mouse = _FakeBrowserMouse()
+        self.keyboard = _FakeBrowserKeyboard()
+        self.focused = {
+            "editable": True,
+            "tag": "input",
+            "type": "text",
+            "password": False,
+            "placeholder": "Search",
+            "label": "q",
+        }
+
+    def evaluate(self, _script):
+        return dict(self.focused)
+
+    def wait_for_timeout(self, _ms):
+        return None
+
+    def screenshot(self, **_kwargs):
+        return b"png"
+
+    def set_default_timeout(self, _timeout):
+        return None
+
+
+def _patch_fake_browser(monkeypatch, page):
+    from services.ucos_browser import server
+
+    runtime = {
+        "page": page,
+        "last_used": 0,
+        "state_store_enabled": False,
+        "disk_persistent": False,
+        "persistent_profile": True,
+        "profile_persistence_backend": "neon_postgres",
+    }
+    monkeypatch.setattr(server, "_get_browser_runtime", lambda *_args: (runtime, False))
+    monkeypatch.setattr(server, "_assert_public_page", lambda _page: None)
+    return server
+
+
+def test_screen_click_uses_validated_viewport_coordinates(monkeypatch):
+    page = _FakeBrowserPage()
+    server = _patch_fake_browser(monkeypatch, page)
+
+    result = server.execute_task({
+        "profile_ref": "amazon-primary",
+        "url": "https://example.com/",
+        "actions": [
+            {"type": "click_at", "x": 120, "y": 80},
+            {"type": "screenshot"},
+        ],
+    })
+
+    assert page.mouse.calls == [("click", 120, 80)]
+    assert result["viewport"] == {"width": 640, "height": 480}
+    assert result["focused"]["editable"] is True
+    assert result["screenshot"] == b"png".hex()
+
+
+def test_screen_click_rejects_coordinates_outside_viewport(monkeypatch):
+    page = _FakeBrowserPage()
+    server = _patch_fake_browser(monkeypatch, page)
+
+    with pytest.raises(ValueError, match="within the 640x480 viewport"):
+        server.execute_task({
+            "profile_ref": "amazon-primary",
+            "url": "https://example.com/",
+            "actions": [{"type": "click_at", "x": 640, "y": 10}],
+        })
+
+
+def test_screen_interactions_scroll_type_and_press(monkeypatch):
+    page = _FakeBrowserPage()
+    server = _patch_fake_browser(monkeypatch, page)
+
+    result = server.execute_task({
+        "profile_ref": "amazon-primary",
+        "url": "https://example.com/",
+        "actions": [
+            {"type": "scroll", "delta_x": 0, "delta_y": 250},
+            {"type": "type_text", "text": "search terms"},
+            {"type": "press_key", "key": "Enter"},
+        ],
+    })
+
+    assert page.mouse.calls == [("wheel", 0, 250)]
+    assert page.keyboard.calls == [("insert_text", "search terms"), ("press", "Enter")]
+    assert [event["type"] for event in result["events"]] == ["scroll", "type_text", "press_key"]
+    assert result["events"][1]["length"] == len("search terms")

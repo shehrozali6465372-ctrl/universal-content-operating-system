@@ -11,6 +11,7 @@ import atexit
 import ipaddress
 import json
 import logging
+import math
 import os
 import socket
 import time
@@ -76,6 +77,31 @@ def validate_url(value: str) -> str:
 
 def _assert_public_page(page) -> None:
     validate_url(page.url)
+
+
+def _focused_element_state(page) -> dict:
+    """Return minimal focus metadata so the console can offer a safe typing proxy."""
+    return page.evaluate("""() => {
+        const e = document.activeElement;
+        const tag = (e?.tagName || '').toLowerCase();
+        const type = (e?.getAttribute('type') || '').toLowerCase();
+        const nonTextInputTypes = new Set([
+            'button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'hidden'
+        ]);
+        const editable = !!e && (
+            e.isContentEditable ||
+            tag === 'textarea' ||
+            (tag === 'input' && !nonTextInputTypes.has(type))
+        );
+        return {
+            editable,
+            tag,
+            type,
+            password: tag === 'input' && type === 'password',
+            placeholder: e?.getAttribute('placeholder') || '',
+            label: e?.getAttribute('aria-label') || e?.getAttribute('name') || ''
+        };
+    }""".strip())
 
 
 def _resolve_form_selector(page, selector: str):
@@ -362,6 +388,83 @@ def execute_task(task: dict) -> dict:
                 pages = [p for p in runtime["context"].pages if not p.is_closed()]
                 result["tabs"] = [{"index": i, "url": p.url, "title": p.title()[:160], "active": p == page} for i, p in enumerate(pages)]
                 result["events"].append({"type": "list_tabs", "count": len(pages)})
+            elif kind in {"click_at", "tap"}:
+                try:
+                    x = float(action.get("x"))
+                    y = float(action.get("y"))
+                except (TypeError, ValueError):
+                    raise ValueError("click_at requires numeric x and y viewport coordinates")
+                if not math.isfinite(x) or not math.isfinite(y):
+                    raise ValueError("click_at coordinates must be finite numbers")
+                viewport = page.viewport_size or page.evaluate(
+                    "() => ({width: window.innerWidth, height: window.innerHeight})"
+                )
+                width, height = int(viewport["width"]), int(viewport["height"])
+                if x < 0 or y < 0 or x >= width or y >= height:
+                    raise ValueError(
+                        f"click_at coordinates must be within the {width}x{height} viewport"
+                    )
+                page.mouse.click(x, y)
+                _assert_public_page(page)
+                result["viewport"] = {"width": width, "height": height}
+                result["focused"] = _focused_element_state(page)
+                result["events"].append({
+                    "type": "click_at", "x": round(x, 2), "y": round(y, 2)
+                })
+            elif kind == "scroll":
+                try:
+                    delta_x = float(action.get("delta_x", 0))
+                    delta_y = float(action.get("delta_y", 0))
+                except (TypeError, ValueError):
+                    raise ValueError("scroll requires numeric delta_x and delta_y")
+                if (
+                    not math.isfinite(delta_x) or not math.isfinite(delta_y)
+                    or abs(delta_x) > 5000 or abs(delta_y) > 5000
+                ):
+                    raise ValueError("scroll deltas must be finite and within +/-5000")
+                page.mouse.wheel(delta_x, delta_y)
+                page.wait_for_timeout(100)
+                _assert_public_page(page)
+                viewport = page.viewport_size or page.evaluate(
+                    "() => ({width: window.innerWidth, height: window.innerHeight})"
+                )
+                result["viewport"] = {
+                    "width": int(viewport["width"]), "height": int(viewport["height"])
+                }
+                result["focused"] = _focused_element_state(page)
+                result["events"].append({
+                    "type": "scroll",
+                    "delta_x": round(delta_x, 2),
+                    "delta_y": round(delta_y, 2)
+                })
+            elif kind == "type_text":
+                text_value = str(action.get("text", ""))
+                if len(text_value) > 10_000:
+                    raise ValueError("type_text text must be <= 10000 characters")
+                page.keyboard.insert_text(text_value)
+                _assert_public_page(page)
+                viewport = page.viewport_size or page.evaluate(
+                    "() => ({width: window.innerWidth, height: window.innerHeight})"
+                )
+                result["viewport"] = {
+                    "width": int(viewport["width"]), "height": int(viewport["height"])
+                }
+                result["focused"] = _focused_element_state(page)
+                result["events"].append({"type": "type_text", "length": len(text_value)})
+            elif kind == "press_key":
+                key_value = str(action.get("key", "")).strip()
+                if not key_value or len(key_value) > 100:
+                    raise ValueError("press_key requires a key name up to 100 characters")
+                page.keyboard.press(key_value)
+                _assert_public_page(page)
+                viewport = page.viewport_size or page.evaluate(
+                    "() => ({width: window.innerWidth, height: window.innerHeight})"
+                )
+                result["viewport"] = {
+                    "width": int(viewport["width"]), "height": int(viewport["height"])
+                }
+                result["focused"] = _focused_element_state(page)
+                result["events"].append({"type": "press_key", "key": key_value})
             elif kind == "click":
                 selector = str(action.get("selector", "")).strip()
                 if not selector or len(selector) > 500:
@@ -425,6 +528,12 @@ def execute_task(task: dict) -> dict:
                 result["text"] = page.locator(selector).first.inner_text(timeout=timeout)[:MAX_TEXT]
             elif kind == "screenshot":
                 result["screenshot"] = page.screenshot(type="png", full_page=False).hex()
+                viewport = page.viewport_size or page.evaluate(
+                    "() => ({width: window.innerWidth, height: window.innerHeight})"
+                )
+                result["viewport"] = {
+                    "width": int(viewport["width"]), "height": int(viewport["height"])
+                }
             else:
                 raise ValueError(f"unsupported browser action: {kind}")
 
