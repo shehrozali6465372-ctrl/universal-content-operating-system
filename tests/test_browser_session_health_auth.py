@@ -23,6 +23,30 @@ def _serve(monkeypatch):
     return server, thread, f"http://127.0.0.1:{server.server_port}"
 
 
+
+def test_browser_tasks_run_on_one_playwright_thread(monkeypatch):
+    observed_thread_ids = []
+    lock = threading.Lock()
+
+    def fake_browser_task(_payload):
+        with lock:
+            observed_thread_ids.append(threading.get_ident())
+        return {"ok": True, "thread_id": threading.get_ident()}
+
+    monkeypatch.setattr(browser_server, "_execute_task_on_browser_thread", fake_browser_task)
+
+    def invoke(_):
+        return browser_server.execute_task({"actions": []})["thread_id"]
+
+    with __import__("concurrent.futures").futures.ThreadPoolExecutor(max_workers=6) as callers:
+        results = list(callers.map(invoke, range(12)))
+
+    assert len(results) == 12
+    assert len(set(results)) == 1
+    assert results[0] != threading.get_ident()
+    assert len(set(observed_thread_ids)) == 1
+
+
 def test_session_health_requires_authentication(monkeypatch):
     server, thread, base_url = _serve(monkeypatch)
     try:
