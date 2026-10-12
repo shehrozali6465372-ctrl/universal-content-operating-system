@@ -19,8 +19,8 @@ import threading
 import re
 import uuid
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlsplit
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 try:
     from . import profile_persistence
@@ -77,6 +77,113 @@ def validate_url(value: str) -> str:
 
 def _assert_public_page(page) -> None:
     validate_url(page.url)
+
+
+_AMAZON_MARKETPLACE_DOMAINS = {
+    "amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.ca",
+    "amazon.co.jp", "amazon.in", "amazon.it", "amazon.es", "amazon.nl",
+    "amazon.se", "amazon.pl", "amazon.com.au", "amazon.com.br", "amazon.com.mx",
+    "amazon.com.be", "amazon.ae", "amazon.sa", "amazon.sg", "amazon.com.tr",
+    "amazon.eg",
+}
+
+
+def _is_amazon_affiliate_link(value: str) -> bool:
+    """Accept only HTTPS Amazon Associates links, not ordinary product URLs."""
+    try:
+        parsed = urlsplit(str(value or "").strip())
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme != "https" or not host:
+            return False
+        if host == "amzn.to":
+            return bool(parsed.path.strip("/"))
+        is_marketplace = any(
+            host == domain or host.endswith("." + domain)
+            for domain in _AMAZON_MARKETPLACE_DOMAINS
+        )
+        tags = parse_qs(parsed.query, keep_blank_values=False).get("tag", [])
+        return is_marketplace and any(str(tag).strip() for tag in tags)
+    except (TypeError, ValueError):
+        return False
+
+
+_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT = r"""
+(() => {
+  const host = String(location.hostname || '').toLowerCase();
+  const amazonMarketplaceDomains = [
+    'amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.fr', 'amazon.ca',
+    'amazon.co.jp', 'amazon.in', 'amazon.it', 'amazon.es', 'amazon.nl',
+    'amazon.se', 'amazon.pl', 'amazon.com.au', 'amazon.com.br', 'amazon.com.mx',
+    'amazon.com.be', 'amazon.ae', 'amazon.sa', 'amazon.sg', 'amazon.com.tr',
+    'amazon.eg'
+  ];
+  const amazonHost = host === 'amzn.to' || amazonMarketplaceDomains.some(
+    domain => host === domain || host.endsWith('.' + domain)
+  );
+  if (!amazonHost || window.__ucosAffiliateClipboardInstalled) return;
+  const state = { text: '', source: '', updatedAt: 0 };
+  Object.defineProperty(window, '__ucosAffiliateClipboardState', {
+    configurable: false, enumerable: false, value: state
+  });
+  Object.defineProperty(window, '__ucosAffiliateClipboardInstalled', {
+    configurable: false, enumerable: false, value: true
+  });
+  const remember = (value, source) => {
+    if (typeof value !== 'string') return;
+    const text = value.trim();
+    if (!text) return;
+    state.text = text;
+    state.source = source;
+    state.updatedAt = Date.now();
+  };
+  const shim = {
+    writeText: async value => { remember(String(value ?? ''), 'clipboard.writeText'); },
+    readText: async () => state.text,
+    write: async items => {
+      for (const item of (items || [])) {
+        try {
+          if (item && item.types && item.types.includes('text/plain')) {
+            const blob = await item.getType('text/plain');
+            remember(await blob.text(), 'clipboard.write');
+          }
+        } catch (_) {}
+      }
+    },
+    read: async () => []
+  };
+  try {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true, enumerable: true, value: shim
+    });
+  } catch (_) {
+    try {
+      Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true, value: shim.writeText
+      });
+    } catch (_) {}
+  }
+  try {
+    const originalExecCommand = Document.prototype.execCommand;
+    Document.prototype.execCommand = function(command, ...args) {
+      if (String(command).toLowerCase() === 'copy') {
+        let text = '';
+        const active = document.activeElement;
+        if (active && /^(INPUT|TEXTAREA)$/.test(active.tagName)) {
+          const value = String(active.value || '');
+          const start = active.selectionStart;
+          const end = active.selectionEnd;
+          text = Number.isInteger(start) && Number.isInteger(end) && end > start
+            ? value.slice(start, end) : value;
+        }
+        if (!text) text = String(window.getSelection ? window.getSelection() : '');
+        remember(text, 'document.execCommand');
+        return true;
+      }
+      return originalExecCommand.apply(this, [command, ...args]);
+    };
+  } catch (_) {}
+})();
+"""
 
 
 def _focused_element_state(page) -> dict:
@@ -283,6 +390,8 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
             )
             if saved_state:
                 profile_persistence.restore_storage_state(context, saved_state)
+            # Preserve storage-restoration ordering; clipboard capture is additive.
+            context.add_init_script(_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT)
             page = context.pages[0] if context.pages else context.new_page()
             page.set_default_timeout(timeout)
         except Exception:
@@ -539,6 +648,61 @@ def execute_task(task: dict) -> dict:
                     }))"""
                 )
                 result["links"] = hrefs
+            elif kind == "affiliate_link":
+                # The remote browser has no access to the user's phone clipboard.
+                # Capture clipboard writes made by Amazon's link generator, then
+                # return only a validated Amazon Associates URL to the local console.
+                candidate_script = """() => {
+                    const out = [];
+                    const state = window.__ucosAffiliateClipboardState;
+                    if (state && typeof state.text === 'string' && state.text.trim()) {
+                        out.push(state.text.trim());
+                    }
+                    const nodes = document.querySelectorAll(
+                        'input,textarea,[data-clipboard-text],[data-clipboard-url],a[href]'
+                    );
+                    for (const el of Array.from(nodes).slice(0, 1200)) {
+                        for (const value of [
+                            el.getAttribute('data-clipboard-text') || '',
+                            el.getAttribute('data-clipboard-url') || '',
+                            (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+                                ? el.value : '',
+                            el.href || ''
+                        ]) {
+                            if (value && out.length < 1200) out.push(String(value).trim());
+                        }
+                    }
+                    const selected = String(window.getSelection ? window.getSelection() : '').trim();
+                    if (selected) out.push(selected);
+                    return out;
+                }"""
+                candidates = []
+                frames = getattr(page, "frames", None)
+                candidate_frames = frames if isinstance(frames, (list, tuple)) and frames else [page]
+                for frame in candidate_frames:
+                    try:
+                        found = frame.evaluate(candidate_script)
+                        if isinstance(found, list):
+                            candidates.extend(found[:1200])
+                    except Exception:
+                        # A frame may navigate or be cross-origin/unavailable; other
+                        # frames and the top page are still eligible candidates.
+                        continue
+                affiliate_link = next(
+                    (
+                        candidate.strip()
+                        for candidate in candidates
+                        if isinstance(candidate, str) and _is_amazon_affiliate_link(candidate)
+                    ),
+                    None,
+                )
+                if not affiliate_link:
+                    raise ValueError(
+                        "No Amazon affiliate link detected. Open Amazon Associates SiteStripe, "
+                        "generate/copy the link there, then tap Capture affiliate link again."
+                    )
+                result["affiliate_link"] = affiliate_link
+                result["events"].append({"type": "affiliate_link_captured"})
             elif kind == "extract_selector":
                 selector = str(action.get("selector", "")).strip()
                 if not selector or len(selector) > 500:
@@ -643,7 +807,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_HEAD(self):
-        if self.path.rstrip("/") in {"", "/health"}:
+        if self.path.rstrip("/") in {"", "/health", "/readyz"}:
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -665,6 +829,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
+        if self.path.rstrip("/") == "/readyz":
+            # Public and dependency-light: Render can verify the HTTP server event
+            # loop is accepting requests without triggering browser/DB work.
+            self._send(200, {"status": "ok", "service": "ucos-personal-browser"})
+            return
         if self.path.startswith("/session/health"):
             if not _authorized(self.headers):
                 self._send(401, {"error": "authentication required"})
@@ -817,7 +986,7 @@ def main() -> None:
     if not os.getenv("UCOS_BROWSER_TOKEN", "").strip():
         raise RuntimeError("UCOS_BROWSER_TOKEN is required")
     _run_profile_persistence_startup_self_test()
-    server = HTTPServer(("0.0.0.0", port), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     LOG.info("UCOS Personal Browser listening on 0.0.0.0:%s", port)
     server.serve_forever()
 
