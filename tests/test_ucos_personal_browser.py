@@ -1,10 +1,37 @@
 import pytest
 
-from services.ucos_browser.server import _is_amazon_affiliate_link, validate_url
+from services.ucos_browser.server import (
+    _AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT,
+    _is_amazon_affiliate_link,
+    validate_url,
+)
 
 
 def test_public_https_url_allowed():
     assert validate_url("https://example.com/path") == "https://example.com/path"
+
+def test_clipboard_capture_script_intercepts_site_stripe_copy_in_chromium():
+    from playwright.sync_api import sync_playwright
+
+    affiliate_url = "https://www.amazon.com/dp/B012345678?tag=ci-store-20&linkCode=ogi"
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+        try:
+            page = browser.new_page()
+            page.add_init_script(_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT)
+            page.goto("data:text/html,<html><body><input id='link' value='test'></body></html>")
+            page.evaluate(
+                """async url => {
+                    await navigator.clipboard.writeText(url);
+                    return window.__ucosAffiliateClipboardState?.text || '';
+                }""",
+                affiliate_url,
+            )
+            captured = page.evaluate("window.__ucosAffiliateClipboardState.text")
+            assert captured == affiliate_url
+        finally:
+            browser.close()
+
 
 def test_affiliate_link_validator_preserves_only_real_amazon_affiliate_urls():
     tagged = "https://www.amazon.com/dp/B012345678?tag=my-store-20&linkCode=ogi"
