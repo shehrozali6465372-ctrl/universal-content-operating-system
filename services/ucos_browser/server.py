@@ -377,9 +377,10 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
                 ignore_https_errors=False,
                 accept_downloads=False,
             )
-            context.add_init_script(_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT)
             if saved_state:
                 profile_persistence.restore_storage_state(context, saved_state)
+            # Preserve storage-restoration ordering; clipboard capture is additive.
+            context.add_init_script(_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT)
             page = context.pages[0] if context.pages else context.new_page()
             page.set_default_timeout(timeout)
         except Exception:
