@@ -23,13 +23,14 @@ jobs:
       - name: Verify public browser worker console
         run: |
           set -euo pipefail
-          for i in {1..6}; do
-            code="$(curl --max-time 20 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
+          # Render can take over a minute to replace the running instance after a main-branch deploy.
+          for i in {1..18}; do
+            code="$(curl --max-time 10 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
             if [ "$code" = "200" ] && grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html; then
               echo "BROWSER_PUBLIC_CONSOLE=PASS"
               break
             fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-console.html || true; echo "BROWSER_PUBLIC_CONSOLE=FAIL"; exit 1; }
+            [ "$i" -eq 18 ] && { cat /tmp/browser-console.html || true; echo "BROWSER_PUBLIC_CONSOLE=FAIL"; exit 1; }
             sleep 10
           done
 
