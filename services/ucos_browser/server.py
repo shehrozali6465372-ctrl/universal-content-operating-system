@@ -640,7 +640,7 @@ def execute_task(task: dict) -> dict:
                 # The remote browser has no access to the user's phone clipboard.
                 # Capture clipboard writes made by Amazon's link generator, then
                 # return only a validated Amazon Associates URL to the local console.
-                candidates = page.evaluate("""() => {
+                candidate_script = """() => {
                     const out = [];
                     const state = window.__ucosAffiliateClipboardState;
                     if (state && typeof state.text === 'string' && state.text.trim()) {
@@ -663,9 +663,19 @@ def execute_task(task: dict) -> dict:
                     const selected = String(window.getSelection ? window.getSelection() : '').trim();
                     if (selected) out.push(selected);
                     return out;
-                }""")
-                if not isinstance(candidates, list):
-                    candidates = []
+                }"""
+                candidates = []
+                frames = getattr(page, "frames", None)
+                candidate_frames = frames if isinstance(frames, (list, tuple)) and frames else [page]
+                for frame in candidate_frames:
+                    try:
+                        found = frame.evaluate(candidate_script)
+                        if isinstance(found, list):
+                            candidates.extend(found[:1200])
+                    except Exception:
+                        # A frame may navigate or be cross-origin/unavailable; other
+                        # frames and the top page are still eligible candidates.
+                        continue
                 affiliate_link = next(
                     (
                         candidate.strip()
