@@ -1,10 +1,58 @@
 import pytest
 
-from services.ucos_browser.server import validate_url
+from services.ucos_browser.server import _is_amazon_affiliate_link, validate_url
 
 
 def test_public_https_url_allowed():
     assert validate_url("https://example.com/path") == "https://example.com/path"
+
+def test_affiliate_link_validator_preserves_only_real_amazon_affiliate_urls():
+    tagged = "https://www.amazon.com/dp/B012345678?tag=my-store-20&linkCode=ogi"
+    short = "https://amzn.to/abc123"
+    assert _is_amazon_affiliate_link(tagged)
+    assert _is_amazon_affiliate_link(short)
+    assert not _is_amazon_affiliate_link("https://www.amazon.com/dp/B012345678")
+    assert not _is_amazon_affiliate_link("https://amazon.com.attacker.example/dp/B012345678?tag=x-20")
+    assert not _is_amazon_affiliate_link("http://www.amazon.com/dp/B012345678?tag=my-store-20")
+    assert not _is_amazon_affiliate_link("https://example.com/?tag=my-store-20")
+
+
+def test_affiliate_link_action_returns_exact_site_stripe_url(monkeypatch):
+    url = "https://www.amazon.com/dp/B012345678?tag=my-store-20&linkCode=ogi&th=1"
+
+    class AffiliatePage(_FakeBrowserPage):
+        def evaluate(self, script):
+            if "__ucosAffiliateClipboardState" in script:
+                return [url]
+            return dict(self.focused)
+
+    page = AffiliatePage()
+    server = _patch_fake_browser(monkeypatch, page)
+    result = server.execute_task({
+        "profile_ref": "amazon-primary",
+        "url": "https://www.amazon.com/",
+        "actions": [{"type": "affiliate_link"}],
+    })
+    assert result["affiliate_link"] == url
+    assert result["events"] == [{"type": "affiliate_link_captured"}]
+
+
+def test_affiliate_link_action_rejects_plain_product_url(monkeypatch):
+    class PlainProductPage(_FakeBrowserPage):
+        def evaluate(self, script):
+            if "__ucosAffiliateClipboardState" in script:
+                return ["https://www.amazon.com/dp/B012345678"]
+            return dict(self.focused)
+
+    page = PlainProductPage()
+    server = _patch_fake_browser(monkeypatch, page)
+    with pytest.raises(ValueError, match="No Amazon affiliate link detected"):
+        server.execute_task({
+            "profile_ref": "amazon-primary",
+            "url": "https://www.amazon.com/",
+            "actions": [{"type": "affiliate_link"}],
+        })
+
 
 
 def test_non_http_scheme_rejected():
