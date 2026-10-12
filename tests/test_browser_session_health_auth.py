@@ -7,7 +7,6 @@ from pathlib import Path
 import threading
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from http.server import ThreadingHTTPServer
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "services" / "ucos_browser" / "server.py"
@@ -18,7 +17,7 @@ SPEC.loader.exec_module(browser_server)
 
 def _serve(monkeypatch):
     monkeypatch.setenv("UCOS_BROWSER_TOKEN", "test-token")
-    server = ThreadingHTTPServer(("127.0.0.1", 0), browser_server.Handler)
+    server = browser_server.ThreadingHTTPServer(("127.0.0.1", 0), browser_server.Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, f"http://127.0.0.1:{server.server_port}"
