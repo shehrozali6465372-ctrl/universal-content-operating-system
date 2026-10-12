@@ -151,3 +151,32 @@ def test_screen_interactions_scroll_type_and_press(monkeypatch):
     assert page.keyboard.calls == [("insert_text", "search terms"), ("press", "Enter")]
     assert [event["type"] for event in result["events"]] == ["scroll", "type_text", "press_key"]
     assert result["events"][1]["length"] == len("search terms")
+
+
+
+def test_navigation_during_focus_read_does_not_fail_click(monkeypatch):
+    class NavigatingPage(_FakeBrowserPage):
+        def evaluate(self, _script):
+            raise RuntimeError(
+                "Execution context was destroyed, most likely because of a navigation"
+            )
+
+    page = NavigatingPage()
+    server = _patch_fake_browser(monkeypatch, page)
+
+    result = server.execute_task({
+        "profile_ref": "amazon-primary",
+        "url": "https://example.com/",
+        "actions": [
+            {"type": "click_at", "x": 200, "y": 120},
+            {"type": "screenshot"},
+        ],
+    })
+
+    # The actual click and screenshot must still succeed even if optional focus
+    # metadata cannot be read during a page navigation.
+    assert page.mouse.calls == [("click", 200, 120)]
+    assert result["events"][0]["type"] == "click_at"
+    assert result["focused"]["editable"] is False
+    assert result["focused"]["unavailable"] is True
+    assert result["screenshot"] == b"png".hex()

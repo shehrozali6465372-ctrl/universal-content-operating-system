@@ -80,28 +80,46 @@ def _assert_public_page(page) -> None:
 
 
 def _focused_element_state(page) -> dict:
-    """Return minimal focus metadata so the console can offer a safe typing proxy."""
-    return page.evaluate("""() => {
-        const e = document.activeElement;
-        const tag = (e?.tagName || '').toLowerCase();
-        const type = (e?.getAttribute('type') || '').toLowerCase();
-        const nonTextInputTypes = new Set([
-            'button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'hidden'
-        ]);
-        const editable = !!e && (
-            e.isContentEditable ||
-            tag === 'textarea' ||
-            (tag === 'input' && !nonTextInputTypes.has(type))
-        );
+    """Return best-effort focus metadata without failing a successful navigation click."""
+    try:
+        return page.evaluate("""() => {
+            const e = document.activeElement;
+            const tag = (e?.tagName || '').toLowerCase();
+            const type = (e?.getAttribute('type') || '').toLowerCase();
+            const nonTextInputTypes = new Set([
+                'button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'hidden'
+            ]);
+            const editable = !!e && (
+                e.isContentEditable ||
+                tag === 'textarea' ||
+                (tag === 'input' && !nonTextInputTypes.has(type))
+            );
+            return {
+                editable,
+                tag,
+                type,
+                password: tag === 'input' && type === 'password',
+                placeholder: e?.getAttribute('placeholder') || '',
+                label: e?.getAttribute('aria-label') || e?.getAttribute('name') || ''
+            };
+        }""".strip())
+    except Exception as exc:
+        # A click or Enter may navigate and destroy the old execution context.
+        # Focus details only drive the optional typing panel; they must not
+        # turn a completed click/navigation into a failed browser task.
+        LOG.debug(
+            "browser focus metadata unavailable after page transition (%s)",
+            type(exc).__name__,
+        )
         return {
-            editable,
-            tag,
-            type,
-            password: tag === 'input' && type === 'password',
-            placeholder: e?.getAttribute('placeholder') || '',
-            label: e?.getAttribute('aria-label') || e?.getAttribute('name') || ''
-        };
-    }""".strip())
+            "editable": False,
+            "tag": "",
+            "type": "",
+            "password": False,
+            "placeholder": "",
+            "label": "",
+            "unavailable": True,
+        }
 
 
 def _resolve_form_selector(page, selector: str):
