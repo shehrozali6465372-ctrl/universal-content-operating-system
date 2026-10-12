@@ -110,6 +110,7 @@ def test_profile_dir_marks_ephemeral_fallback_non_persistent(monkeypatch):
 
 
 def test_durable_profile_uses_encrypted_postgres_when_local_mount_is_unwritable(monkeypatch, caplog):
+    monkeypatch.setattr(browser_server, "LOG", logging.getLogger("test"))
     monkeypatch.delenv("UCOS_BROWSER_PROFILE_DIR", raising=False)
     monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
     monkeypatch.setattr(browser_server.profile_persistence, "is_configured", lambda: True)
