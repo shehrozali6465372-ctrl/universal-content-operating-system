@@ -196,10 +196,8 @@ function syncRemoteTyping(pressEnter=false){
    const x=await task([...actions,{type:'screenshot'}]);
    remoteTypingSent=value;
    show(x);
-   if(pressEnter){
-     // If the website navigated to a new input, show() resets the local buffer for the new focus.
-     if(remoteFocusKey && $('remoteInput').value===value){$('remoteInput').value='';remoteTypingSent='';}
-   }
+   // When Enter submits and moves focus to a new field, show() resets the buffer.
+   // If the site keeps focus in the same field, retain the local buffer to avoid retyping duplicates.
  });
  remoteTypingQueue=run;
  run.catch(setError);
