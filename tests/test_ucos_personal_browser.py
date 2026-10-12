@@ -19,7 +19,15 @@ def test_clipboard_capture_script_intercepts_site_stripe_copy_in_chromium():
         try:
             page = browser.new_page()
             page.add_init_script(_AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT)
-            page.goto("data:text/html,<html><body><input id='link' value='test'></body></html>")
+            page.route(
+                "https://www.amazon.com/**",
+                lambda route: route.fulfill(
+                    status=200,
+                    content_type="text/html",
+                    body="<html><body><input id='link' value='test'></body></html>",
+                ),
+            )
+            page.goto("https://www.amazon.com/")
             page.evaluate(
                 """async url => {
                     await navigator.clipboard.writeText(url);
