@@ -44,7 +44,7 @@ details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summar
   <div class="remote-typing" id="remoteTyping" hidden>
     <label for="remoteInput">Type into the selected website field</label>
     <div class="remote-type-row">
-      <input id="remoteInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tap a field in the page, then type here">
+      <input id="remoteInput" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tap a field in the page, then type here">
       <button onclick="sendRemoteText(false)">Type</button>
       <button class="primary" onclick="sendRemoteText(true)">Type + Enter</button>
       <button onclick="sendRemoteKey('Tab')">Tab</button>
@@ -116,8 +116,11 @@ function show(x){
      if(remoteFocusKey!==focusKey){
        remoteFocusKey=focusKey;
        remoteTypingSent='';
-       input.value='';
+       // A mobile tap primes this local input before the remote click request
+       // completes, so do not erase text the user has already started typing.
+       if(!remoteFocusPending)input.value='';
      }
+     remoteFocusPending=false;
      const desiredType=focus.password?'password':'text';
      if(input.type!==desiredType)input.type=desiredType;
      input.placeholder=focus.placeholder||focus.label||'Type into selected website field';
@@ -139,7 +142,7 @@ function show(x){
  if(r.tabs)$('elements').textContent=JSON.stringify(r.tabs,null,2);
 }
 let pointerStart=null,wheelX=0,wheelY=0,wheelTimer=null;
-let remoteFocusKey='',remoteTypingSent='',remoteTypingTimer=null;
+let remoteFocusKey='',remoteTypingSent='',remoteTypingTimer=null,remoteFocusPending=false;
 let remoteTypingQueue=Promise.resolve();
 function screenGeometry(img){
  const rect=img.getBoundingClientRect(),nw=img.naturalWidth||viewportSize.width,nh=img.naturalHeight||viewportSize.height;
@@ -170,6 +173,17 @@ async function screenPointerUp(e){
    return;
  }
  if(!start.point.inside)return;
+ // A screenshot is only an image; tapping a remote input cannot invoke Android's
+ // native keyboard by itself. Focus the local bridge synchronously in the same
+ // touch gesture, before awaiting the network round-trip to Playwright.
+ if(e.pointerType==='touch'||e.pointerType==='pen'){
+   const input=$('remoteInput');
+   $('remoteTyping').hidden=false;
+   input.value='';
+   remoteTypingSent='';
+   remoteFocusPending=true;
+   input.focus({preventScroll:true});
+ }
  await interact([{type:'click_at',x:start.point.x,y:start.point.y}]);
 }
 async function screenWheel(e){
