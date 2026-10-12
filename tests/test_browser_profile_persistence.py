@@ -238,12 +238,12 @@ def test_startup_self_test_failure_stops_service_when_durability_required(monkey
         browser_server._run_profile_persistence_startup_self_test()
 
 
-def test_startup_self_test_is_opt_in(monkeypatch):
+def test_startup_self_test_is_opt_in_when_durability_is_not_required(monkeypatch):
     monkeypatch.delenv("UCOS_BROWSER_SESSION_SELF_TEST", raising=False)
-    monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
+    monkeypatch.delenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", raising=False)
 
     def should_not_run():
-        raise AssertionError("self-test must remain opt-in")
+        raise AssertionError("self-test must remain opt-in outside durable-required mode")
 
     monkeypatch.setattr(browser_server.profile_persistence, "self_test", should_not_run)
     browser_server._run_profile_persistence_startup_self_test()

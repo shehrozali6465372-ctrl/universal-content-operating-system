@@ -628,20 +628,60 @@ def _env_enabled(name: str) -> bool:
 
 
 def _run_profile_persistence_startup_self_test() -> None:
-    if not _env_enabled("UCOS_BROWSER_SESSION_SELF_TEST"):
+    durable_required = profile_persistence.durable_required()
+    run_self_test = _env_enabled("UCOS_BROWSER_SESSION_SELF_TEST")
+
+    if run_self_test:
+        try:
+            profile_persistence.self_test()
+            LOG.info("UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=PASS backend=encrypted_postgres")
+        except Exception as exc:
+            LOG.error(
+                "UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=FAIL error_type=%s",
+                type(exc).__name__,
+            )
+            if durable_required:
+                raise RuntimeError(
+                    "durable browser profile storage is required but its startup self-test failed"
+                ) from exc
+
+    if not durable_required:
         return
+
+    # The generic self-test proves the DB/key pair can round-trip a fresh snapshot.
+    # Validate the real named profile too, without logging cookies, localStorage values,
+    # or any other session content. This catches encryption-key drift after redeploys.
+    profile_ref = _profile_ref(
+        os.getenv("UCOS_BROWSER_PERSISTENCE_CHECK_PROFILE", "amazon-primary")
+    )
     try:
-        profile_persistence.self_test()
-        LOG.info("UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=PASS backend=encrypted_postgres")
+        saved_state = profile_persistence.load_profile_state(profile_ref)
     except Exception as exc:
         LOG.error(
-            "UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=FAIL error_type=%s",
+            "UCOS_BROWSER_PERSISTENCE_STARTUP_VALIDATION=FAIL profile_ref=%s error_type=%s",
+            profile_ref,
             type(exc).__name__,
         )
-        if profile_persistence.durable_required():
-            raise RuntimeError(
-                "durable browser profile storage is required but its startup self-test failed"
-            ) from exc
+        raise RuntimeError(
+            "durable browser profile storage is required but the saved profile could not be validated"
+        ) from exc
+
+    if saved_state is None:
+        LOG.info(
+            "UCOS_BROWSER_EXISTING_PROFILE_SNAPSHOT=NOT_FOUND profile_ref=%s",
+            profile_ref,
+        )
+        return
+
+    cookies = saved_state.get("cookies", [])
+    origins = saved_state.get("origins", [])
+    LOG.info(
+        "UCOS_BROWSER_EXISTING_PROFILE_SNAPSHOT=DECRYPTABLE profile_ref=%s "
+        "cookie_count=%d origin_count=%d",
+        profile_ref,
+        len(cookies) if isinstance(cookies, list) else 0,
+        len(origins) if isinstance(origins, list) else 0,
+    )
 
 
 def main() -> None:

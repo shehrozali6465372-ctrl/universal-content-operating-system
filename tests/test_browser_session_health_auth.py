@@ -155,3 +155,55 @@ def test_session_health_does_not_treat_ephemeral_profile_files_as_durable(monkey
         server.server_close()
         thread.join(timeout=3)
 
+def test_startup_validation_decrypts_existing_profile_without_logging_session_values(monkeypatch, caplog):
+    monkeypatch.setenv("UCOS_BROWSER_SESSION_SELF_TEST", "true")
+    monkeypatch.setattr(browser_server.profile_persistence, "durable_required", lambda: True)
+    monkeypatch.setattr(browser_server.profile_persistence, "self_test", lambda: True)
+    monkeypatch.setattr(
+        browser_server.profile_persistence,
+        "load_profile_state",
+        lambda profile_ref: {
+            "cookies": [{"name": "session-cookie-secret", "value": "must-not-be-logged"}],
+            "origins": [
+                {
+                    "origin": "https://example.com",
+                    "localStorage": [
+                        {"name": "private-key", "value": "must-not-be-logged"}
+                    ],
+                }
+            ],
+        },
+    )
+
+    with caplog.at_level(logging.INFO, logger="ucos.browser"):
+        browser_server._run_profile_persistence_startup_self_test()
+
+    assert "UCOS_BROWSER_SESSION_PERSISTENCE_SELF_TEST=PASS" in caplog.text
+    assert "UCOS_BROWSER_EXISTING_PROFILE_SNAPSHOT=DECRYPTABLE" in caplog.text
+    assert "profile_ref=amazon-primary" in caplog.text
+    assert "cookie_count=1 origin_count=1" in caplog.text
+    assert "must-not-be-logged" not in caplog.text
+    assert "session-cookie-secret" not in caplog.text
+
+
+def test_startup_validation_fails_closed_when_saved_profile_cannot_be_decrypted(monkeypatch, caplog):
+    monkeypatch.setenv("UCOS_BROWSER_SESSION_SELF_TEST", "true")
+    monkeypatch.setattr(browser_server.profile_persistence, "durable_required", lambda: True)
+    monkeypatch.setattr(browser_server.profile_persistence, "self_test", lambda: True)
+
+    def fail_to_load(_profile_ref):
+        raise RuntimeError("ciphertext unavailable")
+
+    monkeypatch.setattr(browser_server.profile_persistence, "load_profile_state", fail_to_load)
+
+    with caplog.at_level(logging.ERROR, logger="ucos.browser"):
+        try:
+            browser_server._run_profile_persistence_startup_self_test()
+        except RuntimeError as exc:
+            assert "saved profile could not be validated" in str(exc)
+        else:
+            raise AssertionError("required durable mode must fail closed on unreadable saved state")
+
+    assert "UCOS_BROWSER_PERSISTENCE_STARTUP_VALIDATION=FAIL" in caplog.text
+    assert "ciphertext unavailable" not in caplog.text
+
