@@ -101,13 +101,21 @@ function show(x){
    $('remoteTyping').hidden=!focus.editable;
    if(focus.editable){
      const input=$('remoteInput');
+     const focusKey=[focus.tag,focus.type,focus.password,focus.label,focus.placeholder].join('|');
+     if(remoteFocusKey!==focusKey){
+       remoteFocusKey=focusKey;
+       remoteTypingSent='';
+       input.value='';
+     }
      const desiredType=focus.password?'password':'text';
      if(input.type!==desiredType)input.type=desiredType;
      input.placeholder=focus.placeholder||focus.label||'Type into selected website field';
      $('typingHint').textContent=focus.password
-       ? 'Password field selected. Enter credentials here; they stay in this browser session.'
-       : 'Type here to send text to the selected website field. Use Type + Enter to submit.';
+       ? 'Password field selected. Type normally; keystrokes sync to the remote page automatically.'
+       : 'Selected website field is active. Type normally; text syncs automatically. No need to press Type.';
      if(document.activeElement!==input)input.focus({preventScroll:true});
+   }else{
+     remoteFocusKey='';
    }
  }
  if(r.final_url){
@@ -120,6 +128,8 @@ function show(x){
  if(r.tabs)$('elements').textContent=JSON.stringify(r.tabs,null,2);
 }
 let pointerStart=null,wheelX=0,wheelY=0,wheelTimer=null;
+let remoteFocusKey='',remoteTypingSent='',remoteTypingTimer=null;
+let remoteTypingQueue=Promise.resolve();
 function screenGeometry(img){
  const rect=img.getBoundingClientRect(),nw=img.naturalWidth||viewportSize.width,nh=img.naturalHeight||viewportSize.height;
  const scale=Math.min(rect.width/nw,rect.height/nh);
@@ -161,16 +171,40 @@ async function screenWheel(e){
  },120);
 }
 async function interact(actions){
- await runAndShow([...actions,{type:'wait',ms:350},{type:'extract'},{type:'inspect'},{type:'screenshot'}]);
+ // Screen input only needs an updated image; extracting the whole document adds noticeable latency.
+ await runAndShow([...actions,{type:'wait',ms:100},{type:'screenshot'}]);
+}
+function scheduleRemoteTyping(){
+ if(remoteTypingTimer)clearTimeout(remoteTypingTimer);
+ remoteTypingTimer=setTimeout(()=>{remoteTypingTimer=null;syncRemoteTyping(false)},140);
+}
+function syncRemoteTyping(pressEnter=false){
+ if(remoteTypingTimer){clearTimeout(remoteTypingTimer);remoteTypingTimer=null}
+ const run=remoteTypingQueue.catch(()=>{}).then(async()=>{
+   const input=$('remoteInput'),value=input.value,sent=remoteTypingSent;
+   const actions=[];
+   if(value.startsWith(sent)){
+     const suffix=value.slice(sent.length);
+     if(suffix)actions.push({type:'type_text',text:suffix});
+   }else{
+     // For edits/backspaces, replace the selected remote field with the current local input value.
+     actions.push({type:'press_key',key:'Control+A'},{type:'press_key',key:'Backspace'});
+     if(value)actions.push({type:'type_text',text:value});
+   }
+   if(pressEnter)actions.push({type:'press_key',key:'Enter'});
+   if(!actions.length)return;
+   const x=await task([...actions,{type:'screenshot'}]);
+   remoteTypingSent=value;
+   show(x);
+   // When Enter submits and moves focus to a new field, show() resets the buffer.
+   // If the site keeps focus in the same field, retain the local buffer to avoid retyping duplicates.
+ });
+ remoteTypingQueue=run;
+ run.catch(setError);
+ return run;
 }
 async function sendRemoteText(pressEnter=false){
- const input=$('remoteInput'),value=input.value;
- if(!value&&!pressEnter)return;
- input.value='';
- const actions=[];
- if(value)actions.push({type:'type_text',text:value});
- if(pressEnter)actions.push({type:'press_key',key:'Enter'});
- await interact(actions);
+ await syncRemoteTyping(pressEnter);
 }
 async function sendRemoteKey(key){
  await interact([{type:'press_key',key}]);
@@ -203,6 +237,7 @@ function showBookmarks(){const xs=JSON.parse(localStorage.getItem('ucos_browser_
 function showHistory(){const xs=JSON.parse(localStorage.getItem('ucos_browser_history')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
 function clearToken(){sessionStorage.removeItem(key);$('token').value='';$('status').textContent='Token cleared from this tab.';$('status').className='status'}
 $('url').addEventListener('keydown',e=>{if(e.key==='Enter')navigateAddress()});
+$('remoteInput').addEventListener('input',scheduleRemoteTyping);
 $('remoteInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendRemoteText(true)}});
 </script>
 </body></html>
