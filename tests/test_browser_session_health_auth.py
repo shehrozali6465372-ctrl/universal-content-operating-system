@@ -7,7 +7,7 @@ from pathlib import Path
 import threading
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "services" / "ucos_browser" / "server.py"
@@ -18,7 +18,7 @@ SPEC.loader.exec_module(browser_server)
 
 def _serve(monkeypatch):
     monkeypatch.setenv("UCOS_BROWSER_TOKEN", "test-token")
-    server = HTTPServer(("127.0.0.1", 0), browser_server.Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), browser_server.Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, f"http://127.0.0.1:{server.server_port}"
@@ -184,6 +184,72 @@ def test_startup_validation_decrypts_existing_profile_without_logging_session_va
     assert "cookie_count=1 origin_count=1" in caplog.text
     assert "must-not-be-logged" not in caplog.text
     assert "session-cookie-secret" not in caplog.text
+
+def test_public_readyz_is_lightweight_and_does_not_require_token(monkeypatch):
+    server, thread, base_url = _serve(monkeypatch)
+    try:
+        with urlopen(base_url + "/readyz", timeout=2) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        assert payload == {"status": "ok", "service": "ucos-personal-browser"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_readyz_responds_while_browser_execute_is_busy(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("UCOS_BROWSER_STATE_DATABASE_URL", raising=False)
+    server, thread, base_url = _serve(monkeypatch)
+    execute_started = threading.Event()
+    allow_execute_finish = threading.Event()
+    post_results = []
+
+    def slow_execute(_payload):
+        execute_started.set()
+        if not allow_execute_finish.wait(timeout=4):
+            raise RuntimeError("test execution timed out")
+        return {"final_url": "https://example.com/", "persistent_profile": True}
+
+    def post_execute():
+        body = json.dumps({
+            "profile_ref": "account-1",
+            "url": "https://example.com/",
+            "actions": [{"type": "screenshot"}],
+        }).encode("utf-8")
+        request = Request(
+            base_url + "/execute",
+            data=body,
+            headers={
+                "Authorization": "Bearer test-token",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=4) as response:
+                post_results.append(response.status)
+        except Exception as exc:
+            post_results.append(type(exc).__name__)
+
+    monkeypatch.setattr(browser_server, "execute_task", slow_execute)
+    request_thread = threading.Thread(target=post_execute, daemon=True)
+    try:
+        request_thread.start()
+        assert execute_started.wait(timeout=2), "execute request did not start"
+        # This GET must be handled in a separate HTTP thread even while the
+        # single Playwright worker slot is occupied by the simulated long task.
+        with urlopen(base_url + "/readyz", timeout=2) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert payload["status"] == "ok"
+    finally:
+        allow_execute_finish.set()
+        request_thread.join(timeout=4)
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+    assert post_results == [200]
 
 
 def test_startup_validation_fails_closed_when_saved_profile_cannot_be_decrypted(monkeypatch, caplog):
