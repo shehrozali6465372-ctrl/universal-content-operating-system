@@ -658,7 +658,7 @@ def _run_profile_persistence_startup_self_test() -> None:
         saved_state = profile_persistence.load_profile_state(profile_ref)
     except Exception as exc:
         LOG.error(
-            "UCOS_BROWSER_EXISTING_PROFILE_SNAPSHOT=FAIL profile_ref=%s error_type=%s",
+            "UCOS_BROWSER_PERSISTENCE_STARTUP_VALIDATION=FAIL profile_ref=%s error_type=%s",
             profile_ref,
             type(exc).__name__,
         )
