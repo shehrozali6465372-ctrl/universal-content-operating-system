@@ -110,8 +110,16 @@ def _is_amazon_affiliate_link(value: str) -> bool:
 _AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT = r"""
 (() => {
   const host = String(location.hostname || '').toLowerCase();
-  const amazonHost = /^(?:[a-z0-9-]+\\.)*amazon\\.(?:com|co\\.uk|de|fr|ca|co\\.jp|in|it|es|nl|se|pl|com\\.au|com\\.br|com\\.mx|com\\.be|ae|sa|sg|com\\.tr|eg)$/.test(host)
-    || host === 'amzn.to';
+  const amazonMarketplaceDomains = [
+    'amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.fr', 'amazon.ca',
+    'amazon.co.jp', 'amazon.in', 'amazon.it', 'amazon.es', 'amazon.nl',
+    'amazon.se', 'amazon.pl', 'amazon.com.au', 'amazon.com.br', 'amazon.com.mx',
+    'amazon.com.be', 'amazon.ae', 'amazon.sa', 'amazon.sg', 'amazon.com.tr',
+    'amazon.eg'
+  ];
+  const amazonHost = host === 'amzn.to' || amazonMarketplaceDomains.some(
+    domain => host === domain || host.endsWith('.' + domain)
+  );
   if (!amazonHost || window.__ucosAffiliateClipboardInstalled) return;
   const state = { text: '', source: '', updatedAt: 0 };
   Object.defineProperty(window, '__ucosAffiliateClipboardState', {
