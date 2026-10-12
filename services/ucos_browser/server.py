@@ -162,7 +162,19 @@ def _profile_dir(profile_ref: str) -> tuple[str, bool]:
             ) from exc
         fallback = Path("/tmp/ucos-browser/profiles") / _profile_ref(profile_ref)
         fallback.mkdir(parents=True, exist_ok=True)
-        LOG.warning("browser profile storage %s is not writable; using ephemeral fallback %s", root, fallback)
+        if state_store_configured:
+            LOG.info(
+                "local Chromium profile path %s is not writable; using ephemeral runtime profile %s "
+                "with encrypted Postgres session snapshots",
+                root,
+                fallback,
+            )
+        else:
+            LOG.warning(
+                "browser profile storage %s is not writable; using ephemeral fallback %s",
+                root,
+                fallback,
+            )
         return str(fallback), False
 
 
@@ -535,7 +547,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 profile_ref = _profile_ref(query.get("profile_ref", ["default"])[0])
                 path, disk_persistent = _profile_dir(profile_ref)
-                has_disk_state = any(Path(path).iterdir())
+                # Chromium scratch files are not evidence of durable profile initialization.
+                has_disk_state = disk_persistent and any(Path(path).iterdir())
                 state_store_enabled = profile_persistence.is_configured()
                 has_saved_state = (
                     profile_persistence.has_profile_state(profile_ref) if state_store_enabled else False

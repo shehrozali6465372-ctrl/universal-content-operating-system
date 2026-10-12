@@ -1,5 +1,6 @@
 """Regression tests for authenticated browser profile health metadata."""
 import importlib.util
+import json
 import logging
 import os
 from pathlib import Path
@@ -106,3 +107,51 @@ def test_profile_dir_marks_ephemeral_fallback_non_persistent(monkeypatch):
     path, persistent = browser_server._profile_dir("account-2")
     assert persistent is False
     assert path.startswith("/tmp/ucos-browser/profiles/")
+
+
+def test_durable_profile_uses_encrypted_postgres_when_local_mount_is_unwritable(monkeypatch, caplog):
+    monkeypatch.setattr(browser_server, "LOG", logging.getLogger("test"))
+    monkeypatch.delenv("UCOS_BROWSER_PROFILE_DIR", raising=False)
+    monkeypatch.setenv("UCOS_BROWSER_REQUIRE_DURABLE_PROFILE", "true")
+    monkeypatch.setattr(browser_server.profile_persistence, "is_configured", lambda: True)
+    _force_default_profile_root_unwritable(monkeypatch)
+
+    with caplog.at_level(logging.INFO, logger="test"):
+        path, disk_persistent = browser_server._profile_dir("account-durable")
+
+    assert path.startswith("/tmp/ucos-browser/profiles/")
+    assert disk_persistent is False
+    assert "encrypted Postgres session snapshots" in caplog.text
+    assert "browser profile storage" not in caplog.text
+
+
+def test_session_health_does_not_treat_ephemeral_profile_files_as_durable(monkeypatch, tmp_path):
+    profile_dir = tmp_path / "chromium-scratch"
+    profile_dir.mkdir()
+    (profile_dir / "Cookies").write_text("temporary", encoding="utf-8")
+
+    monkeypatch.setattr(
+        browser_server,
+        "_profile_dir",
+        lambda profile_ref: (str(profile_dir), False),
+    )
+    monkeypatch.setattr(browser_server.profile_persistence, "is_configured", lambda: True)
+    monkeypatch.setattr(browser_server.profile_persistence, "has_profile_state", lambda profile_ref: False)
+
+    server, thread, base_url = _serve(monkeypatch)
+    try:
+        request = Request(
+            base_url + "/session/health?profile_ref=account-1",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        with urlopen(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        assert payload["status"] == "ok"
+        assert payload["persistent"] is True
+        assert payload["persistence_backend"] == "neon_postgres"
+        assert payload["profile_initialized"] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
