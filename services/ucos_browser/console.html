@@ -73,6 +73,17 @@ details{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}summar
     <h3 class="section-title">Technical response</h3><pre id="result">Ready.</pre>
   </details>
 </section>
+<section class="panel" aria-labelledby="affiliateTitle">
+  <h2 class="section-title" id="affiliateTitle">Affiliate link transfer</h2>
+  <p class="note">Remote-page clipboard is separate from your phone. First use Amazon Associates SiteStripe to create/copy the link in the remote page, then capture it here.</p>
+  <div class="quick-actions">
+    <button class="primary" onclick="captureAffiliateLink()">Capture affiliate link</button>
+    <button id="copyAffiliateLinkButton" onclick="copyAffiliateLink()" disabled>Copy to phone clipboard</button>
+  </div>
+  <label for="affiliateLinkOutput">Captured Amazon affiliate URL</label>
+  <input id="affiliateLinkOutput" type="url" readonly autocomplete="off" placeholder="Generate/copy the link in Amazon SiteStripe, then tap Capture affiliate link">
+  <p class="note">Only a tagged Amazon Associates URL or an amzn.to short link is accepted. The tracking ID is preserved exactly; UCOS will not invent or replace it.</p>
+</section>
 </main>
 <script>
 const $=id=>document.getElementById(id);const key='ucos_browser_console_token';$('token').value=sessionStorage.getItem(key)||'';
@@ -242,6 +253,51 @@ async function fillField(){const x=await runAndShow([{type:'fill',selector:$('se
 async function fillAndEnter(){const x=await runAndShow([{type:'fill',selector:$('selector').value.trim(),value:$('value').value},{type:'press',selector:$('selector').value.trim(),key:'Enter'},{type:'wait',ms:1500},{type:'screenshot'},{type:'inspect'}]);if(x)$('value').value=''}
 async function clickField(){await runAndShow([{type:'click',selector:$('selector').value.trim()},{type:'screenshot'},{type:'inspect'}])}
 async function pressEnter(){await runAndShow([{type:'press',selector:$('selector').value.trim(),key:'Enter'},{type:'wait',ms:1200},{type:'screenshot'},{type:'inspect'}])}
+async function captureAffiliateLink(){
+  $('status').textContent='Checking the remote page for an Amazon Associates link…';
+  $('status').className='status';
+  const x=await runAndShow([{type:'affiliate_link'}]);
+  if(!x)return;
+  const link=x?.result?.affiliate_link;
+  if(typeof link!=='string'||!link){
+    setError(new Error('No affiliate link was found. Generate/copy it in Amazon Associates SiteStripe first, then capture again.'));
+    return;
+  }
+  $('affiliateLinkOutput').value=link;
+  $('copyAffiliateLinkButton').disabled=false;
+  $('status').textContent='Affiliate link captured. Tap “Copy to phone clipboard” to copy it on this device.';
+  $('status').className='status ok';
+}
+async function copyAffiliateLink(){
+  const input=$('affiliateLinkOutput'),link=input.value.trim();
+  if(!link){setError(new Error('Capture an affiliate link first.'));return}
+  // Clipboard write starts directly from this second, explicit user tap so
+  // mobile browsers retain the required transient user activation.
+  try{
+    if(!navigator.clipboard||typeof navigator.clipboard.writeText!=='function')throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(link);
+    $('status').textContent='Affiliate link copied to this device clipboard.';
+    $('status').className='status ok';
+  }catch(_){
+    try{
+      input.focus();
+      input.select();
+      input.setSelectionRange(0,input.value.length);
+      const copied=document.execCommand('copy');
+      if(copied){
+        $('status').textContent='Affiliate link copied. If your phone did not confirm the copy, long-press the selected URL and tap Copy.';
+        $('status').className='status ok';
+      }else{
+        $('status').textContent='Clipboard access was blocked. The URL is selected; long-press it and tap Copy.';
+        $('status').className='status error';
+      }
+    }catch(e){
+      input.focus();input.select();
+      $('status').textContent='Clipboard access was blocked. The URL is selected; long-press it and tap Copy.';
+      $('status').className='status error';
+    }
+  }
+}
 function bookmarkCurrent(){const url=$('status').textContent||$('url').value.trim();if(!url)return;const k='ucos_browser_bookmarks';const xs=JSON.parse(localStorage.getItem(k)||'[]');if(!xs.some(x=>x.url===url))xs.unshift({url,title:url});localStorage.setItem(k,JSON.stringify(xs.slice(0,100)));$('status').textContent='Bookmarked: '+url;$('status').className='status ok'}
 function showBookmarks(){const xs=JSON.parse(localStorage.getItem('ucos_browser_bookmarks')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
 function showHistory(){const xs=JSON.parse(localStorage.getItem('ucos_browser_history')||'[]');$('elements').textContent=JSON.stringify(xs,null,2);if(xs.length)$('url').value=xs[0].url}
