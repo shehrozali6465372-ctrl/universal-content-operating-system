@@ -109,7 +109,10 @@ def _is_amazon_affiliate_link(value: str) -> bool:
 
 _AFFILIATE_CLIPBOARD_CAPTURE_SCRIPT = r"""
 (() => {
-  if (window.__ucosAffiliateClipboardInstalled) return;
+  const host = String(location.hostname || '').toLowerCase();
+  const amazonHost = /^(?:[a-z0-9-]+\\.)*amazon\\.(?:com|co\\.uk|de|fr|ca|co\\.jp|in|it|es|nl|se|pl|com\\.au|com\\.br|com\\.mx|com\\.be|ae|sa|sg|com\\.tr|eg)$/.test(host)
+    || host === 'amzn.to';
+  if (!amazonHost || window.__ucosAffiliateClipboardInstalled) return;
   const state = { text: '', source: '', updatedAt: 0 };
   Object.defineProperty(window, '__ucosAffiliateClipboardState', {
     configurable: false, enumerable: false, value: state
