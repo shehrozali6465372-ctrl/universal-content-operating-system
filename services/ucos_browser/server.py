@@ -422,10 +422,10 @@ def _get_browser_runtime(profile_ref: str, timeout: int) -> tuple[dict, bool]:
         return runtime, True
 
 
-atexit.register(_close_browser_runtime)
 
 
-def execute_task(task: dict) -> dict:
+
+def _execute_task_on_browser_thread(task: dict) -> dict:
     requested_url = str(task.get("url", "")).strip()
     url = validate_url(requested_url) if requested_url else ""
     profile_ref = _profile_ref(task.get("profile_ref", "default"))
@@ -746,6 +746,31 @@ def execute_task(task: dict) -> dict:
     finally:
         _BROWSER_SLOTS.release()
 
+
+
+# Playwright's synchronous API is thread-affine. HTTP requests may arrive on
+# different ThreadingHTTPServer handler threads, but all browser operations
+# must run on this one dedicated worker thread for the lifetime of the session.
+from concurrent.futures import ThreadPoolExecutor
+
+_BROWSER_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ucos-playwright")
+
+
+def execute_task(task: dict) -> dict:
+    future = _BROWSER_EXECUTOR.submit(_execute_task_on_browser_thread, task)
+    return future.result()
+
+
+def _shutdown_browser_worker() -> None:
+    try:
+        _BROWSER_EXECUTOR.submit(_close_browser_runtime).result(timeout=10)
+    except Exception:
+        LOG.exception("browser runtime shutdown failed")
+    finally:
+        _BROWSER_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+
+
+atexit.register(_shutdown_browser_worker)
 
 def _record_task_run(task_id: str, task: dict, state: str, result=None, error=None, duration_ms=None) -> None:
     """Persist minimal browser task audit metadata; never store page text, screenshots, cookies, or credentials."""
