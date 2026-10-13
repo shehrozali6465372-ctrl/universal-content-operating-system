@@ -3,8 +3,10 @@ from .contracts import (
     AgentEvidence, AgentManifest, AgentResult, AgentRole, AgentRunStatus, AgentScope, AgentTask,
 )
 from .registry import AgentRegistry, AgentRegistryError
+from .super_intelligence import SuperIntelligenceAgent, GoalPlanError
 
 __all__ = [
     "AgentEvidence", "AgentManifest", "AgentResult", "AgentRegistry",
     "AgentRegistryError", "AgentRole", "AgentRunStatus", "AgentScope", "AgentTask",
+    "SuperIntelligenceAgent", "GoalPlanError",
 ]
