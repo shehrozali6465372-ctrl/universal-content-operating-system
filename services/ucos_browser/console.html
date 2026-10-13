@@ -168,7 +168,10 @@ async function screenPointerUp(e){
  if(!pointerStart||pointerStart.id!==e.pointerId)return;
  const start=pointerStart;pointerStart=null;
  const dx=e.clientX-start.clientX,dy=e.clientY-start.clientY;
- if(Math.hypot(dx,dy)>9){
+ // Finger taps often drift a few pixels on Android. Use a larger touch
+ // threshold so tapping product cards is not mistaken for a scroll gesture.
+ const moveThreshold=(e.pointerType==='touch'||e.pointerType==='pen')?22:9;
+ if(Math.hypot(dx,dy)>moveThreshold){
    await interact([{type:'scroll',delta_x:-dx*start.point.scaleX,delta_y:-dy*start.point.scaleY}]);
    return;
  }
@@ -196,8 +199,10 @@ async function screenWheel(e){
  },120);
 }
 async function interact(actions){
- // Screen input only needs an updated image; extracting the whole document adds noticeable latency.
- await runAndShow([...actions,{type:'wait',ms:100},{type:'screenshot'}]);
+ // A product tap may start document navigation; allow the destination to paint
+ // before taking the screenshot. Scrolling remains fast and responsive.
+ const hasClick=actions.some(a=>a.type==='click_at'||a.type==='tap');
+ await runAndShow([...actions,{type:'wait',ms:hasClick?800:120},{type:'screenshot'}]);
 }
 function scheduleRemoteTyping(){
  if(remoteTypingTimer)clearTimeout(remoteTypingTimer);
