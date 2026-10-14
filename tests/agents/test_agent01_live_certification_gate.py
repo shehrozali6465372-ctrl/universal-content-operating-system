@@ -8,6 +8,7 @@ def test_gate_refuses_nonproduction_before_network_or_database(monkeypatch):
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("NEON_DATABASE_URL", "configured-only")
     monkeypatch.setenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "configured-only")
+    monkeypatch.setenv("UCOS_API_TOKEN", "configured-only")
     monkeypatch.setenv("TAVILY_API_KEY", "configured-only")
 
     report = run_gate()
