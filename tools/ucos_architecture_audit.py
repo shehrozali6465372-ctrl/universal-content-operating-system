@@ -248,6 +248,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
                     "from": source_rel,
                     "to": repo_relative(dest, root),
                     "line": str(getattr(node, "lineno", "")),
+                    "kind": "test" if source_is_test else "production",
                 }
                 importers[dest].add(source_rel)
                 import_edges.append(edge)
