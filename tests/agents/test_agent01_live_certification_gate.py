@@ -24,6 +24,7 @@ def test_gate_refuses_missing_neon_url_before_history_import(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
     monkeypatch.setenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "configured-only")
+    monkeypatch.setenv("UCOS_API_TOKEN", "configured-only")
     monkeypatch.setenv("TAVILY_API_KEY", "configured-only")
 
     report = run_gate()
