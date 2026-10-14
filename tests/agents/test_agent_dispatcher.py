@@ -161,6 +161,24 @@ def test_agent01_route_hmac_is_domain_separated_and_replay_protected(monkeypatch
     assert gateway._agent01_dispatch_hmac_authorized(
         "POST", "/agents/AG01/research", body, headers
     ) is True
+
+    second_nonce = "second-request-nonce"
+    second_canonical = (
+        f"POST\n/agents/AG01/research\n{timestamp}\n{second_nonce}\n"
+        f"{hashlib.sha256(body).hexdigest()}"
+    ).encode("utf-8")
+    second_signature = hmac.new(derived_key, second_canonical, hashlib.sha256).hexdigest()
+    second_headers = {
+        "X-UCOS-Agent01-Timestamp": timestamp,
+        "X-UCOS-Agent01-Nonce": second_nonce,
+        "X-UCOS-Agent01-Signature": second_signature,
+    }
+    # A new nonce still cannot start duplicate research while the account is active.
+    assert gateway._agent01_dispatch_hmac_authorized(
+        "POST", "/agents/AG01/research", body, second_headers
+    ) is False
+    gateway._release_agent01_account("account-a")
+    # The original nonce remains rejected even after the account lock is released.
     assert gateway._agent01_dispatch_hmac_authorized(
         "POST", "/agents/AG01/research", body, headers
     ) is False
