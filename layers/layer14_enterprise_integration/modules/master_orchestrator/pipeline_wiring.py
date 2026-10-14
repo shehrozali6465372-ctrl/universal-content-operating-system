@@ -213,9 +213,13 @@ class PipelineWiring:
         response.steps.append(step)
         started = time.time()
         try:
-            data = fn() or {}
+            data = fn()
+            if not isinstance(data, dict):
+                raise TypeError(
+                    f"pipeline step must return dict, got {type(data).__name__}"
+                )
             step.data = data
-            step.status = "skipped" if data.get("skipped") else "success"
+            step.status = "skipped" if data.get("skipped") is True else "success"
             return True
         except Exception as exc:
             step.status = "error"
