@@ -240,8 +240,8 @@ def test_unconfigured_durable_state_prevents_ready_handoff(tmp_path):
     assert report["recommended_topic"] is None
 
 
-def test_production_state_persists_topic_evidence_and_run_by_account(tmp_path, monkeypatch):
-    monkeypatch.setenv("APP_ENV", "production")
+def test_account_scoped_state_persists_topic_evidence_and_run_by_account(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
     store = InMemoryAccountStore()
     store.put("account-a", "memory", "history_baseline:content:v1", {
         "status": "complete",
@@ -267,7 +267,7 @@ def test_production_state_persists_topic_evidence_and_run_by_account(tmp_path, m
 
 
 def test_two_accounts_have_separate_research_state(tmp_path, monkeypatch):
-    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("APP_ENV", "test")
     store = InMemoryAccountStore()
 
     def make(account_id):
@@ -295,20 +295,28 @@ def test_two_accounts_have_separate_research_state(tmp_path, monkeypatch):
 
 
 
-def test_production_with_unknown_history_baseline_holds_and_does_not_save_candidate(monkeypatch):
-    monkeypatch.setenv("APP_ENV", "production")
+def test_production_with_unknown_history_baseline_blocks_before_live_search(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("TAVILY_API_KEY", "unit-test-config-only")
     store = InMemoryAccountStore()
     account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
     agent = ResearchDiscoveryAgent(
         "account-a",
         account_resolver=lambda _account_id: account,
         account_store=store,
-        result_writer=lambda _report: None,
     )
+    assert agent._source is not None
+    assert agent._source.request_count == 0
 
-    report = agent.run([candidate()])
+    # Exercise the production fail-closed branch without sending an HTTP request.
+    monkeypatch.setenv("APP_ENV", "production")
+    report = agent.run()
 
-    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
+    assert report["status"] == "blocked_history_unavailable"
+    assert report["history"]["status"] == "unknown"
+    assert report["candidate_count"] == 0
+    assert report["recommended_topic"] is None
+    assert agent._source.request_count == 0
     assert not any(key.startswith("research_candidate:") for (_aid, _kind, key) in store.data)
 
 
@@ -321,23 +329,35 @@ def test_agent_01_has_no_imports_from_legacy_research_layer():
     assert "layers.layer02_research" not in source
 
 
-def test_production_rejects_status_only_history_baseline_and_does_not_research(monkeypatch):
+def test_production_refuses_injected_account_provider_and_storage_dependencies(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TAVILY_API_KEY", "unit-test-config-only")
     store = InMemoryAccountStore()
-    store.put("account-a", "memory", "history_baseline:content:v1", {"status": "complete"})
-    store.put("account-a", "content", "collection:execution_history", [])
     account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
-    calls = []
+
+    with pytest.raises(ValueError, match="production mode forbids injected test dependencies"):
+        ResearchDiscoveryAgent(
+            "account-a",
+            account_resolver=lambda _account_id: account,
+            history_reader=lambda _account_id: [],
+            candidate_provider=lambda *_args: [candidate()],
+            evidence_provider=lambda *_args: candidate()["evidence"],
+            result_writer=lambda _report: None,
+            account_store=store,
+        )
+
+
+def test_production_rejects_caller_supplied_candidates(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("TAVILY_API_KEY", "unit-test-config-only")
+    account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
     agent = ResearchDiscoveryAgent(
         "account-a",
         account_resolver=lambda _account_id: account,
-        candidate_provider=lambda *_args: calls.append("discover") or [candidate()],
-        account_store=store,
+        history_reader=lambda _account_id: [],
+        storage_root=tmp_path,
     )
+    monkeypatch.setenv("APP_ENV", "production")
 
-    report = agent.run()
-
-    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
-    assert report["history"]["status"] == "unknown"
-    assert calls == []
-    assert not any(key.startswith("research_candidate:") for (_aid, _kind, key) in store.data)
+    with pytest.raises(ValueError, match="caller-supplied candidates"):
+        agent.run([candidate()])
