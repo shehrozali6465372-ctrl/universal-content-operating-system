@@ -16,9 +16,10 @@ from threading import RLock, local
 
 from layers.layer01_core.modules.models import get_all_table_names
 from layers.layer01_core.modules.migrations import MigrationManager
+from layers.shared.sql_identifier import SQLIdentifierMixin
 
 
-class DatabaseManager:
+class DatabaseManager(SQLIdentifierMixin):
     _path_locks: Dict[str, RLock] = {}
     _path_locks_guard = RLock()
     def __init__(self, db_path: str = "data/agent.db", project_root: Optional[str] = None):
@@ -128,14 +129,6 @@ class DatabaseManager:
                 return self._conn.execute(sql, params)
             with self.transaction():
                 return self._conn.execute(sql, params)
-
-    _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-    @classmethod
-    def _identifier(cls, value: str) -> str:
-        if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
-            raise ValueError(f"unsafe SQL identifier: {value}")
-        return value
 
     @classmethod
     def _where_clause(cls, where: str) -> str:
