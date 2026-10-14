@@ -107,15 +107,17 @@ class ResearchDiscoveryAgent:
         self._account_store_override = account_store
         self._source = None
 
-        if self._candidate_provider is None:
-            if os.environ.get("TAVILY_API_KEY", "").strip():
-                from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
+        if self._candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
+            from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
 
-                self._source = TavilyResearchSource.from_env()
-            else:
-                from agents.agent_01_research_discovery.gdelt_context_source import GDELTContextResearchSource
+            self._source = TavilyResearchSource.from_env()
+        elif self._candidate_provider is None and self._is_production():
+            # Unit tests and development remain offline by default. The keyless
+            # public provider is selected only for a real production run.
+            from agents.agent_01_research_discovery.gdelt_context_source import GDELTContextResearchSource
 
-                self._source = GDELTContextResearchSource()
+            self._source = GDELTContextResearchSource()
+        if self._source is not None and self._candidate_provider is None:
             self._candidate_provider = self._source.discover_candidates
             if self._evidence_provider is None:
                 self._evidence_provider = self._source.fetch_evidence
