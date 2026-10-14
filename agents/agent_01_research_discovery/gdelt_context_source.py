@@ -8,6 +8,7 @@ hosts before handing a topic to AG06.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from urllib.error import HTTPError, URLError
@@ -177,19 +178,71 @@ class GDELTContextResearchSource:
         } for item in results]
 
     def fetch_evidence(self, topic: str, niche: str, limit: int = 5) -> list[dict[str, str]]:
+        """Gather real sentence-level evidence using bounded query diversification.
+
+        A single broad OR query often returns multiple snippets from one publisher,
+        which cannot satisfy AG01's independent-source requirement. Search the exact
+        topic first, then distinct topic phrases, then niche-related phrases; merge
+        only real article-linked sentences and stop once two publisher hosts exist.
+        The shared search() method enforces the provider's five-second request gap.
+        """
         topic_value = self._text(topic, 220)
         if not topic_value:
             return []
-        topic_words = topic_value.split()
-        terms = [topic_value]
-        if len(topic_words) > 2:
-            terms.append(" ".join(topic_words[:3]))
-        terms.extend(self._niche_search_terms(niche))
-        rows = self.search(
-            self._or_query(terms),
-            max_results=max(1, min(int(limit), _MAX_RESULTS)),
-        )
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+
+        words = [
+            word for word in re.findall(r"[A-Za-z][A-Za-z0-9'-]*", topic_value)
+            if len(word) > 2 and word.casefold() not in {
+                "the", "and", "for", "with", "from", "into", "your", "best",
+                "top", "how", "why", "what", "when", "where", "this", "that",
+            }
+        ]
+        phrases: list[str] = []
+        for index in range(len(words) - 1):
+            phrase = " ".join(words[index:index + 2])
+            if phrase.casefold() != topic_value.casefold() and phrase.casefold() not in {
+                item.casefold() for item in phrases
+            }:
+                phrases.append(phrase)
+        query_variants = [
+            self._or_query([topic_value]),
+            self._or_query(phrases[:10] or [topic_value]),
+            self._or_query(phrases[2:12] + self._niche_search_terms(niche)[:4] or [topic_value]),
+        ]
+
+        results: list[dict[str, Any]] = []
+        seen_urls: set[str] = set()
+        seen_hosts: set[str] = set()
+        for query in query_variants:
+            if len(seen_hosts) >= 2 or len(results) >= min(limit, _MAX_RESULTS):
+                break
+            try:
+                rows = self.search(query, max_results=max(2, min(limit, _MAX_RESULTS)))
+            except GDELTSourceError:
+                # A failed query cannot be treated as evidence. Continue to the
+                # next bounded query variant; if all fail, the agent will hold.
+                continue
+            for item in rows:
+                url = item["url"]
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                host = (urlsplit(url).hostname or "").lower()
+                if host.startswith("www."):
+                    host = host[4:]
+                if not host or host in seen_hosts:
+                    # One representative sentence per publisher host is enough
+                    # for source diversity; same-host repeats must not crowd out
+                    # independent publishers in the bounded evidence pack.
+                    continue
+                seen_hosts.add(host)
+                results.append(item)
+                if len(results) >= min(limit, _MAX_RESULTS):
+                    break
+
         return [{
             "source": item["source"], "title": item["title"], "url": item["url"],
             "content": item["content"], "published_at": item["published_date"],
-        } for item in rows]
+        } for item in results[:min(limit, _MAX_RESULTS)]]
