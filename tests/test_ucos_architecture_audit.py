@@ -13,6 +13,7 @@ def test_audit_finds_cross_layer_imports_and_manifest_ownership(tmp_path):
     (layer1 / "__init__.py").write_text("", encoding="utf-8")
     (layer2 / "__init__.py").write_text("", encoding="utf-8")
     (layer1 / "core.py").write_text("def useful():\n    return 7\n", encoding="utf-8")
+    (layer1 / "planned_source.py").write_text("def future_owner():\n    value = 1\n    return value\n", encoding="utf-8")
     (layer2 / "consumer.py").write_text(
         "from layers.layer01_core.core import useful\n\n"
         "def run():\n    return useful()\n",
@@ -27,7 +28,7 @@ def test_audit_finds_cross_layer_imports_and_manifest_ownership(tmp_path):
                 "id": "AG01",
                 "name": "test",
                 "status": "planned",
-                "sources": ["layers/layer01_core"],
+                "sources": ["layers/layer01_core/planned_source.py"],
             }],
         }),
         encoding="utf-8",
@@ -39,9 +40,9 @@ def test_audit_finds_cross_layer_imports_and_manifest_ownership(tmp_path):
     assert report["summary"]["layer_count"] == 2
     assert by_name["layer01_core"]["cross_layer_import_edges_in"] == 1
     assert by_name["layer02_research"]["cross_layer_import_edges_out"] == 1
-    core = next(item for item in report["orphan_candidates"] if item["path"] == "layers/layer01_core/core.py")
-    assert core["candidate_class"] == "planned_agent_source"
-    assert "may not be visible statically" in core["warning"]
+    planned = next(item for item in report["orphan_candidates"] if item["path"] == "layers/layer01_core/planned_source.py")
+    assert planned["candidate_class"] == "planned_agent_source"
+    assert "may not be visible statically" in planned["warning"]
 
 
 def test_unreferenced_code_is_only_reported_as_a_candidate(tmp_path):
