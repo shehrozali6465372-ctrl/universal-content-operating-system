@@ -49,7 +49,8 @@
         "AG01"
       ],
       "output": "Evidence-backed ranked trend report with READY_FOR_SCORING handoff to AG08 only when each candidate has at least two independent publisher hosts with timezone-aware publication timestamps inside the configured window.",
-      "gate": "unit contracts, live AG01 evidence-pack compatibility, account isolation, CI, and live production smoke"
+      "gate": "unit contracts, live AG01 evidence-pack compatibility, account isolation, CI, and live production smoke",
+      "entrypoint": "agents/agent_02_trend_scout/agent.py"
     },
     {
       "id": "AG03",
