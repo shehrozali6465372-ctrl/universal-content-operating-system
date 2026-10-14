@@ -38,7 +38,8 @@ def test_preflight_uses_keyless_real_provider_and_requires_verified_history_base
     )
 
     assert report["status"] == "blocked"
-    assert report["checks"]["research_provider"]["status"] == "pass"\n    assert report["checks"]["research_provider"]["reason_code"] == "gdelt_keyless_fallback_selected"
+    assert report["checks"]["research_provider"]["status"] == "pass"
+    assert report["checks"]["research_provider"]["reason_code"] == "gdelt_keyless_fallback_selected"
     assert report["checks"]["history_baseline"]["status"] == "blocked"
     assert report["production_certified"] is False
     assert report["side_effects"] == {
