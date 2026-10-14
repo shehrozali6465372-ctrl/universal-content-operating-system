@@ -495,6 +495,7 @@ def main() -> int:
     parser.add_argument("--fail-on-syntax-errors", action="store_true")
     parser.add_argument("--fail-on-unresolved-internal-imports", action="store_true")
     parser.add_argument("--fail-on-scaffold-success-patterns", action="store_true")
+    parser.add_argument("--fail-on-unowned-layer-modules", action="store_true")
     args = parser.parse_args()
     report = build_report()
     output = (ROOT / args.json).resolve()
@@ -516,6 +517,11 @@ def main() -> int:
     if args.fail_on_unresolved_internal_imports and report["unresolved_internal_imports"]:
         print("UNRESOLVED_INTERNAL_IMPORTS=" + json.dumps(report["unresolved_internal_imports"], sort_keys=True))
         return 4
+    if args.fail_on_unowned_layer_modules:
+        unowned = [item for item in report["orphan_candidates"] if item["candidate_class"] == "no_static_production_inbound_import_found"]
+        if unowned:
+            print("UNOWNED_LAYER_MODULES=" + json.dumps(unowned, sort_keys=True))
+            return 5
     return 0
 
 
