@@ -89,7 +89,7 @@ class TestTwitterPublisher:
 class TestCrossPlatformPublisher:
     def setup_method(self):
         from layers.layer07_publishing.modules.platform_plugin_manager.cross_platform_publisher import CrossPlatformPublisher
-        from layers.layer07_publishing.modules.platform_plugin_manager.mock_publisher import MockPublisher
+        from tests_helpers.mock_publisher import MockPublisher
         self.cross = CrossPlatformPublisher()
         self.cross.register_platform("facebook", MockPublisher("facebook"))
         self.cross.register_platform("twitter", MockPublisher("twitter"))
