@@ -138,21 +138,16 @@ class LLMManager:
                 return response
 
         start = time.time()
-        if self._generator is None:
-            generated = (
-                f"[development-only simulated response for {provider}/{model}]"
-            )
-        else:
-            generated = self._generator(
-                prompt=prompt,
-                model=model,
-                provider=provider,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                system_prompt=system_prompt,
-            )
-            if not isinstance(generated, (str, ProviderResponse, LLMResponse)):
-                raise RuntimeError("AI generator returned an unsupported response type")
+        generated = self._generator(
+            prompt=prompt,
+            model=model,
+            provider=provider,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=system_prompt,
+        )
+        if not isinstance(generated, (str, ProviderResponse, LLMResponse)):
+            raise RuntimeError("AI generator returned an unsupported response type")
 
         if isinstance(generated, ProviderResponse):
             response = LLMResponse(generated.content, generated.model, generated.provider)
