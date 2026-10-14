@@ -50,7 +50,7 @@ def _summary(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_live_smoke(account_id: str) -> dict[str, Any]:
+def run_live_smoke(account_id: str, *, dispatch_mode: str = "certification") -> dict[str, Any]:
     """Use the deployed environment's real provider and durable store; never certify."""
     if os.environ.get("APP_ENV", "").strip().lower() not in {"production", "prod"}:
         return {
@@ -76,26 +76,30 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
 
     # Imports occur only after preflight so that missing history never triggers a
     # real search. The agent uses its real selected provider and real account store.
-    source = None
+    request_count = 0
+    report: dict[str, Any] = {}
     try:
-        from agents.agent_01_research_discovery import ResearchDiscoveryAgent
+        from agents.dispatcher import AgentDispatcher
         from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
         from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
 
-        agent = ResearchDiscoveryAgent(account_id)
-        if getattr(agent, "_source", None) is None:
+        report = AgentDispatcher().dispatch(
+            "AG01",
+            constructor_kwargs={"account_id": account_id},
+            input_payload={"limit": 1},
+            mode=dispatch_mode,
+        )
+        summary = _summary(report)
+        source_status = report.get("research_sources") if isinstance(report.get("research_sources"), Mapping) else {}
+        request_count = int(source_status.get("request_count") or 0)
+        if source_status.get("provider") not in {"tavily", "gdelt_context"}:
             return {
                 "status": "blocked",
                 "reason_code": "live_research_source_not_configured",
                 "production_certified": False,
-                "external_search_performed": False,
+                "external_search_performed": request_count > 0,
                 "content_published": False,
             }
-
-        source = agent._source
-        report = agent.run(limit=1)
-        summary = _summary(report)
-        request_count = int(getattr(source, "request_count", 0))
         registry = AccountRegistry()
         store = AccountDataStore(registry=registry)
         run_id = summary["run_id"]
@@ -154,7 +158,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
             "status": "passed_live_smoke" if passed else "failed_live_smoke",
             "agent_id": "AG01",
             "account_id": account_id,
-            "agent_version": getattr(agent, "version", "unknown"),
+            "agent_version": str(report.get("agent_version") or "unknown"),
             "checks": checks,
             "agent_report": summary,
             "production_certified": False,
@@ -168,7 +172,10 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
         }
     except Exception as exc:
         # Error messages can contain connection details; report only the exception type.
-        request_count = int(getattr(source, "request_count", 0) or 0)
+        request_count = int(
+            ((report.get("research_sources") or {}).get("request_count", 0))
+            if isinstance(report.get("research_sources"), Mapping) else 0
+        )
         return {
             "status": "failed_live_smoke",
             "reason_code": f"live_smoke_exception_{type(exc).__name__}",
