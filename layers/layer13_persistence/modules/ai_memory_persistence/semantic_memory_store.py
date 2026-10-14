@@ -1,6 +1,7 @@
 """semantic_memory_store.py — Semantic memory persistence."""
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+from layers.shared.vector_math import cosine_similarity
 from layers.layer13_persistence.modules.ai_memory_persistence.base_memory_store import BaseMemoryStore, MemoryEntry
 
 
@@ -28,20 +29,12 @@ class SemanticMemoryStore(BaseMemoryStore):
                               top_k: int = 10) -> List[MemoryEntry]:
         scored = []
         for key, emb in self._embeddings.items():
-            score = self._cosine(query_embedding, emb)
+            score = self.cosine_similarity(query_embedding, emb)
             entry = self._store.get(key)
             if entry:
                 scored.append((entry, score))
         scored.sort(key=lambda x: x[1], reverse=True)
         return [e for e, _ in scored[:top_k]]
-
-    def _cosine(self, a: List[float], b: List[float]) -> float:
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = sum(x * x for x in a) ** 0.5
-        nb = sum(x * x for x in b) ** 0.5
-        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
     def get_embedding(self, key: str) -> Optional[List[float]]:
         return self._embeddings.get(key)
