@@ -85,7 +85,7 @@ Agent source ownership for AG18 (Publishing Planner and Scheduler) and AG27 (Run
 
 ## CI acceptance gates
 
-The CI audit reports layer count, production import edges, test-only references, agent ownership, duplicate candidates, provider/model paths, and scaffold-success patterns. The workflow fails on Python syntax errors or remaining high-signal scaffold-success patterns. Unit tests cover the audit, missing real providers, executor-less pipelines, pipeline step result types, production environment detection, cache bypass, and production pricing.
+The CI audit reports layer count, production import edges, test-only references, agent ownership, duplicate candidates, provider/model paths, and scaffold-success patterns. The workflow fails on Python syntax errors, unresolved internal imports, remaining high-signal scaffold-success patterns, or layer modules that have no static production importer, no test importer, and no manifest owner. Unit tests cover the audit, missing real providers, executor-less pipelines, pipeline step result types, production environment detection, cache bypass, and production pricing.
 
 Static import analysis cannot prove the absence of dynamic imports or external third-party imports. All removals are therefore confined to exact placeholder files with no package exports and no in-repository callers. Merge remains blocked until the latest full CI run and required checks pass.
 
