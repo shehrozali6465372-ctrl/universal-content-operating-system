@@ -493,6 +493,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", default="artifacts/ucos-architecture-audit.json")
     parser.add_argument("--fail-on-syntax-errors", action="store_true")
+    parser.add_argument("--fail-on-unresolved-internal-imports", action="store_true")
     parser.add_argument("--fail-on-scaffold-success-patterns", action="store_true")
     args = parser.parse_args()
     report = build_report()
@@ -512,6 +513,9 @@ def main() -> int:
     if args.fail_on_scaffold_success_patterns and report["scaffold_success_patterns"]:
         print("SCAFFOLD_SUCCESS_PATTERNS=" + json.dumps(report["scaffold_success_patterns"], sort_keys=True))
         return 3
+    if args.fail_on_unresolved_internal_imports and report["unresolved_internal_imports"]:
+        print("UNRESOLVED_INTERNAL_IMPORTS=" + json.dumps(report["unresolved_internal_imports"], sort_keys=True))
+        return 4
     return 0
 
 
