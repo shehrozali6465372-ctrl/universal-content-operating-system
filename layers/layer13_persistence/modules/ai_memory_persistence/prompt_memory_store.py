@@ -18,12 +18,6 @@ class PromptMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def record_performance(self, prompt_key: str, score: float) -> None:
         if prompt_key not in self._performances:
             self._performances[prompt_key] = []
