@@ -39,3 +39,7 @@ def test_vector_index_rebuild_rejects_inconsistent_or_nonfinite_vectors():
     invalid = VectorIndex()
     invalid.add(1, [1.0, float("nan")])
     assert invalid.rebuild() is False
+
+    nonnumeric = VectorIndex()
+    nonnumeric.add(1, [1.0, "not-a-number"])
+    assert nonnumeric.rebuild() is False
