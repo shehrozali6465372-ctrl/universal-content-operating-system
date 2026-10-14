@@ -42,7 +42,7 @@ def test_audit_finds_cross_layer_imports_and_manifest_ownership(tmp_path):
     assert by_name["layer02_research"]["cross_layer_import_edges_out"] == 1
     planned = next(item for item in report["orphan_candidates"] if item["path"] == "layers/layer01_core/planned_source.py")
     assert planned["candidate_class"] == "planned_agent_source"
-    assert "may not be visible statically" in planned["warning"]
+    assert "Candidate only" in planned["warning"]
 
 
 def test_unreferenced_code_is_only_reported_as_a_candidate(tmp_path):
