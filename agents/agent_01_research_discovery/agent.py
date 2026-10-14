@@ -241,7 +241,10 @@ class ResearchDiscoveryAgent:
                         baseline = store.get(
                             self.account_id, "memory", "history_baseline:content:v1", default=None
                         )
-                    if not isinstance(baseline, Mapping) or baseline.get("status") != "complete":
+                    from layers.layer07_publishing.modules.account_control.account_data_store import (
+                        is_verified_history_baseline,
+                    )
+                    if not is_verified_history_baseline(baseline):
                         return [], False, "history_baseline_not_verified"
                 rows = store.get(
                     self.account_id, "content", "collection:execution_history", default=[]
