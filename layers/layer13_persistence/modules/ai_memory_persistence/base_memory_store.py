@@ -43,9 +43,12 @@ class BaseMemoryStore(ABC):
     def store(self, key: str, value: Any, metadata: Dict[str, Any] = None) -> MemoryEntry:
         ...
 
-    @abstractmethod
     def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        ...
+        """Return an entry and update its access counter consistently for all stores."""
+        entry = self._store.get(key)
+        if entry:
+            entry.access_count += 1
+        return entry
 
     def delete(self, key: str) -> bool:
         return self._store.pop(key, None) is not None
