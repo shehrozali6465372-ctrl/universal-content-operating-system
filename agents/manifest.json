@@ -21,7 +21,23 @@
       ],
       "output": "JSON research report; READY_FOR_WRITING_REVIEW is not publishing permission.",
       "dependencies": [],
-      "gate": "unit contracts, account isolation, durable Neon state, CI, and live production smoke"
+      "gate": "unit contracts, account isolation, durable Neon state, CI, and live production smoke",
+      "source_configuration": {
+        "provider": "Tavily Search API",
+        "environment_variables": [
+          "TAVILY_API_KEY",
+          "UCOS_TAVILY_TIMEOUT_SECONDS"
+        ],
+        "fallback": "none; no key means no live discovery",
+        "query_budget": "Agent 01 caps the default Tavily run at 5 candidate topics; one discovery request plus at most one evidence request per candidate",
+        "documentation": "https://docs.tavily.com/documentation/api-reference/endpoint/search"
+      },
+      "production_blockers": [
+        "TAVILY_API_KEY must be configured in the deployed service and a real provider smoke test must pass",
+        "The deployed account's existing publication history must be imported or verified before the first production recommendation",
+        "Latest CI and a live Neon-backed service smoke test must pass on the exact candidate release commit",
+        "The agent still imports some Layer 02 manager modules; extraction and old-layer retirement is a later migration step"
+      ]
     },
     {
       "id": "AG02",
