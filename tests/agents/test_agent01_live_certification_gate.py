@@ -41,6 +41,7 @@ def test_gate_refuses_missing_encryption_key_before_history_import(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NEON_DATABASE_URL", "configured-only")
     monkeypatch.delenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("UCOS_API_TOKEN", "configured-only")
     monkeypatch.setenv("TAVILY_API_KEY", "configured-only")
 
     report = run_gate()
