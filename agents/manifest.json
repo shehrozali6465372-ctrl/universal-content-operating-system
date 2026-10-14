@@ -256,9 +256,10 @@
       "status": "planned",
       "owns": "Schedule approved work through durable, deduplicated tasks.",
       "sources": [
-        "layers/layer07_publishing",
-        "layers/layer11_async_runtime",
-        "layers/layer15_async_runtime"
+        "layers/layer07_publishing/modules/empire_engine/publishing_scheduler.py",
+        "layers/layer07_publishing/modules/scheduler_queue",
+        "layers/layer15_async_runtime/modules/async_scheduler/async_scheduler.py",
+        "layers/layer15_async_runtime/modules/durable_execution/durable_execution.py"
       ],
       "dependencies": [
         "AG14",
@@ -373,9 +374,13 @@
       "status": "planned",
       "owns": "Monitor durable tasks, retries, leases, dead-letter state, and recovery.",
       "sources": [
-        "layers/layer11_async_runtime",
-        "layers/layer15_async_runtime",
-        "layers/layer18_monitoring"
+        "layers/layer11_async_runtime/modules/async_runtime_engine",
+        "layers/layer11_async_runtime/modules/async_task_manager",
+        "layers/layer15_async_runtime/modules/async_scheduler/async_scheduler.py",
+        "layers/layer15_async_runtime/modules/durable_execution/durable_execution.py",
+        "layers/layer15_async_runtime/modules/task_queue",
+        "layers/layer15_async_runtime/modules/worker_pool",
+        "layers/layer18_monitoring/modules/monitoring_engine"
       ],
       "dependencies": [
         "AG26"
