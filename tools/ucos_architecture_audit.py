@@ -167,7 +167,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         rel = repo_relative(path, root)
         owners: list[str] = []
         for agent_id, source_ref in manifest_sources:
-            source_ref = source_ref.strip().rstrip("/")
+            source_ref = re.split(r"\s+\(", source_ref, maxsplit=1)[0].strip().rstrip("/")
             # A declared module or directory keeps its subtree protected during migration.
             if source_ref and (rel == source_ref or rel.startswith(source_ref + "/")):
                 owners.append(agent_id)
@@ -178,10 +178,6 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         layer_files = sorted(folder.rglob("*.py"))
         inbound = sum(1 for p in layer_files if importers.get(p))
         layer_edges = [e for e in import_edges if e["from"].startswith(f"layers/{folder.name}/") or e["from"] == f"layers/{folder.name}"]
-        cross_edges = [
-            e for e in layer_edges
-            if e["to"].split("/", 1)[0] != e["from"].split("/", 1)[0]
-        ]
         layer_results.append({
             "name": folder.name,
             "python_file_count": len(layer_files),
