@@ -42,7 +42,7 @@ jobs:
           test "$HAS_NEON_DATABASE_URL" = "true" || { echo "::error::NEON_DATABASE_URL is missing"; exit 2; }
           test "$HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY" = "true" || { echo "::error::UCOS_CREDENTIAL_ENCRYPTION_KEY is missing"; exit 2; }
           echo "REAL_DATABASE_AND_ENCRYPTION_CONFIGURATION=CONFIGURED"
-          echo "TAVILY is checked after authenticated history import; missing Tavily will block research without undoing history coverage."
+          echo "Tavily is optional; when absent, the real keyless GDELT Context API is attempted. Provider failures remain blocking."
 
       - name: Set up Python
         uses: actions/setup-python@v5
