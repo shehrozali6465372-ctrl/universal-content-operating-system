@@ -83,6 +83,17 @@ Agent source ownership for AG18 (Publishing Planner and Scheduler) and AG27 (Run
 3. `PipelineWiring._run_step()` requires a dictionary result; `None` cannot silently become a successful step. Skips must be explicit.
 4. `LLMManager` refuses to generate without an injected real provider-backed generator in every environment. The guard runs before cache lookup, so a cached development placeholder cannot masquerade as execution. Production pricing validation treats either `APP_ENV=production|prod` or `UCOS_ENV=production|prod` as production.
 
+### Shared implementation consolidation
+
+The cleanup also consolidated repeated cross-layer primitives without deleting provider capability:
+- `ConfidenceResult` now has one canonical implementation under `layers/shared/models/confidence.py`; the research layer imports it instead of maintaining a duplicate model.
+- SQL identifier validation is shared by the core database manager and PostgreSQL pool code.
+- Image-size parsing is shared by the OpenRouter and Puter image adapters.
+- Atomic JSON writes and tolerant JSON-object loading are shared by the fact-verification and topic-scoring managers.
+- Layer 12 provider adapters, the real multi-model executor, the active model-router path, and the LLM factory remain in place.
+
+These changes reduce duplicated behavior while preserving domain-specific scoring, verification, provider routing, and account policy.
+
 ## CI acceptance gates
 
 The CI audit reports layer count, production import edges, test-only references, agent ownership, duplicate candidates, provider/model paths, and scaffold-success patterns. The workflow fails on Python syntax errors, unresolved internal imports, remaining high-signal scaffold-success patterns, or layer modules that have no static production importer, no test importer, and no manifest owner. Unit tests cover the audit, missing real providers, executor-less pipelines, pipeline step result types, production environment detection, cache bypass, and production pricing.
