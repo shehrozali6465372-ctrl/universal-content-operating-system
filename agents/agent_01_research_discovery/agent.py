@@ -111,6 +111,13 @@ class ResearchDiscoveryAgent:
             from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
 
             self._source = TavilyResearchSource.from_env()
+        elif self._candidate_provider is None and self._is_production():
+            # Unit tests and development remain offline by default. The keyless
+            # public provider is selected only for a real production run.
+            from agents.agent_01_research_discovery.gdelt_context_source import GDELTContextResearchSource
+
+            self._source = GDELTContextResearchSource()
+        if self._source is not None and self._candidate_provider is None:
             self._candidate_provider = self._source.discover_candidates
             if self._evidence_provider is None:
                 self._evidence_provider = self._source.fetch_evidence
@@ -133,12 +140,13 @@ class ResearchDiscoveryAgent:
 
         self._source_status: dict[str, Any] = {
             "status": "configured" if self._candidate_provider is not None else "unconfigured",
-            "provider": "tavily" if self._source is not None else (
+            "provider": getattr(self._source, "name", None) if self._source is not None else (
                 "injected" if self._candidate_provider is not None else None
             ),
             "candidate_provider_configured": self._candidate_provider is not None,
             "evidence_provider_configured": self._evidence_provider is not None,
-            "tavily_configured_from_environment": self._source is not None,
+            "tavily_configured_from_environment": bool(os.environ.get("TAVILY_API_KEY", "").strip()),
+            "gdelt_fallback_available": self._source is not None and getattr(self._source, "name", "") == "gdelt_context",
         }
 
     @staticmethod

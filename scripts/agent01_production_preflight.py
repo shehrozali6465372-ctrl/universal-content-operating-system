@@ -55,10 +55,12 @@ def run_preflight(
     except Exception:
         checks["neon_postgresql"] = {"status": "unknown", "reason_code": "postgresql_check_failed"}
 
-    checks["tavily_api_key"] = {
-        "status": "pass" if str(env.get("TAVILY_API_KEY") or "").strip() else "blocked",
-        "reason_code": "configured" if str(env.get("TAVILY_API_KEY") or "").strip() else "tavily_api_key_missing",
-    }
+    if str(env.get("TAVILY_API_KEY") or "").strip():
+        checks["research_provider"] = {"status": "pass", "reason_code": "tavily_configured"}
+    else:
+        # The agent uses the public GDELT Context API when Tavily is not configured.
+        # Provider availability and source coverage are verified by the real live smoke.
+        checks["research_provider"] = {"status": "pass", "reason_code": "gdelt_keyless_fallback_selected"}
 
     try:
         from layers.layer07_publishing.modules.account_control.account_data_store import (
@@ -105,7 +107,7 @@ def run_preflight(
         "production_certified": False,
         "checks": checks,
         "next_step": (
-            "Run a bounded live Tavily smoke and verify the deployed Agent 01 end-to-end path."
+            "Run a bounded live research-provider smoke and verify the deployed Agent 01 end-to-end path."
             if ready else
             "Resolve the blocked/unknown checks; do not enable production dispatch."
         ),
