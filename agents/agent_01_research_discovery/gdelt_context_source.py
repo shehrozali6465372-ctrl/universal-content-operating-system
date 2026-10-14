@@ -102,7 +102,7 @@ class GDELTContextResearchSource:
 
         if not isinstance(decoded, Mapping):
             raise GDELTSourceError("GDELT Context response has invalid shape")
-        rows = decoded.get("results") or decoded.get("articles")
+        rows = decoded.get("sentences") or decoded.get("results") or decoded.get("articles")
         if not isinstance(rows, list):
             # GDELT sometimes returns HTTP 200 with plain-text quota/query errors.
             raise GDELTSourceError("GDELT Context response has no results list")
