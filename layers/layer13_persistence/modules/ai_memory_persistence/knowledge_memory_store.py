@@ -45,12 +45,6 @@ class KnowledgeMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def get_graph(self) -> KnowledgeGraph:
         return self._graph
 
