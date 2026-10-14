@@ -9,7 +9,6 @@ class PricePerToken:
 
     PROMPT_PRICE: Dict[str, float] = {
         "gpt-5.6-luna": 0.0002,
-        "gpt-5.6-terra": 0.002,
         "gpt-5.6-sol": 0.004,
         "gemini-3.8-flash": 0.00075,
         "deepseek-flash": 0.0003,
@@ -18,7 +17,6 @@ class PricePerToken:
     }
     COMPLETION_PRICE: Dict[str, float] = {
         "gpt-5.6-luna": 0.0012,
-        "gpt-5.6-terra": 0.012,
         "gpt-5.6-sol": 0.020,
         "gemini-3.8-flash": 0.00375,
         "deepseek-flash": 0.0012,
