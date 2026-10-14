@@ -1,8 +1,9 @@
 """Run a real, bounded Agent 01 smoke against configured production dependencies.
 
 This command does not inject a fake provider or in-memory store. It refuses to
-perform external research until the target account, Neon/PostgreSQL pool, Tavily
-credential, and verified account-history baseline are available. It never publishes.
+perform external research until the target account, Neon/PostgreSQL pool, and
+verified account-history baseline are available. It uses Tavily when configured,
+otherwise the real Google News RSS publisher fallback. It never publishes.
 
 A pass is live-smoke evidence only, not a production certificate.
 """
@@ -86,13 +87,14 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
         if getattr(agent, "_source", None) is None:
             return {
                 "status": "blocked",
-                "reason_code": "live_tavily_source_not_configured",
+                "reason_code": "live_research_provider_not_configured",
                 "production_certified": False,
                 "external_search_performed": False,
                 "content_published": False,
             }
 
         source = agent._source
+        provider_name = str(getattr(source, "name", "unknown"))
         report = agent.run(limit=1)
         summary = _summary(report)
         request_count = int(getattr(source, "request_count", 0))
@@ -123,7 +125,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
             and row.get("persistence", {}).get("evidence_state") == "saved"
         ]
         checks = {
-            "real_tavily_requests": {
+            "real_research_provider_requests": {
                 "status": "pass" if request_count > 0 else "fail",
                 "request_count": request_count,
             },
@@ -154,6 +156,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
             "status": "passed_live_smoke" if passed else "failed_live_smoke",
             "agent_id": "AG01",
             "account_id": account_id,
+            "research_provider": provider_name,
             "agent_version": getattr(agent, "version", "unknown"),
             "checks": checks,
             "agent_report": summary,
