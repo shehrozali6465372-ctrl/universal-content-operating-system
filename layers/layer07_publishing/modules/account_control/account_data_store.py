@@ -1,29 +1,90 @@
-"""Account-scoped persistence facade.
+"""Account-scoped storage using Neon/L13 in production and SQLite in development.
 
-Every account-local read/write requires account_id. The facade resolves only the
-account's provisioned workspace, preventing accidental cross-account history use.
+Production account memory/content/analytics/learning state must survive service
+restarts. It is stored in the canonical L13 PostgreSQL agent_memory table with a
+collision-resistant account namespace. SQLite remains a development/test adapter.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sqlite3
 from typing import Any, Dict, Optional
 
 from .account_registry import AccountRegistry
 
+_ALLOWED_KINDS = {"memory", "content", "analytics", "learning"}
+
+
+def _production() -> bool:
+    return os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
+
+
+def _account_level(account_id: str) -> str:
+    """Return a short non-sensitive storage namespace for one account."""
+    if not account_id or not account_id.strip():
+        raise ValueError("account_id is required")
+    # agent_memory.level is VARCHAR(50); the hash avoids path injection and
+    # prevents account identifiers from being exposed in storage namespace keys.
+    return "acct_" + hashlib.sha256(account_id.strip().encode("utf-8")).hexdigest()[:40]
+
+
+def _decode(value: Any, default: Any = None) -> Any:
+    if value is None:
+        return default
+    if isinstance(value, (dict, list, int, float, bool)):
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return default
+
 
 class AccountDataStore:
-    def __init__(self, registry: Optional[AccountRegistry] = None) -> None:
-        self.registry = registry or AccountRegistry()
+    """Per-account key/value store with a Neon-backed production adapter."""
 
-    def _db(self, account_id: str, kind: str) -> sqlite3.Connection:
+    def __init__(
+        self,
+        registry: Optional[AccountRegistry] = None,
+        database: Any = None,
+    ) -> None:
+        self.registry = registry or AccountRegistry()
+        self._production = _production()
+        self._database = None
+        self._memory = None
+        if self._production:
+            from layers.layer13_persistence.modules.postgresql.manager import get_database
+
+            self._database = database or get_database()
+            if not bool(getattr(self._database, "_postgresql_available", False)):
+                raise RuntimeError("Neon/PostgreSQL is required for production account storage")
+            self._memory = getattr(self._database, "memory", None)
+            if self._memory is None:
+                raise RuntimeError("L13 PostgreSQL memory repository is unavailable")
+            pool = getattr(self._database, "_pool", None)
+            if pool is None:
+                raise RuntimeError("L13 PostgreSQL connection pool is unavailable")
+
+    @staticmethod
+    def _validate(account_id: str, kind: str, key: Optional[str] = None) -> None:
         if not account_id or not account_id.strip():
             raise ValueError("account_id is required")
-        if kind not in {"memory", "content", "analytics", "learning"}:
+        if kind not in _ALLOWED_KINDS:
             raise ValueError(f"unsupported account store: {kind}")
-        spec = self.registry.get(account_id)
-        if spec is None:
+        if key is not None and (not key or len(key) > 255):
+            raise ValueError("key must be between 1 and 255 characters")
+
+    def _account_exists(self, account_id: str) -> None:
+        if self.registry.get(account_id) is None:
             raise KeyError(f"unknown account_id: {account_id}")
+
+    def _db(self, account_id: str, kind: str) -> sqlite3.Connection:
+        """Development/test-only SQLite accessor."""
+        self._validate(account_id, kind)
+        self._account_exists(account_id)
+        if self._production:
+            raise RuntimeError("SQLite account storage is disabled in production")
         path = self.registry.workspace_path(account_id) / f"{kind}.sqlite3"
         if not path.exists():
             raise RuntimeError(f"account workspace is not provisioned: {account_id}")
@@ -32,39 +93,90 @@ class AccountDataStore:
         return db
 
     def put(self, account_id: str, kind: str, key: str, value: Any) -> None:
+        self._validate(account_id, kind, key)
+        self._account_exists(account_id)
+        if self._production:
+            self._memory.save(
+                _account_level(account_id), kind, key,
+                json.dumps(value, sort_keys=True, separators=(",", ":"), default=str),
+                tags="account-scoped", importance=0.5,
+            )
+            return
         with self._db(account_id, kind) as db:
             db.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-            db.execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, json.dumps(value, sort_keys=True)))
+            db.execute(
+                "INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
+                (key, json.dumps(value, sort_keys=True)),
+            )
 
     def get(self, account_id: str, kind: str, key: str, default: Any = None) -> Any:
+        self._validate(account_id, kind, key)
+        self._account_exists(account_id)
+        if self._production:
+            raw = self._memory.load(_account_level(account_id), kind, key)
+            return _decode(raw, default) if raw is not None else default
         with self._db(account_id, kind) as db:
             db.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             row = db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
-        return json.loads(row[0]) if row else default
+        return _decode(row[0], default) if row else default
 
     def append(self, account_id: str, kind: str, collection: str, value: Any) -> None:
-        """Atomically append to an account-local collection.
-
-        The old read/close/write sequence could lose events when two publishing
-        workers recorded outcomes at the same time. A write transaction with an
-        immediate lock keeps each account's event history lossless under normal
-        concurrent worker activity while retaining physical account isolation.
-        """
+        """Atomically append one item to the specified account-local collection."""
+        self._validate(account_id, kind)
+        self._account_exists(account_id)
+        if not collection or len(collection) > 230:
+            raise ValueError("collection must be between 1 and 230 characters")
         key = f"collection:{collection}"
+        if self._production:
+            pool = self._database._pool
+            level = _account_level(account_id)
+            # JSONB concatenation is one database statement, avoiding lost updates
+            # when independent workers append to the same account concurrently.
+            with pool.transaction() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_memory(level, category, key, value, tags, importance)
+                    VALUES (%s, %s, %s, %s, 'account-scoped', 0.5)
+                    ON CONFLICT (level, category, key) DO UPDATE SET
+                      value = (agent_memory.value::jsonb || EXCLUDED.value::jsonb)::text,
+                      tags = 'account-scoped',
+                      updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        level,
+                        kind,
+                        key,
+                        json.dumps([value], sort_keys=True, separators=(",", ":"), default=str),
+                    ),
+                )
+            return
         with self._db(account_id, kind) as db:
             db.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
-            current = json.loads(row[0]) if row else []
+            current = _decode(row[0], []) if row else []
             if not isinstance(current, list):
                 db.rollback()
                 raise TypeError(f"account collection is not a list: {collection}")
             current.append(value)
-            db.execute("INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)", (key, json.dumps(current, sort_keys=True)))
+            db.execute(
+                "INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
+                (key, json.dumps(current, sort_keys=True)),
+            )
             db.commit()
 
     def snapshot(self, account_id: str, kind: str) -> Dict[str, Any]:
+        self._validate(account_id, kind)
+        self._account_exists(account_id)
+        if self._production:
+            level = _account_level(account_id)
+            rows = self._database._pool.query(
+                "SELECT key, value FROM agent_memory WHERE level = %s AND category = %s ORDER BY key",
+                (level, kind),
+            )
+            return {str(row["key"]): _decode(row.get("value")) for row in rows}
         with self._db(account_id, kind) as db:
             db.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             rows = db.execute("SELECT key,value FROM kv ORDER BY key").fetchall()
-        return {key: json.loads(value) for key, value in rows}
+        return {key: _decode(value) for key, value in rows}
