@@ -22,9 +22,15 @@ Existing `layers/` code is the source material for the migration; it is **not sa
 - Requires a registered, enabled `account_id`; resolves platform and niche from that account.
 - Checks known account-local UCOS execution history, de-duplicates candidates in a batch, collects attributable evidence, scores topics, verifies supplied claims, stores a plan and emits one JSON report.
 - Writes production account state through the existing account-store facade, which uses L13 PostgreSQL/Neon in production; local JSON/SQLite is development/test only.
+- With `TAVILY_API_KEY` configured, AG01 uses the documented Tavily `POST /search` API via a bounded, timeout-limited standard-library adapter; each evidence item must carry an HTTP(S) source URL and source hostname. If the key or provider is missing/failing, discovery is explicitly blocked. The default Tavily run is capped at five topics to bound API use.
+- Numeric topic scoring runs only when all seven required dimensions are supplied. The existing scorer's default 5/10 values are not mislabeled as real measurements.
 - Missing history, missing persistence, weak evidence, failed verification, or unknown status must hold/block the candidate. No publisher is called by AG01.
 - `READY_FOR_WRITING_REVIEW` is a hand-off only; it is **not** publish authorization.
 - Before production handoff, the account's UCOS history baseline must be verified. A present legacy SQLite store is imported into Neon without overwriting newer Neon rows; if the legacy store is missing or unreadable, AG01 holds. History coverage includes records synced to UCOS. Posts made outside UCOS need a verified import before they can be included in duplicate decisions. Live source providers must also be configured; an empty source registry returns `blocked_research_sources_unconfigured` rather than fake recommendations.
+
+## Live source setup
+
+Set `TAVILY_API_KEY` in the deployed service environment. An optional `UCOS_TAVILY_TIMEOUT_SECONDS` may be set from 3 to 30 (default 12). No key is stored in source control. See the [official Tavily Search endpoint documentation](https://docs.tavily.com/documentation/api-reference/endpoint/search). Provider availability and quota are environment-dependent; CI tests use a mock API, not a real Tavily account.
 
 ## Completion evidence
 
