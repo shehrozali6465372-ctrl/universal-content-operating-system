@@ -19,13 +19,13 @@ def test_dispatcher_lists_exactly_28_workers():
     agents = AgentDispatcher().list_agents()
     assert len(agents) == 28
     assert agents[0]["id"] == "AG01"
-    assert sum(row["status"] != "planned" for row in agents) == 1
+    assert sum(row["status"] != "planned" for row in agents) == 2
 
 
 def test_planned_worker_cannot_be_dispatched():
     dispatcher = AgentDispatcher()
     with pytest.raises(AgentNotImplementedError, match="planned"):
-        dispatcher.dispatch("AG02", constructor_kwargs={}, input_payload={}, mode="staging")
+        dispatcher.dispatch("AG03", constructor_kwargs={}, input_payload={}, mode="staging")
 
 
 def test_agent_01_cannot_be_dispatched_to_production_before_certification():
@@ -182,3 +182,45 @@ def test_agent01_route_hmac_is_domain_separated_and_replay_protected(monkeypatch
     assert gateway._agent01_dispatch_hmac_authorized(
         "POST", "/agents/AG01/research", body, headers
     ) is False
+
+def test_agent_02_dispatches_implemented_worker_in_staging():
+    from datetime import datetime, timezone
+
+    from agents.agent_02_trend_scout import TrendScoutAgent
+
+    dispatcher = AgentDispatcher()
+    now = datetime.now(timezone.utc)
+    published = now.isoformat()
+    result = dispatcher.dispatch(
+        "AG02",
+        constructor_kwargs={},
+        input_payload={
+            "evidence_pack": {
+                "account_id": "account-a",
+                "candidates": [{
+                    "topic": "Storage trends",
+                    "decision": "READY_FOR_VERIFICATION",
+                    "evidence": [
+                        {"title": "Report one", "content": "Detailed report on storage trends.", "url": "https://one.example/a", "published_at": published},
+                        {"title": "Report two", "content": "Independent detailed report on storage trends.", "url": "https://two.example/b", "published_at": published},
+                    ],
+                }],
+            },
+            "as_of": now,
+        },
+        mode="staging",
+    )
+    assert result["agent_id"] == "AG02"
+    assert result["account_id"] == "account-a"
+    assert result["status"] == "READY_FOR_SCORING"
+
+
+def test_agent_02_is_not_production_dispatchable_before_certification():
+    dispatcher = AgentDispatcher()
+    with pytest.raises(AgentNotProductionReadyError, match="production_ready"):
+        dispatcher.dispatch(
+            "AG02",
+            constructor_kwargs={},
+            input_payload={"evidence_pack": {"account_id": "account-a", "candidates": []}},
+            mode="production",
+        )
