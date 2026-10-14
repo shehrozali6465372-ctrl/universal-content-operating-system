@@ -85,6 +85,7 @@ class ResearchDiscoveryAgent:
         storage_root: str | os.PathLike[str] | None = None,
         trend_sources: Mapping[str, Callable[..., Any]] | None = None,
         components: Mapping[str, Any] | None = None,
+        account_store: Any | None = None,
     ) -> None:
         self.account_id = str(account_id or "").strip()
         if not self.account_id:
@@ -96,6 +97,7 @@ class ResearchDiscoveryAgent:
         self._candidate_provider = candidate_provider
         self._evidence_provider = evidence_provider
         self._result_writer = result_writer
+        self._account_store_override = account_store
         self._components_override = dict(components or {})
         self._tavily_source = None
         configured_trend_sources = dict(trend_sources or {})
@@ -177,6 +179,13 @@ class ResearchDiscoveryAgent:
             raise LookupError("unknown account_id")
         return account
 
+    def _account_data_store(self) -> Any:
+        """Return the one account-scoped persistence facade used by this worker."""
+        if self._account_store_override is not None:
+            return self._account_store_override
+        from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+        return AccountDataStore(registry=self._get_registry())
+
     def _resolve_storage_dir(
         self, storage_root: str | os.PathLike[str] | None
     ) -> Path | None:
@@ -205,8 +214,7 @@ class ResearchDiscoveryAgent:
         if not production:
             return False
         try:
-            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
-            AccountDataStore(registry=self._get_registry()).get(
+            self._account_data_store().get(
                 self.account_id, "memory", "research_agent_storage_probe", default=None
             )
             return True
@@ -218,9 +226,7 @@ class ResearchDiscoveryAgent:
             if self._history_reader is not None:
                 rows = self._history_reader(self.account_id)
             else:
-                from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
-
-                store = AccountDataStore(registry=self._get_registry())
+                store = self._account_data_store()
                 production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
                 if production:
                     baseline = store.bootstrap_legacy_store(self.account_id, "content")
@@ -417,6 +423,8 @@ class ResearchDiscoveryAgent:
         self, topic: str, evidence: list[dict[str, str]], run_id: str, index: int
     ) -> tuple[bool, list[str]]:
         warnings: list[str] = []
+        production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
+        durable_ok = True
         for evidence_index, item in enumerate(evidence, 1):
             try:
                 self.knowledge_manager.collect(
@@ -432,8 +440,34 @@ class ResearchDiscoveryAgent:
                     dedup=True,
                 )
             except Exception:
-                warnings.append("knowledge_store_failed")
-        return not warnings, sorted(set(warnings))
+                warnings.append("knowledge_manager_runtime_failed")
+                if not production:
+                    durable_ok = False
+            if production:
+                key_digest = hashlib.sha256(
+                    f"{self.account_id}|{topic}|{item['url']}".encode("utf-8")
+                ).hexdigest()[:24]
+                try:
+                    self._account_data_store().put(
+                        self.account_id,
+                        "memory",
+                        f"research_evidence:{key_digest}",
+                        {
+                            "topic": topic,
+                            "niche": self.niche,
+                            "source": item["source"],
+                            "title": item["title"],
+                            "url": item["url"],
+                            "content": item["content"],
+                            "run_id": run_id,
+                            "candidate_index": index,
+                            "evidence_index": evidence_index,
+                        },
+                    )
+                except Exception:
+                    durable_ok = False
+                    warnings.append("durable_evidence_store_failed")
+        return durable_ok, sorted(set(warnings))
 
     def _verify_claims(
         self, candidate: Mapping[str, Any], evidence: list[dict[str, str]]
@@ -480,19 +514,39 @@ class ResearchDiscoveryAgent:
                     numeric[str(key)] = max(0.0, min(10.0, number))
             except (TypeError, ValueError):
                 continue
+
+        topic_payload = {
+            "topic": topic,
+            "platform": self.platform,
+            "niche": self.niche,
+            "category": str(candidate.get("category") or self.niche),
+            "keywords": [str(k) for k in candidate.get("keywords", [])[:20]]
+                if isinstance(candidate.get("keywords", []), list) else [],
+            "supplied_scores": numeric,
+            "confidence_from_verified_claims": confidence,
+            "source_relevance_score": candidate.get("relevance_score"),
+            "status": "research_candidate",
+        }
         try:
             existing = self.topic_manager.get_topic_by_name(topic)
             if existing is None:
                 self.topic_manager.add_topic(
                     name=topic,
                     niche=self.niche,
-                    category=str(candidate.get("category") or self.niche),
+                    category=topic_payload["category"],
                     engagement_score=numeric.get("engagement_score", 0.0),
                     audience_fit_score=numeric.get("audience_fit_score", 0.0),
                     competition_score=numeric.get("competition_score", 0.0),
-                    keywords=[str(k) for k in candidate.get("keywords", [])[:20]] if isinstance(candidate.get("keywords", []), list) else [],
+                    keywords=topic_payload["keywords"],
                     confidence=confidence,
                     auto_categorize=True,
+                )
+            if os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}:
+                digest = hashlib.sha256(
+                    f"{self.niche.casefold()}|{self._normalized(topic)}".encode("utf-8")
+                ).hexdigest()[:32]
+                self._account_data_store().put(
+                    self.account_id, "memory", f"research_topic:{digest}", topic_payload
                 )
             return True, None
         except Exception:
@@ -575,7 +629,7 @@ class ResearchDiscoveryAgent:
             return
         from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
 
-        AccountDataStore(registry=self._get_registry()).put(
+        self._account_data_store().put(
             self.account_id, "memory", f"research_agent_run:{payload['run_id']}", payload
         )
 
@@ -717,16 +771,37 @@ class ResearchDiscoveryAgent:
                     for item in evidence
                 )
                 digest = hashlib.sha256(f"{self.account_id}|{run_id}|{topic}".encode("utf-8")).hexdigest()[:24]
+                memory_content = joined_evidence or str(candidate.get("description") or "")
+                memory_summary = f"Research candidate for niche {self.niche}; decision pending."
+                memory_sources = "; ".join(item["source"] for item in evidence)
                 self.memory_manager.store_entry(
                     entry_id=f"{run_id}-{digest}",
                     title=topic,
-                    content=joined_evidence or str(candidate.get("description") or ""),
-                    summary=f"Research candidate for niche {self.niche}; decision pending.",
+                    content=memory_content,
+                    summary=memory_summary,
                     category=self.niche,
                     tags=["research-agent", self.platform],
-                    source="; ".join(item["source"] for item in evidence),
+                    source=memory_sources,
                     keywords=[topic],
                 )
+                if os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}:
+                    self._account_data_store().put(
+                        self.account_id,
+                        "memory",
+                        f"research_memory:{run_id}:{digest}",
+                        {
+                            "entry_id": f"{run_id}-{digest}",
+                            "topic": topic,
+                            "niche": self.niche,
+                            "platform": self.platform,
+                            "title": topic,
+                            "content": memory_content[:60000],
+                            "summary": memory_summary,
+                            "source": memory_sources,
+                            "keywords": [topic],
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
             except Exception:
                 memory_stored = False
                 warnings.append("research_memory_store_failed")
