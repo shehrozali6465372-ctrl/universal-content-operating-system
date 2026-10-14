@@ -212,3 +212,28 @@ def test_invalid_limit_is_rejected(tmp_path):
     agent, _writes, _components = build_agent(tmp_path)
     with pytest.raises(ValueError, match="limit must be a positive integer"):
         agent.run([], limit=0)
+
+def test_empty_production_namespace_does_not_claim_history_is_complete(tmp_path, monkeypatch):
+    import layers.layer07_publishing.modules.account_control.account_data_store as account_store_module
+
+    class MissingBaselineStore:
+        def __init__(self, registry=None):
+            self.registry = registry
+
+        def bootstrap_legacy_store(self, account_id, kind):
+            return {"status": "legacy_store_missing", "records_imported": 0}
+
+        def get(self, account_id, kind, key, default=None):
+            return default
+
+    monkeypatch.setattr(account_store_module, "AccountDataStore", MissingBaselineStore)
+    agent, _writes, _components = build_agent(tmp_path)
+    agent._history_reader = None
+    agent._get_registry = lambda: object()
+    monkeypatch.setenv("APP_ENV", "production")
+
+    rows, available, error_code = agent._load_history()
+
+    assert rows == []
+    assert available is False
+    assert error_code == "history_baseline_not_verified"
