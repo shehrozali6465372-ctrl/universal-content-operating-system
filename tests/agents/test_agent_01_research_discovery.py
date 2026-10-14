@@ -246,3 +246,24 @@ def test_unconfigured_sources_are_reported_explicitly(tmp_path):
     assert report["status"] == "blocked_research_sources_unconfigured"
     assert report["research_sources"]["status"] == "unconfigured"
     assert "research_sources_unconfigured" in report["warnings"]
+
+def test_unavailable_history_short_circuits_research_side_effects(tmp_path):
+    agent, _writes, components = build_agent(tmp_path, history_error=True)
+
+    report = agent.run([supported_candidate()])
+
+    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
+    assert components["knowledge_manager"].entries == []
+    assert components["memory_manager"].entries == []
+    assert components["topic_manager"].topics == {}
+
+
+def test_evidence_without_a_traceable_url_is_not_counted(tmp_path):
+    agent, _writes, _components = build_agent(tmp_path)
+    candidate = supported_candidate()
+    candidate["evidence"][1]["url"] = ""
+
+    report = agent.run([candidate])
+
+    assert report["candidates"][0]["evidence_count"] == 1
+    assert report["candidates"][0]["decision"] == "NEEDS_MORE_EVIDENCE"
