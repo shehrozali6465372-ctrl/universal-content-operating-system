@@ -73,6 +73,51 @@ class APIGateway:
         except (ValueError, UnicodeDecodeError):
             return False
 
+    def _agent01_dispatch_hmac_authorized(self, method: str, path: str, raw_body: bytes, headers: Any) -> bool:
+        """Authenticate only AG01's non-publishing research route with a domain-separated HMAC."""
+        if method.upper() != "POST" or path != "/agents/AG01/research":
+            return False
+        if os.getenv("APP_ENV", "").strip().lower() not in {"production", "prod"}:
+            return False
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+            if not isinstance(payload, dict):
+                return False
+            if str(payload.get("mode") or "").strip().lower() not in {"certification", "production"}:
+                return False
+            if not str(payload.get("account_id") or "").strip():
+                return False
+            root_key = os.getenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
+            timestamp = str(headers.get("X-UCOS-Agent01-Timestamp", ""))
+            nonce = str(headers.get("X-UCOS-Agent01-Nonce", ""))
+            signature = str(headers.get("X-UCOS-Agent01-Signature", ""))
+            if not root_key or not timestamp or not nonce or not signature or len(nonce) > 128:
+                return False
+            now = int(time.time())
+            if abs(now - int(timestamp)) > 300:
+                return False
+            derived_key = hmac.new(
+                root_key.encode("utf-8"),
+                b"UCOS_AGENT01_DISPATCH_API_V1",
+                hashlib.sha256,
+            ).digest()
+            body_digest = hashlib.sha256(raw_body).hexdigest()
+            canonical = f"{method.upper()}\n{path}\n{timestamp}\n{nonce}\n{body_digest}".encode("utf-8")
+            expected = hmac.new(derived_key, canonical, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                return False
+            cache_key = f"agent01:{nonce}"
+            with self._aios_nonce_lock:
+                expired = [n for n, t in self._aios_nonces.items() if now - t > 300]
+                for n in expired:
+                    self._aios_nonces.pop(n, None)
+                if cache_key in self._aios_nonces:
+                    return False
+                self._aios_nonces[cache_key] = now
+            return True
+        except (ValueError, UnicodeDecodeError):
+            return False
+
     def start(self):
         gateway=self
         class Handler(BaseHTTPRequestHandler):
@@ -91,6 +136,8 @@ class APIGateway:
                 if path == "/v1/jobs":
                     if not gateway._aios_authorized("POST", path, raw, self.headers):
                         self._send(APIResponse(401,error="AI OS authentication required")); return
+                elif path == "/agents/AG01/research" and gateway._agent01_dispatch_hmac_authorized("POST", path, raw, self.headers):
+                    pass
                 elif not gateway._authorized(self.headers):
                     self._send(APIResponse(401,error="API authentication required")); return
                 try:
