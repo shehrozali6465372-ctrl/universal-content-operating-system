@@ -52,10 +52,13 @@ class GeminiProvider:
     - Rate limited on all keys
     """
 
+    # Flash models currently selectable as stable models in the Gemini API.
+    # Keep deprecated aliases and shut-down model IDs out of the advertised list.
     SUPPORTED_MODELS = [
-        "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3-flash-preview",
-        "gemini-1.5-pro", "gemini-1.5-flash",
-        "gemini-pro", "gemini-1.0-pro",
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
     ]
 
     def __init__(self, key_manager: Optional[Any] = None) -> None:
