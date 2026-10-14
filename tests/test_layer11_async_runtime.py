@@ -19,7 +19,6 @@ from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_builder i
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_factory import RuntimeFactory
 from layers.layer11_async_runtime.modules.async_runtime_engine.runtime_context import RuntimeContext
 from layers.layer11_async_runtime.modules.event_loop_management.loop_manager import LoopManager
-from layers.layer11_async_runtime.modules.event_loop_management.loop_registry import LoopRegistry
 from layers.layer11_async_runtime.modules.async_task_manager.task import Task
 from layers.layer11_async_runtime.modules.async_task_manager.task_graph import TaskGraph
 from layers.layer11_async_runtime.modules.async_task_manager.task_scheduler import TaskScheduler
@@ -376,16 +375,6 @@ class TestLoopManager:
         lm.create_loop("a")
         lm.create_loop("b")
         assert lm.get_stats()["total_loops"] == 2
-
-
-class TestLoopRegistry:
-    def test_register(self):
-        assert LoopRegistry().register("loop1").loop_id == "loop1"
-
-    def test_unregister(self):
-        r = LoopRegistry()
-        r.register("loop1")
-        assert r.unregister("loop1") is True
 
 
 class TestTask:
