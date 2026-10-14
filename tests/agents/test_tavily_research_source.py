@@ -147,10 +147,18 @@ def test_timeout_range_is_bounded():
 
 
 def test_agent_auto_configures_tavily_only_when_key_is_present(tmp_path, monkeypatch):
-    from tests.agents.test_agent_01_research_discovery import build_agent
+    from agents.agent_01_research_discovery.agent import ResearchDiscoveryAgent
 
+    monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TAVILY_API_KEY", "unit-test-key")
-    agent, _writes, _components = build_agent(tmp_path)
+    account = {"account_id": "account-tavily", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    agent = ResearchDiscoveryAgent(
+        "account-tavily",
+        account_resolver=lambda account_id: account,
+        history_reader=lambda account_id: [],
+        result_writer=lambda report: None,
+        storage_root=tmp_path,
+    )
     assert agent._tavily_source is not None
     assert agent._source_status["tavily_configured_from_environment"] is True
     assert callable(agent._evidence_provider)
