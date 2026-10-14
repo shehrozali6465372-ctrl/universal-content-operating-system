@@ -276,7 +276,8 @@
       "status": "planned",
       "owns": "Call configured real platform adapters with account-specific credentials.",
       "sources": [
-        "layers/layer07_publishing"
+        "layers/layer07_publishing",
+        "layers/layer11_async_runtime/modules/provider_integration/wordpress_publisher.py"
       ],
       "dependencies": [
         "AG14",
