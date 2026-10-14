@@ -1,19 +1,36 @@
-"""
-Parallel Executor
-Layer 2: Research Engine — Module 10
-
-Manages parallel execution of independent modules:
-- Wave-based execution
-- Dependency-aware scheduling
-- Result aggregation
-"""
-
+"""Dependency-aware executor for Layer 02 research modules."""
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from layers.layer02_research.modules.research_planner.exceptions import DependencyError
 
-from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
+
+def _serializable_result(value: Any, depth: int = 0) -> Any:
+    """Keep module outputs JSON-safe so agent results preserve actual findings."""
+    if depth > 20:
+        return {"type": type(value).__name__, "truncated": True}
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): _serializable_result(item, depth + 1) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serializable_result(item, depth + 1) for item in value]
+    if isinstance(value, set):
+        return [_serializable_result(item, depth + 1) for item in sorted(value, key=str)]
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        try:
+            return _serializable_result(value.to_dict(), depth + 1)
+        except Exception:
+            return {"type": type(value).__name__, "serializable": False}
+    if hasattr(value, "isoformat") and callable(value.isoformat):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    return {"type": type(value).__name__, "serializable": False}
 
 
 class ExecutionResult:
@@ -33,6 +50,7 @@ class ExecutionResult:
         return {
             "module": self.module,
             "success": self.success,
+            "result": _serializable_result(self.result),
             "confidence": self.confidence,
             "duration_sec": round(self.duration_sec, 3),
             "error": self.error,
@@ -73,7 +91,7 @@ class ParallelExecutor:
                 unknown_deps = set(deps) - module_set
                 if unknown_deps:
                     raise DependencyError(
-                        f"Module '{module}' depends on unknown modules: {sorted(unknown_deps)}"
+                        f"Module '{module}' depends on unknown module: {sorted(unknown_deps)}"
                     )
                 for dep in deps:
                     if dep == module:
@@ -121,8 +139,15 @@ class ParallelExecutor:
             start = datetime.now(timezone.utc)
             try:
                 result.result = func(**ctx)
+                raw_confidence = (
+                    result.result.get("confidence", 0.0)
+                    if isinstance(result.result, dict)
+                    else getattr(result.result, "confidence", 0.0)
+                )
+                result.confidence = float(raw_confidence)
+                if not isfinite(result.confidence) or not 0.0 <= result.confidence <= 1.0:
+                    raise ValueError("module confidence must be finite and between 0 and 1")
                 result.success = True
-                result.confidence = getattr(result.result, "confidence", 0.8)
             except Exception as exc:
                 result.error = str(exc)
             end = datetime.now(timezone.utc)

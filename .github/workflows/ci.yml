@@ -52,6 +52,17 @@ jobs:
       - name: Compile
         run: python -m compileall -q layers tests tools main.py
 
+      - name: Research Agent integration gate
+        run: |
+          python -m pytest \
+            tests/shared/test_agent_runtime_contracts.py \
+            tests/shared/test_super_intelligence_agent.py \
+            tests/shared/test_research_agent.py \
+            layers/layer02_research/tests/test_trend_discovery.py \
+            layers/layer02_research/tests/test_topic_scoring.py \
+            layers/layer02_research/tests/test_fact_verification.py \
+            -q --tb=short
+
       - name: Layer 1 gate
         env:
           APP_ENV: test
