@@ -18,16 +18,27 @@ class AIPipeline:
         return self._pipelines.get(pipeline_id)
     def execute(self, pipeline_id: str, executor: Callable | None = None) -> Dict[str, Any]:
         pipeline = self._pipelines.get(pipeline_id)
-        if not pipeline: return {"error": "Pipeline not found"}
+        if not pipeline:
+            return {"error": "Pipeline not found"}
+
+        # Empty pipelines require no executor. A populated pipeline must never
+        # be marked complete by fabricating task outputs.
+        if pipeline.tasks and not callable(executor):
+            error = "No pipeline executor configured; refusing synthetic task output"
+            pipeline.status = PipelineStatus.FAILED
+            results = []
+            for task in pipeline.tasks:
+                task.status = TaskStatus.FAILED
+                task.error = error
+                results.append({"task": task.name, "status": "failed", "error": error})
+            return {"pipeline": pipeline.to_dict(), "results": results}
+
         pipeline.status = PipelineStatus.RUNNING
         results = []
         for task in pipeline.tasks:
             task.status = TaskStatus.RUNNING
             try:
-                if executor:
-                    task.output_data = executor(task)
-                else:
-                    task.output_data = {"result": f"executed_{task.name}"}
+                task.output_data = executor(task)
                 task.status = TaskStatus.COMPLETED
                 task.completed_at = time.time()
                 results.append({"task": task.name, "status": "completed"})
