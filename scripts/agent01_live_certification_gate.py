@@ -107,18 +107,6 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "production_certified": False,
         }
 
-    if not str(os.environ.get("TAVILY_API_KEY") or "").strip():
-        return {
-            "status": "history_import_passed_research_blocked",
-            "reason_code": "TAVILY_API_KEY_missing",
-            "enabled_pinterest_account_count": len(accounts),
-            "history_imports": import_reports,
-            "live_smokes": [],
-            "external_research_performed": False,
-            "content_published": False,
-            "production_certified": False,
-        }
-
     from scripts.agent01_live_smoke import run_live_smoke
 
     live_reports: list[dict[str, Any]] = []
@@ -143,6 +131,7 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
         live_reports.append({
             "status": str(report.get("status") or "unknown"),
             "agent_id": str(report.get("agent_id") or "AG01"),
+            "research_provider": str(report.get("research_provider") or "unknown"),
             "checks": safe_checks,
             "external_search_performed": bool(report.get("external_search_performed", False)),
             "content_published": bool(report.get("content_published", False)),
