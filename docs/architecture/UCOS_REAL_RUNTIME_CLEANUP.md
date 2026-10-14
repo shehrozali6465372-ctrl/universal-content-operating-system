@@ -88,6 +88,10 @@ Agent source ownership for AG18 (Publishing Planner and Scheduler) and AG27 (Run
 3. `PipelineWiring._run_step()` requires a dictionary result; `None` cannot silently become a successful step. Skips must be explicit.
 4. `LLMManager` refuses to generate without an injected real provider-backed generator in every environment. The guard runs before cache lookup, so a cached development placeholder cannot masquerade as execution. Production pricing validation treats either `APP_ENV=production|prod` or `UCOS_ENV=production|prod` as production.
 
+### Unowned monitoring modules removed
+
+The new ownership gate identified seven Layer 18 modules with no production importers, test importers, or manifest owners: a dashboard backend, a second error tracker, a standalone performance analyzer, a profiler, a resource monitor, a tracer, and in-memory usage analytics. They were removed after checking their contents and the retained monitoring path. System and error monitoring remain in `monitoring_engine`; runtime profiling remains in Layer 11; business/content analytics remain in their owning layers. The removed modules had no route, registration, durable storage, or caller connecting them to those canonical paths.
+
 ### Shared implementation consolidation
 
 The cleanup also consolidated repeated cross-layer primitives without deleting provider capability:
