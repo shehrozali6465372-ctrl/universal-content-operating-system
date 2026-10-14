@@ -18,12 +18,6 @@ class StrategyMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def record_outcome(self, strategy_key: str, outcome: Dict[str, Any]) -> None:
         if strategy_key not in self._outcomes:
             self._outcomes[strategy_key] = []
