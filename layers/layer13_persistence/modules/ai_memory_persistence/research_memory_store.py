@@ -19,12 +19,6 @@ class ResearchMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def cache_result(self, query: str, result: Any, ttl: float = 3600.0) -> None:
         import time
         self._cache[query] = {"result": result, "created_at": time.time(), "ttl": ttl}
