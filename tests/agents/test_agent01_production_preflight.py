@@ -38,7 +38,7 @@ def test_preflight_requires_key_and_verified_history_baseline():
     )
 
     assert report["status"] == "blocked"
-    assert report["checks"]["tavily_api_key"]["status"] == "blocked"
+    assert report["checks"]["research_provider"]["status"] == "blocked"
     assert report["checks"]["history_baseline"]["status"] == "blocked"
     assert report["production_certified"] is False
     assert report["side_effects"] == {
