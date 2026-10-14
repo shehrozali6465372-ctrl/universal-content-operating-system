@@ -89,3 +89,35 @@ def test_home_decor_discovery_uses_real_niche_synonyms_without_overconstraining_
     assert '"home decor"' in query
     assert '"interior design"' in query
     assert " OR " in query
+
+def test_fetch_evidence_searches_fallback_queries_for_independent_hosts(monkeypatch):
+    from agents.agent_01_research_discovery import gdelt_context_source as module
+
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    responses = [
+        {"sentences": [
+            {"title": "Topic article one", "url": "https://same.example/one",
+             "sentence": "A real matching sentence from the first publisher."},
+            {"title": "Topic article two", "url": "https://www.same.example/two",
+             "sentence": "Another real matching sentence from the same publisher."},
+        ]},
+        {"sentences": [
+            {"title": "Repeated publisher", "url": "https://same.example/three",
+             "sentence": "A third real matching sentence from the first publisher."},
+            {"title": "Independent report", "url": "https://independent.example/report",
+             "sentence": "A real matching sentence from an independent publisher."},
+        ]},
+    ]
+    seen_queries = []
+
+    def opener(request, timeout):
+        seen_queries.append(request.full_url)
+        return Response(responses.pop(0))
+
+    source = GDELTContextResearchSource(opener=opener)
+    evidence = source.fetch_evidence("Home decor trends", "home decor", limit=5)
+
+    assert len(evidence) == 2
+    assert {row["source"] for row in evidence} == {"same.example", "independent.example"}
+    assert len(seen_queries) == 2
+    assert source.request_count == 2
