@@ -1,7 +1,5 @@
-"""Contract tests for UCOS Agent 01: Research Discovery."""
+"""Agent 01 contract tests: discovery, account history, and evidence-pack handoff."""
 from __future__ import annotations
-
-from types import SimpleNamespace
 
 import pytest
 
@@ -9,75 +7,62 @@ from agents.agent_01_research_discovery.agent import ResearchDiscoveryAgent
 
 
 @pytest.fixture(autouse=True)
-def _nonproduction_environment(monkeypatch):
-    # These tests verify the worker contract without claiming live Neon access.
+def _test_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
 
 
-class FakeTopicManager:
+class InMemoryAccountStore:
     def __init__(self):
-        self.topics = {}
+        self.data = {}
 
-    def get_topic_by_name(self, name):
-        return self.topics.get(name.casefold())
+    def get(self, account_id, kind, key, default=None):
+        return self.data.get((account_id, kind, key), default)
 
-    def add_topic(self, name, **kwargs):
-        item = {"name": name, **kwargs}
-        self.topics[name.casefold()] = item
-        return item
+    def put(self, account_id, kind, key, value):
+        self.data[(account_id, kind, key)] = value
 
 
-class FakeKnowledgeManager:
-    def __init__(self):
-        self.entries = []
-
-    def collect(self, **kwargs):
-        self.entries.append(kwargs)
-        return {"stored": True}
-
-
-class FakeVerifier:
-    def __init__(self, status="verified", confidence=0.95):
-        self.status = status
-        self.confidence = confidence
-
-    def verify_claim(self, claim_text, evidence_texts):
-        return SimpleNamespace(
-            status=self.status,
-            confidence_result=SimpleNamespace(confidence=self.confidence),
-        )
-
-
-class FakeMemoryManager:
-    def __init__(self):
-        self.entries = []
-
-    def store_entry(self, **kwargs):
-        self.entries.append(kwargs)
-        return kwargs["entry_id"]
+def candidate(topic="Small-space storage ideas"):
+    return {
+        "topic": topic,
+        "source_relevance_score": 0.86,
+        "claims": ["The writing agent should verify this factual claim."],
+        "evidence": [
+            {
+                "source": "publisher-one.example",
+                "title": "Storage research one",
+                "url": "https://publisher-one.example/article",
+                "content": "A source-backed excerpt about small-space storage.",
+                "published_at": "2026-10-13",
+            },
+            {
+                "source": "publisher-two.example",
+                "title": "Storage research two",
+                "url": "https://publisher-two.example/research",
+                "content": "A second independent excerpt about apartment storage.",
+            },
+        ],
+    }
 
 
-class FakeScoringManager:
-    def score_topic(self, topic, niche="general", scores=None, evidence=None):
-        return {
-            "topic": topic,
-            "niche": niche,
-            "overall_score": 8.5,
-            "recommendation": "publish",
-            "confidence": 0.95,
-            "raw_scores": scores or {},
-            "weighted_scores": {},
-        }
-
-
-class FakePlanner:
-    def create_plan(self, topic, niche="general"):
-        return SimpleNamespace(plan_id="plan-test", status="ready", tasks=[object()])
-
-
-def build_agent(tmp_path, *, history=None, history_error=False, writes=None, verifier=None):
+def build_agent(
+    tmp_path,
+    *,
+    history=None,
+    history_error=False,
+    writes=None,
+    candidate_provider=None,
+    evidence_provider=None,
+    account_store=None,
+):
     writes = writes if writes is not None else []
-    account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    account = {
+        "account_id": "account-a",
+        "platform": "pinterest",
+        "niche": "home decor",
+        "enabled": True,
+    }
 
     def read_history(account_id):
         assert account_id == "account-a"
@@ -85,70 +70,48 @@ def build_agent(tmp_path, *, history=None, history_error=False, writes=None, ver
             raise RuntimeError("deliberate test failure")
         return list(history or [])
 
-    components = {
-        "topic_manager": FakeTopicManager(),
-        "knowledge_manager": FakeKnowledgeManager(),
-        "verifier": verifier or FakeVerifier(),
-        "memory_manager": FakeMemoryManager(),
-        "scoring_manager": FakeScoringManager(),
-        "planner_manager": FakePlanner(),
+    kwargs = {
+        "account_resolver": lambda account_id: account,
+        "history_reader": read_history,
+        "result_writer": writes.append,
+        "candidate_provider": candidate_provider,
+        "evidence_provider": evidence_provider,
+        "account_store": account_store,
     }
-    return ResearchDiscoveryAgent(
-        "account-a",
-        account_resolver=lambda account_id: account,
-        history_reader=read_history,
-        result_writer=writes.append,
-        storage_root=tmp_path,
-        components=components,
-    ), writes, components
-
-
-def supported_candidate(topic="Small-space storage ideas"):
-    return {
-        "topic": topic,
-        "scores": {"audience_fit": 8, "opportunity": 8, "risk": 2},
-        "claims": ["Two independent sources support this claim."],
-        "evidence": [
-            {
-                "source": "Source One",
-                "title": "Research one",
-                "url": "https://one.example.com/article",
-                "content": "The first source contains directly relevant supporting evidence.",
-            },
-            {
-                "source": "Source Two",
-                "title": "Research two",
-                "url": "https://two.example.org/research",
-                "content": "The second independent source contains corroborating evidence.",
-            },
-        ],
-    }
+    if account_store is None:
+        kwargs["storage_root"] = tmp_path
+    return ResearchDiscoveryAgent("account-a", **kwargs), writes
 
 
 def test_missing_account_id_is_rejected():
     with pytest.raises(ValueError, match="account_id is required"):
-        ResearchDiscoveryAgent("", account_resolver=lambda _account_id: None)
+        ResearchDiscoveryAgent("")
 
 
-def test_supported_candidate_is_ready_for_writing_review_not_publication(tmp_path):
-    agent, writes, components = build_agent(tmp_path)
-    report = agent.run([supported_candidate()])
+def test_supported_candidate_is_handed_to_agent_06_not_publishing(tmp_path):
+    agent, writes = build_agent(tmp_path)
+    report = agent.run([candidate()])
 
+    result = report["candidates"][0]
     assert report["status"] == "completed"
     assert report["account_id"] == "account-a"
     assert report["recommended_topic"] == "Small-space storage ideas"
-    candidate = report["candidates"][0]
-    assert candidate["decision"] == "READY_FOR_WRITING_REVIEW"
-    assert candidate["verification"]["status"] == "verified"
-    assert candidate["independent_source_count"] == 2
+    assert result["decision"] == "READY_FOR_VERIFICATION"
+    assert result["verification"]["status"] == "pending_agent_06"
+    assert result["claims_for_agent_06"] == ["The writing agent should verify this factual claim."]
+    assert result["evidence_count"] == 2
+    assert result["independent_source_count"] == 2
+    assert result["source_relevance"]["value"] == pytest.approx(0.86)
+    assert result["source_relevance"]["metric"] == "vendor_search_relevance_not_content_performance"
+    assert result["next_agent"] == "AG06"
     assert report["publishing"] == {"performed": False, "status": "not_requested"}
     assert report["persistence"]["status"] == "persisted"
     assert len(writes) == 1
-    assert len(components["knowledge_manager"].entries) == 2
 
 
-def test_published_topic_in_account_history_is_blocked(tmp_path):
-    agent, _writes, _components = build_agent(
+def test_published_topic_in_account_history_is_blocked_before_research(tmp_path):
+    calls = []
+    agent, _writes = build_agent(
         tmp_path,
         history=[{
             "topic": "Small-space storage ideas",
@@ -156,114 +119,172 @@ def test_published_topic_in_account_history_is_blocked(tmp_path):
             "published": True,
             "post_id": "real-post-123",
         }],
+        evidence_provider=lambda topic, niche, limit: calls.append(topic) or [],
     )
-    report = agent.run([supported_candidate()])
+    report = agent.run([candidate()])
 
-    candidate = report["candidates"][0]
-    assert candidate["decision"] == "BLOCK_DUPLICATE_PUBLISHED"
-    assert candidate["duplicate"]["post_id_present"] is True
+    result = report["candidates"][0]
+    assert result["decision"] == "BLOCK_DUPLICATE_PUBLISHED"
+    assert result["duplicate"]["post_id_present"] is True
+    assert result["evidence_count"] == 0
+    assert calls == []
     assert report["recommended_topic"] is None
 
 
-def test_unavailable_history_fails_closed(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path, history_error=True)
-    report = agent.run([supported_candidate()])
+def test_unavailable_history_fails_closed_without_research_side_effects(tmp_path):
+    calls = []
+    agent, _writes = build_agent(
+        tmp_path,
+        history_error=True,
+        evidence_provider=lambda topic, niche, limit: calls.append(topic) or [],
+    )
+    report = agent.run([candidate()])
 
     assert report["history"]["status"] == "unknown"
     assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
+    assert calls == []
     assert report["recommended_topic"] is None
 
 
 def test_duplicate_candidate_in_same_batch_is_blocked(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path)
-    report = agent.run([
-        supported_candidate("Small-space storage ideas"),
-        supported_candidate("Small-space storage ideas"),
-    ])
+    agent, _writes = build_agent(tmp_path)
+    report = agent.run([candidate(), candidate()])
 
     assert report["candidate_count"] == 2
     assert report["candidates"][1]["decision"] == "BLOCK_DUPLICATE_IN_BATCH"
 
 
-def test_same_source_host_does_not_count_as_two_independent_sources(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path)
-    candidate = supported_candidate()
-    candidate["evidence"][1]["url"] = "https://one.example.com/another-page"
+def test_same_source_host_is_not_counted_as_two_independent_sources(tmp_path):
+    agent, _writes = build_agent(tmp_path)
+    repeated_host = candidate()
+    repeated_host["evidence"][1]["url"] = "https://publisher-one.example/another-page"
 
-    report = agent.run([candidate])
+    report = agent.run([repeated_host])
 
     result = report["candidates"][0]
     assert result["evidence_count"] == 1
     assert result["decision"] == "NEEDS_MORE_EVIDENCE"
 
 
-def test_low_confidence_claim_cannot_be_marked_ready(tmp_path):
-    agent, _writes, _components = build_agent(
+def test_missing_source_url_does_not_count_as_citable_evidence(tmp_path):
+    agent, _writes = build_agent(tmp_path)
+    value = candidate()
+    value["evidence"][1]["url"] = ""
+
+    report = agent.run([value])
+
+    assert report["candidates"][0]["evidence_count"] == 1
+    assert report["candidates"][0]["decision"] == "NEEDS_MORE_EVIDENCE"
+
+
+def test_evidence_provider_can_add_a_second_independent_source(tmp_path):
+    value = candidate()
+    value["evidence"] = value["evidence"][:1]
+    agent, _writes = build_agent(
         tmp_path,
-        verifier=FakeVerifier(status="verified", confidence=0.40),
+        evidence_provider=lambda topic, niche, limit: [{
+            "source": "publisher-two.example",
+            "title": "Second source",
+            "url": "https://publisher-two.example/support",
+            "content": "Supporting source material.",
+        }],
     )
-    report = agent.run([supported_candidate()])
 
-    assert report["candidates"][0]["decision"] == "HUMAN_REVIEW_REQUIRED"
-    assert report["recommended_topic"] is None
+    report = agent.run([value])
+
+    assert report["candidates"][0]["evidence_count"] == 2
+    assert report["candidates"][0]["decision"] == "READY_FOR_VERIFICATION"
 
 
-def test_invalid_limit_is_rejected(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path)
-    with pytest.raises(ValueError, match="limit must be a positive integer"):
-        agent.run([], limit=0)
-
-def test_empty_production_namespace_does_not_claim_history_is_complete(tmp_path, monkeypatch):
-    import layers.layer07_publishing.modules.account_control.account_data_store as account_store_module
-
-    class MissingBaselineStore:
-        def __init__(self, registry=None):
-            self.registry = registry
-
-        def bootstrap_legacy_store(self, account_id, kind):
-            return {"status": "legacy_store_missing", "records_imported": 0}
-
-        def get(self, account_id, kind, key, default=None):
-            return default
-
-    monkeypatch.setattr(account_store_module, "AccountDataStore", MissingBaselineStore)
-    agent, _writes, _components = build_agent(tmp_path)
-    agent._history_reader = None
-    agent._get_registry = lambda: object()
-    monkeypatch.setenv("APP_ENV", "production")
-
-    rows, available, error_code = agent._load_history()
-
-    assert rows == []
-    assert available is False
-    assert error_code == "history_baseline_not_verified"
-
-def test_unconfigured_sources_are_reported_explicitly(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path)
+def test_unconfigured_source_is_reported_explicitly(tmp_path):
+    agent, _writes = build_agent(tmp_path)
 
     report = agent.run()
 
     assert report["status"] == "blocked_research_sources_unconfigured"
     assert report["research_sources"]["status"] == "unconfigured"
-    assert "research_sources_unconfigured" in report["warnings"]
-
-def test_unavailable_history_short_circuits_research_side_effects(tmp_path):
-    agent, _writes, components = build_agent(tmp_path, history_error=True)
-
-    report = agent.run([supported_candidate()])
-
-    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
-    assert components["knowledge_manager"].entries == []
-    assert components["memory_manager"].entries == []
-    assert components["topic_manager"].topics == {}
 
 
-def test_evidence_without_a_traceable_url_is_not_counted(tmp_path):
-    agent, _writes, _components = build_agent(tmp_path)
-    candidate = supported_candidate()
-    candidate["evidence"][1]["url"] = ""
+def test_failed_candidate_provider_is_reported_as_unavailable(tmp_path):
+    def fail_provider(account_id, niche, limit):
+        raise RuntimeError("provider secret details must not leak")
 
-    report = agent.run([candidate])
+    agent, _writes = build_agent(tmp_path, candidate_provider=fail_provider)
 
-    assert report["candidates"][0]["evidence_count"] == 1
-    assert report["candidates"][0]["decision"] == "NEEDS_MORE_EVIDENCE"
+    report = agent.run()
+
+    assert report["status"] == "blocked_research_sources_unavailable"
+    assert report["research_sources"]["status"] == "unavailable"
+    assert "provider secret details" not in str(report)
+
+
+def test_invalid_limit_is_rejected(tmp_path):
+    agent, _writes = build_agent(tmp_path)
+    with pytest.raises(ValueError, match="limit must be a positive integer"):
+        agent.run([], limit=0)
+
+
+def test_unconfigured_durable_state_prevents_ready_handoff(tmp_path):
+    writes = []
+    account = {"account_id": "account-isolated", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    agent = ResearchDiscoveryAgent(
+        "account-isolated",
+        account_resolver=lambda _account_id: account,
+        history_reader=lambda _account_id: [],
+        result_writer=writes.append,
+    )
+
+    report = agent.run([candidate()])
+
+    assert report["candidates"][0]["decision"] == "HOLD_RESEARCH_STORAGE_UNAVAILABLE"
+    assert report["recommended_topic"] is None
+
+
+def test_production_state_persists_topic_evidence_and_run_by_account(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    store = InMemoryAccountStore()
+    account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    agent = ResearchDiscoveryAgent(
+        "account-a",
+        account_resolver=lambda _account_id: account,
+        history_reader=lambda _account_id: [],
+        account_store=store,
+    )
+
+    report = agent.run([candidate()])
+
+    assert report["candidates"][0]["decision"] == "READY_FOR_VERIFICATION"
+    assert report["persistence"]["status"] == "persisted"
+    keys = [key for (account_id, kind, key) in store.data if account_id == "account-a" and kind == "memory"]
+    assert any(key.startswith("research_candidate:") for key in keys)
+    assert len([key for key in keys if key.startswith("research_evidence:")]) == 2
+    assert any(key.startswith("research_agent_run:") for key in keys)
+    assert all(account_id == "account-a" for account_id, _kind, _key in store.data)
+
+
+def test_two_accounts_have_separate_research_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    store = InMemoryAccountStore()
+
+    def make(account_id):
+        account = {"account_id": account_id, "platform": "pinterest", "niche": "home decor", "enabled": True}
+        return ResearchDiscoveryAgent(
+            account_id,
+            account_resolver=lambda _account_id: account,
+            history_reader=lambda _account_id: [],
+            account_store=store,
+        )
+
+    make("account-a").run([candidate("Ideas for account A")])
+    make("account-b").run([candidate("Ideas for account B")])
+
+    topics_a = [
+        value for (account_id, kind, key), value in store.data.items()
+        if account_id == "account-a" and key.startswith("research_candidate:")
+    ]
+    topics_b = [
+        value for (account_id, kind, key), value in store.data.items()
+        if account_id == "account-b" and key.startswith("research_candidate:")
+    ]
+    assert [row["topic"] for row in topics_a] == ["Ideas for account A"]
+    assert [row["topic"] for row in topics_b] == ["Ideas for account B"]
