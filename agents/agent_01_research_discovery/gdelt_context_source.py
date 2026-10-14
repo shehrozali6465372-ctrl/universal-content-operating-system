@@ -67,7 +67,7 @@ class GDELTContextResearchSource:
             time.sleep(wait)
         params = urlencode({
             "query": query, "mode": "artlist", "format": "json",
-            "maxrecords": max_results, "timespan": "1week",
+            "maxrecords": max_results, "timespan": "72h",
         })
         request = Request(
             f"{_ENDPOINT}?{params}",
@@ -116,7 +116,7 @@ class GDELTContextResearchSource:
             # Do not synthesize article content from titles. Require a sentence/snippet
             # actually returned by the source API before it can count as evidence.
             content = self._text(
-                item.get("sentence") or item.get("snippet") or item.get("content") or item.get("description"), 4000
+                item.get("sentence") or item.get("context") or item.get("snippet") or item.get("content") or item.get("description"), 4000
             )
             if not url or not title or not content or url in seen:
                 continue
@@ -137,7 +137,7 @@ class GDELTContextResearchSource:
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
         results = self.search(
-            f"{self._text(niche, 120)} trends OR ideas OR guide",
+            f"{self._text(niche, 120)} (trends OR ideas OR guide)",
             max_results=min(limit, self.max_candidates_per_run),
         )
         return [{
