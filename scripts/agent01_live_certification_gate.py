@@ -1,7 +1,7 @@
 """Real production evidence gate for UCOS Agent 01.
 
-Runs only against the configured production Neon database and real Pinterest and
-Tavily APIs. No mocked adapters, canned API responses, injected stores, or
+Runs against the configured production Neon database, real Pinterest APIs, and the
+real research provider through the authenticated deployed UCOS API. No mocked adapters, canned API responses, injected stores, or
 publishing calls are used. This is live validation evidence, not an automatic
 production certificate: the release orchestrator must also be wired and verified.
 """
