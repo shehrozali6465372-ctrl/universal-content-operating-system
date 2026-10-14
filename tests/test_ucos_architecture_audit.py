@@ -61,3 +61,31 @@ def test_unreferenced_code_is_only_reported_as_a_candidate(tmp_path):
     )
     assert candidate["candidate_class"] == "no_static_inbound_import_found"
     assert any("never deletes" in note for note in report["safety_notes"])
+
+
+def test_test_only_imports_do_not_count_as_production_ownership(tmp_path):
+    layer = tmp_path / "layers" / "layer01_core"
+    layer.mkdir(parents=True)
+    (layer / "__init__.py").write_text("", encoding="utf-8")
+    (layer / "legacy_candidate.py").write_text(
+        "def old_helper(value):\n    normalized = str(value)\n    return normalized.strip()\n",
+        encoding="utf-8",
+    )
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_legacy.py").write_text(
+        "from layers.layer01_core.legacy_candidate import old_helper\n"
+        "def test_old_helper():\n    assert old_helper('x') == 'x'\n",
+        encoding="utf-8",
+    )
+
+    report = build_report(tmp_path)
+    candidate = next(
+        item for item in report["orphan_candidates"]
+        if item["path"] == "layers/layer01_core/legacy_candidate.py"
+    )
+    layer_info = report["layers"][0]
+    assert candidate["candidate_class"] == "tests_only_references"
+    assert candidate["test_only_importer_count"] == 1
+    assert layer_info["files_with_static_inbound_imports"] >= 1
+    assert layer_info["files_with_static_production_inbound_imports"] == 0
