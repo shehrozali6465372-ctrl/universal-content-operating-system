@@ -68,6 +68,40 @@ class _FakeManagerPool:
 
 
 class Layer13PostgreSQLHardeningTests(unittest.TestCase):
+    def test_neon_database_url_is_parsed_and_requires_tls(self) -> None:
+        dsn = "postgresql://neon_role:p%40ss%3Aword@ep-example.ap-southeast-1.aws.neon.tech/ucos_db?sslmode=require"
+        with patch.dict(
+            os.environ,
+            {
+                "NEON_DATABASE_URL": dsn,
+                "POSTGRES_HOST": "should-not-win",
+                "POSTGRES_DB": "wrong_db",
+                "POSTGRES_USER": "wrong_user",
+                "POSTGRES_PASSWORD": "wrong_password",
+            },
+            clear=False,
+        ):
+            config = ConnectionConfig.from_env()
+
+        self.assertEqual(config.host, "ep-example.ap-southeast-1.aws.neon.tech")
+        self.assertEqual(config.database, "ucos_db")
+        self.assertEqual(config.user, "neon_role")
+        self.assertEqual(config.password, "p@ss:word")
+        self.assertEqual(config.sslmode, "require")
+
+    def test_neon_database_url_refuses_tls_downgrade_without_leaking_dsn(self) -> None:
+        dsn = "postgresql://neon_role:secret@ep-example.ap-southeast-1.aws.neon.tech/ucos_db?sslmode=disable"
+        with patch.dict(os.environ, {"NEON_DATABASE_URL": dsn}, clear=True):
+            with self.assertRaisesRegex(ValueError, "valid PostgreSQL URI") as error:
+                ConnectionConfig.from_env()
+        self.assertNotIn("secret", str(error.exception))
+        self.assertNotIn(dsn, str(error.exception))
+
+    def test_invalid_database_url_fails_closed_without_fallback_to_localhost(self) -> None:
+        with patch.dict(os.environ, {"NEON_DATABASE_URL": "not-a-postgres-url"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "valid PostgreSQL URI"):
+                ConnectionConfig.from_env()
+
     def test_borrowed_connection_is_returned_transaction_clean(self) -> None:
         pool = ConnectionPool(ConnectionConfig(min_connections=1, max_connections=1))
         conn = _FakeConnection()
