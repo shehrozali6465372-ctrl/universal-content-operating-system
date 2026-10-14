@@ -88,6 +88,77 @@ def _absolute_import_targets(node: ast.AST, current_module: str, path: Path) -> 
     return targets
 
 
+def _literal_dict(node: ast.AST) -> dict[str, Any]:
+    """Return literal string-key dictionary entries; ignore computed expressions."""
+    if not isinstance(node, ast.Dict):
+        return {}
+    output: dict[str, Any] = {}
+    for key, value in zip(node.keys, node.values):
+        if isinstance(key, ast.Constant) and isinstance(key.value, str) and isinstance(value, ast.Constant):
+            output[key.value] = value.value
+    return output
+
+
+def _scaffold_success_patterns(parsed: dict[Path, ast.AST], root: Path) -> list[dict[str, Any]]:
+    """Detect narrow, high-signal placeholder success patterns; never assume deletion safety."""
+    findings: list[dict[str, Any]] = []
+    for path, tree in parsed.items():
+        rel = repo_relative(path, root)
+        if is_test_source(rel):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            has_self_data_append = any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "append"
+                and isinstance(call.func.value, ast.Attribute)
+                and call.func.value.attr == "_data"
+                and isinstance(call.func.value.value, ast.Name)
+                and call.func.value.value.id == "self"
+                for call in ast.walk(node)
+            )
+            for child in ast.walk(node):
+                if not isinstance(child, ast.Return) or child.value is None:
+                    continue
+                fields = _literal_dict(child.value)
+                if (
+                    has_self_data_append
+                    and fields.get("processed") is True
+                    and fields.get("status") in {"ok", "success", "completed"}
+                ):
+                    findings.append({
+                        "path": rel,
+                        "symbol": node.name,
+                        "line": child.lineno,
+                        "pattern": "buffer_append_claims_processing_success",
+                        "evidence": "method appends to self._data and returns a literal processed=true success status",
+                        "severity": "high",
+                        "action": "review_against_runtime_owner_before_refactor",
+                    })
+                if isinstance(child.value, ast.JoinedStr):
+                    literal_parts = [
+                        part.value for part in child.value.values
+                        if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                    ]
+                    if any("Response from " in part or "executed_" in part for part in literal_parts):
+                        findings.append({
+                            "path": rel,
+                            "symbol": node.name,
+                            "line": child.lineno,
+                            "pattern": "fabricated_runtime_output_string",
+                            "evidence": "returned f-string embeds a known placeholder-output prefix",
+                            "severity": "high",
+                            "action": "replace_with_real_execution_or_explicit_failure",
+                        })
+    unique: dict[tuple[str, str, int, str], dict[str, Any]] = {}
+    for item in findings:
+        key = (item["path"], item["symbol"], item["line"], item["pattern"])
+        unique[key] = item
+    return sorted(unique.values(), key=lambda x: (x["path"], x["line"], x["pattern"]))
+
+
 def build_report(root: Path = ROOT) -> dict[str, Any]:
     root = root.resolve()
     files = production_python_paths(root)
@@ -256,6 +327,8 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         if len(items) > 1 and len({item["path"] for item in items}) > 1
     ]
 
+    scaffold_success_patterns = _scaffold_success_patterns(parsed, root)
+
     # References from the manifest are reported separately; they are not treated as proof
     # that a planned agent is already a live caller of a legacy module.
     orphan_candidates: list[dict[str, Any]] = []
@@ -321,6 +394,15 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             "model_provider_related_files": sum(1 for item in provider_inventory if item["source_type"] == "production"),
             "model_provider_related_test_files": sum(1 for item in provider_inventory if item["source_type"] == "test"),
             "production_import_edges": len(production_import_edges),
+            "scaffold_success_pattern_findings": len(scaffold_success_patterns),
+            "buffer_append_claims_processing_success": sum(
+                1 for item in scaffold_success_patterns
+                if item["pattern"] == "buffer_append_claims_processing_success"
+            ),
+            "fabricated_runtime_output_strings": sum(
+                1 for item in scaffold_success_patterns
+                if item["pattern"] == "fabricated_runtime_output_string"
+            ),
         },
         "agent_manifest": manifest_summary,
         "agents": agents,
@@ -329,6 +411,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         "orphan_candidates": orphan_candidates,
         "exact_duplicate_file_groups": duplicate_files,
         "duplicate_function_body_groups": duplicate_bodies[:250],
+        "scaffold_success_patterns": scaffold_success_patterns,
         "model_provider_inventory": provider_inventory,
         "syntax_errors": syntax_errors,
         "safety_notes": [
@@ -337,6 +420,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             "Dynamic imports, entry-point loading, reflection, framework registration, external callers and provider callbacks may not be visible statically.",
             "Model/provider adapters are inventoried explicitly so cleanup can preserve agent-building and inference capability.",
             "A cleanup deletion requires runtime ownership review, regression tests, integration evidence and rollback coverage.",
+            "Scaffold-success findings are high-signal review targets, not automatic deletion instructions.",
         ],
     }
 
