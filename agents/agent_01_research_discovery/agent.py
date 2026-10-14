@@ -196,8 +196,6 @@ class ResearchDiscoveryAgent:
             return True
         except Exception:
             return False
-self, filename: str) -> str | None:
-        return str(self._storage_dir / filename) if self._storage_dir is not None else None
 
     def _load_history(self) -> tuple[list[dict[str, Any]], bool, str | None]:
         try:
