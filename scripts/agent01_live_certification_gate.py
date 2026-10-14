@@ -107,19 +107,7 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "production_certified": False,
         }
 
-    if not str(os.environ.get("TAVILY_API_KEY") or "").strip():
-        return {
-            "status": "history_import_passed_research_blocked",
-            "reason_code": "TAVILY_API_KEY_missing",
-            "enabled_pinterest_account_count": len(accounts),
-            "history_imports": import_reports,
-            "live_smokes": [],
-            "external_research_performed": False,
-            "content_published": False,
-            "production_certified": False,
-        }
-
-    from scripts.agent01_live_smoke import run_live_smoke
+    # ResearchDiscoveryAgent selects Tavily when configured, otherwise the real\n    # public GDELT Context API. The smoke must prove an actual external request.\n\n    from scripts.agent01_live_smoke import run_live_smoke
 
     live_reports: list[dict[str, Any]] = []
     for account in accounts:
