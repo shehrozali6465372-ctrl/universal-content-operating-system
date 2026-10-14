@@ -56,7 +56,7 @@ jobs:
         run: python -m pytest tests/test_ucos_architecture_audit.py -q --tb=short
 
       - name: Layer 12 real model execution integrity
-        run: python -m pytest tests/test_layer12_ai_foundation.py::TestMultiModelExecutor tests/test_layer12_production_contracts.py -q --tb=short
+        run: python -m pytest tests/test_layer12_ai_foundation.py tests/test_layer12_production_contracts.py tests/unit/layer12_ai_foundation/test_parallel_execution.py -q --tb=short
 
       - name: Gemini provider adapter regression
         run: python -m pytest tests/test_gemini_real_api.py -q --tb=short
@@ -91,6 +91,9 @@ jobs:
       - name: Layer 15 gate
         run: python -m pytest tests/test_layer15_production_gate.py -q --tb=short
 
+      - name: Layer 18 monitoring regression
+        run: python -m pytest tests/test_phase5_monitoring.py -q --tb=short
+
       - name: Integration contracts
         run: python -m pytest tests/test_real_integration_contracts.py -q --tb=short
 
@@ -99,6 +102,7 @@ jobs:
 
       - name: System status
         run: |
+          python -m pytest tests/test_main_subsystem_status.py -q --tb=short
           python main.py --boot
           python main.py --integration-status
 
