@@ -113,8 +113,12 @@ class GDELTContextResearchSource:
             self.last_error_code = "invalid_response_shape"
             raise GDELTSourceError("GDELT Context response has invalid shape")
         self.last_response_keys = sorted(str(key)[:80] for key in decoded.keys())[:20]
-        rows = decoded.get("sentences") or decoded.get("results") or decoded.get("articles")
-        if not isinstance(rows, list):
+        rows = None
+        for response_key in ("sentences", "results", "articles"):
+            if isinstance(decoded.get(response_key), list):
+                rows = decoded[response_key]
+                break
+        if rows is None:
             self.last_error_code = "response_no_results_list"
             raise GDELTSourceError("GDELT Context response has no results list")
         self.last_response_row_count = len(rows)
