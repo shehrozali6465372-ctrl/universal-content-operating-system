@@ -7,28 +7,14 @@ name: UCOS Full End-to-End One Real Autonomous Post
 # Research provider: SerpAPI when configured, Google News RSS fallback otherwise.
 # Certification conformance: exclude P0 preflight from canonical layer list.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ucos-full-e2e-one-post.yml"
-      - ".github/workflows/ci.yml"
-      - ".github/workflows/production-activation-gate.yml"
-      - "layers/layer07_publishing/modules/platform_plugin_manager/facebook/facebook_publisher.py"
-      - "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py"
-      - "layers/layer07_publishing/modules/publisher_engine/publisher_manager.py"
-      - "layers/layer07_publishing/modules/publisher_engine/status_tracker.py"
-      - "layers/layer13_persistence/**"
-      - "layers/layer17_security/**"
-      - "layers/layer15_async_runtime/**"
-      - "layers/layer14_enterprise_integration/modules/real_integrations/gateway.py"
-      - "layers/layer12_ai_foundation/**"
-      - "layers/layer14_enterprise_integration/modules/master_orchestrator/pipeline_wiring.py"
-      - "layers/layer14_enterprise_integration/modules/master_orchestrator/production_pipeline.py"
-      - "tests/test_real_integration_contracts.py"
-      - "docs/releases/UCOS_V1_2_RELEASE_MANIFEST.md"
-      - "docs/architecture/UCOS_V1_2_PRODUCTION_CROSSCHECK.md"
-
+  # This workflow can publish a real public post. Code changes must never trigger it.
   workflow_dispatch:
+    inputs:
+      confirm_real_post:
+        description: "Explicitly authorize one real Facebook post to the configured production Page"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -49,11 +35,17 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before || '' }}
           EVENT_SHA: ${{ github.sha }}
+          CONFIRM_REAL_POST: ${{ inputs.confirm_real_post }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$CONFIRM_REAL_POST" != "true" ]]; then
+              echo "run_e2e=false" >> "$GITHUB_OUTPUT"
+              echo "::error::No public post sent: set confirm_real_post=true only after reviewing target, text and credentials."
+              exit 1
+            fi
             echo "run_e2e=true" >> "$GITHUB_OUTPUT"
-            echo "E2E_SCOPE=MANUAL_DISPATCH"
+            echo "E2E_SCOPE=EXPLICITLY_AUTHORIZED_REAL_POST"
             exit 0
           fi
           if [[ -z "$EVENT_BEFORE" || "$EVENT_BEFORE" =~ ^0+$ ]]; then
