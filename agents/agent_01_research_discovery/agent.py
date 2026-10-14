@@ -79,6 +79,25 @@ class ResearchDiscoveryAgent:
         if not self.account_id:
             raise ValueError("account_id is required")
 
+        # Dependency overrides are for isolated unit tests only. Production must
+        # resolve the real registered account, real Tavily provider and real Neon
+        # store; a caller must not be able to certify it using fake dependencies.
+        if self._is_production():
+            injected = [
+                name for name, value in (
+                    ("account_resolver", account_resolver),
+                    ("history_reader", history_reader),
+                    ("candidate_provider", candidate_provider),
+                    ("evidence_provider", evidence_provider),
+                    ("result_writer", result_writer),
+                    ("account_store", account_store),
+                ) if value is not None
+            ]
+            if injected:
+                raise ValueError(
+                    "production mode forbids injected test dependencies: " + ", ".join(injected)
+                )
+
         self._registry = None
         self._account_resolver = account_resolver
         self._history_reader = history_reader
@@ -400,6 +419,12 @@ class ResearchDiscoveryAgent:
         """Create a JSON evidence-pack report without verifying claims or publishing."""
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
+        if self._is_production() and candidates is not None:
+            raise ValueError("production mode does not accept caller-supplied candidates")
+        if self._is_production() and (
+            self._source is None or self._source_status.get("provider") != "tavily"
+        ):
+            raise RuntimeError("production mode requires the real Tavily provider configured from TAVILY_API_KEY")
         requested_limit = min(limit, MAX_CANDIDATES)
         limit = requested_limit
         if self._source is not None:
