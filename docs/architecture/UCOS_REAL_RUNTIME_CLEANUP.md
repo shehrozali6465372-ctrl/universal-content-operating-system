@@ -23,6 +23,10 @@ A second pass removed another **73 dead Layer 11 scaffold files** across the sam
 
 Across both passes, **154 Layer 11 scaffold files** were removed. The substantive execution implementation remains in the separate runtime/task-manager/provider-integration modules.
 
+### Second-pass event-loop cleanup
+
+A repository-wide import/ownership scan identified 17 additional files under `layer11_async_runtime/modules/event_loop_management` with no production imports, test importers, or manifest owners. Manual source inspection confirmed that the dispatch/recovery/restart helpers only recorded requests and could report `success: true` without dispatching or restarting a real loop; the remaining unreferenced helpers were isolated in-memory registries, metrics, context, event, policy, and report utilities that were not connected to the retained runtime. These 17 unowned utility modules were removed. The actual `event_loop.py` and `loop_manager.py` entry points and package marker remain.
+
 ## Runtime code intentionally retained
 
 The following execution paths remain in the repository:
