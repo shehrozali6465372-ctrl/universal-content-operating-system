@@ -1,6 +1,11 @@
 """Tests for the UCOS agent dispatcher and source-readiness contract."""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import time
+
 import pytest
 
 from agents.dispatcher import (
@@ -123,3 +128,39 @@ def test_agent01_research_endpoint_requires_account_id():
 
     response = APIGateway()._handle_agent01_research({"mode": "certification"})
     assert response.status_code == 400
+
+def test_agent01_route_hmac_is_domain_separated_and_replay_protected(monkeypatch):
+    from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "test-root-secret")
+    gateway = APIGateway()
+    body = json.dumps(
+        {"account_id": "account-a", "mode": "certification", "limit": 1},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    timestamp = str(int(time.time()))
+    nonce = "one-time-test-nonce"
+    derived_key = hmac.new(
+        b"test-root-secret",
+        b"UCOS_AGENT01_DISPATCH_API_V1",
+        hashlib.sha256,
+    ).digest()
+    canonical = (
+        f"POST\n/agents/AG01/research\n{timestamp}\n{nonce}\n"
+        f"{hashlib.sha256(body).hexdigest()}"
+    ).encode("utf-8")
+    signature = hmac.new(derived_key, canonical, hashlib.sha256).hexdigest()
+    headers = {
+        "X-UCOS-Agent01-Timestamp": timestamp,
+        "X-UCOS-Agent01-Nonce": nonce,
+        "X-UCOS-Agent01-Signature": signature,
+    }
+
+    assert gateway._agent01_dispatch_hmac_authorized(
+        "POST", "/agents/AG01/research", body, headers
+    ) is True
+    assert gateway._agent01_dispatch_hmac_authorized(
+        "POST", "/agents/AG01/research", body, headers
+    ) is False
