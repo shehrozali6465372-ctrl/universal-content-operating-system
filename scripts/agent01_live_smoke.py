@@ -76,6 +76,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
 
     # Imports occur only after preflight so that missing history never triggers a
     # real search. The agent uses its real Tavily adapter and real account store.
+    source = None
     try:
         from agents.agent_01_research_discovery import ResearchDiscoveryAgent
         from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
@@ -91,9 +92,9 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
                 "content_published": False,
             }
 
+        source = agent._source
         report = agent.run(limit=1)
         summary = _summary(report)
-        source = agent._source
         request_count = int(getattr(source, "request_count", 0))
         registry = AccountRegistry()
         store = AccountDataStore(registry=registry)
@@ -167,11 +168,13 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
         }
     except Exception as exc:
         # Error messages can contain connection details; report only the exception type.
+        request_count = int(getattr(source, "request_count", 0) or 0)
         return {
             "status": "failed_live_smoke",
             "reason_code": f"live_smoke_exception_{type(exc).__name__}",
+            "provider_request_count": request_count,
             "production_certified": False,
-            "external_search_performed": True,
+            "external_search_performed": request_count > 0,
             "content_published": False,
         }
 
