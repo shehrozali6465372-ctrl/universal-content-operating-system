@@ -41,4 +41,4 @@ def test_documents_are_design_frozen_not_false_production_certificates():
         text = path.read_text(encoding="utf-8")
         assert "FROZEN CANONICAL ARCHITECTURE" in text
         assert "NOT CERTIFIED" in text
-        assert "production-certified" in text.lower()
+        assert "not certified by this specification" in text.lower()
