@@ -31,8 +31,6 @@ from layers.layer12_ai_foundation.modules.model_provider_framework.grok_provider
 from layers.layer12_ai_foundation.modules.model_provider_framework.mistral_provider import MistralProvider
 from layers.layer12_ai_foundation.modules.model_provider_framework.cohere_provider import CohereProvider
 from layers.layer12_ai_foundation.modules.model_provider_framework.ollama_provider import OllamaProvider
-from layers.layer12_ai_foundation.modules.model_provider_framework.llama_provider import LlamaProvider
-from layers.layer12_ai_foundation.modules.model_provider_framework.qwen_provider import QwenProvider
 from layers.layer12_ai_foundation.modules.model_provider_framework.openrouter_provider import OpenRouterProvider
 
 
@@ -397,12 +395,6 @@ class TestAllProviders:
     def test_ollama(self):
         self._test_provider(OllamaProvider, "ollama", "llama3.1")
 
-    def test_llama(self):
-        self._test_provider(LlamaProvider, "llama", "llama-3.1-70b")
-
-    def test_qwen(self):
-        self._test_provider(QwenProvider, "qwen", "qwen-max")
-
     def test_openrouter(self):
         self._test_provider(OpenRouterProvider, "openrouter", "openai/gpt-4o")
 
@@ -411,11 +403,8 @@ class TestAllProviders:
                            (GeminiProvider, "gemini"), (DeepSeekProvider, "deepseek"),
                            (GrokProvider, "grok"), (MistralProvider, "mistral"),
                            (CohereProvider, "cohere"), (OllamaProvider, "ollama"),
-                           (LlamaProvider, "llama"), (QwenProvider, "qwen"),
                            (OpenRouterProvider, "openrouter")]:
             p = cls()
-            if name in {"llama", "qwen"}:
-                continue
             assert p.initialize() is False
             with pytest.raises(RuntimeError):
                 p.chat([{"role": "user", "content": "Hi"}])
