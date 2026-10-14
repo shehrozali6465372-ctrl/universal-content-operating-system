@@ -51,6 +51,15 @@ from layers.layer12_ai_foundation.modules.ai_cost_optimizer.price_calculator imp
 class LLMManager:
     """Central AI model management — the brain of the AI OS."""
 
+    @staticmethod
+    def _is_production_environment() -> bool:
+        """Respect both the service-wide APP_ENV and UCOS-specific override."""
+        production_values = {"production", "prod"}
+        return any(
+            os.getenv(name, "").strip().lower() in production_values
+            for name in ("APP_ENV", "UCOS_ENV")
+        )
+
     def __init__(
         self, config: Optional[LLMConfig] = None, generator: Any = None
     ) -> None:
@@ -102,6 +111,13 @@ class LLMManager:
         )
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
+        if self._is_production_environment() and self._generator is None:
+            # Check before cache lookup as a process may have cached a development
+            # placeholder before its environment was switched to production.
+            raise RuntimeError(
+                "LLMManager has no production generator; "
+                "refusing simulated AI output"
+            )
 
         request = LLMRequest(prompt, model, provider)
         request.temperature = temperature
@@ -124,11 +140,6 @@ class LLMManager:
 
         start = time.time()
         if self._generator is None:
-            if os.getenv("UCOS_ENV", "").strip().lower() == "production":
-                raise RuntimeError(
-                    "LLMManager has no production generator; "
-                    "refusing simulated AI output"
-                )
             generated = (
                 f"[development-only simulated response for {provider}/{model}]"
             )
@@ -204,7 +215,7 @@ class LLMManager:
                 model, prompt_tokens, completion_tokens
             )
         except ValueError as exc:
-            if os.getenv("UCOS_ENV", "").strip().lower() == "production":
+            if self._is_production_environment():
                 raise RuntimeError(
                     f"No production pricing configured for model: {model}"
                 ) from exc
