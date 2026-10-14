@@ -1,6 +1,7 @@
 """similarity_search.py — Similarity search engine."""
 from __future__ import annotations
 from typing import List, Tuple
+from layers.shared.vector_math import cosine_similarity
 
 
 class SimilaritySearch:
@@ -23,20 +24,12 @@ class SimilaritySearch:
 
     def _compute(self, a: List[float], b: List[float]) -> float:
         if self._metric == "cosine":
-            return self._cosine(a, b)
+            return cosine_similarity(a, b)
         elif self._metric == "euclidean":
             return self._euclidean(a, b)
         elif self._metric == "dot":
             return self._dot(a, b)
         return self._cosine(a, b)
-
-    def _cosine(self, a: List[float], b: List[float]) -> float:
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = sum(x * x for x in a) ** 0.5
-        nb = sum(x * x for x in b) ** 0.5
-        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
     def _euclidean(self, a: List[float], b: List[float]) -> float:
         if len(a) != len(b):
