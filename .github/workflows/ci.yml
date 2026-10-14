@@ -55,7 +55,7 @@ jobs:
       - name: Agent 01 contract gates
         env:
           APP_ENV: test
-        run: python -m pytest tests/agents/test_agent_01_research_discovery.py tests/agents/test_account_data_store_neon.py tests/agents/test_account_data_store_neon_integration.py tests/agents/test_agent_dispatcher.py tests/agents/test_tavily_research_source.py tests/agents/test_agent01_production_preflight.py tests/agents/test_agent01_pinterest_history_import_guards.py tests/agents/test_account_registry_platform_enabled.py -q --tb=short
+        run: python -m pytest tests/agents/test_agent_01_research_discovery.py tests/agents/test_account_data_store_neon.py tests/agents/test_account_data_store_neon_integration.py tests/agents/test_agent_dispatcher.py tests/agents/test_tavily_research_source.py tests/agents/test_agent01_production_preflight.py tests/agents/test_agent01_pinterest_history_import_guards.py tests/agents/test_account_registry_platform_enabled.py tests/agents/test_agent01_live_certification_gate.py -q --tb=short
 
       - name: Layer 1 gate
         env:
