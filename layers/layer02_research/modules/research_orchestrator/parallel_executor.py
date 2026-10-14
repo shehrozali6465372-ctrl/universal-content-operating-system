@@ -1,19 +1,52 @@
-"""
-Parallel Executor
-Layer 2: Research Engine — Module 10
-
-Manages parallel execution of independent modules:
-- Wave-based execution
-- Dependency-aware scheduling
-- Result aggregation
-"""
-
+"""Dependency-aware executor for Layer 02 research modules."""
 from datetime import datetime, timezone
+from inspect import Parameter, signature
+from math import isfinite
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from layers.layer02_research.modules.research_planner.exceptions import DependencyError
-
 from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
+
+
+def _serializable_result(value: Any, depth: int = 0) -> Any:
+    """Keep module outputs JSON-safe so agent results preserve actual findings."""
+    if depth > 20:
+        return {"type": type(value).__name__, "truncated": True}
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): _serializable_result(item, depth + 1) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serializable_result(item, depth + 1) for item in value]
+    if isinstance(value, set):
+        return [_serializable_result(item, depth + 1) for item in sorted(value, key=str)]
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        try:
+            return _serializable_result(value.to_dict(), depth + 1)
+        except Exception:
+            return {"type": type(value).__name__, "serializable": False}
+    if hasattr(value, "isoformat") and callable(value.isoformat):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    return {"type": type(value).__name__, "serializable": False}
+
+
+def _invoke(func: Callable[..., Any], context: Dict[str, Any]) -> Any:
+    """Preserve legacy fixed-signature callables while supporting scoped upstream results."""
+    try:
+        parameters = signature(func).parameters.values()
+    except (TypeError, ValueError):
+        return func(**context)
+    if any(parameter.kind == Parameter.VAR_KEYWORD for parameter in parameters):
+        return func(**context)
+    accepted = {parameter.name for parameter in parameters if parameter.kind in {
+        Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY,
+    }}
+    return func(**{name: value for name, value in context.items() if name in accepted})
 
 
 class ExecutionResult:
@@ -33,6 +66,7 @@ class ExecutionResult:
         return {
             "module": self.module,
             "success": self.success,
+            "result": _serializable_result(self.result),
             "confidence": self.confidence,
             "duration_sec": round(self.duration_sec, 3),
             "error": self.error,
@@ -40,7 +74,7 @@ class ExecutionResult:
 
 
 class ParallelExecutor:
-    """Executes modules in parallel waves based on dependency graph."""
+    """Executes modules in dependency waves with current-run result isolation."""
 
     def __init__(self):
         self._results: Dict[str, ExecutionResult] = {}
@@ -50,11 +84,7 @@ class ParallelExecutor:
         module_order: List[str],
         dependencies: Optional[Dict[str, List[str]]] = None,
     ) -> List[List[str]]:
-        """Build execution waves from module order and dependencies.
-
-        Returns a list of waves, where each wave is a list of modules
-        that can execute in parallel.
-        """
+        """Build execution waves from module order and dependencies."""
         graph = DependencyGraph()
         for module in module_order:
             graph.add_node(module)
@@ -73,29 +103,22 @@ class ParallelExecutor:
                 unknown_deps = set(deps) - module_set
                 if unknown_deps:
                     raise DependencyError(
-                        f"Module '{module}' depends on unknown modules: {sorted(unknown_deps)}"
+                        f"Module '{module}' depends on unknown module: {sorted(unknown_deps)}"
                     )
                 for dep in deps:
                     if dep == module:
-                        raise DependencyError(
-                            f"Module '{module}' cannot depend on itself"
-                        )
+                        raise DependencyError(f"Module '{module}' cannot depend on itself")
                     graph.add_edge(dep, module)
 
         waves: List[List[str]] = []
         completed: Set[str] = set()
-
         while len(completed) < len(module_order):
             ready = graph.get_ready_nodes(completed)
             if not ready:
-                remaining = [m for m in module_order if m not in completed]
-                raise DependencyError(
-                    f"Dependency cycle detected among modules: {remaining}"
-                )
-
+                remaining = [module for module in module_order if module not in completed]
+                raise DependencyError(f"Dependency cycle detected among modules: {remaining}")
             waves.append(ready)
             completed.update(ready)
-
         return waves
 
     def execute_wave(
@@ -104,14 +127,13 @@ class ParallelExecutor:
         module_funcs: Dict[str, Callable[..., Any]],
         context: Optional[Dict] = None,
     ) -> List[ExecutionResult]:
-        """Execute a single wave of modules sequentially."""
+        """Execute one dependency wave; modules in this wave do not see sibling results."""
         wave_results = []
-        ctx = context or {}
+        ctx = dict(context or {})
 
         for module in modules:
             result = ExecutionResult(module)
             func = module_funcs.get(module)
-
             if func is None:
                 result.error = f"No function registered for module '{module}'"
                 wave_results.append(result)
@@ -120,14 +142,19 @@ class ParallelExecutor:
 
             start = datetime.now(timezone.utc)
             try:
-                result.result = func(**ctx)
+                result.result = _invoke(func, ctx)
+                raw_confidence = (
+                    result.result.get("confidence", 0.0)
+                    if isinstance(result.result, dict)
+                    else getattr(result.result, "confidence", 0.0)
+                )
+                result.confidence = float(raw_confidence)
+                if not isfinite(result.confidence) or not 0.0 <= result.confidence <= 1.0:
+                    raise ValueError("module confidence must be finite and between 0 and 1")
                 result.success = True
-                result.confidence = getattr(result.result, "confidence", 0.8)
             except Exception as exc:
                 result.error = str(exc)
-            end = datetime.now(timezone.utc)
-            result.duration_sec = (end - start).total_seconds()
-
+            result.duration_sec = (datetime.now(timezone.utc) - start).total_seconds()
             wave_results.append(result)
             self._results[module] = result
 
@@ -140,11 +167,41 @@ class ParallelExecutor:
         dependencies: Optional[Dict[str, List[str]]] = None,
         context: Optional[Dict] = None,
     ) -> Dict[str, ExecutionResult]:
-        """Execute all modules in dependency-respecting waves."""
-        waves = self.build_waves(module_order, dependencies)
+        """Run dependency waves, pass successful upstream outputs, and block failed dependants."""
+        self.reset()
+        base_context = dict(context or {})
+        dependency_map = dependencies or {}
+        waves = self.build_waves(module_order, dependency_map)
 
         for wave in waves:
-            self.execute_wave(wave, module_funcs, context)
+            # Snapshot only successful results from earlier waves. Siblings cannot
+            # observe partial results based on iteration order within the wave.
+            upstream_results = {
+                name: result.result
+                for name, result in self._results.items()
+                if result.success
+            }
+            wave_context = dict(base_context)
+            wave_context["upstream_results"] = upstream_results
+
+            runnable = []
+            for module in wave:
+                failed_dependencies = [
+                    dependency for dependency in dependency_map.get(module, [])
+                    if dependency in self._results and not self._results[dependency].success
+                ]
+                if failed_dependencies:
+                    result = ExecutionResult(module)
+                    result.error = (
+                        "Blocked because required module(s) failed: "
+                        + ", ".join(sorted(failed_dependencies))
+                    )
+                    self._results[module] = result
+                else:
+                    runnable.append(module)
+
+            if runnable:
+                self.execute_wave(runnable, module_funcs, wave_context)
 
         return dict(self._results)
 
@@ -157,11 +214,10 @@ class ParallelExecutor:
     def get_success_rate(self) -> float:
         if not self._results:
             return 0.0
-        successful = sum(1 for r in self._results.values() if r.success)
-        return round(successful / len(self._results), 3)
+        return round(sum(1 for result in self._results.values() if result.success) / len(self._results), 3)
 
     def get_total_duration(self) -> float:
-        return sum(r.duration_sec for r in self._results.values())
+        return sum(result.duration_sec for result in self._results.values())
 
-    def reset(self):
+    def reset(self) -> None:
         self._results.clear()
