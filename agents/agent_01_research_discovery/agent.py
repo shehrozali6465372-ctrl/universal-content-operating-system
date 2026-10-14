@@ -107,13 +107,21 @@ class ResearchDiscoveryAgent:
         self._account_store_override = account_store
         self._source = None
 
-        if self._candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
-            from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
+        if self._candidate_provider is None:
+            if os.environ.get("TAVILY_API_KEY", "").strip():
+                from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
 
-            self._source = TavilyResearchSource.from_env()
-            self._candidate_provider = self._source.discover_candidates
-            if self._evidence_provider is None:
-                self._evidence_provider = self._source.fetch_evidence
+                self._source = TavilyResearchSource.from_env()
+            elif self._is_production():
+                # Public Google News RSS is the real no-key fallback. It resolves
+                # article links to original publishers; no canned data is emitted.
+                from agents.agent_01_research_discovery.google_news_rss_source import GoogleNewsRSSResearchSource
+
+                self._source = GoogleNewsRSSResearchSource()
+            if self._source is not None:
+                self._candidate_provider = self._source.discover_candidates
+                if self._evidence_provider is None:
+                    self._evidence_provider = self._source.fetch_evidence
 
         account = self._resolve_account()
         if not bool(self._field(account, "enabled", True)):
@@ -422,9 +430,10 @@ class ResearchDiscoveryAgent:
         if self._is_production() and candidates is not None:
             raise ValueError("production mode does not accept caller-supplied candidates")
         if self._is_production() and (
-            self._source is None or self._source_status.get("provider") != "tavily"
+            self._source is None
+            or getattr(self._source, "name", "") not in {"tavily", "google_news_rss"}
         ):
-            raise RuntimeError("production mode requires the real Tavily provider configured from TAVILY_API_KEY")
+            raise RuntimeError("production mode requires a supported real research provider")
         requested_limit = min(limit, MAX_CANDIDATES)
         limit = requested_limit
         if self._source is not None:
@@ -663,7 +672,7 @@ class ResearchDiscoveryAgent:
             "requested_candidate_limit": requested_limit,
             "effective_candidate_limit": limit,
             "candidate_limit_note": (
-                "Tavily runs are capped at five candidate topics to bound external API use."
+                f"{getattr(self._source, 'name', 'research')} runs are capped at five candidate topics to bound external requests."
                 if self._source is not None and requested_limit != limit else None
             ),
             "candidates": results,
