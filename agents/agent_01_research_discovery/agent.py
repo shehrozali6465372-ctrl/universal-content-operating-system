@@ -197,7 +197,7 @@ class ResearchDiscoveryAgent:
         try:
             from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
             AccountDataStore(registry=self._get_registry()).get(
-                self.account_id, "memory", "collection:research_agent_runs", default=[]
+                self.account_id, "memory", "research_agent_storage_probe", default=None
             )
             return True
         except Exception:
@@ -326,7 +326,9 @@ class ResearchDiscoveryAgent:
             content = str(item.get("content") or item.get("text") or item.get("snippet") or "").strip()
             content = content[:20000]
             url = self._safe_url(item.get("url") or item.get("source_url"))
-            if not source or not content:
+            # Production evidence needs a traceable HTTP(S) citation, not merely
+            # a source label supplied by an upstream caller.
+            if not source or not content or not url:
                 continue
             source_key = self._source_key(source, url)
             if source_key in seen:
@@ -518,8 +520,8 @@ class ResearchDiscoveryAgent:
             return
         from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
 
-        AccountDataStore(registry=self._get_registry()).append(
-            self.account_id, "memory", "research_agent_runs", payload
+        AccountDataStore(registry=self._get_registry()).put(
+            self.account_id, "memory", f"research_agent_run:{payload['run_id']}", payload
         )
 
     def run(
@@ -599,9 +601,23 @@ class ResearchDiscoveryAgent:
                 except Exception:
                     warnings.append("evidence_provider_failed")
 
+            if not history_available:
+                results.append({
+                    "topic": topic,
+                    "platform": self.platform,
+                    "niche": self.niche,
+                    "decision": "HOLD_HISTORY_UNAVAILABLE",
+                    "reason_codes": [history_error or "history_unknown"],
+                    "duplicate": {"match_type": "unknown", "published": None},
+                    "evidence_count": 0,
+                    "verification": {"status": "not_run", "claims_checked": 0, "results": []},
+                    "publishing": {"performed": False},
+                })
+                continue
+
             history_match = self._match_history(
                 topic, str(candidate.get("draft_text") or "")[:20000], history
-            ) if history_available else None
+            )
 
             claims = self._verify_claims(candidate, evidence)
             valid_claims = len(claims)
@@ -700,7 +716,12 @@ class ResearchDiscoveryAgent:
                 "reason_codes": reason_codes,
                 "duplicate": duplicate or {"match_type": "no_match", "published": False},
                 "evidence": [
-                    {"source": item["source"], "title": item["title"], "url": item["url"]}
+                    {
+                        "source": item["source"],
+                        "title": item["title"],
+                        "url": item["url"],
+                        "excerpt": item["content"][:1600],
+                    }
                     for item in evidence
                 ],
                 "evidence_count": len(evidence),
