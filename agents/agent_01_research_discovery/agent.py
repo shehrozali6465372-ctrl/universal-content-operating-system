@@ -441,6 +441,39 @@ class ResearchDiscoveryAgent:
         }
         warnings: list[str] = []
 
+        # Do not spend the real provider's API quota or gather topics until
+        # production account-history coverage is independently verified.
+        if self._is_production() and not history_available:
+            blocked_report: dict[str, Any] = {
+                "agent": self.name,
+                "agent_id": self.agent_id,
+                "agent_version": self.version,
+                "run_id": run_id,
+                "account_id": self.account_id,
+                "platform": self.platform,
+                "niche": self.niche,
+                "started_at": started,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "status": "blocked_history_unavailable",
+                "research_sources": dict(self._source_status),
+                "history": history_summary,
+                "history_coverage": _HISTORY_COVERAGE,
+                "candidate_count": 0,
+                "requested_candidate_limit": min(limit, MAX_CANDIDATES),
+                "effective_candidate_limit": limit,
+                "candidates": [],
+                "recommended_topic": None,
+                "publishing": {"performed": False, "status": "not_requested"},
+                "warnings": [history_error or "history_unknown"],
+                "persistence": {"status": "pending"},
+            }
+            try:
+                self._persist_report(blocked_report)
+                blocked_report["persistence"] = {"status": "persisted"}
+            except Exception:
+                blocked_report["persistence"] = {"status": "failed", "error_code": "result_writer_failed"}
+            return blocked_report
+
         if candidates is not None:
             self._source_status = {
                 **self._source_status,
