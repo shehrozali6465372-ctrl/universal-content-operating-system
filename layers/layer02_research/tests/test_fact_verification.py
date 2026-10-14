@@ -452,6 +452,8 @@ class TestManager:
         import json
         data = json.loads(path.read_text())
         assert len(data.get("history", [])) >= 1
+        reloaded = VerificationManager(storage_path=str(path))
+        assert reloaded._history
 
     def test_no_storage(self):
         m = VerificationManager()
