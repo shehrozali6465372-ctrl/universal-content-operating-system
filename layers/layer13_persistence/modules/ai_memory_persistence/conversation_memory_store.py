@@ -22,12 +22,6 @@ class ConversationMemoryStore(BaseMemoryStore):
             self._conversations[key].append(value)
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def add_message(self, conversation_id: str, role: str, content: str) -> None:
         if conversation_id not in self._conversations:
             self._conversations[conversation_id] = []
