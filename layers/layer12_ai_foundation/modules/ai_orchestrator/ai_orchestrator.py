@@ -109,9 +109,13 @@ class AIOrchestrator:
                 self.monitor.alert("error", f"Task failed: {task}")
 
         elapsed = (time.time() - start) * 1000
-        success = result.get("success") is True or (
-            "error" not in result and result.get("status") not in {"blocked", "failed"}
-        )
+        if "success" in result:
+            success = result["success"] is True
+        else:
+            success = (
+                "error" not in result
+                and result.get("status") not in {"blocked", "failed"}
+            )
         result.setdefault("success", success)
         self.metrics.record_task(target, success, elapsed)
         self.memory.store(task, "success" if success else "failed")
