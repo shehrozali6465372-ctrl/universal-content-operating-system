@@ -248,5 +248,5 @@ def test_tests_helpers_are_not_counted_as_production_importers(tmp_path):
         if item["from"] == "tests_helpers/mock.py"
         and item["to"] == "layers/layer01_core/helper.py"
     )
-    assert edge not in report["production_import_edges"]
     assert edge in report["import_edges"]
+    assert report["summary"]["production_import_edges"] == 0
