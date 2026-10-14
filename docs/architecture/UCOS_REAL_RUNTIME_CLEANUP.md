@@ -31,6 +31,20 @@ A repository-wide import/ownership scan identified 17 additional files under `la
 
 The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
 
+### Disconnected Layer 12 duplicate subsystems removed
+
+The repository import graph showed no production callers or agent-manifest ownership for the following Layer 12 subpackages; their only external callers were the monolithic unit-test file. Their responsibilities already have canonical implementation boundaries elsewhere in UCOS, so retaining them created parallel, unconnected implementations:
+
+- `ai_orchestrator` — duplicate task orchestration removed; the canonical account-aware control plane remains in Layer 14.
+- `ai_governance` — duplicate governance helpers removed; authorization/security remains owned by Layer 17.
+- `ai_evaluation_engine` — duplicate evaluation helpers removed; content quality/safety remains owned by Layer 6.
+- `ai_memory_layer` — duplicate in-memory helpers removed; durable/account-scoped state remains owned by the persistence and memory paths.
+- `ai_reasoning_engine` — duplicate reasoning helpers removed; the existing Layer 3 reasoning/intelligence path remains.
+- `prompt_intelligence` — duplicate prompt utilities removed; writing and the canonical model-router prompt builder remain.
+- The standalone `ai_cost_optimizer` family was pruned to the `price_calculator.py` module that the retained `LLMManager` actually imports. Its other unreferenced, in-memory trackers, schedulers, registries, and hard-coded model-switch helpers were removed with their disconnected unit-test section.
+
+The large `tests/test_layer12_ai_foundation.py` suite now retains tests for the actual LLM manager, provider adapters, multi-model execution, and the wired price calculator rather than treating disconnected helper classes as production capabilities.
+
 ### Additional LLM and image-provider cleanup
 
 - Removed unreferenced LLM utility modules whose implementations only recorded in-memory lists, pretended a model was loaded, or duplicated the canonical model-router/response-selector behavior. Provider adapters, the canonical model router/key manager, LLM manager, and multi-model execution components remain.
@@ -56,7 +70,7 @@ Agent source ownership for AG18 (Publishing Planner and Scheduler) and AG27 (Run
 ## Confirmed false-success fixes
 
 1. `MultiModelExecutor.execute()` no longer fabricates `Response from {model}` as model output. A real provider callback is required, and late responses are not marked successful after the overall deadline.
-2. `AIPipeline.execute()` no longer creates `executed_<task>` output when no executor is supplied. A populated pipeline fails closed without an executor.
+2. The duplicate Layer 12 `ai_orchestrator` package was removed after dependency analysis found no production callers; canonical orchestration remains in Layer 14.
 3. `PipelineWiring._run_step()` requires a dictionary result; `None` cannot silently become a successful step. Skips must be explicit.
 4. `LLMManager` refuses to generate without an injected real provider-backed generator in every environment. The guard runs before cache lookup, so a cached development placeholder cannot masquerade as execution. Production pricing validation treats either `APP_ENV=production|prod` or `UCOS_ENV=production|prod` as production.
 
