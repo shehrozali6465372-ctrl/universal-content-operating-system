@@ -147,3 +147,31 @@ def test_audit_scans_service_sources_outside_known_layer_roots(tmp_path):
     assert target["from"].startswith("services/")
     layer_info = report["layers"][0]
     assert layer_info["files_with_static_production_inbound_imports"] >= 1
+
+
+def test_audit_reports_missing_internal_imports(tmp_path):
+    source = tmp_path / "services" / "content_api"
+    source.mkdir(parents=True)
+    (source / "server.py").write_text(
+        "from layers.layer11_async_runtime.modules.background_workers.router import WorkerRouter\n"
+        "def create():\n    return WorkerRouter()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "layers" / "layer11_async_runtime" / "modules").mkdir(parents=True)
+    (tmp_path / "layers" / "layer11_async_runtime" / "__init__.py").write_text(
+        '"""Layer 11 test package."""\n', encoding="utf-8"
+    )
+
+    report = build_report(tmp_path)
+    missing = [
+        item for item in report["unresolved_internal_imports"]
+        if item["path"] == "services/content_api/server.py"
+    ]
+    assert any(
+        item["target"] == "layers.layer11_async_runtime.modules.background_workers.router"
+        and item["kind"] == "production"
+        for item in missing
+    )
+    assert report["summary"]["unresolved_internal_imports"] == len(
+        report["unresolved_internal_imports"]
+    )
