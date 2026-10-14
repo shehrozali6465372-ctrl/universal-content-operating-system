@@ -51,7 +51,13 @@ def test_preflight_passes_only_when_all_prerequisites_are_visible():
     report = run_preflight(
         "acct-1",
         registry=Registry(),
-        store=Store({"status": "complete"}, [{"topic": "Known post", "published": True}]),
+        store=Store({
+            "status": "complete",
+            "source": "operator_review",
+            "records_checked": 1,
+            "verified_at": "2026-10-14T10:00:00+00:00",
+            "coverage": "Verified account history",
+        }, [{"topic": "Known post", "published": True}]),
         database=Database(),
         environment={"TAVILY_API_KEY": "not-returned-to-report"},
     )
@@ -71,3 +77,18 @@ def test_preflight_rejects_unreadable_history_even_when_baseline_exists():
     )
     assert report["status"] == "blocked"
     assert report["checks"]["account_history"]["reason_code"] == "history_missing_or_invalid"
+
+
+
+def test_preflight_rejects_status_only_history_marker():
+    report = run_preflight(
+        "acct-1",
+        registry=Registry(),
+        store=Store({"status": "complete"}, []),
+        database=Database(),
+        environment={"TAVILY_API_KEY": "redacted"},
+    )
+    assert report["status"] == "blocked"
+    assert report["checks"]["history_baseline"]["reason_code"] == "history_baseline_metadata_invalid"
+    assert report["production_certified"] is False
+    assert report["side_effects"]["external_search_performed"] is False
