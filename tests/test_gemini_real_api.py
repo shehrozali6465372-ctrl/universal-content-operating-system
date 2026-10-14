@@ -131,3 +131,25 @@ def test_gemini_default_uses_current_stable_flash_model():
     provider = GeminiProvider()
     assert provider.get_stats()["default_model"] == "gemini-3.8-flash"
     assert "gemini-3.8-flash" in provider.list_models()
+
+def test_gemini_inventory_excludes_deprecated_and_shutdown_model_ids():
+    provider = GeminiProvider()
+    models = provider.list_models()
+    assert models == [
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+    ]
+    assert not any(
+        model in models
+        for model in (
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+            "gemini-3-flash-preview",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "gemini-pro",
+            "gemini-1.0-pro",
+        )
+    )
