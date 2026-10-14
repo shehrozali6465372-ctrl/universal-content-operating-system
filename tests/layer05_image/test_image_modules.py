@@ -1,7 +1,8 @@
 """Tests for Layer 5 — Image & Visual Intelligence."""
 from layers.layer05_image.modules.image_planner.image_planner import ImagePlanner
 from layers.layer05_image.modules.image_prompt.image_prompt import ImagePromptBuilder
-from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, ImageResponse, MockImageProvider
+from layers.layer05_image.modules.image_provider.image_provider import BaseImageProvider, ImageResponse
+from tests_helpers.mock_image_provider import MockImageProvider
 import hashlib
 
 class RealTestImageProvider(BaseImageProvider):
