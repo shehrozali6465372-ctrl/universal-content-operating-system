@@ -39,6 +39,10 @@ Before the first production recommendation on a Pinterest account, run `APP_ENV=
 
 Run `APP_ENV=production python -m scripts.agent01_live_smoke --account-id <registered-account-id>` only from the deployed service environment or an equivalent production-configured runner. This command uses the real Tavily API and Neon/PostgreSQL account store; it does not inject fake dependencies. It blocks before outbound search unless preflight verifies the registered account, PostgreSQL pool, Tavily key presence, a completed history baseline, and a readable account history. A successful smoke writes one bounded research run and confirms that candidate/evidence/run records can be read back from the durable store. It never publishes. A passed smoke is evidence for review, **not** automatic production certification.
 
+## Automated real production validation
+
+The `.github/workflows/agent01-live-certification.yml` workflow uses repository secrets `NEON_DATABASE_URL`, `UCOS_CREDENTIAL_ENCRYPTION_KEY`, and `TAVILY_API_KEY`. It connects to the actual Neon account registry, imports Pins from each enabled Pinterest account with that account's encrypted credentials, reads imported history back, then performs one bounded real Tavily research smoke per account. It never publishes. If the research key is absent, history import may complete but live research is explicitly blocked. The workflow is evidence only; it must not mark AG01 `production_ready` unless the production orchestrator is wired and the deployed request-to-Neon path has also been verified.
+
 ## Completion evidence
 
 Do not mark an agent production-ready from imports or unit tests alone. Its gate needs unit/contract tests, cross-account isolation tests, the relevant CI run, real durable-store verification, and a live smoke test against configured dependencies. If production credentials/database access are unavailable, record that as an unresolved gate rather than claiming success.
