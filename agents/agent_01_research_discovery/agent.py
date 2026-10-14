@@ -622,6 +622,11 @@ class ResearchDiscoveryAgent:
         except Exception:
             candidate_values = []
             warnings.append("candidate_provider_failed")
+            self._source_status = {
+                **self._source_status,
+                "status": "unavailable",
+                "error_code": "candidate_provider_failed",
+            }
         if not candidate_values and candidates is None and self._source_status.get("status") == "unconfigured":
             warnings.append("research_sources_unconfigured")
 
@@ -813,6 +818,8 @@ class ResearchDiscoveryAgent:
                 "completed" if results else
                 "blocked_research_sources_unconfigured"
                 if candidates is None and self._source_status.get("status") == "unconfigured"
+                else "blocked_research_sources_unavailable"
+                if candidates is None and self._source_status.get("status") == "unavailable"
                 else "no_candidates"
             ),
             "research_sources": dict(self._source_status),
