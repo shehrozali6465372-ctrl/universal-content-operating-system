@@ -1,10 +1,10 @@
-"""Tavily-backed live web source for UCOS Agent 01.
+"""Tavily Search adapter for UCOS Agent 01.
 
-API contract is based on Tavily's documented POST /search endpoint:
+Uses the documented POST /search API:
 https://docs.tavily.com/documentation/api-reference/endpoint/search
 
-Network calls use the Python standard library. API keys are read only from the
-environment and are never placed in request bodies, reports, or exception text.
+The adapter outputs plain dictionaries rather than importing legacy Layer 02
+trend models, keeping the worker independent from the old layer architecture.
 """
 from __future__ import annotations
 
@@ -17,8 +17,6 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from typing import Any
 
-from layers.layer02_research.modules.trend_discovery.trend_entry import TrendEntry
-
 
 _ENDPOINT = "https://api.tavily.com/search"
 _MAX_RESULTS = 10
@@ -27,11 +25,11 @@ _MAX_CONTENT_LENGTH = 12000
 
 
 class TavilySourceError(RuntimeError):
-    """Safe, sanitized source error; never carries a credential or response body."""
+    """Sanitized provider error; never contains a credential or response body."""
 
 
 class TavilyResearchSource:
-    """Search real web pages and convert them into UCOS trend/evidence contracts."""
+    """Find current candidate topics and their source-backed evidence."""
 
     name = "tavily"
     max_candidates_per_run = 5
@@ -71,7 +69,7 @@ class TavilyResearchSource:
             if parts.scheme.lower() in {"http", "https"} and parts.hostname:
                 return raw
         except ValueError:
-            return ""
+            pass
         return ""
 
     @staticmethod
@@ -79,25 +77,23 @@ class TavilyResearchSource:
         return str(value or "").strip()[:limit]
 
     def search(self, query: str, *, max_results: int = 5) -> list[dict[str, Any]]:
-        """Return normalized, URL-backed result records from Tavily Search."""
         query = self._text(query, _MAX_QUERY_LENGTH)
         if not query:
             raise ValueError("query is required")
         if isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= _MAX_RESULTS:
             raise ValueError(f"max_results must be between 1 and {_MAX_RESULTS}")
 
-        payload = {
-            "query": query,
-            "topic": "general",
-            "search_depth": "basic",
-            "max_results": max_results,
-            "include_answer": False,
-            "include_raw_content": False,
-            "include_images": False,
-        }
         request = Request(
             _ENDPOINT,
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            data=json.dumps({
+                "query": query,
+                "topic": "general",
+                "search_depth": "basic",
+                "max_results": max_results,
+                "include_answer": False,
+                "include_raw_content": False,
+                "include_images": False,
+            }, separators=(",", ":")).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
@@ -118,8 +114,7 @@ class TavilyResearchSource:
         except HTTPError as exc:
             raise TavilySourceError(f"Tavily Search returned HTTP {int(exc.code)}") from None
         except URLError as exc:
-            reason = getattr(exc, "reason", None)
-            if isinstance(reason, TimeoutError):
+            if isinstance(getattr(exc, "reason", None), TimeoutError):
                 raise TavilySourceError("Tavily Search timed out") from None
             raise TavilySourceError("Tavily Search network request failed") from None
         except TimeoutError:
@@ -129,7 +124,6 @@ class TavilyResearchSource:
         except OSError:
             raise TavilySourceError("Tavily Search network request failed") from None
         except Exception as exc:
-            # Do not relay arbitrary exception strings; some HTTP stacks echo headers.
             raise TavilySourceError(f"Tavily Search failed ({type(exc).__name__})") from None
 
         results = decoded.get("results") if isinstance(decoded, Mapping) else None
@@ -165,32 +159,36 @@ class TavilyResearchSource:
             })
         return normalized
 
-    def fetch_trends(self, *, category: str = "general", limit: int = 5) -> list[TrendEntry]:
-        """Provide live search-discovered topic candidates to Layer 02's trend contract."""
+    def discover_candidates(self, account_id: str, niche: str, limit: int) -> list[dict[str, Any]]:
+        """Discover possible topic titles, each initially backed by its own search result."""
+        if not str(account_id or "").strip():
+            raise ValueError("account_id is required")
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
-        topic = self._text(category, 120) or "general"
+        bounded = min(limit, self.max_candidates_per_run)
+        category = self._text(niche, 120) or "general"
         results = self.search(
-            f"current content trends, questions, and underserved topic ideas in {topic}",
-            max_results=min(limit, self.max_candidates_per_run),
+            f"current content trends, audience questions, and underserved topic ideas in {category}",
+            max_results=bounded,
         )
-        trends: list[TrendEntry] = []
-        for item in results:
-            score = round(item["relevance"] * 10.0, 2)
-            trends.append(TrendEntry(
-                keyword=item["title"],
-                category=topic,
-                source=self.name,
-                relevance_score=score,
-                description=f"{item['content'][:1200]}\nSource: {item['url']}",
-                related_keywords=[],
-                tags=["live-web-search", "source-attributed"],
-                expires_in_hours=24,
-            ))
-        return trends
+        return [
+            {
+                "topic": item["title"],
+                "description": item["content"][:1600],
+                "source_relevance_score": item["relevance"],
+                "evidence": [{
+                    "source": item["source"],
+                    "title": item["title"],
+                    "url": item["url"],
+                    "content": item["content"],
+                    "published_at": item["published_date"],
+                }],
+            }
+            for item in results
+        ]
 
     def fetch_evidence(self, topic: str, niche: str, limit: int = 5) -> list[dict[str, str]]:
-        """Fetch independent, traceable source material for one candidate topic."""
+        """Fetch additional attributable sources for an individual candidate."""
         if not str(topic or "").strip():
             return []
         bounded = max(1, min(int(limit), _MAX_RESULTS))
