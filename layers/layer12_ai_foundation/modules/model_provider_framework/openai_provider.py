@@ -37,6 +37,7 @@ class OpenAIProvider(BaseProvider):
             or [
                 "gpt-4o",
                 "gpt-5.6-luna",
+                "gpt-5.6-sol",
                 "gpt-4-turbo",
                 "gpt-4",
                 "gpt-3.5-turbo",
