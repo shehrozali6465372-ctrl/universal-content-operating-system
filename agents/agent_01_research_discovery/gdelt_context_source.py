@@ -39,6 +39,10 @@ class GDELTContextResearchSource:
         self._opener = opener or urlopen
         self._last_request_at = 0.0
         self.request_count = 0
+        self.last_response_keys: list[str] = []
+        self.last_response_row_count = 0
+        self.last_result_count = 0
+        self.last_error_code = ""
 
     @staticmethod
     def _valid_url(value: Any) -> str:
@@ -76,6 +80,10 @@ class GDELTContextResearchSource:
         )
         self._last_request_at = time.monotonic()
         self.request_count += 1
+        self.last_response_keys = []
+        self.last_response_row_count = 0
+        self.last_result_count = 0
+        self.last_error_code = ""
         try:
             with self._opener(request, timeout=self.timeout_seconds) as response:
                 status = int(getattr(response, "status", 200))
@@ -84,6 +92,7 @@ class GDELTContextResearchSource:
                 raise GDELTSourceError(f"GDELT Context returned HTTP {status}")
             decoded = json.loads(raw.decode("utf-8"))
         except GDELTSourceError:
+            self.last_error_code = "provider_error"
             raise
         except HTTPError as exc:
             raise GDELTSourceError(f"GDELT Context returned HTTP {int(exc.code)}") from None
@@ -101,11 +110,14 @@ class GDELTContextResearchSource:
             raise GDELTSourceError(f"GDELT Context failed ({type(exc).__name__})") from None
 
         if not isinstance(decoded, Mapping):
+            self.last_error_code = "invalid_response_shape"
             raise GDELTSourceError("GDELT Context response has invalid shape")
+        self.last_response_keys = sorted(str(key)[:80] for key in decoded.keys())[:20]
         rows = decoded.get("sentences") or decoded.get("results") or decoded.get("articles")
         if not isinstance(rows, list):
-            # GDELT sometimes returns HTTP 200 with plain-text quota/query errors.
+            self.last_error_code = "response_no_results_list"
             raise GDELTSourceError("GDELT Context response has no results list")
+        self.last_response_row_count = len(rows)
         normalized = []
         seen = set()
         for item in rows[:max_results]:
@@ -129,6 +141,7 @@ class GDELTContextResearchSource:
                 "content": content, "relevance": None,
                 "published_date": self._text(item.get("seendate") or item.get("published_at"), 64),
             })
+        self.last_result_count = len(normalized)
         return normalized
 
     @staticmethod
