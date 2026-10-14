@@ -58,26 +58,3 @@ class BaseImageProvider(ABC):
         with self._counter_lock:
             calls = self._call_count
         return {"provider": self.provider_name, "calls": calls}
-
-
-class MockImageProvider(BaseImageProvider):
-    """Mock image provider for testing."""
-
-    def __init__(self) -> None:
-        super().__init__(provider_name="mock")
-        self._mock_url = "https://example.com/mock_image.png"
-
-    def generate(self, prompt: str, size: str = "1024x1024",
-                 **kwargs: Any) -> ImageResponse:
-        resp = ImageResponse()
-        resp.image_url = self._mock_url
-        resp.provider = "mock"
-        resp.model = "mock-v1"
-        resp.revised_prompt = prompt
-        resp.latency_ms = 1.0
-        with self._counter_lock:
-            self._call_count += 1
-        return resp
-
-    def is_configured(self) -> bool:
-        return True
