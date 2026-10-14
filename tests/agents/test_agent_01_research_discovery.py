@@ -243,11 +243,15 @@ def test_unconfigured_durable_state_prevents_ready_handoff(tmp_path):
 def test_production_state_persists_topic_evidence_and_run_by_account(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     store = InMemoryAccountStore()
+    store.put("account-a", "memory", "history_baseline:content:v1", {
+        "status": "complete",
+        "source": "operator_review",
+        "records_checked": 0,
+    })
     account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
     agent = ResearchDiscoveryAgent(
         "account-a",
         account_resolver=lambda _account_id: account,
-        history_reader=lambda _account_id: [],
         account_store=store,
     )
 
@@ -288,3 +292,30 @@ def test_two_accounts_have_separate_research_state(tmp_path, monkeypatch):
     ]
     assert [row["topic"] for row in topics_a] == ["Ideas for account A"]
     assert [row["topic"] for row in topics_b] == ["Ideas for account B"]
+
+
+
+def test_production_with_unknown_history_baseline_holds_and_does_not_save_candidate(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    store = InMemoryAccountStore()
+    account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    agent = ResearchDiscoveryAgent(
+        "account-a",
+        account_resolver=lambda _account_id: account,
+        account_store=store,
+        result_writer=lambda _report: None,
+    )
+
+    report = agent.run([candidate()])
+
+    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
+    assert not any(key.startswith("research_candidate:") for (_aid, _kind, key) in store.data)
+
+
+def test_agent_01_has_no_imports_from_legacy_research_layer():
+    from pathlib import Path
+    import inspect
+
+    path = Path(inspect.getsourcefile(ResearchDiscoveryAgent))
+    source = path.read_text(encoding="utf-8")
+    assert "layers.layer02_research" not in source
