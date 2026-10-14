@@ -1,1 +1,1 @@
-"""AI Cost Optimizer — track, predict, and optimize AI spending."""
+"""Canonical model price registry used by the LLM manager."""
