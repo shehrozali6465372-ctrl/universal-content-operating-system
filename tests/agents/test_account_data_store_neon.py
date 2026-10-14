@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from pathlib import Path
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -28,9 +30,26 @@ class FakeMemory:
 class FakeCursor:
     def __init__(self, pool):
         self.pool = pool
+        self.rowcount = 0
 
     def execute(self, query, params=()):
         self.pool.statements.append((query, params))
+        compact = " ".join(query.split()).lower()
+        if "insert into agent_memory" not in compact:
+            return
+        if "values (%s, %s, %s, %s" in compact:
+            level, category, key, value = params
+            entry_key = (level, category, key)
+            do_nothing = "on conflict (level, category, key) do nothing" in compact
+            if do_nothing and entry_key in self.pool.memory.values:
+                self.rowcount = 0
+            else:
+                self.pool.memory.values[entry_key] = value
+                self.rowcount = 1
+        elif "values (%s, 'memory', %s, %s" in compact:
+            level, key, value = params
+            self.pool.memory.values[(level, "memory", key)] = value
+            self.rowcount = 1
 
 
 class FakeConnection:
@@ -67,8 +86,14 @@ class FakeDatabase:
 
 
 class FakeRegistry:
+    def __init__(self, root=None):
+        self.root = Path(root or "/tmp/ucos-account-data-store-tests")
+
     def get(self, account_id):
         return SimpleNamespace(account_id=account_id)
+
+    def workspace_path(self, account_id):
+        return self.root / account_id
 
 
 @pytest.fixture
@@ -139,3 +164,52 @@ def test_history_baseline_requires_explicit_confirmation(prod_store):
     )
     assert marker["status"] == "complete"
     assert store.history_baseline("account-a") == marker
+
+
+
+def _create_legacy_store(path: Path, values: dict[str, object]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(path) as legacy:
+        legacy.execute("CREATE TABLE kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        legacy.executemany(
+            "INSERT INTO kv(key,value) VALUES (?,?)",
+            [(key, json.dumps(value, sort_keys=True)) for key, value in values.items()],
+        )
+
+
+def test_bootstrap_imports_history_and_marks_only_explicit_legacy_history_complete(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    registry = FakeRegistry(tmp_path)
+    legacy_path = registry.workspace_path("account-a") / "content.sqlite3"
+    history = [{"topic": "prior post", "published": True, "post_id": "p-123"}]
+    _create_legacy_store(
+        legacy_path,
+        {
+            "collection:execution_history": history,
+            "collection:analytics": [{"metric": "likes", "value": 4}],
+        },
+    )
+    database = FakeDatabase()
+    store = AccountDataStore(registry=registry, database=database)
+
+    marker = store.bootstrap_legacy_store("account-a", "content")
+
+    assert marker["status"] == "complete"
+    assert marker["history_records"] == 1
+    assert store.get("account-a", "content", "collection:execution_history") == history
+    assert store.history_baseline("account-a")["source"] == "legacy_sqlite_import"
+
+
+def test_bootstrap_does_not_mark_legacy_store_complete_without_history_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    registry = FakeRegistry(tmp_path)
+    legacy_path = registry.workspace_path("account-a") / "content.sqlite3"
+    _create_legacy_store(legacy_path, {"some_other_key": {"ok": True}})
+    database = FakeDatabase()
+    store = AccountDataStore(registry=registry, database=database)
+
+    marker = store.bootstrap_legacy_store("account-a", "content")
+
+    assert marker["status"] == "legacy_history_key_missing"
+    assert store.history_baseline("account-a") is None
+    assert database.memory.values == {}
