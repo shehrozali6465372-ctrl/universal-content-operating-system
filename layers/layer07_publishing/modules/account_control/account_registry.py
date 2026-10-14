@@ -115,7 +115,10 @@ class AccountRegistry:
             affiliate_rules=decoded(row.get("affiliate_rules"), {}),
             capabilities=decoded(row.get("capabilities"), []),
             constraints=decoded(row.get("constraints"), {}),
-            enabled=bool(row.get("enabled")),
+            # The production identity join includes platform-account enablement.
+            # A disabled provider identity must disable this account for dispatch,
+            # even when its parent business account remains enabled.
+            enabled=bool(row.get("enabled")) and bool(row.get("platform_account_enabled", True)),
             tenant_id=str(row.get("tenant_id") or ""),
             workspace_id=str(row.get("workspace_id") or ""),
             brand_id=str(row.get("brand_id") or ""),

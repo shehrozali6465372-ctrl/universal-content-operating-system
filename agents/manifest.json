@@ -1,0 +1,399 @@
+{
+  "architecture_version": "1.0",
+  "architecture_name": "UCOS 28-Worker Agent Architecture",
+  "execution_model": "One deterministic workflow orchestrator dispatches typed jobs to workers. Workers do not free-chat with each other. State is account-scoped; publishing remains fail-closed.",
+  "migration_policy": "Move one bounded responsibility at a time. A legacy layer is retired only after all needed code is owned by an agent/shared contract, callers are migrated, tests pass, and production evidence is recorded.",
+  "agents": [
+    {
+      "id": "AG01",
+      "name": "Research Discovery Agent",
+      "status": "implementation_in_progress",
+      "entrypoint": "agents/agent_01_research_discovery/agent.py",
+      "owns": "Discover candidate topics, collect attributable web evidence, check the target account's known publication history, and persist an evidence pack for Agent 06. Does not verify claims, score, write content, or publish.",
+      "sources": [
+        "agents/agent_01_research_discovery/tavily_source.py",
+        "layers/layer07_publishing/modules/account_control/account_registry.py (shared identity boundary)",
+        "layers/layer07_publishing/modules/account_control/account_data_store.py (shared account-state boundary)"
+      ],
+      "output": "JSON evidence-pack report with READY_FOR_VERIFICATION handoff to AG06; this is not a factual-verification result or publishing permission.",
+      "dependencies": [],
+      "gate": "unit contracts, account isolation, durable Neon state, CI, and live production smoke",
+      "source_configuration": {
+        "provider": "Tavily Search API",
+        "environment_variables": [
+          "TAVILY_API_KEY",
+          "UCOS_TAVILY_TIMEOUT_SECONDS"
+        ],
+        "fallback": "none; no key means no live discovery",
+        "query_budget": "Agent 01 caps the default Tavily run at 5 candidate topics; one discovery request plus at most one evidence request per candidate",
+        "documentation": "https://docs.tavily.com/documentation/api-reference/endpoint/search"
+      },
+      "production_blockers": [
+        "TAVILY_API_KEY must be configured in the deployed service and a real provider smoke test must pass",
+        "The deployed account's existing publication history must be imported or verified before the first production recommendation",
+        "Latest CI and a live Neon-backed service smoke test must pass on the exact candidate release commit",
+        "The worker must be wired into the release orchestrator only after production certification"
+      ]
+    },
+    {
+      "id": "AG02",
+      "name": "Trend Scout Agent",
+      "status": "planned",
+      "owns": "Gather current trends from configured, attributable sources.",
+      "sources": [
+        "layers/layer02_research/modules/trend_discovery"
+      ],
+      "dependencies": [
+        "AG01"
+      ]
+    },
+    {
+      "id": "AG03",
+      "name": "Topic Opportunity Agent",
+      "status": "planned",
+      "owns": "Find topic gaps and score topic demand against a niche.",
+      "sources": [
+        "layers/layer02_research/modules/niche_intelligence",
+        "layers/layer02_research/modules/topic_intelligence"
+      ],
+      "dependencies": [
+        "AG01",
+        "AG02"
+      ]
+    },
+    {
+      "id": "AG04",
+      "name": "Audience Intelligence Agent",
+      "status": "planned",
+      "owns": "Build audience and interest profiles from available data.",
+      "sources": [
+        "layers/layer02_research/modules/audience_research"
+      ],
+      "dependencies": [
+        "AG01"
+      ]
+    },
+    {
+      "id": "AG05",
+      "name": "Competitor Intelligence Agent",
+      "status": "planned",
+      "owns": "Analyze observable competitor content, timing, and gaps.",
+      "sources": [
+        "layers/layer02_research/modules/competitor_analysis"
+      ],
+      "dependencies": [
+        "AG01",
+        "AG02"
+      ]
+    },
+    {
+      "id": "AG06",
+      "name": "Evidence and Citation Agent",
+      "status": "planned",
+      "owns": "Validate source provenance and evaluate explicit factual claims.",
+      "sources": [
+        "layers/layer02_research/modules/fact_verification"
+      ],
+      "dependencies": [
+        "AG01"
+      ]
+    },
+    {
+      "id": "AG07",
+      "name": "Research Memory and Dedup Agent",
+      "status": "planned",
+      "owns": "Retrieve prior account research and prevent research-state duplication.",
+      "sources": [
+        "layers/layer02_research/modules/research_memory",
+        "layers/layer03_intelligence/modules/content_understanding/duplicate_detector.py"
+      ],
+      "dependencies": [
+        "AG01",
+        "AG06"
+      ]
+    },
+    {
+      "id": "AG08",
+      "name": "Strategy and Scoring Agent",
+      "status": "planned",
+      "owns": "Rank eligible topics using supplied signals, niche weights, risk, and confidence.",
+      "sources": [
+        "layers/layer02_research/modules/topic_scoring",
+        "layers/layer03_intelligence/modules/strategy_engine"
+      ],
+      "dependencies": [
+        "AG03",
+        "AG04",
+        "AG05",
+        "AG06"
+      ]
+    },
+    {
+      "id": "AG09",
+      "name": "Content Planning Agent",
+      "status": "planned",
+      "owns": "Produce an executable content brief and task plan.",
+      "sources": [
+        "layers/layer02_research/modules/research_planner",
+        "layers/layer04_writing"
+      ],
+      "dependencies": [
+        "AG08"
+      ]
+    },
+    {
+      "id": "AG10",
+      "name": "Content Writer Agent",
+      "status": "planned",
+      "owns": "Create a platform-shaped first draft from an approved brief.",
+      "sources": [
+        "layers/layer04_writing"
+      ],
+      "dependencies": [
+        "AG09"
+      ]
+    },
+    {
+      "id": "AG11",
+      "name": "Brand Voice Editor Agent",
+      "status": "planned",
+      "owns": "Apply account-specific brand voice without crossing account boundaries.",
+      "sources": [
+        "layers/layer06_quality",
+        "layers/layer09_learning"
+      ],
+      "dependencies": [
+        "AG10"
+      ]
+    },
+    {
+      "id": "AG12",
+      "name": "Image and Media Agent",
+      "status": "planned",
+      "owns": "Create or select media and return valid media references.",
+      "sources": [
+        "layers/layer05_image",
+        "layers/layer20_image_pipeline"
+      ],
+      "dependencies": [
+        "AG09",
+        "AG10"
+      ]
+    },
+    {
+      "id": "AG13",
+      "name": "Quality and Safety Agent",
+      "status": "planned",
+      "owns": "Run originality, factuality, safety, readability, and content-quality gates.",
+      "sources": [
+        "layers/layer06_quality"
+      ],
+      "dependencies": [
+        "AG10",
+        "AG11",
+        "AG12"
+      ]
+    },
+    {
+      "id": "AG14",
+      "name": "Platform Compliance Agent",
+      "status": "planned",
+      "owns": "Enforce current target-platform format and policy requirements.",
+      "sources": [
+        "layers/layer06_quality",
+        "layers/layer07_publishing"
+      ],
+      "dependencies": [
+        "AG13"
+      ]
+    },
+    {
+      "id": "AG15",
+      "name": "Account and Niche Strategy Agent",
+      "status": "planned",
+      "owns": "Select only enabled, policy-compatible accounts using observed account-local signals.",
+      "sources": [
+        "layers/layer14_enterprise_integration/modules/master_orchestrator"
+      ],
+      "dependencies": [
+        "AG08",
+        "AG25"
+      ]
+    },
+    {
+      "id": "AG16",
+      "name": "Affiliate and Product Evidence Agent",
+      "status": "planned",
+      "owns": "Return only real, account-authorized product and affiliate evidence.",
+      "sources": [
+        "layers/layer10_monetization",
+        "layers/layer14_enterprise_integration/modules"
+      ],
+      "dependencies": [
+        "AG15",
+        "AG24"
+      ]
+    },
+    {
+      "id": "AG17",
+      "name": "Content Repetition Guard Agent",
+      "status": "planned",
+      "owns": "Block repeated content or unresolved publication intents using durable account-scoped state.",
+      "sources": [
+        "layers/layer07_publishing/modules/publisher_engine/content_repetition_guard.py",
+        "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py"
+      ],
+      "dependencies": [
+        "AG13",
+        "AG15"
+      ]
+    },
+    {
+      "id": "AG18",
+      "name": "Publishing Planner and Scheduler Agent",
+      "status": "planned",
+      "owns": "Schedule approved work through durable, deduplicated tasks.",
+      "sources": [
+        "layers/layer07_publishing",
+        "layers/layer11_async_runtime",
+        "layers/layer15_async_runtime"
+      ],
+      "dependencies": [
+        "AG14",
+        "AG17",
+        "AG26"
+      ]
+    },
+    {
+      "id": "AG19",
+      "name": "Platform Publisher Agent",
+      "status": "planned",
+      "owns": "Call configured real platform adapters with account-specific credentials.",
+      "sources": [
+        "layers/layer07_publishing"
+      ],
+      "dependencies": [
+        "AG14",
+        "AG16",
+        "AG17",
+        "AG18",
+        "AG24",
+        "AG25"
+      ]
+    },
+    {
+      "id": "AG20",
+      "name": "Publication Verification and Reconciliation Agent",
+      "status": "planned",
+      "owns": "Reconcile asynchronous outcomes and verify public post identity/status.",
+      "sources": [
+        "layers/layer07_publishing/modules/publisher_engine/publication_ledger.py"
+      ],
+      "dependencies": [
+        "AG19",
+        "AG26"
+      ]
+    },
+    {
+      "id": "AG21",
+      "name": "Analytics Collector Agent",
+      "status": "planned",
+      "owns": "Collect real platform analytics and explicitly represent unavailable values.",
+      "sources": [
+        "layers/layer08_analytics",
+        "layers/layer19_analytics_engine"
+      ],
+      "dependencies": [
+        "AG20"
+      ]
+    },
+    {
+      "id": "AG22",
+      "name": "Performance Analyst Agent",
+      "status": "planned",
+      "owns": "Explain observed account-local performance without fabricating metrics.",
+      "sources": [
+        "layers/layer08_analytics",
+        "layers/layer19_analytics_engine"
+      ],
+      "dependencies": [
+        "AG21"
+      ]
+    },
+    {
+      "id": "AG23",
+      "name": "Learning Optimizer Agent",
+      "status": "planned",
+      "owns": "Update future decisions only from verified account-local observations.",
+      "sources": [
+        "layers/layer09_learning"
+      ],
+      "dependencies": [
+        "AG22"
+      ]
+    },
+    {
+      "id": "AG24",
+      "name": "Credential and OAuth Guardian Agent",
+      "status": "planned",
+      "owns": "Check token configuration/expiry and enforce account-bound credential references.",
+      "sources": [
+        "layers/layer14_enterprise_integration/modules/agents/pinterest_token_guardian.py",
+        "layers/layer17_security"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "AG25",
+      "name": "Security and Tenant Isolation Agent",
+      "status": "planned",
+      "owns": "Enforce tenant/workspace/brand/account authorization and secret-safe audit behavior.",
+      "sources": [
+        "layers/layer17_security",
+        "layers/layer14_enterprise_integration"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "AG26",
+      "name": "Database and State Integrity Agent",
+      "status": "planned",
+      "owns": "Validate Neon/PostgreSQL readiness, migrations, transactions, and durable-state contracts.",
+      "sources": [
+        "layers/layer13_persistence",
+        "layers/layer16_database_engineering"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "AG27",
+      "name": "Runtime, Queue and Recovery Agent",
+      "status": "planned",
+      "owns": "Monitor durable tasks, retries, leases, dead-letter state, and recovery.",
+      "sources": [
+        "layers/layer11_async_runtime",
+        "layers/layer15_async_runtime",
+        "layers/layer18_monitoring"
+      ],
+      "dependencies": [
+        "AG26"
+      ]
+    },
+    {
+      "id": "AG28",
+      "name": "Deployment and Website Operations Agent",
+      "status": "planned",
+      "owns": "Validate release health, external service readiness, deploy evidence, and website operations.",
+      "sources": [
+        "layers/layer21_deployment",
+        "layers/layer22_documentation",
+        "layers/layer23_website_manager"
+      ],
+      "dependencies": [
+        "AG25",
+        "AG26",
+        "AG27"
+      ]
+    }
+  ]
+}

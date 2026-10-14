@@ -15,6 +15,7 @@ import threading
 from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dataclasses import dataclass
+from urllib.parse import parse_qs, unquote, urlsplit
 import re
 
 
@@ -31,6 +32,7 @@ class ConnectionConfig:
     idle_timeout: int = 300
     max_retries: int = 3
     retry_delays: tuple = (0.5, 1.0, 2.0)
+    sslmode: str = "prefer"
 
     def __post_init__(self) -> None:
         integer_fields = {
@@ -55,9 +57,57 @@ class ConnectionConfig:
             for delay in self.retry_delays
         ):
             raise ValueError("retry_delays must contain non-negative numbers")
+        allowed_sslmodes = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+        if self.sslmode not in allowed_sslmodes:
+            raise ValueError("sslmode is not a supported libpq SSL mode")
 
     @classmethod
     def from_env(cls) -> "ConnectionConfig":
+        # The Neon/DATABASE URL is the canonical production configuration when
+        # present. The legacy discrete POSTGRES_* settings remain supported.
+        dsn = (
+            os.environ.get("NEON_DATABASE_URL", "").strip()
+            or os.environ.get("DATABASE_URL", "").strip()
+        )
+        if dsn:
+            try:
+                parsed = urlsplit(dsn)
+                if parsed.scheme.lower() not in {"postgres", "postgresql"} or not parsed.hostname:
+                    raise ValueError
+                database = unquote(parsed.path.lstrip("/"))
+                if not database:
+                    raise ValueError
+                host = parsed.hostname
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                url_sslmode = (query.get("sslmode") or [None])[0]
+                explicit_sslmode = (
+                    os.environ.get("POSTGRES_SSLMODE", "").strip()
+                    or os.environ.get("PGSSLMODE", "").strip()
+                )
+                sslmode = explicit_sslmode or url_sslmode
+                is_neon = host.lower().endswith(".neon.tech")
+                if is_neon:
+                    # Never silently downgrade a Neon connection to plaintext
+                    # or opportunistic TLS if an environment override is unsafe.
+                    if sslmode and sslmode not in {"require", "verify-ca", "verify-full"}:
+                        raise ValueError
+                    sslmode = sslmode or "require"
+                else:
+                    sslmode = sslmode or "prefer"
+                return cls(
+                    host=host,
+                    port=parsed.port or int(os.environ.get("POSTGRES_PORT", "5432")),
+                    database=database,
+                    user=unquote(parsed.username or os.environ.get("POSTGRES_USER", os.environ.get("PG_USER", "postgres"))),
+                    password=unquote(parsed.password or os.environ.get("POSTGRES_PASSWORD", os.environ.get("PG_PASSWORD", ""))),
+                    min_connections=int(os.environ.get("PG_MIN_CONN", "2")),
+                    max_connections=int(os.environ.get("PG_MAX_CONN", "10")),
+                    sslmode=sslmode,
+                )
+            except (TypeError, ValueError):
+                # Never include the DSN in the exception; it contains credentials.
+                raise ValueError("NEON_DATABASE_URL or DATABASE_URL must be a valid PostgreSQL URI with a database name") from None
+
         return cls(
             host=os.environ.get("POSTGRES_HOST", os.environ.get("PG_HOST", "localhost")),
             port=int(os.environ.get("POSTGRES_PORT", os.environ.get("PG_PORT", "5432"))),
@@ -66,6 +116,7 @@ class ConnectionConfig:
             password=os.environ.get("POSTGRES_PASSWORD", os.environ.get("PG_PASSWORD", "")),
             min_connections=int(os.environ.get("PG_MIN_CONN", "2")),
             max_connections=int(os.environ.get("PG_MAX_CONN", "10")),
+            sslmode=os.environ.get("POSTGRES_SSLMODE", os.environ.get("PGSSLMODE", "prefer")),
         )
 
 
@@ -118,6 +169,7 @@ class ConnectionPool:
                     user=self._config.user,
                     password=self._config.password,
                     connect_timeout=self._config.connection_timeout,
+                    sslmode=self._config.sslmode,
                 )
                 self._pg_available = True
                 self._initialized = True
