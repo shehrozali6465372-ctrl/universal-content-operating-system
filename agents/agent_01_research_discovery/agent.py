@@ -143,7 +143,8 @@ class ResearchDiscoveryAgent:
             ),
             "candidate_provider_configured": self._candidate_provider is not None,
             "evidence_provider_configured": self._evidence_provider is not None,
-            "tavily_configured_from_environment": bool(os.environ.get("TAVILY_API_KEY", "").strip()),\n            "gdelt_fallback_available": self._source is not None and getattr(self._source, "name", "") == "gdelt_context",
+            "tavily_configured_from_environment": bool(os.environ.get("TAVILY_API_KEY", "").strip()),
+            "gdelt_fallback_available": self._source is not None and getattr(self._source, "name", "") == "gdelt_context",
         }
 
     @staticmethod
