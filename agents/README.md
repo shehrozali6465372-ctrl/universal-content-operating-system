@@ -10,7 +10,7 @@ UCOS has **28 named worker agents**. A deterministic orchestrator dispatches typ
 
 `Account + request → AG01 research → AG02–AG08 topic strategy → AG09 plan → AG10–AG14 content/media/quality → AG15 account choice → AG16 product evidence (when requested) → AG17 duplicate guard → AG18 schedule → AG19 publish → AG20 verify → AG21–AG23 learn → AG24–AG28 cross-cutting controls`.
 
-The orchestrator may skip an agent when its responsibility is irrelevant, but it may not skip a required safety, account-isolation, publication, or verification gate.
+The deterministic entry point is `agents.dispatcher.AgentDispatcher`. It dispatches only implemented workers, rejects planned workers, and refuses production dispatch until a worker is explicitly marked `production_ready` in `manifest.json`. The orchestrator may skip an agent when its responsibility is irrelevant, but it may not skip a required safety, account-isolation, publication, or verification gate.
 
 ## Layer retirement rule
 
@@ -24,7 +24,7 @@ Existing `layers/` code is the source material for the migration; it is **not sa
 - Writes production account state through the existing account-store facade, which uses L13 PostgreSQL/Neon in production; local JSON/SQLite is development/test only.
 - Missing history, missing persistence, weak evidence, failed verification, or unknown status must hold/block the candidate. No publisher is called by AG01.
 - `READY_FOR_WRITING_REVIEW` is a hand-off only; it is **not** publish authorization.
-- History coverage includes records synced to UCOS. Posts made outside UCOS need a verified import before they can be included in duplicate decisions.
+- Before production handoff, the account's UCOS history baseline must be verified. A present legacy SQLite store is imported into Neon without overwriting newer Neon rows; if the legacy store is missing or unreadable, AG01 holds. History coverage includes records synced to UCOS. Posts made outside UCOS need a verified import before they can be included in duplicate decisions. Live source providers must also be configured; an empty source registry returns `blocked_research_sources_unconfigured` rather than fake recommendations.
 
 ## Completion evidence
 
