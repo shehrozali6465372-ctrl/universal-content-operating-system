@@ -73,7 +73,7 @@ def test_research_agent_runs_layer02_and_returns_source_evidence():
     result = agent.execute(agent.manifest(), sample_task())
 
     assert isinstance(result, AgentResult)
-    assert result.status == AgentRunStatus.COMPLETED
+    assert result.status == AgentRunStatus.COMPLETED, result.errors
     assert result.agent_role == AgentRole.RESEARCH
     assert result.confidence == pytest.approx(0.85)
     assert len(result.output["completed_modules"]) == len(MODULE_NAMES)
@@ -88,7 +88,7 @@ def test_research_agent_does_not_claim_completion_without_source_urls():
         for name in MODULE_NAMES
     })
     result = agent.execute(agent.manifest(), sample_task())
-    assert result.status == AgentRunStatus.PARTIAL
+    assert result.status == AgentRunStatus.PARTIAL, result.errors
     assert result.output["source_urls"] == []
     assert any("no verifiable HTTP(S) source URLs" in error for error in result.errors)
 
@@ -98,7 +98,7 @@ def test_research_agent_surfaces_module_failure_instead_of_fabricating_success()
         raise RuntimeError("source validator unavailable")
     agent = ResearchAgent(module_bindings(fact_verification=fail_verification))
     result = agent.execute(agent.manifest(), sample_task())
-    assert result.status == AgentRunStatus.PARTIAL
+    assert result.status == AgentRunStatus.PARTIAL, result.errors
     assert "fact_verification" in result.output["failed_modules"]
     assert any("source validator unavailable" in error for error in result.errors)
 
@@ -113,7 +113,7 @@ def test_task_input_cannot_override_ceo_authorization_scope():
     agent = ResearchAgent(module_bindings(trend_discovery=inspect_scope))
     task = sample_task(tenant_id="tenant-attacker", workspace_id="workspace-attacker", brand_id="brand-attacker")
     result = agent.execute(agent.manifest(), task)
-    assert result.status == AgentRunStatus.COMPLETED
+    assert result.status == AgentRunStatus.COMPLETED, result.errors
     assert observed[0]["tenant_id"] == "tenant-1"
     assert observed[0]["workspace_id"] == "workspace-1"
     assert observed[0]["brand_id"] == "brand-1"
@@ -155,7 +155,7 @@ def test_ceo_delegates_to_research_agent_and_persists_verified_result():
         executor=research_agent, store=store,
     )
     report = ceo.run_goal(task.goal_id, "Research sensitive skin towels", sample_scope())
-    assert report["status"] == "completed"
+    assert report["status"] == "completed", report
     assert report["finished_tasks"] == 1
     assert report["results"][0]["agent_role"] == "research"
     assert any(event[0] == "finished" for event in store.events)
