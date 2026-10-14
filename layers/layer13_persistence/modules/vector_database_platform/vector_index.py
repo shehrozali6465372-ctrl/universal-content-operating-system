@@ -1,6 +1,8 @@
 """vector_index.py — Vector indexing."""
 from __future__ import annotations
 from typing import Any, Dict, List, Tuple
+import math
+from layers.shared.vector_math import cosine_similarity
 
 
 class VectorIndex:
@@ -20,23 +22,32 @@ class VectorIndex:
     def search(self, query: List[float], top_k: int = 10) -> List[Tuple[int, float]]:
         results: List[Tuple[int, float]] = []
         for rid, vec in self._index.items():
-            score = self._cosine(query, vec)
+            score = cosine_similarity(query, vec)
             results.append((rid, score))
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_k]
-
-    def _cosine(self, a: List[float], b: List[float]) -> float:
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = sum(x * x for x in a) ** 0.5
-        nb = sum(x * x for x in b) ** 0.5
-        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
     def count(self) -> int:
         return len(self._index)
 
     def rebuild(self) -> bool:
+        """Rebuild the flat index snapshot after validating stored vectors."""
+        dimensions = {len(vector) for vector in self._index.values()}
+        if len(dimensions) > 1:
+            return False
+        if any(
+            not math.isfinite(float(value))
+            for vector in self._index.values()
+            for value in vector
+        ):
+            return False
+        if dimensions:
+            self._dimensions = dimensions.pop()
+        self._index = {
+            record_id: [float(value) for value in vector]
+            for record_id, vector in self._index.items()
+        }
+        self._flat = True
         return True
 
     def stats(self) -> Dict[str, Any]:
