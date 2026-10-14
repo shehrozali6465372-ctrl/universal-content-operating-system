@@ -917,10 +917,9 @@ class TestParallelReasoning:
     def setup_method(self):
         self.engine = ParallelReasoning(max_concurrent=3)
 
-    def test_reason_simulated(self):
-        results = self.engine.reason("test prompt", ["gpt-4o", "claude", "gemini"])
-        assert len(results) == 3
-        assert all(not r.is_success for r in results)
+    def test_reason_without_callback_fails_closed(self):
+        with pytest.raises(ValueError, match="real provider callback"):
+            self.engine.reason("test prompt", ["gpt-4o", "claude", "gemini"])
 
     def test_reason_with_callback(self):
         def fake_call(prompt, model):
@@ -937,7 +936,9 @@ class TestParallelReasoning:
         assert "boom" in results[0].error
 
     def test_history(self):
-        self.engine.reason("test", ["gpt-4o"])
+        def call(prompt, model):
+            return ModelResponse(model=model, provider="test", content="reasoned")
+        self.engine.reason("test", ["gpt-4o"], call_fn=call)
         assert len(self.engine.get_history()) == 1
 
 
@@ -947,10 +948,9 @@ class TestParallelGeneration:
     def setup_method(self):
         self.engine = ParallelGeneration(max_parallel=3)
 
-    def test_generate_simulated(self):
-        results = self.engine.generate("Write a blog", ["gpt-4o", "claude"])
-        assert len(results) == 2
-        assert all(not r.is_success for r in results)
+    def test_generate_without_callback_fails_closed(self):
+        with pytest.raises(ValueError, match="real provider callback"):
+            self.engine.generate("Write a blog", ["gpt-4o", "claude"])
 
     def test_generate_with_callback(self):
         def fake_call(prompt, model):
@@ -959,11 +959,15 @@ class TestParallelGeneration:
         assert results[0].content == "Content"
 
     def test_max_parallel(self):
-        results = self.engine.generate("Write", ["m1", "m2", "m3", "m4", "m5"])
-        assert len(results) <= 3
+        def call(prompt, model):
+            return ModelResponse(model=model, provider="test", content=model)
+        results = self.engine.generate("Write", ["m1", "m2", "m3", "m4", "m5"], call_fn=call)
+        assert len(results) == 3
 
     def test_history(self):
-        self.engine.generate("Write", ["gpt-4o"])
+        def call(prompt, model):
+            return ModelResponse(model=model, provider="test", content="generated")
+        self.engine.generate("Write", ["gpt-4o"], call_fn=call)
         assert len(self.engine.get_history()) == 1
 
 
@@ -973,10 +977,9 @@ class TestParallelReview:
     def setup_method(self):
         self.reviewer = ParallelReview(max_concurrent=3)
 
-    def test_review_simulated(self):
-        results = self.reviewer.review("Great content", ["critic1", "critic2"])
-        assert len(results) == 2
-        assert all(r.is_success for r in results)
+    def test_review_without_callback_fails_closed(self):
+        with pytest.raises(ValueError, match="real provider callback"):
+            self.reviewer.review("Great content", ["critic1", "critic2"])
 
     def test_review_with_callback(self):
         def fake_review(content, reviewer):
@@ -985,7 +988,9 @@ class TestParallelReview:
         assert results[0].is_success
 
     def test_history(self):
-        self.reviewer.review("Text", ["c1"])
+        def call(content, reviewer):
+            return ModelResponse(model=reviewer, provider="test", content="review")
+        self.reviewer.review("Text", ["c1"], call_fn=call)
         assert len(self.reviewer.get_history()) == 1
 
 
