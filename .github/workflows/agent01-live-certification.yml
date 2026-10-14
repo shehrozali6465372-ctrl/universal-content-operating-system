@@ -1,0 +1,57 @@
+name: UCOS Agent 01 Real Production Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/agent01-live-certification.yml"
+      - "agents/**"
+      - "scripts/agent01_*.py"
+      - "layers/layer07_publishing/modules/account_control/account_registry.py"
+      - "layers/layer07_publishing/modules/account_control/account_data_store.py"
+      - "layers/layer13_persistence/**"
+      - "layers/layer17_security/modules/credential_resolver/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ucos-agent01-real-production-validation
+  cancel-in-progress: false
+
+jobs:
+  real-live-validation:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      APP_ENV: production
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+
+      - name: Verify required production secrets are present without printing values
+        env:
+          HAS_NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL != '' }}
+          HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY != '' }}
+          HAS_TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY != '' }}
+        run: |
+          set -euo pipefail
+          test "$HAS_NEON_DATABASE_URL" = "true" || { echo "::error::NEON_DATABASE_URL is missing"; exit 2; }
+          test "$HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY" = "true" || { echo "::error::UCOS_CREDENTIAL_ENCRYPTION_KEY is missing"; exit 2; }
+          test "$HAS_TAVILY_API_KEY" = "true" || { echo "::error::TAVILY_API_KEY is missing; no live import or search was performed"; exit 2; }
+          echo "REAL_DATABASE_CREDENTIALS_AND_RESEARCH_PROVIDER=CONFIGURED"
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Compile real production gate
+        run: python -m compileall -q agents scripts layers/layer07_publishing/modules/account_control layers/layer13_persistence layers/layer17_security
+
+      - name: Import history and smoke-test every enabled Pinterest account against real APIs
+        run: python -m scripts.agent01_live_certification_gate --max-pages 100
