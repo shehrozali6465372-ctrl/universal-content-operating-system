@@ -49,7 +49,8 @@ def test_search_uses_public_https_endpoint_and_requires_real_sentence():
     assert rows[0]["content"] == "A real sentence returned by the Context API."
     assert urlsplit(seen[0][0].full_url).scheme == "https"
     assert urlsplit(seen[0][0].full_url).hostname == "api.gdeltproject.org"
-    assert parse_qs(urlsplit(seen[0][0].full_url).query)["format"] == ["json"]\n    assert parse_qs(urlsplit(seen[0][0].full_url).query)["timespan"] == ["72h"]
+    assert parse_qs(urlsplit(seen[0][0].full_url).query)["format"] == ["json"]
+    assert parse_qs(urlsplit(seen[0][0].full_url).query)["timespan"] == ["72h"]
     assert seen[0][1] == 12.0
     assert source.request_count == 1
 
