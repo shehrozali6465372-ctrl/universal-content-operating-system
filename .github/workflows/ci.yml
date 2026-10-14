@@ -58,6 +58,9 @@ jobs:
       - name: Layer 12 real model execution integrity
         run: python -m pytest tests/test_layer12_ai_foundation.py::TestMultiModelExecutor tests/test_layer12_production_contracts.py -q --tb=short
 
+      - name: Gemini provider adapter regression
+        run: python -m pytest tests/test_gemini_real_api.py -q --tb=short
+
       - name: Compile
         run: python -m compileall -q layers agents tests tools scripts main.py
 
