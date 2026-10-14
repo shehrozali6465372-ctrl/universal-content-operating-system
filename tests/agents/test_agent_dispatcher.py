@@ -69,3 +69,40 @@ def test_dispatch_rejects_account_mismatch():
             input_payload={},
             mode="test",
         )
+
+def test_certification_dispatch_is_production_only(monkeypatch):
+    dispatcher = AgentDispatcher()
+    monkeypatch.setenv("APP_ENV", "development")
+    with pytest.raises(AgentNotProductionReadyError, match="production"):
+        dispatcher.dispatch(
+            "AG01",
+            constructor_kwargs={"account_id": "account-a"},
+            input_payload={"limit": 1},
+            mode="certification",
+        )
+
+
+def test_certification_dispatch_rejects_injected_factories_in_production(monkeypatch):
+    class FakeAgent:
+        def __init__(self, account_id):
+            self.account_id = account_id
+
+        def run(self, limit=1):
+            return {"account_id": self.account_id, "status": "fake"}
+
+    monkeypatch.setenv("APP_ENV", "production")
+    dispatcher = AgentDispatcher(factories={"AG01": FakeAgent})
+    with pytest.raises(AgentNotProductionReadyError, match="injected factories"):
+        dispatcher.dispatch(
+            "AG01",
+            constructor_kwargs={"account_id": "account-a"},
+            input_payload={"limit": 1},
+            mode="certification",
+        )
+
+
+def test_api_gateway_registers_agent01_research_route():
+    from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
+
+    gateway = APIGateway()
+    assert callable(gateway._routes["POST /agents/AG01/research"])
