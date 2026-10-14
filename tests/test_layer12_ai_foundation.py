@@ -368,8 +368,6 @@ class TestAllProviders:
     def _test_provider(self, cls, name, model):
         p = cls()
         assert p.name == name
-        if name in {"llama", "qwen"}:
-            return
         assert p.initialize() is False
         with pytest.raises(RuntimeError):
             p.generate(ProviderRequest("Test", model, name))
