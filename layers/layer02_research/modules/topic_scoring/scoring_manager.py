@@ -16,7 +16,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Dict, List, Optional
 
-from layers.shared.json_store import atomic_write_json, load_json_object
+from layers.shared.json_store import atomic_write_json, load_json_list
 
 from layers.layer02_research.modules.topic_scoring.scoring_engine import ScoringEngine, ScoringResult
 
@@ -36,7 +36,7 @@ class ScoringManager:
         self._history: List[dict] = []
         self._max_history = 500
 
-        self._load()
+        self._history = load_json_list(self._storage_path, "history")
 
     def score_topic(
         self,
@@ -147,7 +147,3 @@ class ScoringManager:
             "history": self._history[-50:],
         })
 
-    def _load(self):
-        data = load_json_object(self._storage_path)
-        history = data.get("history", [])
-        self._history = history if isinstance(history, list) else []
