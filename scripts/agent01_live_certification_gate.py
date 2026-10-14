@@ -107,7 +107,10 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "production_certified": False,
         }
 
-    # ResearchDiscoveryAgent selects Tavily when configured, otherwise the real\n    # public GDELT Context API. The smoke must prove an actual external request.\n\n    from scripts.agent01_live_smoke import run_live_smoke
+    # ResearchDiscoveryAgent selects Tavily when configured, otherwise the real
+    # public GDELT Context API. The smoke must prove an actual external request.
+
+    from scripts.agent01_live_smoke import run_live_smoke
 
     live_reports: list[dict[str, Any]] = []
     for account in accounts:
