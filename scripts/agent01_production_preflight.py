@@ -62,7 +62,7 @@ def run_preflight(
 
     try:
         if store is None:
-            from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+            from layers.layer07_publishing.modules.account_control.account_data_store import (\n                AccountDataStore,\n                is_verified_history_baseline,\n            )
             if registry is None:
                 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
                 registry = AccountRegistry()
@@ -70,11 +70,16 @@ def run_preflight(
         marker = store.history_baseline(account_id, "content") if hasattr(store, "history_baseline") else store.get(
             account_id, "memory", "history_baseline:content:v1", default=None
         )
-        if isinstance(marker, Mapping) and marker.get("status") == "complete":
-            checks["history_baseline"] = {"status": "pass", "reason_code": "verified"}
+        if is_verified_history_baseline(marker):
+            checks["history_baseline"] = {"status": "pass", "reason_code": "verified_with_provenance"}
         else:
             marker_status = str(marker.get("status") or "missing") if isinstance(marker, Mapping) else "missing"
-            checks["history_baseline"] = {"status": "blocked", "reason_code": f"history_baseline_{marker_status}"}
+            reason_code = (
+                "history_baseline_metadata_invalid"
+                if isinstance(marker, Mapping) and marker_status == "complete"
+                else f"history_baseline_{marker_status}"
+            )
+            checks["history_baseline"] = {"status": "blocked", "reason_code": reason_code}
     except Exception:
         checks["history_baseline"] = {"status": "unknown", "reason_code": "history_baseline_unavailable"}
 
