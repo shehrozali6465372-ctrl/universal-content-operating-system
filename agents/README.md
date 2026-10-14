@@ -29,7 +29,7 @@ Existing `layers/` code is the source material for the migration; it is **not sa
 
 ## Live source setup
 
-Set `TAVILY_API_KEY` in the deployed service environment. An optional `UCOS_TAVILY_TIMEOUT_SECONDS` may be set from 3 to 30 (default 12). No key is stored in source control. See the [official Tavily Search endpoint documentation](https://docs.tavily.com/documentation/api-reference/endpoint/search). Provider availability and quota are environment-dependent; CI tests use a mock API, not a real Tavily account.
+Set `TAVILY_API_KEY` in the deployed service environment for Tavily. An optional `UCOS_TAVILY_TIMEOUT_SECONDS` may be set from 3 to 30 (default 12). If Tavily is not configured in production, AG01 uses the public Google News RSS endpoint and resolves each item to its publisher's HTTPS article URL; if fewer than two independent publisher hosts are available, the topic is held. This is a real public source fallback, not canned data. See the [official Tavily Search endpoint documentation](https://docs.tavily.com/documentation/api-reference/endpoint/search) and [Google News RSS search](https://news.google.com/rss/search?q=home%20organization&hl=en-US&gl=US&ceid=US:en). CI unit tests verify parsing/redirect safety separately from the real live production gate.
 
 ## Real Pinterest history import
 
@@ -41,7 +41,7 @@ Run `APP_ENV=production python -m scripts.agent01_live_smoke --account-id <regis
 
 ## Automated real production validation
 
-The `.github/workflows/agent01-live-certification.yml` workflow uses repository secrets `NEON_DATABASE_URL`, `UCOS_CREDENTIAL_ENCRYPTION_KEY`, and `TAVILY_API_KEY`. It connects to the actual Neon account registry, imports Pins from each enabled Pinterest account with that account's encrypted credentials, reads imported history back, then performs one bounded real Tavily research smoke per account. It never publishes. If the research key is absent, history import may complete but live research is explicitly blocked. The workflow is evidence only; it must not mark AG01 `production_ready` unless the production orchestrator is wired and the deployed request-to-Neon path has also been verified.
+The `.github/workflows/agent01-live-certification.yml` workflow requires repository secrets `NEON_DATABASE_URL` and `UCOS_CREDENTIAL_ENCRYPTION_KEY`. It connects to the real Neon account registry, imports Pins for each enabled Pinterest account using that account's encrypted credential, reads imported history back, then attempts a bounded real Tavily search if configured or the real Google News RSS publisher fallback. It never publishes. The workflow is evidence only; it must not mark AG01 `production_ready` unless the production orchestrator is wired and the deployed request-to-Neon path has also been verified.
 
 ## Completion evidence
 
