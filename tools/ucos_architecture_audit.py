@@ -429,6 +429,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", default="artifacts/ucos-architecture-audit.json")
     parser.add_argument("--fail-on-syntax-errors", action="store_true")
+    parser.add_argument("--fail-on-scaffold-success-patterns", action="store_true")
     args = parser.parse_args()
     report = build_report()
     output = (ROOT / args.json).resolve()
@@ -444,6 +445,9 @@ def main() -> int:
     if args.fail_on_syntax_errors and report["syntax_errors"]:
         print("SYNTAX_ERRORS=" + json.dumps(report["syntax_errors"], sort_keys=True))
         return 2
+    if args.fail_on_scaffold_success_patterns and report["scaffold_success_patterns"]:
+        print("SCAFFOLD_SUCCESS_PATTERNS=" + json.dumps(report["scaffold_success_patterns"], sort_keys=True))
+        return 3
     return 0
 
 
