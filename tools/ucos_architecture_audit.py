@@ -42,7 +42,11 @@ def module_name(path: Path, root: Path = ROOT) -> str:
 def is_test_source(path: str | Path) -> bool:
     """Recognize root tests, nested package tests, and test_*.py modules."""
     rel = str(path).replace("\\", "/")
-    return rel.startswith("tests/") or "/tests/" in f"/{rel}/" or Path(rel).name.startswith("test_")
+    return (
+        rel.startswith(("tests/", "tests_helpers/"))
+        or "/tests/" in f"/{rel}/"
+        or Path(rel).name.startswith("test_")
+    )
 
 
 def production_python_paths(root: Path) -> list[Path]:
