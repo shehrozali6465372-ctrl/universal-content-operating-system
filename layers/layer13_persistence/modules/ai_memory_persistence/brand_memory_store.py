@@ -19,12 +19,6 @@ class BrandMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def set_guideline(self, category: str, text: str) -> None:
         self._guidelines[category] = text
 
