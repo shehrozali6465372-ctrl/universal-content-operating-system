@@ -1,31 +1,7 @@
 name: UCOS Production Certificate Gate
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/production-activation-gate.yml"
-      - ".github/workflows/production-live-smoke.yml"
-      - ".github/workflows/production-browser-live-smoke.yml"
-      - ".github/workflows/production-provider-readiness.yml"
-      - ".github/workflows/ucos-full-e2e-one-post.yml"
-      - ".github/workflows/ci.yml"
-      - ".github/workflows/architecture-conformance.yml"
-      - "tests/test_cross_layer_architecture_conformance.py"
-      - "main.py"
-      - "layers/layer12_ai_foundation/**"
-      - "layers/layer14_enterprise_integration/**"
-      - "layers/layer10_monetization/**"
-      - "services/ucos_browser/**"
-      - "layers/layer07_publishing/**"
-      - "layers/layer11_async_runtime/**"
-      - "layers/layer13_persistence/**"
-      - "layers/layer15_async_runtime/**"
-      - "tests/test_production_architecture_contracts.py"
-      - "tests/test_layer14_production_gate.py"
-      - "tests/test_layer15_production_gate.py"
-      - "scripts/check_l11_boundary.py"
-      - "docs/architecture/UCOS_V1_2_PRODUCTION_CROSSCHECK.md"
-      - "docs/releases/UCOS_V1_2_RELEASE_MANIFEST.md"
+  # Full certification currently includes a real social-post E2E. Run only after
+  # the operator separately reviewed and explicitly authorized that post.
   workflow_dispatch:
 permissions:
   contents: read
