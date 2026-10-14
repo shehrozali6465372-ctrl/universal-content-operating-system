@@ -27,6 +27,10 @@ Across both passes, **154 Layer 11 scaffold files** were removed. The substantiv
 
 A repository-wide import/ownership scan identified 17 additional files under `layer11_async_runtime/modules/event_loop_management` with no production imports, test importers, or manifest owners. Manual source inspection confirmed that the dispatch/recovery/restart helpers only recorded requests and could report `success: true` without dispatching or restarting a real loop; the remaining unreferenced helpers were isolated in-memory registries, metrics, context, event, policy, and report utilities that were not connected to the retained runtime. These 17 unowned utility modules were removed. The actual `event_loop.py` and `loop_manager.py` entry points and package marker remain.
 
+### Test doubles isolated from production packages
+
+The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
+
 ## Runtime code intentionally retained
 
 The following execution paths remain in the repository:
