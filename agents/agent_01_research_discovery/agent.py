@@ -97,11 +97,21 @@ class ResearchDiscoveryAgent:
         self._evidence_provider = evidence_provider
         self._result_writer = result_writer
         self._components_override = dict(components or {})
+        self._tavily_source = None
+        configured_trend_sources = dict(trend_sources or {})
+        if trend_sources is None and candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
+            from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
+
+            self._tavily_source = TavilyResearchSource.from_env()
+            configured_trend_sources["tavily"] = self._tavily_source.fetch_trends
+            if self._evidence_provider is None:
+                self._evidence_provider = self._tavily_source.fetch_evidence
         self._source_status: dict[str, Any] = {
-            "status": "configured" if candidate_provider is not None or trend_sources else "unconfigured",
+            "status": "configured" if candidate_provider is not None or configured_trend_sources else "unconfigured",
             "candidate_provider_configured": candidate_provider is not None,
-            "trend_sources_configured": bool(trend_sources),
-            "trend_sources": sorted(str(name) for name in (trend_sources or {}).keys()),
+            "trend_sources_configured": bool(configured_trend_sources),
+            "trend_sources": sorted(str(name) for name in configured_trend_sources.keys()),
+            "tavily_configured_from_environment": self._tavily_source is not None,
         }
 
         account = self._resolve_account()
@@ -141,7 +151,7 @@ class ResearchDiscoveryAgent:
         )
         self.planner_manager = override.get("planner_manager") or PlannerManager()
 
-        for source_name, fetch_fn in (trend_sources or {}).items():
+        for source_name, fetch_fn in configured_trend_sources.items():
             if callable(fetch_fn):
                 self.trend_manager.register_source(str(source_name), fetch_fn=fetch_fn)
 
@@ -252,6 +262,22 @@ class ResearchDiscoveryAgent:
                 "trend_sources": source_names,
             }
             self.trend_manager.discover(category=self.niche)
+            refreshed_health = self.trend_manager.list_sources()
+            failed_sources = [
+                str(item.get("name"))
+                for item in refreshed_health
+                if isinstance(item, Mapping) and int(item.get("error_count") or 0) > 0
+            ]
+            if failed_sources and not any(
+                isinstance(item, Mapping) and int(item.get("fetch_count") or 0) > 0
+                for item in refreshed_health
+            ):
+                self._source_status = {
+                    **self._source_status,
+                    "status": "unavailable",
+                    "error_code": "trend_source_request_failed",
+                    "failed_sources": failed_sources,
+                }
             for item in self.trend_manager.top_trends(category=self.niche, limit=limit):
                 row = dict(item)
                 row.setdefault("topic", row.get("keyword") or row.get("name") or row.get("title"))
@@ -482,8 +508,36 @@ class ResearchDiscoveryAgent:
                     sanitized[str(key)] = max(0.0, min(10.0, number))
             except (TypeError, ValueError):
                 continue
-        refs = [item["url"] or item["source"] for item in evidence]
-        result = self.scoring_manager.score_topic(topic, niche=self.niche, scores=sanitized, evidence=refs)
+
+        references = [item["url"] or item["source"] for item in evidence]
+        required_dimensions = {
+            "trend", "audience", "competition", "knowledge",
+            "verification", "engagement", "freshness",
+        }
+        missing_dimensions = sorted(required_dimensions - set(sanitized))
+        if missing_dimensions:
+            # The existing scorer otherwise silently imputes 5/10 for missing
+            # dimensions. Agent 01 must not present these defaults as measured data.
+            source_relevance = candidate.get("relevance_score")
+            try:
+                source_relevance = float(source_relevance)
+                if not math.isfinite(source_relevance):
+                    source_relevance = None
+            except (TypeError, ValueError):
+                source_relevance = None
+            return {
+                "status": "not_scored_insufficient_signals",
+                "reason_code": "missing_required_scoring_dimensions",
+                "missing_dimensions": missing_dimensions,
+                "source_relevance_score": source_relevance,
+                "source_relevance_is_vendor_rank_only": source_relevance is not None,
+                "score_inputs_supplied": False,
+                "evidence_sources": len(references),
+            }
+
+        result = self.scoring_manager.score_topic(
+            topic, niche=self.niche, scores=sanitized, evidence=references
+        )
         data = self._as_dict(result)
         if not data:
             data = {
@@ -495,8 +549,9 @@ class ResearchDiscoveryAgent:
                 "raw_scores": getattr(result, "raw_scores", {}),
                 "weighted_scores": getattr(result, "weighted_scores", {}),
             }
-        data["score_inputs_supplied"] = bool(sanitized)
-        data["evidence_sources"] = len(refs)
+        data["status"] = "scored"
+        data["score_inputs_supplied"] = True
+        data["evidence_sources"] = len(references)
         return data
 
     def _plan_summary(self, topic: str) -> dict[str, Any] | None:
@@ -540,6 +595,9 @@ class ResearchDiscoveryAgent:
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
         limit = min(limit, MAX_CANDIDATES)
+        requested_limit = limit
+        if self._tavily_source is not None:
+            limit = min(limit, self._tavily_source.max_candidates_per_run)
         run_id = str(uuid4())
         started = datetime.now(timezone.utc).isoformat()
         history, history_available, history_error = self._load_history()
@@ -695,13 +753,10 @@ class ResearchDiscoveryAgent:
             elif len(evidence) < MIN_INDEPENDENT_SOURCES:
                 decision = "NEEDS_MORE_EVIDENCE"
                 reason_codes.append("fewer_than_two_independent_sources")
-            elif valid_claims == 0:
-                decision = "NEEDS_CLAIM_VERIFICATION"
-                reason_codes.append("no_claims_supplied_for_verification")
             elif contradicted:
                 decision = "BLOCK_CONTRADICTED_CLAIM"
                 reason_codes.append("one_or_more_claims_contradicted_or_verification_failed")
-            elif not all_verified:
+            elif claims and not all_verified:
                 decision = "HUMAN_REVIEW_REQUIRED"
                 reason_codes.append("all_claims_not_verified_at_required_confidence")
             else:
@@ -730,7 +785,7 @@ class ResearchDiscoveryAgent:
                     "status": (
                         "verified" if all_verified else
                         "contradicted_or_failed" if contradicted else
-                        "needs_review" if claims else "not_run"
+                        "needs_review" if claims else "not_requested_topic_only"
                     ),
                     "claims_checked": valid_claims,
                     "minimum_confidence": verified_confidence,
@@ -764,6 +819,12 @@ class ResearchDiscoveryAgent:
             "history": history_summary,
             "history_coverage": _HISTORY_COVERAGE,
             "candidate_count": len(results),
+            "requested_candidate_limit": requested_limit,
+            "effective_candidate_limit": limit,
+            "candidate_limit_note": (
+                "Tavily runs are capped at five candidate topics to bound external API use."
+                if self._tavily_source is not None and requested_limit != limit else None
+            ),
             "candidates": results,
             "recommended_topic": next(
                 (item["topic"] for item in results if item.get("decision") == "READY_FOR_WRITING_REVIEW"),
