@@ -50,7 +50,7 @@ jobs:
           pip install --break-system-packages -r requirements.txt
 
       - name: UCOS architecture dependency audit
-        run: python tools/ucos_architecture_audit.py --json ucos-architecture-audit.json --fail-on-syntax-errors --fail-on-scaffold-success-patterns
+        run: python tools/ucos_architecture_audit.py --json ucos-architecture-audit.json --fail-on-syntax-errors --fail-on-scaffold-success-patterns --fail-on-unresolved-internal-imports
 
       - name: UCOS architecture audit regression tests
         run: python -m pytest tests/test_ucos_architecture_audit.py -q --tb=short
