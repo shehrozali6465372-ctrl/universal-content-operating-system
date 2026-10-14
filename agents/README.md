@@ -37,7 +37,7 @@ Before the first production recommendation on a Pinterest account, run `APP_ENV=
 
 ## Real production smoke
 
-Run `APP_ENV=production python -m scripts.agent01_live_smoke --account-id <registered-account-id>` only from the deployed service environment or an equivalent production-configured runner. This command uses the real Tavily API and Neon/PostgreSQL account store; it does not inject fake dependencies. It blocks before outbound search unless preflight verifies the registered account, PostgreSQL pool, Tavily key presence, a completed history baseline, and a readable account history. A successful smoke writes one bounded research run and confirms that candidate/evidence/run records can be read back from the durable store. It never publishes. A passed smoke is evidence for review, **not** automatic production certification.
+Run `APP_ENV=production python -m scripts.agent01_live_smoke --account-id <registered-account-id>` only from the deployed service environment or an equivalent production-configured runner. This command uses the real selected research API and Neon/PostgreSQL account store; it does not inject fake dependencies. It blocks before outbound search unless preflight verifies the registered account, PostgreSQL pool, a configured real provider, a completed history baseline, and a readable account history. A successful smoke writes one bounded research run and confirms that candidate/evidence/run records can be read back from the durable store. It never publishes. A passed smoke is evidence for review, **not** automatic production certification.
 
 ## Automated real production validation
 
