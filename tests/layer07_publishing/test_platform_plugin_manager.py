@@ -3,7 +3,7 @@ from layers.layer07_publishing.modules.platform_plugin_manager.base_publisher im
     PublishResult, PlatformCapabilities,
 )
 from layers.layer07_publishing.modules.platform_plugin_manager.plugin_registry import PluginRegistry
-from layers.layer07_publishing.modules.platform_plugin_manager.mock_publisher import MockPublisher
+from tests_helpers.mock_publisher import MockPublisher
 from layers.layer07_publishing.modules.platform_plugin_manager.plugin_manager import PluginManager
 from layers.layer07_publishing.modules.platform_plugin_manager.exceptions import PluginNotFoundError
 
