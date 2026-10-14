@@ -114,19 +114,18 @@ def test_search_rejects_malformed_provider_contract():
         source.search("niche")
 
 
-def test_trend_contract_keeps_provider_relevance_separate_from_real_world_demand():
+def test_discovery_contract_keeps_provider_relevance_separate_from_real_world_demand():
     source = TavilyResearchSource(
         "key", opener=lambda request, timeout: FakeResponse(sample_payload())
     )
-    trends = source.fetch_trends(category="home decor", limit=3)
+    candidates = source.discover_candidates("account-a", "home decor", 3)
 
-    assert len(trends) == 2
-    assert trends[0].source == "tavily"
-    assert trends[0].keyword == "Small-space storage guide"
-    assert trends[0].relevance_score == pytest.approx(8.7)
-    assert trends[0].virality_score == 0
-    assert trends[0].freshness_score == 0
-    assert "https://publisher-one.example/article" in trends[0].description
+    assert len(candidates) == 2
+    assert candidates[0]["topic"] == "Small-space storage guide"
+    assert candidates[0]["source_relevance_score"] == pytest.approx(0.87)
+    assert candidates[0]["evidence"][0]["source"] == "publisher-one.example"
+    assert candidates[0]["evidence"][0]["url"] == "https://publisher-one.example/article"
+    assert "score is not a performance metric" not in str(candidates[0])
 
 
 def test_evidence_adapter_returns_attributed_sources_only():
@@ -159,7 +158,7 @@ def test_agent_auto_configures_tavily_only_when_key_is_present(tmp_path, monkeyp
         result_writer=lambda report: None,
         storage_root=tmp_path,
     )
-    assert agent._tavily_source is not None
+    assert agent._source is not None
     assert agent._source_status["tavily_configured_from_environment"] is True
     assert callable(agent._evidence_provider)
-    assert agent._tavily_source.max_candidates_per_run == 5
+    assert agent._source.max_candidates_per_run == 5
