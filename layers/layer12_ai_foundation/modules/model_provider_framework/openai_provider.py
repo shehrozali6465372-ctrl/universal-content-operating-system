@@ -36,6 +36,7 @@ class OpenAIProvider(BaseProvider):
             cfg.get("supported_models")
             or [
                 "gpt-4o",
+                "gpt-4o-mini",
                 "gpt-5.6-luna",
                 "gpt-5.6-sol",
                 "gpt-4-turbo",
