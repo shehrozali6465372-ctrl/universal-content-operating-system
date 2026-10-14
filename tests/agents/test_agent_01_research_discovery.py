@@ -237,3 +237,12 @@ def test_empty_production_namespace_does_not_claim_history_is_complete(tmp_path,
     assert rows == []
     assert available is False
     assert error_code == "history_baseline_not_verified"
+
+def test_unconfigured_sources_are_reported_explicitly(tmp_path):
+    agent, _writes, _components = build_agent(tmp_path)
+
+    report = agent.run()
+
+    assert report["status"] == "blocked_research_sources_unconfigured"
+    assert report["research_sources"]["status"] == "unconfigured"
+    assert "research_sources_unconfigured" in report["warnings"]
