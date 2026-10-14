@@ -36,7 +36,7 @@ def test_search_uses_public_https_endpoint_and_requires_real_sentence():
         seen.append((request, timeout))
         return Response({"results": [
             {"title": "Headline with evidence", "url": "https://publisher.example/a",
-             "domain": "publisher.example", "sentence": "A real sentence returned by the Context API."},
+             "domain": "publisher.example", "context": "A real sentence returned by the Context API."},
             {"title": "Headline only", "url": "https://other.example/b", "domain": "other.example"},
             {"title": "Bad URL", "url": "javascript:alert(1)", "sentence": "not accepted"},
         ]})
@@ -49,7 +49,7 @@ def test_search_uses_public_https_endpoint_and_requires_real_sentence():
     assert rows[0]["content"] == "A real sentence returned by the Context API."
     assert urlsplit(seen[0][0].full_url).scheme == "https"
     assert urlsplit(seen[0][0].full_url).hostname == "api.gdeltproject.org"
-    assert parse_qs(urlsplit(seen[0][0].full_url).query)["format"] == ["json"]
+    assert parse_qs(urlsplit(seen[0][0].full_url).query)["format"] == ["json"]\n    assert parse_qs(urlsplit(seen[0][0].full_url).query)["timespan"] == ["72h"]
     assert seen[0][1] == 12.0
     assert source.request_count == 1
 
