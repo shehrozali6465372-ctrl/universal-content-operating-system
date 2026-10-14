@@ -34,6 +34,12 @@ def module_name(path: Path, root: Path = ROOT) -> str:
     return ".".join(rel.parts)
 
 
+def is_test_source(path: str | Path) -> bool:
+    """Recognize root tests, nested package tests, and test_*.py modules."""
+    rel = str(path).replace("\\", "/")
+    return rel.startswith("tests/") or "/tests/" in f"/{rel}/" or Path(rel).name.startswith("test_")
+
+
 def production_python_paths(root: Path) -> list[Path]:
     files: set[Path] = set()
     for folder in SOURCE_ROOTS:
@@ -100,9 +106,13 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             })
 
     importers: dict[Path, set[str]] = defaultdict(set)
+    production_importers: dict[Path, set[str]] = defaultdict(set)
     import_edges: list[dict[str, str]] = []
+    production_import_edges: list[dict[str, str]] = []
     for source, tree in parsed.items():
         src_mod = module_name(source, root)
+        source_rel = repo_relative(source, root)
+        source_is_test = is_test_source(source_rel)
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue
@@ -110,12 +120,16 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
                 dest = module_to_path.get(target)
                 if dest is None:
                     continue
-                importers[dest].add(repo_relative(source, root))
-                import_edges.append({
-                    "from": repo_relative(source, root),
+                edge = {
+                    "from": source_rel,
                     "to": repo_relative(dest, root),
                     "line": str(getattr(node, "lineno", "")),
-                })
+                }
+                importers[dest].add(source_rel)
+                import_edges.append(edge)
+                if not source_is_test:
+                    production_importers[dest].add(source_rel)
+                    production_import_edges.append(edge)
 
     manifest_path = root / "agents" / "manifest.json"
     agents: list[dict[str, Any]] = []
@@ -178,16 +192,31 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         layer_files = sorted(folder.rglob("*.py"))
         inbound = sum(1 for p in layer_files if importers.get(p))
         layer_edges = [e for e in import_edges if e["from"].startswith(f"layers/{folder.name}/") or e["from"] == f"layers/{folder.name}"]
+        production_inbound = sum(1 for p in layer_files if production_importers.get(p))
+        production_layer_edges = [
+            e for e in production_import_edges
+            if e["from"].startswith(f"layers/{folder.name}/") or e["from"] == f"layers/{folder.name}"
+        ]
         layer_results.append({
             "name": folder.name,
             "python_file_count": len(layer_files),
             "files_with_static_inbound_imports": inbound,
+            "files_with_static_production_inbound_imports": production_inbound,
             "cross_layer_import_edges_out": sum(
                 1 for e in layer_edges
                 if e["to"].startswith("layers/") and e["to"].split("/")[1] != folder.name
             ),
             "cross_layer_import_edges_in": sum(
                 1 for e in import_edges
+                if e["to"].startswith(f"layers/{folder.name}/") and e["from"].startswith("layers/")
+                and e["from"].split("/")[1] != folder.name
+            ),
+            "cross_layer_production_import_edges_out": sum(
+                1 for e in production_layer_edges
+                if e["to"].startswith("layers/") and e["to"].split("/")[1] != folder.name
+            ),
+            "cross_layer_production_import_edges_in": sum(
+                1 for e in production_import_edges
                 if e["to"].startswith(f"layers/{folder.name}/") and e["from"].startswith("layers/")
                 and e["from"].split("/")[1] != folder.name
             ),
@@ -201,19 +230,23 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     function_hashes: dict[str, list[dict[str, str]]] = defaultdict(list)
     for path, tree in parsed.items():
         rel = repo_relative(path, root)
-        if "/tests/" not in f"/{rel}" and not rel.startswith("tests/"):
+        if not is_test_source(rel) and path.name != "__init__.py":
             try:
-                hashes[hashlib.sha256(path.read_bytes()).hexdigest()].append(rel)
+                raw = path.read_bytes()
+                if raw:
+                    hashes[hashlib.sha256(raw).hexdigest()].append(rel)
             except OSError:
                 pass
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if len(node.body) < 2:
-                    continue
-                normalized = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
-                digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-                owner = node.name
-                function_hashes[digest].append({"path": rel, "symbol": owner, "line": str(node.lineno)})
+        if not is_test_source(rel):
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    # __new__ methods are commonly identical allocation boilerplate;
+                    # their repetition is noise for behavior-level duplication review.
+                    if node.name == "__new__" or len(node.body) < 2:
+                        continue
+                    normalized = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
+                    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+                    function_hashes[digest].append({"path": rel, "symbol": node.name, "line": str(node.lineno)})
 
     duplicate_files = [paths for paths in hashes.values() if len(paths) > 1]
     duplicate_bodies = [
@@ -228,14 +261,23 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         rel = repo_relative(path, root)
         if not rel.startswith("layers/") or path.name == "__init__.py" or "/tests/" in f"/{rel}":
             continue
-        if importers.get(path):
+        if production_importers.get(path):
             continue
         owners = has_manifest_owner(path)
+        test_importers = sorted(importers.get(path, set()) - production_importers.get(path, set()))
+        if test_importers:
+            candidate_class = "tests_only_references"
+        elif owners:
+            candidate_class = "planned_agent_source"
+        else:
+            candidate_class = "no_static_production_inbound_import_found"
         orphan_candidates.append({
             "path": rel,
             "module": module_name(path, root),
             "manifest_owners": owners,
-            "candidate_class": "planned_agent_source" if owners else "no_static_inbound_import_found",
+            "test_only_importer_count": len(test_importers),
+            "test_only_importers": test_importers[:10],
+            "candidate_class": candidate_class,
             "warning": "Candidate only: dynamic imports, entry points, framework hooks and external callers may be invisible.",
         })
 
@@ -245,7 +287,11 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         lower = rel.lower()
         matched = [term for term in MODEL_PATH_TERMS if term in lower]
         if matched:
-            provider_inventory.append({"path": rel, "categories": matched})
+            provider_inventory.append({
+                "path": rel,
+                "categories": matched,
+                "source_type": "test" if is_test_source(rel) else "production",
+            })
 
     source_count_by_layer = {
         row["name"]: row["python_file_count"] for row in layer_results
@@ -266,8 +312,13 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             "static_import_edges": len(import_edges),
             "exact_duplicate_file_groups": len(duplicate_files),
             "duplicate_function_body_groups": len(duplicate_bodies),
-            "no_static_inbound_layer_module_candidates": len(orphan_candidates),
-            "model_provider_related_files": len(provider_inventory),
+            "no_static_inbound_layer_module_candidates": sum(
+                1 for item in orphan_candidates if item["candidate_class"] == "no_static_production_inbound_import_found"
+            ),
+            "no_static_production_inbound_layer_module_candidates": len(orphan_candidates),
+            "model_provider_related_files": sum(1 for item in provider_inventory if item["source_type"] == "production"),
+            "model_provider_related_test_files": sum(1 for item in provider_inventory if item["source_type"] == "test"),
+            "production_import_edges": len(production_import_edges),
         },
         "agent_manifest": manifest_summary,
         "agents": agents,
