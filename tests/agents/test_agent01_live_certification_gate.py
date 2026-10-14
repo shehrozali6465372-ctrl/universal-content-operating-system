@@ -19,17 +19,32 @@ def test_gate_refuses_nonproduction_before_network_or_database(monkeypatch):
     assert report["production_certified"] is False
 
 
-def test_gate_refuses_missing_real_tavily_key_before_history_import(monkeypatch):
+def test_gate_refuses_missing_neon_url_before_history_import(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("NEON_DATABASE_URL", "configured-only")
+    monkeypatch.delenv("NEON_DATABASE_URL", raising=False)
     monkeypatch.setenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "configured-only")
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setenv("TAVILY_API_KEY", "configured-only")
 
     report = run_gate()
 
     assert report["status"] == "blocked"
     assert report["reason_code"] == "required_live_environment_missing"
-    assert report["missing_environment_names"] == ["TAVILY_API_KEY"]
+    assert report["missing_environment_names"] == ["NEON_DATABASE_URL"]
     assert report["history_imports"] == []
-    assert report["external_research_performed"] is False if "external_research_performed" in report else True
+    assert report["external_research_performed"] is False
+    assert report["production_certified"] is False
+
+
+def test_gate_refuses_missing_encryption_key_before_history_import(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NEON_DATABASE_URL", "configured-only")
+    monkeypatch.delenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("TAVILY_API_KEY", "configured-only")
+
+    report = run_gate()
+
+    assert report["status"] == "blocked"
+    assert report["missing_environment_names"] == ["UCOS_CREDENTIAL_ENCRYPTION_KEY"]
+    assert report["history_imports"] == []
+    assert report["external_research_performed"] is False
     assert report["production_certified"] is False
