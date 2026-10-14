@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Optional
 
-from .image_provider import BaseImageProvider, ImageResponse
+from .image_provider import BaseImageProvider, ImageResponse, parse_image_size
 
 
 class OpenRouterImageProvider(BaseImageProvider):
@@ -125,19 +125,9 @@ class OpenRouterImageProvider(BaseImageProvider):
                 raise RuntimeError("OpenRouter returned invalid JSON") from exc
         raise RuntimeError("OpenRouter retry budget exhausted")
 
-    @staticmethod
-    def _parse_size(size: str) -> tuple[int, int]:
-        try:
-            width, height = (int(part) for part in size.lower().split("x", 1))
-        except (ValueError, TypeError):
-            raise ValueError("Image size must use WIDTHxHEIGHT notation") from None
-        if not (256 <= width <= 4096 and 256 <= height <= 4096):
-            raise ValueError("Image dimensions must be between 256 and 4096 pixels")
-        return width, height
-
     @classmethod
     def _aspect_ratio(cls, size: str) -> str:
-        width, height = cls._parse_size(size)
+        width, height = parse_image_size(size)
         choices = {
             "1:1": 1.0, "2:3": 2 / 3, "3:2": 1.5, "3:4": 0.75,
             "4:3": 4 / 3, "4:5": 0.8, "5:4": 1.25, "9:16": 9 / 16,
