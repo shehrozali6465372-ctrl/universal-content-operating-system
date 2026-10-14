@@ -1,8 +1,6 @@
 """Run a real, bounded Agent 01 smoke against configured production dependencies.
 
-This command does not inject a fake provider or in-memory store. It refuses to
-perform external research until the target account, Neon/PostgreSQL pool, Tavily
-provider, and verified account-history baseline are available. It never publishes.
+This command dispatches the real AG01 implementation through AgentDispatcher and uses the selected real research provider plus durable Neon/PostgreSQL storage. It refuses external research until the target account and verified account-history baseline are available. It never publishes.
 
 A pass is live-smoke evidence only, not a production certificate.
 """
