@@ -101,6 +101,10 @@ class AgentDispatcher:
             from agents.agent_01_research_discovery import ResearchDiscoveryAgent
 
             factory = ResearchDiscoveryAgent
+        elif factory is None and key == "AG02":
+            from agents.agent_02_trend_scout import TrendScoutAgent
+
+            factory = TrendScoutAgent
         if factory is None:
             raise AgentNotImplementedError(f"{key} has no registered implementation")
 
