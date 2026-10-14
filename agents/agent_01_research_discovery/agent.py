@@ -107,10 +107,15 @@ class ResearchDiscoveryAgent:
         self._account_store_override = account_store
         self._source = None
 
-        if self._candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
-            from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
+        if self._candidate_provider is None:
+            if os.environ.get("TAVILY_API_KEY", "").strip():
+                from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
 
-            self._source = TavilyResearchSource.from_env()
+                self._source = TavilyResearchSource.from_env()
+            else:
+                from agents.agent_01_research_discovery.gdelt_context_source import GDELTContextResearchSource
+
+                self._source = GDELTContextResearchSource()
             self._candidate_provider = self._source.discover_candidates
             if self._evidence_provider is None:
                 self._evidence_provider = self._source.fetch_evidence
@@ -133,12 +138,12 @@ class ResearchDiscoveryAgent:
 
         self._source_status: dict[str, Any] = {
             "status": "configured" if self._candidate_provider is not None else "unconfigured",
-            "provider": "tavily" if self._source is not None else (
+            "provider": getattr(self._source, "name", None) if self._source is not None else (
                 "injected" if self._candidate_provider is not None else None
             ),
             "candidate_provider_configured": self._candidate_provider is not None,
             "evidence_provider_configured": self._evidence_provider is not None,
-            "tavily_configured_from_environment": self._source is not None,
+            "tavily_configured_from_environment": bool(os.environ.get("TAVILY_API_KEY", "").strip()),\n            "gdelt_fallback_available": self._source is not None and getattr(self._source, "name", "") == "gdelt_context",
         }
 
     @staticmethod
