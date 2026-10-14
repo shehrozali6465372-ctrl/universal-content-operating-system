@@ -40,3 +40,9 @@ def atomic_write_json(path: str | Path, value: Mapping[str, Any]) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def load_json_list(path: str | Path | None, key: str) -> list[Any]:
+    """Load a named JSON list, returning an empty list for invalid state."""
+    value = load_json_object(path).get(key, [])
+    return value if isinstance(value, list) else []
