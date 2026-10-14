@@ -8,7 +8,7 @@ UCOS has **28 named worker agents**. A deterministic orchestrator dispatches typ
 
 ## One end-to-end path
 
-`Account + request → AG01 research → AG02–AG08 topic strategy → AG09 plan → AG10–AG14 content/media/quality → AG15 account choice → AG16 product evidence (when requested) → AG17 duplicate guard → AG18 schedule → AG19 publish → AG20 verify → AG21–AG23 learn → AG24–AG28 cross-cutting controls`.
+`Request → AG25 tenant/account checks + AG26 database readiness → AG01 discovery/history gate → AG02–AG05 research enrichment + AG06 fact verification + AG07 memory/dedup → AG08 scoring → AG09 plan → AG10–AG14 content/media/quality → AG15 account choice → AG16 product evidence (when requested) → AG17 publication repeat guard → AG18 schedule → AG19 publish → AG20 verify → AG21–AG23 learn → AG24–AG28 cross-cutting controls`.
 
 The deterministic entry point is `agents.dispatcher.AgentDispatcher`. It dispatches only implemented workers, rejects planned workers, and refuses production dispatch until a worker is explicitly marked `production_ready` in `manifest.json`. The orchestrator may skip an agent when its responsibility is irrelevant, but it may not skip a required safety, account-isolation, publication, or verification gate.
 
@@ -20,12 +20,11 @@ Existing `layers/` code is the source material for the migration; it is **not sa
 
 - Entry point: `agents.agent_01_research_discovery.ResearchDiscoveryAgent`.
 - Requires a registered, enabled `account_id`; resolves platform and niche from that account.
-- Checks known account-local UCOS execution history, de-duplicates candidates in a batch, collects attributable evidence, scores topics, verifies supplied claims, stores a plan and emits one JSON report.
+- Checks known account-local UCOS execution history, removes duplicate candidates within a batch, gathers at least two independent source hosts for a candidate, persists the evidence pack, and emits a JSON handoff report.
 - Writes production account state through the existing account-store facade, which uses L13 PostgreSQL/Neon in production; local JSON/SQLite is development/test only.
 - With `TAVILY_API_KEY` configured, AG01 uses the documented Tavily `POST /search` API via a bounded, timeout-limited standard-library adapter; each evidence item must carry an HTTP(S) source URL and source hostname. If the key or provider is missing/failing, discovery is explicitly blocked. The default Tavily run is capped at five topics to bound API use.
-- Numeric topic scoring runs only when all seven required dimensions are supplied. The existing scorer's default 5/10 values are not mislabeled as real measurements.
-- Missing history, missing persistence, weak evidence, failed verification, or unknown status must hold/block the candidate. No publisher is called by AG01.
-- `READY_FOR_WRITING_REVIEW` is a hand-off only; it is **not** publish authorization.
+- Missing history, missing persistence, weak evidence, missing source URLs, or unknown duplicate status must hold/block the candidate. Factual verification belongs to AG06, scoring belongs to AG08, planning belongs to AG09. No publisher is called by AG01.
+- `READY_FOR_VERIFICATION` is a hand-off to AG06 only; it does not mean factual claims are verified and is **not** publish authorization.
 - Before production handoff, the account's UCOS history baseline must be verified. A present legacy SQLite store is imported into Neon without overwriting newer Neon rows; if the legacy store is missing or unreadable, AG01 holds. History coverage includes records synced to UCOS. Posts made outside UCOS need a verified import before they can be included in duplicate decisions. Live source providers must also be configured; an empty source registry returns `blocked_research_sources_unconfigured` rather than fake recommendations.
 
 ## Live source setup
