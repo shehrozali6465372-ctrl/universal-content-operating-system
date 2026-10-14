@@ -8,7 +8,7 @@ Architecture:
     2. GeminiProvider actual HTTP request bheje
     3. Response parse ho aur ModelResponse mein convert ho
 
-    Agar network nahi hai to simulated response return hota hai.
+    Network/API/auth failures return explicit errors; no synthetic completion is substituted.
 
 Design Rules:
     - AI Brain ko kabhi pata nahi kaunsi key use ho rahi
@@ -40,11 +40,9 @@ class GeminiConfig:
 class GeminiProvider:
     """Real Gemini API provider with intelligent key rotation.
 
-    Supports:
-    - Text generation (generateContent)
-    - Chat (generateContent with history)
-    - Image understanding (generateContent with image)
-    - Streaming (streamGenerateContent)
+    Exposes text generation and chat through the non-streaming generateContent
+    endpoint. Multimodal image inputs and provider-native streaming are not
+    exposed by this adapter; failures return explicit error results.
 
     Returns an explicit failure when:
     - No network available
@@ -81,7 +79,7 @@ class GeminiProvider:
 
     def generate(self, prompt: str, model: str = "",
                  system_prompt: str = "", **kwargs: Any) -> Dict[str, Any]:
-        """Text generate karo — real API call ya simulated."""
+        """Generate text through the real API or return an explicit error result."""
         start = time.time()
         model = model or self._config.default_model
         self._request_count += 1
