@@ -6135,11 +6135,24 @@ class TestAIOrchestrator:
         o = AIOrchestrator()
         assert o.start(); assert o.stop()
 
-    def test_process(self):
+    def test_process_without_registered_component_is_blocked(self):
         o = AIOrchestrator()
         o.start()
         result = o.process("test", {"input": "data"})
-        assert "component" in result or "processed" in result
+        assert result["success"] is False
+        assert result["status"] == "blocked"
+        assert "processed" not in result
+
+    def test_process_executes_registered_component(self):
+        class Component:
+            def evaluate(self, payload):
+                return {"success": True, "output": payload}
+
+        o = AIOrchestrator()
+        o.link_module("default", Component())
+        result = o.process("test", {"input": "data"})
+        assert result["success"] is True
+        assert result["output"] == "{'input': 'data'}"
 
     def test_link(self):
         o = AIOrchestrator()
