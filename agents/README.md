@@ -22,14 +22,14 @@ Existing `layers/` code is the source material for the migration; it is **not sa
 - Requires a registered, enabled `account_id`; resolves platform and niche from that account.
 - Checks known account-local UCOS execution history, removes duplicate candidates within a batch, gathers at least two independent source hosts for a candidate, persists the evidence pack, and emits a JSON handoff report.
 - Writes production account state through the existing account-store facade, which uses L13 PostgreSQL/Neon in production; local JSON/SQLite is development/test only.
-- With `TAVILY_API_KEY` configured, AG01 uses the documented Tavily `POST /search` API via a bounded, timeout-limited standard-library adapter; each evidence item must carry an HTTP(S) source URL and source hostname. If the key or provider is missing/failing, discovery is explicitly blocked. The default Tavily run is capped at five topics to bound API use.
+- With `TAVILY_API_KEY` configured, AG01 uses the documented Tavily `POST /search` API. Otherwise it selects the public, keyless GDELT Context API via a bounded standard-library adapter. GDELT is rate-limited to one request per five seconds and capped at three candidate topics; it only accepts article records that contain a real source URL, title, and returned sentence/snippet. A provider/network/quota failure remains blocked; no synthetic evidence is substituted.
 - Missing history, missing persistence, weak evidence, missing source URLs, or unknown duplicate status must hold/block the candidate. Factual verification belongs to AG06, scoring belongs to AG08, planning belongs to AG09. No publisher is called by AG01.
 - `READY_FOR_VERIFICATION` is a hand-off to AG06 only; it does not mean factual claims are verified and is **not** publish authorization.
 - Before production handoff, the account's UCOS history baseline must be verified. A present legacy SQLite store is imported into Neon without overwriting newer Neon rows; if the legacy store is missing or unreadable, AG01 holds. History coverage includes records synced to UCOS. Posts made outside UCOS need a verified import before they can be included in duplicate decisions. Live source providers must also be configured; an empty source registry returns `blocked_research_sources_unconfigured` rather than fake recommendations.
 
 ## Live source setup
 
-Set `TAVILY_API_KEY` in the deployed service environment. An optional `UCOS_TAVILY_TIMEOUT_SECONDS` may be set from 3 to 30 (default 12). No key is stored in source control. See the [official Tavily Search endpoint documentation](https://docs.tavily.com/documentation/api-reference/endpoint/search). Provider availability and quota are environment-dependent; CI tests use a mock API, not a real Tavily account.
+Optional: set `TAVILY_API_KEY` in the deployed service environment for Tavily. Without it, AG01 attempts real live research through the public [GDELT Context API](https://blog.gdeltproject.org/announcing-the-gdelt-context-2-0-api/), which requires no key and is throttled to one request every five seconds. GDELT coverage is news-centric and may return no suitable sources for some niches; if so, the agent holds the candidate rather than inventing evidence. `UCOS_TAVILY_TIMEOUT_SECONDS` applies to Tavily only. No key is stored in source control.
 
 ## Real Pinterest history import
 
@@ -41,7 +41,7 @@ Run `APP_ENV=production python -m scripts.agent01_live_smoke --account-id <regis
 
 ## Automated real production validation
 
-The `.github/workflows/agent01-live-certification.yml` workflow uses repository secrets `NEON_DATABASE_URL`, `UCOS_CREDENTIAL_ENCRYPTION_KEY`, and `TAVILY_API_KEY`. It connects to the actual Neon account registry, imports Pins from each enabled Pinterest account with that account's encrypted credentials, reads imported history back, then performs one bounded real Tavily research smoke per account. It never publishes. If the research key is absent, history import may complete but live research is explicitly blocked. The workflow is evidence only; it must not mark AG01 `production_ready` unless the production orchestrator is wired and the deployed request-to-Neon path has also been verified.
+The `.github/workflows/agent01-live-certification.yml` workflow uses repository secrets `NEON_DATABASE_URL`, `UCOS_CREDENTIAL_ENCRYPTION_KEY`, and `TAVILY_API_KEY`. It connects to the actual Neon account registry, imports Pins from each enabled Pinterest account with that account's encrypted credentials, reads imported history back, then performs one bounded real research-provider smoke per account. It never publishes. If Tavily is absent, the workflow attempts the public GDELT fallback; live research still fails closed if that API is unavailable or cannot provide two independent source hosts. The workflow is evidence only; it must not mark AG01 `production_ready` unless the production orchestrator is wired and the deployed request-to-Neon path has also been verified.
 
 ## Completion evidence
 
