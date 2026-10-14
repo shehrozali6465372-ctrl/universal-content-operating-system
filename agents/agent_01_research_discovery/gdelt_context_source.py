@@ -216,7 +216,7 @@ class GDELTContextResearchSource:
         seen_urls: set[str] = set()
         seen_hosts: set[str] = set()
         for query in query_variants:
-            if len(results) >= min(limit, _MAX_RESULTS) and len(seen_hosts) >= 2:
+            if len(seen_hosts) >= 2 or len(results) >= min(limit, _MAX_RESULTS):
                 break
             try:
                 rows = self.search(query, max_results=max(2, min(limit, _MAX_RESULTS)))
