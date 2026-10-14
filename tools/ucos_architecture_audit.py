@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOTS = ("layers", "agents", "tools", "scripts", "tests")
+# Scan all Python sources in the repository, not only known roots. This catches
+# service/dashboard entrypoints that may import layer code from outside layers/.
+EXCLUDED_DIRECTORY_NAMES = {
+    ".git", ".venv", "venv", "node_modules", "__pycache__", ".tox",
+    ".pytest_cache", "build", "dist",
+}
 TEXT_SUFFIXES = {".py", ".md", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg"}
 MODEL_PATH_TERMS = (
     "model", "router", "provider", "llm", "openai", "gemini", "deepseek",
@@ -41,14 +46,15 @@ def is_test_source(path: str | Path) -> bool:
 
 
 def production_python_paths(root: Path) -> list[Path]:
-    files: set[Path] = set()
-    for folder in SOURCE_ROOTS:
-        base = root / folder
-        if base.is_dir():
-            files.update(p for p in base.rglob("*.py") if p.is_file())
-    main = root / "main.py"
-    if main.is_file():
-        files.add(main)
+    """Return all repository Python sources, including service and dashboard code."""
+    files: list[Path] = []
+    for path in root.rglob("*.py"):
+        if not path.is_file():
+            continue
+        relative_parts = path.relative_to(root).parts
+        if any(part in EXCLUDED_DIRECTORY_NAMES for part in relative_parts[:-1]):
+            continue
+        files.append(path)
     return sorted(files)
 
 
@@ -375,9 +381,10 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "revision": os.environ.get("GITHUB_SHA", "local-or-unspecified"),
         "scope": {
-            "python_roots": list(SOURCE_ROOTS) + ["main.py"],
+            "python_roots": "all repository Python files",
+            "excluded_directory_names": sorted(EXCLUDED_DIRECTORY_NAMES),
             "layer_dirs_detected": len(layer_results),
-            "method": "static AST imports plus manifest ownership; no runtime reachability claim",
+            "method": "repository-wide static AST imports plus manifest ownership; no runtime reachability claim",
         },
         "summary": {
             "layer_count": len(layer_results),
