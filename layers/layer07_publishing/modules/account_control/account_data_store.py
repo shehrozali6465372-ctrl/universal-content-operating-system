@@ -228,9 +228,23 @@ class AccountDataStore:
                 exists = legacy.execute(
                     "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kv'"
                 ).fetchone()
-                rows = legacy.execute("SELECT key,value FROM kv ORDER BY key").fetchall() if exists else []
+                if not exists:
+                    return {"status": "legacy_history_table_missing", "records_imported": 0}
+                rows = legacy.execute("SELECT key,value FROM kv ORDER BY key").fetchall()
         except Exception:
             return {"status": "legacy_store_unreadable", "records_imported": 0}
+
+        # A provisioned SQLite file (or an empty kv table) is not evidence that
+        # history was checked. Require an explicit execution_history collection.
+        history_raw = next(
+            (raw for key, raw in rows if str(key) == "collection:execution_history"),
+            None,
+        )
+        if history_raw is None:
+            return {"status": "legacy_history_key_missing", "records_imported": 0}
+        history_events = _decode(history_raw, None)
+        if not isinstance(history_events, list):
+            return {"status": "legacy_history_malformed", "records_imported": 0}
 
         level = _account_level(account_id)
         pool = self._database._pool
@@ -250,19 +264,6 @@ class AccountDataStore:
                         (level, kind, str(key), str(raw)),
                     )
                     seeded += max(0, int(getattr(cursor, "rowcount", 0) or 0))
-
-                history_key = "collection:execution_history"
-                cursor.execute(
-                    "SELECT value FROM agent_memory WHERE level=%s AND category=%s AND key=%s",
-                    (level, kind, history_key),
-                )
-                history_row = cursor.fetchone()
-                history_value = None
-                if history_row:
-                    history_value = history_row[0] if not isinstance(history_row, dict) else history_row.get("value")
-                history_events = _decode(history_value, None) if history_value is not None else []
-                if not isinstance(history_events, list):
-                    raise TypeError("account execution history is not a list")
 
                 verified_marker = {
                     "status": "complete",
