@@ -32,21 +32,25 @@ class VectorIndex:
 
     def rebuild(self) -> bool:
         """Rebuild the flat index snapshot after validating stored vectors."""
-        dimensions = {len(vector) for vector in self._index.values()}
-        if len(dimensions) > 1:
+        try:
+            rebuilt = {
+                record_id: [float(value) for value in vector]
+                for record_id, vector in self._index.items()
+            }
+        except (TypeError, ValueError, OverflowError):
             return False
         if any(
-            not math.isfinite(float(value))
-            for vector in self._index.values()
+            not math.isfinite(value)
+            for vector in rebuilt.values()
             for value in vector
         ):
             return False
+        dimensions = {len(vector) for vector in rebuilt.values()}
+        if len(dimensions) > 1:
+            return False
         if dimensions:
             self._dimensions = dimensions.pop()
-        self._index = {
-            record_id: [float(value) for value in vector]
-            for record_id, vector in self._index.items()
-        }
+        self._index = rebuilt
         self._flat = True
         return True
 
