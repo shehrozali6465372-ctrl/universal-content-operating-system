@@ -127,3 +127,15 @@ def test_unregistered_account_is_rejected(prod_store):
     store.registry = MissingRegistry()
     with pytest.raises(KeyError, match="unknown account_id"):
         store.get("missing", "content", "history")
+
+def test_history_baseline_requires_explicit_confirmation(prod_store):
+    store, _db = prod_store
+    with pytest.raises(ValueError, match="confirmed=True"):
+        store.mark_history_baseline_verified(
+            "account-a", source="operator_review", records_checked=0
+        )
+    marker = store.mark_history_baseline_verified(
+        "account-a", source="operator_review", records_checked=0, confirmed=True
+    )
+    assert marker["status"] == "complete"
+    assert store.history_baseline("account-a") == marker
