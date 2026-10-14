@@ -1,1 +1,0 @@
-"""Database adapter interfaces."""

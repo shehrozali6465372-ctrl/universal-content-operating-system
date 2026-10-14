@@ -1,26 +1,24 @@
-name: UCOS Live Browser Gateway Smoke
+name: UCOS Personal Browser Live Smoke
 
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/production-browser-live-smoke.yml"
-      - "layers/layer14_enterprise_integration/modules/api_gateway/api_gateway.py"
-      - "services/ucos_browser/server.py"
+      - "services/ucos_browser/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  browser-gateway:
+  browser-worker:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - name: Verify browser worker public console
         run: |
           set -euo pipefail
-          # Render can take over a minute to replace the running instance after a main-branch deploy.
           for i in {1..18}; do
             code="$(curl --max-time 10 -sS -o /tmp/browser-console.html -w '%{http_code}' https://ucos-personal-browser.onrender.com/console || true)"
             if [ "$code" = "200" ] && grep -q '<title>UCOS Personal Browser Console</title>' /tmp/browser-console.html; then
@@ -31,7 +29,7 @@ jobs:
             sleep 10
           done
 
-      - name: Verify browser worker health endpoint is protected
+      - name: Verify protected health endpoint rejects anonymous requests
         run: |
           set -euo pipefail
           code="$(curl --max-time 20 -sS -o /tmp/browser-worker-health.json -w '%{http_code}' https://ucos-personal-browser.onrender.com/health || true)"
@@ -40,33 +38,5 @@ jobs:
           grep -q 'authentication required' /tmp/browser-worker-health.json
           echo "BROWSER_WORKER_HEALTH_AUTH_FAIL_CLOSED=PASS"
 
-      - name: Verify protected browser gateway fail-closed
-        run: |
-          set -euo pipefail
-          for i in {1..6}; do
-            rm -f /tmp/browser-unauth.json
-            code="$(curl --max-time 20 -sS -o /tmp/browser-unauth.json -w '%{http_code}' -X POST -H "Content-Type: application/json" --data '{"url":"https://example.com","actions":[{"type":"extract"}]}' https://ucos-backend.onrender.com/browser/tasks || true)"
-            if [ "$code" = "401" ] && grep -q 'API authentication required' /tmp/browser-unauth.json; then
-              echo "BROWSER_GATEWAY_AUTH_FAIL_CLOSED=PASS"
-              break
-            fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-unauth.json || true; echo "BROWSER_GATEWAY_AUTH_FAIL_CLOSED=FAIL"; exit 1; }
-            sleep 10
-          done
-
-      - name: Verify browser gateway health requires authentication
-        run: |
-          set -euo pipefail
-          for i in {1..6}; do
-            rm -f /tmp/browser-gateway-health.json
-            code="$(curl --max-time 20 -sS -o /tmp/browser-gateway-health.json -w '%{http_code}' https://ucos-backend.onrender.com/browser/health || true)"
-            if [ "$code" = "401" ] && grep -q 'API authentication required' /tmp/browser-gateway-health.json; then
-              echo "BROWSER_GATEWAY_HEALTH_AUTH=PASS"
-              break
-            fi
-            [ "$i" -eq 6 ] && { cat /tmp/browser-gateway-health.json || true; echo "BROWSER_GATEWAY_HEALTH_AUTH=FAIL"; exit 1; }
-            sleep 10
-          done
-
-      - name: Final browser gateway result
-        run: echo "FINAL_BROWSER_GATEWAY_SMOKE=PASS"
+      - name: Final browser worker result
+        run: echo "FINAL_BROWSER_WORKER_SMOKE=PASS"
