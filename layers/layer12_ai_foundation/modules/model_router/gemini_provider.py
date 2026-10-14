@@ -30,7 +30,7 @@ class GeminiConfig:
 
     def __init__(self) -> None:
         self.api_base = "https://generativelanguage.googleapis.com/v1beta"
-        self.default_model = "gemini-3.5-flash"
+        self.default_model = "gemini-3.8-flash"
         self.max_tokens = 8192
         self.temperature = 0.7
         self.timeout_seconds = 60
