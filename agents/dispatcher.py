@@ -6,6 +6,7 @@ blocked until that agent's manifest status is explicitly production_ready.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -72,8 +73,8 @@ class AgentDispatcher:
         """Run one implemented agent and return its JSON-compatible report."""
         key = str(agent_id or "").strip().upper()
         selected_mode = str(mode or "").strip().lower()
-        if selected_mode not in {"test", "staging", "production"}:
-            raise ValueError("mode must be test, staging, or production")
+        if selected_mode not in {"test", "staging", "production", "certification"}:
+            raise ValueError("mode must be test, staging, production, or certification")
         spec = self._agents.get(key)
         if spec is None:
             raise AgentNotImplementedError("worker id is not present in the manifest")
@@ -84,6 +85,16 @@ class AgentDispatcher:
             raise AgentNotProductionReadyError(
                 f"{key} status is {status}; production dispatch requires production_ready"
             )
+        if selected_mode == "certification":
+            app_env = os.environ.get("APP_ENV", "").strip().lower()
+            if key != "AG01" or app_env not in {"production", "prod"}:
+                raise AgentNotProductionReadyError(
+                    "certification dispatch is restricted to AG01 in a production environment"
+                )
+            if key in self._factories:
+                raise AgentNotProductionReadyError(
+                    "certification dispatch rejects injected factories and requires the real AG01 implementation"
+                )
 
         factory = self._factories.get(key)
         if factory is None and key == "AG01":

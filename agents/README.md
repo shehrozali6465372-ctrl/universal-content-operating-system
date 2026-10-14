@@ -46,3 +46,11 @@ The `.github/workflows/agent01-live-certification.yml` workflow uses repository 
 ## Completion evidence
 
 Do not mark an agent production-ready from imports or unit tests alone. Its gate needs unit/contract tests, cross-account isolation tests, the relevant CI run, real durable-store verification, and a live smoke test against configured dependencies. If production credentials/database access are unavailable, record that as an unresolved gate rather than claiming success.
+
+### Authenticated AG01 API dispatch
+
+The API gateway exposes `POST /agents/AG01/research` behind the existing UCOS bearer-token authentication. The request accepts only a registered `account_id` and a `mode` of `certification` or `production`; candidate lists and provider/evidence overrides are never accepted from callers.
+
+- `certification` is restricted to `APP_ENV=production` and dispatches the real AG01 implementation through `AgentDispatcher`. It performs research and Neon read-back only; it never publishes.
+- `production` dispatch remains blocked until AG01's manifest status is explicitly `production_ready`.
+- The live certification workflow calls the deployed endpoint for every enabled Pinterest account, verifies the provider request and Neon read-back, and does not treat a CI-only direct function call as deployed-path proof.

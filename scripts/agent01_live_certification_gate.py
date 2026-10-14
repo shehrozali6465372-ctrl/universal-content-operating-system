@@ -1,7 +1,7 @@
 """Real production evidence gate for UCOS Agent 01.
 
-Runs only against the configured production Neon database and real Pinterest and
-Tavily APIs. No mocked adapters, canned API responses, injected stores, or
+Runs against the configured production Neon database, real Pinterest APIs, and the
+real research provider through the authenticated deployed UCOS API. No mocked adapters, canned API responses, injected stores, or
 publishing calls are used. This is live validation evidence, not an automatic
 production certificate: the release orchestrator must also be wired and verified.
 """
@@ -10,13 +10,142 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
+from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
 REQUIRED_ENV = (
     "NEON_DATABASE_URL",
     "UCOS_CREDENTIAL_ENCRYPTION_KEY",
 )
+
+
+def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str, Any]:
+    """Call the authenticated deployed UCOS API; retry only while the route is not deployed."""
+    token = str(
+        os.environ.get("UCOS_API_TOKEN")
+        or os.environ.get("UCOS_MLH_SERVICE_TOKEN")
+        or ""
+    ).strip()
+    if not token:
+        return {
+            "status": "failed_live_smoke",
+            "reason_code": "deployed_api_auth_token_missing",
+            "request_path_verified": False,
+            "external_search_performed": False,
+            "content_published": False,
+        }
+    base_url = str(os.environ.get("UCOS_API_BASE_URL") or "https://ucos-backend.onrender.com").strip().rstrip("/")
+    body = json.dumps({
+        "account_id": account_id,
+        "mode": dispatch_mode,
+        "limit": 1,
+    }).encode("utf-8")
+    endpoint = f"{base_url}/agents/AG01/research"
+
+    for attempt in range(36):
+        request = Request(
+            endpoint,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=15) as response:
+                status_code = int(getattr(response, "status", 200))
+                raw = response.read(1_000_000)
+        except HTTPError as exc:
+            status_code = int(exc.code)
+            raw = exc.read(100_000)
+            if status_code == 404 and b"Endpoint not found" in raw and attempt < 35:
+                time.sleep(5)
+                continue
+            try:
+                wrapper = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                wrapper = {}
+            data = wrapper.get("data") if isinstance(wrapper, dict) else None
+            return dict(data) if isinstance(data, dict) else {
+                "status": "failed_live_smoke",
+                "reason_code": f"deployed_api_http_{status_code}",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        except (URLError, TimeoutError, OSError):
+            if attempt < 35:
+                time.sleep(5)
+                continue
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_unreachable",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+
+        try:
+            wrapper = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_invalid_json",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        if not isinstance(wrapper, dict):
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_invalid_response",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        data = wrapper.get("data")
+        if status_code >= 400:
+            return dict(data) if isinstance(data, dict) else {
+                "status": "failed_live_smoke",
+                "reason_code": f"deployed_api_http_{status_code}",
+                "request_path_verified": True,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        if not isinstance(data, dict):
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_missing_result",
+                "request_path_verified": True,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        return {**data, "request_path_verified": True, "dispatch_mode": dispatch_mode}
+
+    return {
+        "status": "failed_live_smoke",
+        "reason_code": "deployed_agent01_endpoint_not_ready",
+        "request_path_verified": False,
+        "external_search_performed": False,
+        "content_published": False,
+    }
+
+
+def _agent01_manifest_status() -> str:
+    try:
+        manifest = json.loads(Path("agents/manifest.json").read_text(encoding="utf-8"))
+        for agent in manifest.get("agents", []):
+            if isinstance(agent, dict) and str(agent.get("id") or "").upper() == "AG01":
+                return str(agent.get("status") or "unknown").strip().lower()
+    except (OSError, json.JSONDecodeError):
+        pass
+    return "unknown"
 
 
 def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
@@ -31,6 +160,8 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
         }
 
     missing = [name for name in REQUIRED_ENV if not str(os.environ.get(name) or "").strip()]
+    if not str(os.environ.get("UCOS_API_TOKEN") or os.environ.get("UCOS_MLH_SERVICE_TOKEN") or "").strip():
+        missing.append("UCOS_API_TOKEN or UCOS_MLH_SERVICE_TOKEN")
     if missing:
         return {
             "status": "blocked",
@@ -107,14 +238,14 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "production_certified": False,
         }
 
-    # ResearchDiscoveryAgent selects Tavily when configured, otherwise the real
-    # public GDELT Context API. The smoke must prove an actual external request.
-
-    from scripts.agent01_live_smoke import run_live_smoke
+    # Exercise the deployed HTTP request path. Use certification mode until the
+    # manifest is explicitly production_ready; after certification, exercise normal
+    # production dispatch through the same authenticated endpoint.
+    dispatch_mode = "production" if _agent01_manifest_status() == "production_ready" else "certification"
 
     live_reports: list[dict[str, Any]] = []
     for account in accounts:
-        report = run_live_smoke(str(account.account_id))
+        report = _call_deployed_api_smoke(str(account.account_id), dispatch_mode=dispatch_mode)
         checks = report.get("checks", {})
         safe_checks = {
             str(name): {
@@ -138,19 +269,33 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "external_search_performed": bool(report.get("external_search_performed", False)),
             "content_published": bool(report.get("content_published", False)),
             "reason_code": report.get("reason_code"),
+            "request_path_verified": bool(report.get("request_path_verified", False)),
+            "dispatch_mode": str(report.get("dispatch_mode") or dispatch_mode),
         })
 
-    live_passed = all(item["status"] == "passed_live_smoke" for item in live_reports)
+    live_passed = all(
+        item["status"] == "passed_live_smoke" and item["request_path_verified"]
+        for item in live_reports
+    )
+    production_certified = live_passed and dispatch_mode == "production"
     return {
-        "status": "passed_real_live_validation" if live_passed else "failed_live_validation",
+        "status": (
+            "production_certified" if production_certified else
+            "passed_real_live_validation" if live_passed else "failed_live_validation"
+        ),
         "enabled_pinterest_account_count": len(accounts),
         "history_imports": import_reports,
         "live_smokes": live_reports,
         "external_research_performed": any(item["external_search_performed"] for item in live_reports),
         "content_published": False,
-        "production_certified": False,
+        "production_certified": production_certified,
+        "dispatch_mode": dispatch_mode,
         "remaining_release_gate": (
-            "Wire AG01 into the real UCOS release orchestrator and verify the deployed request-to-Neon path."
+            "No AG01 live gate remains; continue to the next agent only after the production certificate is reviewed."
+            if production_certified else
+            "Set AG01 manifest status to production_ready after the authenticated API request path and Neon read-back have passed."
+            if live_passed else
+            "Fix the deployed API request path or Neon read-back failure before certification."
         ),
     }
 
@@ -163,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-pages must be between 1 and 1000")
     report = run_gate(max_pages=args.max_pages)
     print(json.dumps(report, indent=2, sort_keys=True, default=str))
-    return 0 if report.get("status") == "passed_real_live_validation" else 2
+    return 0 if report.get("status") in {"passed_real_live_validation", "production_certified"} else 2
 
 
 if __name__ == "__main__":

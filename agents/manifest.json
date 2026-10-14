@@ -30,10 +30,11 @@
         "documentation": "https://docs.tavily.com/documentation/api-reference/endpoint/search; https://blog.gdeltproject.org/announcing-the-gdelt-context-2-0-api/"
       },
       "production_blockers": [
-        "A real provider smoke test must pass with at least two independent source hosts per eligible candidate",
-        "The deployed account's existing publication history must be imported or verified before the first production recommendation",
-        "Latest CI and a live Neon-backed service smoke test must pass on the exact candidate release commit",
-        "The worker must be wired into the release orchestrator only after production certification"
+        "A real provider smoke must return at least one eligible candidate with two independent publisher hosts per enabled account",
+        "The enabled account's history baseline must be imported and verified before every production recommendation",
+        "CI and live Neon-backed evidence must pass on the exact release commit",
+        "The authenticated deployed API path must dispatch the real agent and read back the report, candidate, and evidence from Neon",
+        "After the deployed API path passes in certification mode, set status to production_ready and rerun the gate in production dispatch mode"
       ]
     },
     {

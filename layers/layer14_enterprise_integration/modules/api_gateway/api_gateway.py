@@ -35,7 +35,7 @@ class APIGateway:
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
-        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /credentials/pinterest/revoke":self._handle_pinterest_credential_revoke,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
+        self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /credentials/pinterest/revoke":self._handle_pinterest_credential_revoke,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /agents/AG01/research":self._handle_agent01_research,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
     def _requires_auth(self) -> bool:
         return self._host not in {"127.0.0.1", "localhost", "::1"}
     def _authorized(self, headers: Any) -> bool:
@@ -645,6 +645,28 @@ class APIGateway:
             return APIResponse(data=result)
         except (LookupError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
+
+    def _handle_agent01_research(self,data):
+        """Authenticated request path for the real, non-publishing AG01 research worker."""
+        account_id=str(data.get("account_id") or "").strip()
+        mode=str(data.get("mode") or "production").strip().lower()
+        if not account_id:
+            return APIResponse(status_code=400,error="account_id is required")
+        if mode not in {"certification","production"}:
+            return APIResponse(status_code=400,error="mode must be certification or production")
+        if mode=="certification" and os.getenv("APP_ENV","").strip().lower() not in {"production","prod"}:
+            return APIResponse(status_code=403,error="certification mode is production-only")
+        try:
+            from scripts.agent01_live_smoke import run_live_smoke
+            result=run_live_smoke(account_id,dispatch_mode=mode)
+            if result.get("status")=="passed_live_smoke":
+                return APIResponse(data=result)
+            code=503 if result.get("reason_code")=="production_preflight_blocked" else 409
+            return APIResponse(status_code=code,data=result,error="AG01 live research gate did not pass")
+        except Exception as exc:
+            # Keep database/provider internals out of public API errors.
+            logger.error("AG01 research dispatch failed: %s",type(exc).__name__)
+            return APIResponse(status_code=500,error="AG01 research dispatch failed")
     def _handle_templates(self,params):
         try:
             account_id,error=self._require_account(params)

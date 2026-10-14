@@ -647,6 +647,12 @@ class ResearchDiscoveryAgent:
                 "persistence": persistence,
             })
 
+        if self._source is not None:
+            self._source_status = {
+                **self._source_status,
+                "request_count": int(getattr(self._source, "request_count", 0) or 0),
+            }
+
         report: dict[str, Any] = {
             "agent": self.name,
             "agent_id": self.agent_id,
@@ -672,7 +678,7 @@ class ResearchDiscoveryAgent:
             "requested_candidate_limit": requested_limit,
             "effective_candidate_limit": limit,
             "candidate_limit_note": (
-                "Tavily runs are capped at five candidate topics to bound external API use."
+                "Candidate count is capped to bound external API use."
                 if self._source is not None and requested_limit != limit else None
             ),
             "candidates": results,
