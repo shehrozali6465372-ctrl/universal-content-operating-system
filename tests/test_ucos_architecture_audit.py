@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from tools.ucos_architecture_audit import build_report
+from tools.ucos_architecture_audit import build_report, unowned_layer_modules
 
 
 def test_audit_finds_cross_layer_imports_and_manifest_ownership(tmp_path):
@@ -175,3 +175,38 @@ def test_audit_reports_missing_internal_imports(tmp_path):
     assert report["summary"]["unresolved_internal_imports"] == len(
         report["unresolved_internal_imports"]
     )
+
+
+def test_unowned_layer_gate_excludes_tested_and_manifest_owned_modules(tmp_path):
+    layer = tmp_path / "layers" / "layer01_core"
+    layer.mkdir(parents=True)
+    (layer / "__init__.py").write_text("", encoding="utf-8")
+    (layer / "unowned.py").write_text(
+        "def unowned():\n    value = 1\n    return value\n", encoding="utf-8"
+    )
+    (layer / "tested.py").write_text(
+        "def tested():\n    value = 2\n    return value\n", encoding="utf-8"
+    )
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_tested.py").write_text(
+        "from layers.layer01_core.tested import tested\n", encoding="utf-8"
+    )
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    (agents / "manifest.json").write_text(
+        json.dumps({"agents": [{
+            "id": "AG01", "status": "planned",
+            "sources": ["layers/layer01_core/unowned.py"],
+        }]}), encoding="utf-8"
+    )
+
+    report = build_report(tmp_path)
+    assert unowned_layer_modules(report) == []
+    manifest = json.loads((agents / "manifest.json").read_text(encoding="utf-8"))
+    manifest["agents"][0]["sources"] = []
+    (agents / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    report = build_report(tmp_path)
+    assert [item["path"] for item in unowned_layer_modules(report)] == [
+        "layers/layer01_core/unowned.py"
+    ]
