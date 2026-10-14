@@ -1,43 +1,42 @@
-"""ParallelGeneration — generate content from multiple models simultaneously."""
+"""ParallelGeneration — bounded concurrent provider-backed generation."""
 from __future__ import annotations
 
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 from .models import ModelResponse
+from .parallel_utils import execute_parallel_calls
 
 
 class ParallelGeneration:
-    """Generate content from multiple models in parallel (simulated)."""
+    """Generate content concurrently; never synthesize a model response."""
 
     def __init__(self, max_parallel: int = 5) -> None:
+        if max_parallel < 1:
+            raise ValueError("max_parallel must be positive")
         self.max_parallel = max_parallel
         self._history: List[Dict[str, Any]] = []
 
-    def generate(self, prompt: str, models: List[str],
-                 call_fn: Optional[Callable[[str, str], ModelResponse]] = None,
-                 **kwargs: Any) -> List[ModelResponse]:
-        results: List[ModelResponse] = []
-        start = time.time()
-
-        for model in models[:self.max_parallel]:
-            if call_fn:
-                try:
-                    r = call_fn(prompt, model)
-                    results.append(r)
-                except Exception as exc:
-                    results.append(ModelResponse(model=model, provider="unknown",
-                                                 content="", error=str(exc)))
-            else:
-                results.append(ModelResponse(
-                    model=model, provider="error",
-                    content="", error=f"No call_fn for {model}",
-                    confidence=0.0, latency_ms=0.0,
-                ))
-
-        elapsed = (time.time() - start) * 1000
-        self._history.append({"prompt": prompt[:100], "models_used": len(results),
-                              "elapsed_ms": elapsed})
+    def generate(
+        self,
+        prompt: str,
+        models: List[str],
+        call_fn: Optional[Callable[[str, str], ModelResponse]] = None,
+        **kwargs: Any,
+    ) -> List[ModelResponse]:
+        targets = models[: self.max_parallel]
+        start = time.monotonic()
+        results = execute_parallel_calls(
+            prompt, targets, call_fn, max_workers=self.max_parallel
+        )
+        elapsed = (time.monotonic() - start) * 1000
+        self._history.append(
+            {
+                "prompt": prompt[:100],
+                "models_used": len(results),
+                "elapsed_ms": elapsed,
+            }
+        )
         return results
 
     def get_history(self) -> List[Dict[str, Any]]:
