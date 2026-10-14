@@ -9,17 +9,13 @@
       "name": "Research Discovery Agent",
       "status": "implementation_in_progress",
       "entrypoint": "agents/agent_01_research_discovery/agent.py",
-      "owns": "Collect research evidence, check known account-local history, verify claims, score topics, and hand off a recommendation.",
+      "owns": "Discover candidate topics, collect attributable web evidence, check the target account's known publication history, and persist an evidence pack for Agent 06. Does not verify claims, score, write content, or publish.",
       "sources": [
-        "layers/layer02_research/modules/trend_discovery",
-        "layers/layer02_research/modules/knowledge_collector",
-        "layers/layer02_research/modules/fact_verification",
-        "layers/layer02_research/modules/research_memory",
-        "layers/layer02_research/modules/topic_intelligence",
-        "layers/layer02_research/modules/topic_scoring",
-        "layers/layer02_research/modules/research_planner"
+        "agents/agent_01_research_discovery/tavily_source.py",
+        "layers/layer07_publishing/modules/account_control/account_registry.py (shared identity boundary)",
+        "layers/layer07_publishing/modules/account_control/account_data_store.py (shared account-state boundary)"
       ],
-      "output": "JSON research report; READY_FOR_WRITING_REVIEW is not publishing permission.",
+      "output": "JSON evidence-pack report with READY_FOR_VERIFICATION handoff to AG06; this is not a factual-verification result or publishing permission.",
       "dependencies": [],
       "gate": "unit contracts, account isolation, durable Neon state, CI, and live production smoke",
       "source_configuration": {
@@ -36,7 +32,7 @@
         "TAVILY_API_KEY must be configured in the deployed service and a real provider smoke test must pass",
         "The deployed account's existing publication history must be imported or verified before the first production recommendation",
         "Latest CI and a live Neon-backed service smoke test must pass on the exact candidate release commit",
-        "The agent still imports some Layer 02 manager modules; extraction and old-layer retirement is a later migration step"
+        "The worker must be wired into the release orchestrator only after production certification"
       ]
     },
     {
