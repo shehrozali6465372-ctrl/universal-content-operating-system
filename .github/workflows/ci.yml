@@ -55,6 +55,9 @@ jobs:
       - name: UCOS architecture audit regression tests
         run: python -m pytest tests/test_ucos_architecture_audit.py -q --tb=short
 
+      - name: Layer 12 real model execution integrity
+        run: python -m pytest tests/test_layer12_ai_foundation.py::TestMultiModelExecutor tests/test_layer12_production_contracts.py -q --tb=short
+
       - name: Compile
         run: python -m compileall -q layers agents tests tools scripts main.py
 
