@@ -43,7 +43,7 @@ This is one logical Research Agent using existing Layer 02 modules, not eight ne
 - The existing Layer 02 planner creates a research plan; the existing orchestrator runs its dependency-aware workflow.
 - Module outputs are returned in a JSON-safe form so findings and citation fields are available to the agent.
 - A module with no explicit confidence receives 0.0, not a fabricated confidence score.
-- A task is completed only when the workflow completes and outputs include actual HTTP(S) source references. Missing provenance yields partial status; execution errors are surfaced.
+- A task is completed only when the workflow completes and outputs include well-formed HTTP(S) source references. Missing provenance yields partial status; URL syntax alone is not proof that a source is reachable or accurate. Execution errors are surfaced.
 - A layer02://research/... reference is an internal execution trace, never represented as an external source URL.
 
 ## Boundaries and cleanup

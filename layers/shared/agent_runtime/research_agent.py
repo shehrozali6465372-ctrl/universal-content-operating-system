@@ -209,7 +209,7 @@ class ResearchAgent:
             elif not source_urls:
                 status = AgentRunStatus.PARTIAL
                 errors.append(
-                    "Research modules returned no verifiable HTTP(S) source URLs; "
+                    "Research modules returned no well-formed HTTP(S) source URLs; "
                     "the run cannot be certified as completed."
                 )
             else:

@@ -90,7 +90,7 @@ def test_research_agent_does_not_claim_completion_without_source_urls():
     result = agent.execute(agent.manifest(), sample_task())
     assert result.status == AgentRunStatus.PARTIAL, result.errors
     assert result.output["source_urls"] == []
-    assert any("no verifiable HTTP(S) source URLs" in error for error in result.errors)
+    assert any("no well-formed HTTP(S) source URLs" in error for error in result.errors)
 
 
 def test_research_agent_surfaces_module_failure_instead_of_fabricating_success():
