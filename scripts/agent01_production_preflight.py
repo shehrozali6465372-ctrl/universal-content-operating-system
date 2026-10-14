@@ -55,9 +55,17 @@ def run_preflight(
     except Exception:
         checks["neon_postgresql"] = {"status": "unknown", "reason_code": "postgresql_check_failed"}
 
-    checks["tavily_api_key"] = {
-        "status": "pass" if str(env.get("TAVILY_API_KEY") or "").strip() else "blocked",
-        "reason_code": "configured" if str(env.get("TAVILY_API_KEY") or "").strip() else "tavily_api_key_missing",
+    tavily_configured = bool(str(env.get("TAVILY_API_KEY") or "").strip())
+    production_context = str(env.get("APP_ENV") or os.environ.get("APP_ENV", "")).strip().lower() in {"production", "prod"}
+    checks["research_provider"] = {
+        "status": "pass" if tavily_configured or production_context else "blocked",
+        "reason_code": (
+            "tavily_configured"
+            if tavily_configured else
+            "google_news_rss_real_provider_fallback_available"
+            if production_context else
+            "no_production_research_provider_available"
+        ),
     }
 
     try:
