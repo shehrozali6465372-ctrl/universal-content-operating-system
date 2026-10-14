@@ -138,7 +138,7 @@ class OpenRouterImageProvider(BaseImageProvider):
 
     @classmethod
     def _resolution(cls, size: str) -> str:
-        width, height = cls._parse_size(size)
+        width, height = parse_image_size(size)
         pixels = width * height
         if pixels <= 1024 * 1024:
             return "1K"
