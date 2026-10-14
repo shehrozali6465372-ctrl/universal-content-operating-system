@@ -4,6 +4,7 @@ from math import isfinite
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from layers.layer02_research.modules.research_planner.exceptions import DependencyError
+from layers.layer02_research.modules.research_planner.dependency_graph import DependencyGraph
 
 
 def _serializable_result(value: Any, depth: int = 0) -> Any:
