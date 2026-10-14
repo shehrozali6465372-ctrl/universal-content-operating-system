@@ -224,3 +224,13 @@ def test_llm_manager_requires_production_pricing_from_app_env(monkeypatch):
             "unknown-model-for-production-pricing-contract",
             {"prompt_tokens": 1, "completion_tokens": 1},
         )
+
+def test_llm_manager_refuses_simulation_in_development(monkeypatch):
+    from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_manager import (
+        LLMManager,
+    )
+
+    monkeypatch.setenv("UCOS_ENV", "development")
+    monkeypatch.delenv("APP_ENV", raising=False)
+    with pytest.raises(RuntimeError, match="no real AI generator"):
+        LLMManager().generate("development must not fake a model response")
