@@ -16,6 +16,7 @@ import time
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 from collections import Counter
+from layers.shared.vector_math import cosine_similarity
 
 
 class EmbeddingEngine:
@@ -226,16 +227,7 @@ class EmbeddingEngine:
         """Compute similarity between two texts."""
         vec_a = self.embed(text_a)
         vec_b = self.embed(text_b)
-        return self._cosine(vec_a, vec_b)
-
-    @staticmethod
-    def _cosine(a: List[float], b: List[float]) -> float:
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a))
-        nb = math.sqrt(sum(x * x for x in b))
-        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
+        return cosine_similarity(vec_a, vec_b)
 
     def stats(self) -> Dict[str, Any]:
         """Get engine statistics."""
