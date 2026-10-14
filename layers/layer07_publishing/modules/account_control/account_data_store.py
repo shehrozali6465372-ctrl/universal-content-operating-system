@@ -10,6 +10,8 @@ import hashlib
 import json
 import os
 import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .account_registry import AccountRegistry
@@ -165,6 +167,128 @@ class AccountDataStore:
                 (key, json.dumps(current, sort_keys=True)),
             )
             db.commit()
+
+    def history_baseline(self, account_id: str, kind: str = "content") -> Any:
+        """Return the persisted completeness marker for account history."""
+        if kind not in _ALLOWED_KINDS:
+            raise ValueError(f"unsupported account store: {kind}")
+        return self.get(
+            account_id, "memory", f"history_baseline:{kind}:v1", default=None
+        )
+
+    def mark_history_baseline_verified(
+        self,
+        account_id: str,
+        *,
+        source: str,
+        records_checked: int,
+        confirmed: bool = False,
+    ) -> Dict[str, Any]:
+        """Mark historical coverage verified only after an explicit import/review."""
+        allowed_sources = {"legacy_sqlite_import", "platform_api_import", "operator_review"}
+        if not confirmed:
+            raise ValueError("confirmed=True is required to certify historical coverage")
+        if source not in allowed_sources:
+            raise ValueError("source must identify a verified import or operator review")
+        if isinstance(records_checked, bool) or not isinstance(records_checked, int) or records_checked < 0:
+            raise ValueError("records_checked must be a non-negative integer")
+        marker = {
+            "status": "complete",
+            "source": source,
+            "records_checked": records_checked,
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "coverage": "UCOS-managed history; off-platform history only when imported",
+        }
+        self.put(account_id, "memory", "history_baseline:content:v1", marker)
+        return marker
+
+    def bootstrap_legacy_store(self, account_id: str, kind: str) -> Dict[str, Any]:
+        """Import an existing account-local SQLite store into Neon without overwriting Neon rows.
+
+        The operation is production-only. If the legacy file is absent, it deliberately
+        returns an incomplete status; an empty new Neon namespace is not proof that a
+        previously published account has no history.
+        """
+        self._validate(account_id, kind)
+        self._account_exists(account_id)
+        if not self._production:
+            return {"status": "not_required", "records_imported": 0}
+
+        marker = self.history_baseline(account_id, kind)
+        if isinstance(marker, dict) and marker.get("status") == "complete":
+            return marker
+
+        legacy_path = self.registry.workspace_path(account_id) / f"{kind}.sqlite3"
+        if not legacy_path.is_file():
+            return {"status": "legacy_store_missing", "records_imported": 0}
+
+        try:
+            uri = legacy_path.resolve().as_uri() + "?mode=ro"
+            with sqlite3.connect(uri, uri=True, timeout=5) as legacy:
+                exists = legacy.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kv'"
+                ).fetchone()
+                rows = legacy.execute("SELECT key,value FROM kv ORDER BY key").fetchall() if exists else []
+        except Exception:
+            return {"status": "legacy_store_unreadable", "records_imported": 0}
+
+        level = _account_level(account_id)
+        pool = self._database._pool
+        seeded = 0
+        try:
+            with pool.transaction() as conn:
+                cursor = conn.cursor()
+                for key, raw in rows:
+                    if not key or len(str(key)) > 255:
+                        raise ValueError("legacy store contains an invalid key")
+                    cursor.execute(
+                        """
+                        INSERT INTO agent_memory(level, category, key, value, tags, importance)
+                        VALUES (%s, %s, %s, %s, 'account-scoped legacy-import', 0.5)
+                        ON CONFLICT (level, category, key) DO NOTHING
+                        """,
+                        (level, kind, str(key), str(raw)),
+                    )
+                    seeded += max(0, int(getattr(cursor, "rowcount", 0) or 0))
+
+                history_key = "collection:execution_history"
+                cursor.execute(
+                    "SELECT value FROM agent_memory WHERE level=%s AND category=%s AND key=%s",
+                    (level, kind, history_key),
+                )
+                history_row = cursor.fetchone()
+                history_value = None
+                if history_row:
+                    history_value = history_row[0] if not isinstance(history_row, dict) else history_row.get("value")
+                history_events = _decode(history_value, []) if history_value is not None else []
+                if not isinstance(history_events, list):
+                    raise TypeError("account execution history is not a list")
+
+                verified_marker = {
+                    "status": "complete",
+                    "source": "legacy_sqlite_import",
+                    "records_checked": len(rows),
+                    "history_records": len(history_events),
+                    "records_seeded": seeded,
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "coverage": "UCOS-managed history; off-platform history only when imported",
+                }
+                cursor.execute(
+                    """
+                    INSERT INTO agent_memory(level, category, key, value, tags, importance)
+                    VALUES (%s, 'memory', %s, %s, 'account-scoped', 0.9)
+                    ON CONFLICT (level, category, key) DO UPDATE SET
+                      value=EXCLUDED.value, updated_at=CURRENT_TIMESTAMP
+                    """,
+                    (
+                        level,
+                        f"history_baseline:{kind}:v1",
+                        json.dumps(verified_marker, sort_keys=True, separators=(",", ":")),
+                    ),
+                )
+            return verified_marker
+        except Exception:
+            return {"status": "legacy_import_failed", "records_imported": 0}
 
     def snapshot(self, account_id: str, kind: str) -> Dict[str, Any]:
         self._validate(account_id, kind)
