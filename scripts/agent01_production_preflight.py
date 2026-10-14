@@ -61,8 +61,11 @@ def run_preflight(
     }
 
     try:
+        from layers.layer07_publishing.modules.account_control.account_data_store import (
+            AccountDataStore,
+            is_verified_history_baseline,
+        )
         if store is None:
-            from layers.layer07_publishing.modules.account_control.account_data_store import (\n                AccountDataStore,\n                is_verified_history_baseline,\n            )
             if registry is None:
                 from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
                 registry = AccountRegistry()
