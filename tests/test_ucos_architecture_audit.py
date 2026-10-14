@@ -187,6 +187,9 @@ def test_unowned_layer_gate_excludes_tested_and_manifest_owned_modules(tmp_path)
     (layer / "tested.py").write_text(
         "def tested():\n    value = 2\n    return value\n", encoding="utf-8"
     )
+    (layer / "shared.py").write_text(
+        "def shared():\n    value = 3\n    return value\n", encoding="utf-8"
+    )
     test_dir = tmp_path / "tests"
     test_dir.mkdir()
     (test_dir / "test_tested.py").write_text(
@@ -195,10 +198,16 @@ def test_unowned_layer_gate_excludes_tested_and_manifest_owned_modules(tmp_path)
     agents = tmp_path / "agents"
     agents.mkdir()
     (agents / "manifest.json").write_text(
-        json.dumps({"agents": [{
-            "id": "AG01", "status": "planned",
-            "sources": ["layers/layer01_core/unowned.py"],
-        }]}), encoding="utf-8"
+        json.dumps({
+            "agents": [{
+                "id": "AG01", "status": "planned",
+                "sources": ["layers/layer01_core/unowned.py"],
+            }],
+            "shared_components": [{
+                "id": "SH01", "name": "Shared core",
+                "sources": ["layers/layer01_core/shared.py"],
+            }],
+        }), encoding="utf-8"
     )
 
     report = build_report(tmp_path)
@@ -210,3 +219,12 @@ def test_unowned_layer_gate_excludes_tested_and_manifest_owned_modules(tmp_path)
     assert [item["path"] for item in unowned_layer_modules(report)] == [
         "layers/layer01_core/unowned.py"
     ]
+    assert report["agent_manifest"]["shared_component_count"] == 1
+    shared = next(item for item in report["orphan_candidates"] if item["path"] == "layers/layer01_core/shared.py")
+    assert shared["candidate_class"] == "shared_infrastructure"
+    manifest["shared_components"] = []
+    (agents / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    report = build_report(tmp_path)
+    assert {item["path"] for item in unowned_layer_modules(report)} == {
+        "layers/layer01_core/unowned.py", "layers/layer01_core/shared.py"
+    }
