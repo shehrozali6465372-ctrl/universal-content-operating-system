@@ -59,7 +59,7 @@ def test_unreferenced_code_is_only_reported_as_a_candidate(tmp_path):
         item for item in report["orphan_candidates"]
         if item["path"] == "layers/layer01_core/unused_candidate.py"
     )
-    assert candidate["candidate_class"] == "no_static_inbound_import_found"
+    assert candidate["candidate_class"] == "no_static_production_inbound_import_found"
     assert any("never deletes" in note for note in report["safety_notes"])
 
 
