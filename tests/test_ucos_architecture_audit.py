@@ -120,3 +120,30 @@ def test_audit_flags_scaffold_that_claims_success_after_only_buffering(tmp_path)
         for item in patterns
     )
     assert report["summary"]["scaffold_success_pattern_findings"] == 2
+
+
+def test_audit_scans_service_sources_outside_known_layer_roots(tmp_path):
+    layer = tmp_path / "layers" / "layer01_core"
+    layer.mkdir(parents=True)
+    (layer / "__init__.py").write_text("", encoding="utf-8")
+    (layer / "runtime_api.py").write_text(
+        "def health():\n    return {'status': 'ok'}\n",
+        encoding="utf-8",
+    )
+    services = tmp_path / "services" / "content_api"
+    services.mkdir(parents=True)
+    (services / "server.py").write_text(
+        "from layers.layer01_core.runtime_api import health\n"
+        "def endpoint():\n    return health()\n",
+        encoding="utf-8",
+    )
+
+    report = build_report(tmp_path)
+    target = next(
+        item for item in report["import_edges"]
+        if item["from"] == "services/content_api/server.py"
+        and item["to"] == "layers/layer01_core/runtime_api.py"
+    )
+    assert target["from"].startswith("services/")
+    layer_info = report["layers"][0]
+    assert layer_info["files_with_static_production_inbound_imports"] >= 1
