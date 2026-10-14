@@ -54,7 +54,7 @@ def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str
             hashlib.sha256,
         ).digest()
         canonical = (
-            f"POST\\n/agents/AG01/research\\n{timestamp}\\n{nonce}\\n"
+            f"POST\n/agents/AG01/research\n{timestamp}\n{nonce}\n"
             f"{hashlib.sha256(body).hexdigest()}"
         ).encode("utf-8")
         signature = hmac.new(derived_key, canonical, hashlib.sha256).hexdigest()
