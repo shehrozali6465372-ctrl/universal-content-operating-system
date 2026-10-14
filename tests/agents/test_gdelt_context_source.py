@@ -34,7 +34,7 @@ def test_search_uses_public_https_endpoint_and_requires_real_sentence():
 
     def opener(request, timeout):
         seen.append((request, timeout))
-        return Response({"results": [
+        return Response({"sentences": [
             {"title": "Headline with evidence", "url": "https://publisher.example/a",
              "domain": "publisher.example", "context": "A real sentence returned by the Context API."},
             {"title": "Headline only", "url": "https://other.example/b", "domain": "other.example"},
