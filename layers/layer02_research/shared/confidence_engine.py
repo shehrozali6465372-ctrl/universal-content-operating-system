@@ -11,49 +11,7 @@ Standardized confidence scoring across all research modules:
 
 from typing import Dict, List, Optional
 
-
-class ConfidenceResult:
-    """Standardized confidence output for any decision."""
-
-    __slots__ = ("confidence", "reasons", "risk_level", "evidence", "metadata")
-
-    RISK_LEVELS = ["VERY_LOW", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
-
-    def __init__(
-        self,
-        confidence: float = 0.5,
-        reasons: Optional[List[str]] = None,
-        risk_level: str = "MEDIUM",
-        evidence: Optional[List[str]] = None,
-        metadata: Optional[Dict] = None,
-    ):
-        self.confidence = max(0.0, min(1.0, confidence))
-        self.reasons = reasons or []
-        self.risk_level = risk_level if risk_level in self.RISK_LEVELS else "MEDIUM"
-        self.evidence = evidence or []
-        self.metadata = metadata or {}
-
-    def to_dict(self) -> dict:
-        return {
-            "confidence": self.confidence,
-            "reasons": self.reasons,
-            "risk_level": self.risk_level,
-            "evidence": self.evidence,
-            "metadata": self.metadata,
-        }
-
-    def add_reason(self, reason: str):
-        self.reasons.append(reason)
-
-    def add_evidence(self, evidence: str):
-        self.evidence.append(evidence)
-
-    def is_trustworthy(self) -> bool:
-        """Is this result trustworthy enough to act on?"""
-        return self.confidence >= 0.7 and self.risk_level in ("VERY_LOW", "LOW", "MEDIUM")
-
-    def __str__(self) -> str:
-        return f"ConfidenceResult(confidence={self.confidence:.2f}, risk={self.risk_level})"
+from layers.shared.models.confidence import ConfidenceResult
 
 
 class ConfidenceEngine:
