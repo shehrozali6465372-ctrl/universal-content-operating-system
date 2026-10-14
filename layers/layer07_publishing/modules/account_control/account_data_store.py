@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -30,6 +31,33 @@ def _account_level(account_id: str) -> str:
     # agent_memory.level is VARCHAR(50); the hash avoids path injection and
     # prevents account identifiers from being exposed in storage namespace keys.
     return "acct_" + hashlib.sha256(account_id.strip().encode("utf-8")).hexdigest()[:40]
+
+
+_VERIFIED_HISTORY_SOURCES = {"legacy_sqlite_import", "platform_api_import", "operator_review"}
+
+
+def is_verified_history_baseline(value: Any) -> bool:
+    """Validate completeness evidence, not merely a truthy status string.
+
+    A production worker must not infer that history is checked from an empty
+    namespace or a manually fabricated {"status": "complete"} record.
+    """
+    if not isinstance(value, Mapping) or value.get("status") != "complete":
+        return False
+    if value.get("source") not in _VERIFIED_HISTORY_SOURCES:
+        return False
+    checked = value.get("records_checked")
+    if isinstance(checked, bool) or not isinstance(checked, int) or checked < 0:
+        return False
+    verified_at = str(value.get("verified_at") or "").strip()
+    coverage = str(value.get("coverage") or "").strip()
+    if not verified_at or not coverage:
+        return False
+    try:
+        parsed = datetime.fromisoformat(verified_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
 
 
 def _decode(value: Any, default: Any = None) -> Any:
