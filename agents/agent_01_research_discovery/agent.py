@@ -430,9 +430,10 @@ class ResearchDiscoveryAgent:
         if self._is_production() and candidates is not None:
             raise ValueError("production mode does not accept caller-supplied candidates")
         if self._is_production() and (
-            self._source is None or self._source_status.get("provider") != "tavily"
+            self._source is None
+            or self._source_status.get("provider") not in {"tavily", "gdelt_context"}
         ):
-            raise RuntimeError("production mode requires the real Tavily provider configured from TAVILY_API_KEY")
+            raise RuntimeError("production mode requires an approved real research provider")
         requested_limit = min(limit, MAX_CANDIDATES)
         limit = requested_limit
         if self._source is not None:
