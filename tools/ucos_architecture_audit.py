@@ -94,6 +94,22 @@ def _absolute_import_targets(node: ast.AST, current_module: str, path: Path) -> 
     return targets
 
 
+def _absolute_import_base(node: ast.ImportFrom, current_module: str, path: Path) -> str:
+    """Resolve the module named by an ImportFrom node without imported symbols."""
+    if node.level:
+        is_package = path.name == "__init__.py"
+        package = current_module if is_package else current_module.rpartition(".")[0]
+        parts = package.split(".") if package else []
+        for _ in range(max(0, node.level - 1)):
+            if parts:
+                parts.pop()
+        base = ".".join(parts)
+        if node.module:
+            base = f"{base}.{node.module}" if base else node.module
+        return base
+    return node.module or ""
+
+
 def _literal_dict(node: ast.AST) -> dict[str, Any]:
     """Return literal string-key dictionary entries; ignore computed expressions."""
     if not isinstance(node, ast.Dict):
@@ -186,6 +202,18 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     production_importers: dict[Path, set[str]] = defaultdict(set)
     import_edges: list[dict[str, str]] = []
     production_import_edges: list[dict[str, str]] = []
+    unresolved_internal_imports: list[dict[str, str]] = []
+    internal_roots = {
+        path.name for path in root.iterdir() if path.is_dir()
+    } | {path.stem for path in root.glob("*.py")}
+
+    def module_exists(name: str) -> bool:
+        if not name:
+            return True
+        if name in module_to_path:
+            return True
+        return root.joinpath(*name.split(".")).is_dir()
+
     for source, tree in parsed.items():
         src_mod = module_name(source, root)
         source_rel = repo_relative(source, root)
@@ -193,6 +221,21 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue
+            if isinstance(node, ast.Import):
+                base_targets = [alias.name for alias in node.names]
+            else:
+                base = _absolute_import_base(node, src_mod, source)
+                base_targets = [base] if base else []
+
+            for base in base_targets:
+                if base.split(".", 1)[0] in internal_roots and not module_exists(base):
+                    unresolved_internal_imports.append({
+                        "path": source_rel,
+                        "line": str(getattr(node, "lineno", "")),
+                        "target": base,
+                        "kind": "test" if source_is_test else "production",
+                    })
+
             for target in _absolute_import_targets(node, src_mod, source):
                 dest = module_to_path.get(target)
                 if dest is None:
@@ -207,6 +250,11 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
                 if not source_is_test:
                     production_importers[dest].add(source_rel)
                     production_import_edges.append(edge)
+
+    unresolved_internal_imports = sorted(
+        unresolved_internal_imports,
+        key=lambda item: (item["path"], int(item["line"]), item["target"]),
+    )
 
     manifest_path = root / "agents" / "manifest.json"
     agents: list[dict[str, Any]] = []
@@ -401,6 +449,13 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             "model_provider_related_files": sum(1 for item in provider_inventory if item["source_type"] == "production"),
             "model_provider_related_test_files": sum(1 for item in provider_inventory if item["source_type"] == "test"),
             "production_import_edges": len(production_import_edges),
+            "unresolved_internal_imports": len(unresolved_internal_imports),
+            "unresolved_production_imports": sum(
+                1 for item in unresolved_internal_imports if item["kind"] == "production"
+            ),
+            "unresolved_test_imports": sum(
+                1 for item in unresolved_internal_imports if item["kind"] == "test"
+            ),
             "scaffold_success_pattern_findings": len(scaffold_success_patterns),
             "buffer_append_claims_processing_success": sum(
                 1 for item in scaffold_success_patterns
@@ -415,6 +470,8 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
         "agents": agents,
         "layers": layer_results,
         "import_edges": import_edges,
+        "unresolved_internal_imports": unresolved_internal_imports,
+        "internal_roots": sorted(internal_roots),
         "orphan_candidates": orphan_candidates,
         "exact_duplicate_file_groups": duplicate_files,
         "duplicate_function_body_groups": duplicate_bodies[:250],
