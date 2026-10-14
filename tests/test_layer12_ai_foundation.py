@@ -6149,7 +6149,7 @@ class TestAIOrchestrator:
                 return {"success": True, "output": payload}
 
         o = AIOrchestrator()
-        o.link_module("default", Component())
+        o.link_module("llm_manager", Component())
         result = o.process("test", {"input": "data"})
         assert result["success"] is True
         assert result["output"] == "{'input': 'data'}"
