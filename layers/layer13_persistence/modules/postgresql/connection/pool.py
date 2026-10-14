@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import parse_qs, unquote, urlsplit
-import re
+from layers.shared.sql_identifier import SQLIdentifierMixin
 
 
 @dataclass
@@ -120,7 +120,7 @@ class ConnectionConfig:
         )
 
 
-class ConnectionPool:
+class ConnectionPool(SQLIdentifierMixin):
     """Thread-safe PostgreSQL connection pool with retry, reconnect, and metrics."""
 
     _MAX_LATENCY_SAMPLES = 1000
@@ -372,14 +372,6 @@ class ConnectionPool:
         result = self._execute_with_retry(_do)
         self._total_queries += 1
         return result
-
-    _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-    @classmethod
-    def _identifier(cls, value: str) -> str:
-        if not isinstance(value, str) or not cls._IDENT.fullmatch(value):
-            raise ValueError(f"unsafe SQL identifier: {value}")
-        return value
 
     def _placeholder(self) -> str:
         return "%s" if self._pg_available else "?"
