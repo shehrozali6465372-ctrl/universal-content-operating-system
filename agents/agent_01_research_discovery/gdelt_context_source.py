@@ -131,13 +131,40 @@ class GDELTContextResearchSource:
             })
         return normalized
 
+    @staticmethod
+    def _or_query(terms: list[str]) -> str:
+        clean: list[str] = []
+        seen: set[str] = set()
+        for term in terms:
+            value = " ".join(str(term or "").replace('"', "").split())[:180]
+            key = value.casefold()
+            if value and key not in seen:
+                seen.add(key)
+                clean.append(f'"{value}"')
+        return "(" + " OR ".join(clean[:12]) + ")"
+
+    def _niche_search_terms(self, niche: str) -> list[str]:
+        value = self._text(niche, 120)
+        terms = [value, f"{value} trends", f"{value} ideas", f"{value} tips", f"{value} guide"]
+        normalized = value.casefold().replace("-", " ")
+        if "home decor" in normalized or "home decoration" in normalized:
+            terms.extend([
+                "interior design", "home styling", "room makeover",
+                "decor trends", "decor ideas", "home design",
+            ])
+        elif any(word in normalized for word in ("skin care", "skincare", "beauty")):
+            terms.extend(["skin care routine", "beauty trends", "skin health", "makeup tips"])
+        elif any(word in normalized for word in ("technology", "tech", "artificial intelligence", "ai")):
+            terms.extend(["technology trends", "artificial intelligence", "digital tools", "tech news"])
+        return terms
+
     def discover_candidates(self, account_id: str, niche: str, limit: int) -> list[dict[str, Any]]:
         if not str(account_id or "").strip():
             raise ValueError("account_id is required")
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
         results = self.search(
-            f"{self._text(niche, 120)} (trends OR ideas OR guide)",
+            self._or_query(self._niche_search_terms(niche)),
             max_results=min(limit, self.max_candidates_per_run),
         )
         return [{
@@ -150,10 +177,16 @@ class GDELTContextResearchSource:
         } for item in results]
 
     def fetch_evidence(self, topic: str, niche: str, limit: int = 5) -> list[dict[str, str]]:
-        if not str(topic or "").strip():
+        topic_value = self._text(topic, 220)
+        if not topic_value:
             return []
+        topic_words = topic_value.split()
+        terms = [topic_value]
+        if len(topic_words) > 2:
+            terms.append(" ".join(topic_words[:3]))
+        terms.extend(self._niche_search_terms(niche))
         rows = self.search(
-            f'"{self._text(topic, 220)}" {self._text(niche, 120)}',
+            self._or_query(terms),
             max_results=max(1, min(int(limit), _MAX_RESULTS)),
         )
         return [{

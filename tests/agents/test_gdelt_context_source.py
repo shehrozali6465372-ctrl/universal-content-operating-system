@@ -71,3 +71,21 @@ def test_empty_query_and_invalid_limits_are_rejected():
         source.search("")
     with pytest.raises(ValueError):
         source.search("decor", max_results=0)
+def test_home_decor_discovery_uses_real_niche_synonyms_without_overconstraining_query():
+    seen = []
+
+    def opener(request, timeout):
+        seen.append(request)
+        return Response({"sentences": [{
+            "title": "Interior design trends", "url": "https://publisher.example/design",
+            "domain": "publisher.example", "sentence": "Interior design is changing quickly.",
+        }]})
+
+    source = GDELTContextResearchSource(opener=opener)
+    candidates = source.discover_candidates("acct-1", "home decor", 1)
+    query = parse_qs(urlsplit(seen[0].full_url).query)["query"][0]
+
+    assert candidates[0]["topic"] == "Interior design trends"
+    assert '"home decor"' in query
+    assert '"interior design"' in query
+    assert " OR " in query
