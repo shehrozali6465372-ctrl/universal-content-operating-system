@@ -489,6 +489,15 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     }
 
 
+
+def unowned_layer_modules(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return only layer modules with no production imports, tests, or manifest owner."""
+    return [
+        item for item in report.get("orphan_candidates", [])
+        if item.get("candidate_class") == "no_static_production_inbound_import_found"
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", default="artifacts/ucos-architecture-audit.json")
@@ -518,7 +527,7 @@ def main() -> int:
         print("UNRESOLVED_INTERNAL_IMPORTS=" + json.dumps(report["unresolved_internal_imports"], sort_keys=True))
         return 4
     if args.fail_on_unowned_layer_modules:
-        unowned = [item for item in report["orphan_candidates"] if item["candidate_class"] == "no_static_production_inbound_import_found"]
+        unowned = unowned_layer_modules(report)
         if unowned:
             print("UNOWNED_LAYER_MODULES=" + json.dumps(unowned, sort_keys=True))
             return 5
