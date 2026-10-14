@@ -188,3 +188,39 @@ def test_production_factory_is_wired_to_real_provider_and_fails_closed(monkeypat
     manager = LLMFactory.create("production")
     with pytest.raises(RuntimeError, match="API key is not configured"):
         manager.generate("real provider contract")
+
+
+def test_llm_manager_refuses_simulation_from_app_env_before_cache_lookup(monkeypatch):
+    from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_manager import (
+        LLMManager,
+    )
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("UCOS_ENV", raising=False)
+    manager = LLMManager()
+    manager.cache.set(
+        "production test",
+        manager.config.default_model,
+        "[development-only simulated response]",
+        manager.config.default_provider,
+        "",
+        manager.config.default_temperature,
+        manager.config.default_max_tokens,
+    )
+    with pytest.raises(RuntimeError, match="refusing simulated AI output"):
+        manager.generate("production test")
+
+
+def test_llm_manager_requires_production_pricing_from_app_env(monkeypatch):
+    from layers.layer12_ai_foundation.modules.universal_llm_manager.llm_manager import (
+        LLMManager,
+    )
+
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.delenv("UCOS_ENV", raising=False)
+    manager = LLMManager(generator=lambda **kwargs: "real adapter fixture output")
+    with pytest.raises(RuntimeError, match="No production pricing configured"):
+        manager._calculate_cost(
+            "unknown-model-for-production-pricing-contract",
+            {"prompt_tokens": 1, "completion_tokens": 1},
+        )
