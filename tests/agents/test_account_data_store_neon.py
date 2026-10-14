@@ -213,3 +213,51 @@ def test_bootstrap_does_not_mark_legacy_store_complete_without_history_key(tmp_p
     assert marker["status"] == "legacy_history_key_missing"
     assert store.history_baseline("account-a") is None
     assert database.memory.values == {}
+
+
+def test_legacy_store_without_history_key_is_not_certified(tmp_path, prod_store, monkeypatch):
+    import sqlite3
+    from pathlib import Path
+
+    store, _db = prod_store
+
+    class Registry(FakeRegistry):
+        def workspace_path(self, account_id):
+            path = tmp_path / account_id
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+
+    store.registry = Registry()
+    legacy = store.registry.workspace_path("account-a") / "content.sqlite3"
+    with sqlite3.connect(legacy) as conn:
+        conn.execute("CREATE TABLE kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        conn.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("brand", '"example"'))
+
+    result = store.bootstrap_legacy_store("account-a", "content")
+    assert result["status"] == "legacy_history_key_missing"
+    assert store.history_baseline("account-a") is None
+
+
+def test_legacy_store_with_explicit_empty_history_can_be_certified(tmp_path, prod_store):
+    import sqlite3
+
+    store, _db = prod_store
+
+    class Registry(FakeRegistry):
+        def workspace_path(self, account_id):
+            path = tmp_path / account_id
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+
+    store.registry = Registry()
+    legacy = store.registry.workspace_path("account-a") / "content.sqlite3"
+    with sqlite3.connect(legacy) as conn:
+        conn.execute("CREATE TABLE kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        conn.execute(
+            "INSERT INTO kv(key, value) VALUES (?, ?)",
+            ("collection:execution_history", "[]"),
+        )
+
+    result = store.bootstrap_legacy_store("account-a", "content")
+    assert result["status"] == "complete"
+    assert result["history_records"] == 0
