@@ -319,3 +319,25 @@ def test_agent_01_has_no_imports_from_legacy_research_layer():
     path = Path(inspect.getsourcefile(ResearchDiscoveryAgent))
     source = path.read_text(encoding="utf-8")
     assert "layers.layer02_research" not in source
+
+
+def test_production_rejects_status_only_history_baseline_and_does_not_research(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    store = InMemoryAccountStore()
+    store.put("account-a", "memory", "history_baseline:content:v1", {"status": "complete"})
+    store.put("account-a", "content", "collection:execution_history", [])
+    account = {"account_id": "account-a", "platform": "pinterest", "niche": "home decor", "enabled": True}
+    calls = []
+    agent = ResearchDiscoveryAgent(
+        "account-a",
+        account_resolver=lambda _account_id: account,
+        candidate_provider=lambda *_args: calls.append("discover") or [candidate()],
+        account_store=store,
+    )
+
+    report = agent.run()
+
+    assert report["candidates"][0]["decision"] == "HOLD_HISTORY_UNAVAILABLE"
+    assert report["history"]["status"] == "unknown"
+    assert calls == []
+    assert not any(key.startswith("research_candidate:") for (_aid, _kind, key) in store.data)
