@@ -67,20 +67,52 @@ class AIOrchestrator:
         target = self.router.route(task)
         component = self._linked_modules.get(target)
 
-        # Execute
-        try:
-            if component and hasattr(component, "evaluate"):
-                result = component.evaluate(str(input_data))
-            elif component and hasattr(component, "check"):
-                result = component.check(str(input_data))
-            else:
-                result = {"component": target, "task": task, "processed": True}
-        except Exception as exc:
-            result = {"error": str(exc)}
-            self.monitor.alert("error", f"Task failed: {task}")
+        # Execute only a registered component with an explicit supported interface.
+        if component is None:
+            result = {
+                "success": False,
+                "status": "blocked",
+                "error": "No execution component is registered for the routed task",
+                "component": target,
+                "task": task,
+            }
+        else:
+            try:
+                if callable(getattr(component, "evaluate", None)):
+                    result = component.evaluate(str(input_data))
+                elif callable(getattr(component, "check", None)):
+                    result = component.check(str(input_data))
+                else:
+                    result = {
+                        "success": False,
+                        "status": "blocked",
+                        "error": "Registered component exposes no supported execution method",
+                        "component": target,
+                        "task": task,
+                    }
+                if not isinstance(result, dict):
+                    result = {
+                        "success": False,
+                        "status": "failed",
+                        "error": "Execution component returned a non-dictionary result",
+                        "component": target,
+                        "task": task,
+                    }
+            except Exception as exc:
+                result = {
+                    "success": False,
+                    "status": "failed",
+                    "error": f"Execution component failed: {type(exc).__name__}",
+                    "component": target,
+                    "task": task,
+                }
+                self.monitor.alert("error", f"Task failed: {task}")
 
         elapsed = (time.time() - start) * 1000
-        success = "error" not in result
+        success = result.get("success") is True or (
+            "error" not in result and result.get("status") not in {"blocked", "failed"}
+        )
+        result.setdefault("success", success)
         self.metrics.record_task(target, success, elapsed)
         self.memory.store(task, "success" if success else "failed")
         self.events.publish("task_completed", {"task": task, "success": success})
