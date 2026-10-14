@@ -26,7 +26,7 @@
           "UCOS_TAVILY_TIMEOUT_SECONDS"
         ],
         "fallback": "Real keyless GDELT Context API; rate-limited and fails closed if it cannot return real article sentences from two independent hosts",
-        "query_budget": "Tavily capped at five candidates; GDELT capped at three candidates and one request per five seconds",
+        "query_budget": "Tavily capped at five candidates; GDELT capped at three candidates, searches the supported 72-hour context window, and sends no more than one request every five seconds",
         "documentation": "https://docs.tavily.com/documentation/api-reference/endpoint/search; https://blog.gdeltproject.org/announcing-the-gdelt-context-2-0-api/"
       },
       "production_blockers": [
@@ -397,4 +397,4 @@
       ]
     }
   ]
-}\n
+}
