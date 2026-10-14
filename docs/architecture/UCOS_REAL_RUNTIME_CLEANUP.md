@@ -31,6 +31,15 @@ A repository-wide import/ownership scan identified 17 additional files under `la
 
 The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
 
+### Provider and multi-model execution hardening
+
+- Removed 22 unconnected provider helper modules that were only tested in isolation and not used by the real provider factory/adapters. The provider base, factory/registry, and real HTTP-backed OpenAI, Claude, Gemini, DeepSeek, Grok, Mistral, Cohere, Ollama, and OpenRouter adapters remain.
+- Removed the Llama and Qwen classes that returned fabricated prompt-derived text while claiming initialization success; they had no production callers. Real adapters must perform a provider call or return/raise an explicit failure.
+- Removed the unused embedding helper that derived synthetic vectors from a text hash.
+- `ParallelGeneration`, `ParallelReasoning`, and `ParallelReview` now run real callbacks concurrently with bounded workers and preserve result order. They reject a missing callback instead of simulating output; review no longer fabricates positive feedback.
+- `MultiModelFallback` now requires a real provider callback when a fallback is available. The callback's failures are recorded and never replaced by synthetic success.
+- Removed unconnected multi-model context/metrics/monitor/cache/registry/scheduler/request/response helper modules; retained the actual model response type, provider-backed executor, parallel execution, routing/strategy, consensus/voting/ranking, ensemble, response selection, reasoning merge, and callback-based fallback.
+
 ### Disconnected Layer 12 duplicate subsystems removed
 
 The repository import graph showed no production callers or agent-manifest ownership for the following Layer 12 subpackages; their only external callers were the monolithic unit-test file. Their responsibilities already have canonical implementation boundaries elsewhere in UCOS, so retaining them created parallel, unconnected implementations:
