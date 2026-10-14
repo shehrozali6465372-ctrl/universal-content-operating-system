@@ -106,3 +106,20 @@ def test_api_gateway_registers_agent01_research_route():
 
     gateway = APIGateway()
     assert callable(gateway._routes["POST /agents/AG01/research"])
+
+def test_agent01_certification_endpoint_is_production_only(monkeypatch):
+    from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
+
+    monkeypatch.setenv("APP_ENV", "development")
+    response = APIGateway()._handle_agent01_research({
+        "account_id": "account-a",
+        "mode": "certification",
+    })
+    assert response.status_code == 403
+
+
+def test_agent01_research_endpoint_requires_account_id():
+    from layers.layer14_enterprise_integration.modules.api_gateway.api_gateway import APIGateway
+
+    response = APIGateway()._handle_agent01_research({"mode": "certification"})
+    assert response.status_code == 400
