@@ -83,7 +83,7 @@ jobs:
         run: python -m pytest tests/layer10_monetization tests/test_layer10_production_gate.py -q --tb=short
 
       - name: Layer 13 PostgreSQL gate
-        run: python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py tests/unit/test_layer13_postgresql_production_hardening.py tests/unit/layer13_persistence/test_memory_store_retrieval.py -q --tb=short
+        run: python -m pytest tests/layer13_persistence/test_layer13_postgresql_real_production.py tests/unit/test_layer13_postgresql_production_hardening.py tests/unit/layer13_persistence/test_memory_store_retrieval.py tests/unit/layer13_persistence/test_vector_math.py -q --tb=short
 
       - name: Layer 14 gate
         run: python -m pytest tests/test_layer14_production_gate.py tests/test_layer14_integration.py tests/test_pinterest_token_refresh_lifecycle.py -q --tb=short
