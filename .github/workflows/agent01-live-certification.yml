@@ -37,13 +37,12 @@ jobs:
         env:
           HAS_NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL != '' }}
           HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY != '' }}
-          HAS_TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY != '' }}
         run: |
           set -euo pipefail
           test "$HAS_NEON_DATABASE_URL" = "true" || { echo "::error::NEON_DATABASE_URL is missing"; exit 2; }
           test "$HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY" = "true" || { echo "::error::UCOS_CREDENTIAL_ENCRYPTION_KEY is missing"; exit 2; }
-          test "$HAS_TAVILY_API_KEY" = "true" || { echo "::error::TAVILY_API_KEY is missing; no live import or search was performed"; exit 2; }
-          echo "REAL_DATABASE_CREDENTIALS_AND_RESEARCH_PROVIDER=CONFIGURED"
+          echo "REAL_DATABASE_AND_ENCRYPTION_CONFIGURATION=CONFIGURED"
+          echo "TAVILY is checked after authenticated history import; missing Tavily will block research without undoing history coverage."
 
       - name: Install project dependencies
         run: |
