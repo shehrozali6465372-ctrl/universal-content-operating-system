@@ -55,6 +55,8 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "history_imports": [],
             "live_smokes": [],
             "production_certified": False,
+            "external_research_performed": False,
+            "content_published": False,
         }
 
     if not accounts:
@@ -64,6 +66,8 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "history_imports": [],
             "live_smokes": [],
             "production_certified": False,
+            "external_research_performed": False,
+            "content_published": False,
         }
 
     from scripts.agent01_import_pinterest_history import run_import
