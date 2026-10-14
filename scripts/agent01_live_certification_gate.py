@@ -8,8 +8,11 @@ production certificate: the release orchestrator must also be wired and verified
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any
@@ -25,15 +28,11 @@ REQUIRED_ENV = (
 
 def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str, Any]:
     """Call the authenticated deployed UCOS API; retry only while the route is not deployed."""
-    token = str(
-        os.environ.get("UCOS_API_TOKEN")
-        or os.environ.get("UCOS_MLH_SERVICE_TOKEN")
-        or ""
-    ).strip()
-    if not token:
+    root_key = str(os.environ.get("UCOS_CREDENTIAL_ENCRYPTION_KEY") or "").strip()
+    if not root_key:
         return {
             "status": "failed_live_smoke",
-            "reason_code": "deployed_api_auth_token_missing",
+            "reason_code": "certification_signing_key_missing",
             "request_path_verified": False,
             "external_search_performed": False,
             "content_published": False,
@@ -43,15 +42,29 @@ def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str
         "account_id": account_id,
         "mode": dispatch_mode,
         "limit": 1,
-    }).encode("utf-8")
+    }, separators=(",", ":"), sort_keys=True).encode("utf-8")
     endpoint = f"{base_url}/agents/AG01/research"
 
     for attempt in range(36):
+        timestamp = str(int(time.time()))
+        nonce = secrets.token_hex(16)
+        derived_key = hmac.new(
+            root_key.encode("utf-8"),
+            b"UCOS_AGENT01_DISPATCH_API_V1",
+            hashlib.sha256,
+        ).digest()
+        canonical = (
+            f"POST\\n/agents/AG01/research\\n{timestamp}\\n{nonce}\\n"
+            f"{hashlib.sha256(body).hexdigest()}"
+        ).encode("utf-8")
+        signature = hmac.new(derived_key, canonical, hashlib.sha256).hexdigest()
         request = Request(
             endpoint,
             data=body,
             headers={
-                "Authorization": f"Bearer {token}",
+                "X-UCOS-Agent01-Timestamp": timestamp,
+                "X-UCOS-Agent01-Nonce": nonce,
+                "X-UCOS-Agent01-Signature": signature,
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
@@ -160,8 +173,6 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
         }
 
     missing = [name for name in REQUIRED_ENV if not str(os.environ.get(name) or "").strip()]
-    if not str(os.environ.get("UCOS_API_TOKEN") or os.environ.get("UCOS_MLH_SERVICE_TOKEN") or "").strip():
-        missing.append("UCOS_API_TOKEN or UCOS_MLH_SERVICE_TOKEN")
     if missing:
         return {
             "status": "blocked",
