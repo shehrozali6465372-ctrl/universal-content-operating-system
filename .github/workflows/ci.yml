@@ -73,7 +73,7 @@ jobs:
         env:
           APP_ENV: test
         run: |
-          python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py -q --tb=short
+          python -m pytest tests/test_layer1_production_gate.py tests/test_layer1_runtime.py tests/test_layer1_code_audit.py tests/unit/test_sql_identifier.py -q --tb=short
           python tools/layer1_code_audit.py --json layer1-code-audit.json
 
       - name: Layer 5 gate
