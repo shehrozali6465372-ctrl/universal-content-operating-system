@@ -16,6 +16,7 @@ import threading
 import json
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
+from layers.shared.vector_math import cosine_similarity, dot_product
 
 
 @dataclass
@@ -211,23 +212,14 @@ class VectorStore:
     def _compute_distance(self, a: List[float], b: List[float]) -> float:
         """Compute distance between two vectors."""
         if self._metric == "cosine":
-            return self._cosine(a, b)
+            return cosine_similarity(a, b)
         elif self._metric == "euclidean":
             return self._euclidean(a, b)
         elif self._metric == "dot":
-            return self._dot(a, b)
+            return dot_product(a, b)
         elif self._metric == "manhattan":
             return self._manhattan(a, b)
-        return self._cosine(a, b)
-
-    @staticmethod
-    def _cosine(a: List[float], b: List[float]) -> float:
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a))
-        nb = math.sqrt(sum(x * x for x in b))
-        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
+        return cosine_similarity(a, b)
 
     @staticmethod
     def _euclidean(a: List[float], b: List[float]) -> float:
@@ -235,12 +227,6 @@ class VectorStore:
             return 0.0
         dist = math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
         return 1.0 / (1.0 + dist)
-
-    @staticmethod
-    def _dot(a: List[float], b: List[float]) -> float:
-        if len(a) != len(b):
-            return 0.0
-        return sum(x * y for x, y in zip(a, b))
 
     @staticmethod
     def _manhattan(a: List[float], b: List[float]) -> float:
