@@ -16,7 +16,6 @@ from typing import Any
 REQUIRED_ENV = (
     "NEON_DATABASE_URL",
     "UCOS_CREDENTIAL_ENCRYPTION_KEY",
-    "TAVILY_API_KEY",
 )
 
 
@@ -40,6 +39,8 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
             "history_imports": [],
             "live_smokes": [],
             "production_certified": False,
+            "external_research_performed": False,
+            "content_published": False,
         }
 
     try:
@@ -94,6 +95,18 @@ def run_gate(*, max_pages: int = 100) -> dict[str, Any]:
     if not imports_passed:
         return {
             "status": "failed_history_import",
+            "enabled_pinterest_account_count": len(accounts),
+            "history_imports": import_reports,
+            "live_smokes": [],
+            "external_research_performed": False,
+            "content_published": False,
+            "production_certified": False,
+        }
+
+    if not str(os.environ.get("TAVILY_API_KEY") or "").strip():
+        return {
+            "status": "history_import_passed_research_blocked",
+            "reason_code": "TAVILY_API_KEY_missing",
             "enabled_pinterest_account_count": len(accounts),
             "history_imports": import_reports,
             "live_smokes": [],
