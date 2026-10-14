@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from .image_provider import BaseImageProvider, ImageResponse
+from .image_provider import BaseImageProvider, ImageResponse, parse_image_size
 
 
 class PuterImageProvider(BaseImageProvider):
@@ -61,7 +61,7 @@ class PuterImageProvider(BaseImageProvider):
         if not self.is_configured():
             raise RuntimeError("Puter image provider is not configured")
 
-        width, height = self._parse_size(size)
+        width, height = parse_image_size(size)
         request = {
             "prompt": prompt.strip(),
             "model": self._model.strip() or None,
@@ -159,16 +159,6 @@ class PuterImageProvider(BaseImageProvider):
         if not isinstance(payload, dict):
             raise RuntimeError("Puter bridge returned invalid response")
         return payload
-
-    @staticmethod
-    def _parse_size(size: str) -> tuple[int, int]:
-        try:
-            width, height = (int(part) for part in size.lower().split("x", 1))
-        except (ValueError, TypeError):
-            raise ValueError("Image size must use WIDTHxHEIGHT notation") from None
-        if not (256 <= width <= 4096 and 256 <= height <= 4096):
-            raise ValueError("Image dimensions must be between 256 and 4096 pixels")
-        return width, height
 
     @staticmethod
     def _persist_image(image_bytes: bytes, mime_type: str) -> str:
