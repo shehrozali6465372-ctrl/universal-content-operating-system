@@ -30,8 +30,6 @@ jobs:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-      UCOS_API_TOKEN: ${{ secrets.UCOS_API_TOKEN }}
-      UCOS_MLH_SERVICE_TOKEN: ${{ secrets.UCOS_MLH_SERVICE_TOKEN }}
       UCOS_API_BASE_URL: https://ucos-backend.onrender.com
     steps:
       - name: Checkout exact release commit
@@ -41,18 +39,12 @@ jobs:
         env:
           HAS_NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL != '' }}
           HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.UCOS_CREDENTIAL_ENCRYPTION_KEY != '' }}
-          HAS_UCOS_API_TOKEN: ${{ secrets.UCOS_API_TOKEN != '' }}
-          HAS_UCOS_MLH_SERVICE_TOKEN: ${{ secrets.UCOS_MLH_SERVICE_TOKEN != '' }}
         run: |
           set -euo pipefail
           test "$HAS_NEON_DATABASE_URL" = "true" || { echo "::error::NEON_DATABASE_URL is missing"; exit 2; }
           test "$HAS_UCOS_CREDENTIAL_ENCRYPTION_KEY" = "true" || { echo "::error::UCOS_CREDENTIAL_ENCRYPTION_KEY is missing"; exit 2; }
-          if [ "$HAS_UCOS_API_TOKEN" != "true" ] && [ "$HAS_UCOS_MLH_SERVICE_TOKEN" != "true" ]; then
-            echo "::error::UCOS_API_TOKEN or UCOS_MLH_SERVICE_TOKEN is missing"
-            exit 2
-          fi
           echo "REAL_DATABASE_AND_ENCRYPTION_CONFIGURATION=CONFIGURED"
-          echo "AUTHENTICATED_DEPLOYED_API_CONFIGURATION=CONFIGURED"
+          echo "DERIVED_HMAC_DEPLOYED_API_CONFIGURATION=CONFIGURED"
           echo "Tavily is optional; when absent, the real keyless GDELT Context API is attempted. Provider failures remain blocking."
 
       - name: Set up Python
