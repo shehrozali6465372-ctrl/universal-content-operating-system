@@ -97,6 +97,12 @@ class ResearchDiscoveryAgent:
         self._evidence_provider = evidence_provider
         self._result_writer = result_writer
         self._components_override = dict(components or {})
+        self._source_status: dict[str, Any] = {
+            "status": "configured" if candidate_provider is not None or trend_sources else "unconfigured",
+            "candidate_provider_configured": candidate_provider is not None,
+            "trend_sources_configured": bool(trend_sources),
+            "trend_sources": sorted(str(name) for name in (trend_sources or {}).keys()),
+        }
 
         account = self._resolve_account()
         if not bool(self._field(account, "enabled", True)):
@@ -222,23 +228,55 @@ class ResearchDiscoveryAgent:
 
     def _discover_candidates(self, limit: int) -> list[Any]:
         if self._candidate_provider is not None:
+            self._source_status = {
+                "status": "configured",
+                "mode": "candidate_provider",
+                "candidate_provider_configured": True,
+                "trend_sources_configured": bool(self.trend_manager.list_sources()),
+            }
             values = self._candidate_provider(self.account_id, self.niche, limit)
             return list(values or [])[:limit]
 
         found: list[Any] = []
         try:
+            source_health = self.trend_manager.list_sources()
+            source_names = sorted(
+                str(item.get("name")) for item in source_health
+                if isinstance(item, Mapping) and item.get("name")
+            )
+            self._source_status = {
+                "status": "configured" if source_names else "unconfigured",
+                "mode": "trend_sources",
+                "candidate_provider_configured": False,
+                "trend_sources_configured": bool(source_names),
+                "trend_sources": source_names,
+            }
             self.trend_manager.discover(category=self.niche)
             for item in self.trend_manager.top_trends(category=self.niche, limit=limit):
                 row = dict(item)
                 row.setdefault("topic", row.get("keyword") or row.get("name") or row.get("title"))
                 found.append(row)
         except Exception:
-            pass
+            self._source_status = {
+                "status": "unavailable",
+                "mode": "trend_sources",
+                "candidate_provider_configured": False,
+                "trend_sources_configured": False,
+                "error_code": "trend_source_discovery_failed",
+            }
+
         try:
-            for item in self.topic_manager.get_top_topics(count=limit, niche=self.niche):
+            stored_topics = self.topic_manager.get_top_topics(count=limit, niche=self.niche)
+            for item in stored_topics:
                 row = self._as_dict(item)
                 row.setdefault("topic", row.get("name") or row.get("title"))
                 found.append(row)
+            if found and self._source_status.get("status") == "unconfigured":
+                self._source_status = {
+                    **self._source_status,
+                    "status": "stored_topics_only",
+                    "note": "Candidates came from stored topic state, not a live research source.",
+                }
         except Exception:
             pass
         return found[:limit]
@@ -511,11 +549,21 @@ class ResearchDiscoveryAgent:
         }
 
         warnings: list[str] = []
+        if candidates is not None:
+            self._source_status = {
+                "status": "caller_supplied",
+                "mode": "explicit_candidates",
+                "candidate_provider_configured": False,
+                "trend_sources_configured": False,
+                "evidence_must_still_be_verified": True,
+            }
         try:
             candidate_values = list(candidates)[:limit] if candidates is not None else self._discover_candidates(limit)
         except Exception:
             candidate_values = []
             warnings.append("candidate_provider_failed")
+        if not candidate_values and candidates is None and self._source_status.get("status") == "unconfigured":
+            warnings.append("research_sources_unconfigured")
 
         results: list[dict[str, Any]] = []
         seen_in_batch: set[str] = set()
@@ -685,7 +733,13 @@ class ResearchDiscoveryAgent:
             "niche": self.niche,
             "started_at": started,
             "completed_at": datetime.now(timezone.utc).isoformat(),
-            "status": "completed" if results else "no_candidates",
+            "status": (
+                "completed" if results else
+                "blocked_research_sources_unconfigured"
+                if candidates is None and self._source_status.get("status") == "unconfigured"
+                else "no_candidates"
+            ),
+            "research_sources": dict(self._source_status),
             "history": history_summary,
             "history_coverage": _HISTORY_COVERAGE,
             "candidate_count": len(results),
