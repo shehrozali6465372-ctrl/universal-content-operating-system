@@ -14,7 +14,8 @@
         "agents/agent_01_research_discovery/tavily_source.py",
         "agents/agent_01_research_discovery/gdelt_context_source.py",
         "layers/layer07_publishing/modules/account_control/account_registry.py (shared identity boundary)",
-        "layers/layer07_publishing/modules/account_control/account_data_store.py (shared account-state boundary)"
+        "layers/layer07_publishing/modules/account_control/account_data_store.py (shared account-state boundary)",
+        "layers/layer02_research/modules/knowledge_collector/knowledge_collector_manager.py"
       ],
       "output": "JSON evidence-pack report with READY_FOR_VERIFICATION handoff to AG06; this is not a factual-verification result or publishing permission.",
       "dependencies": [],
@@ -59,7 +60,9 @@
       "owns": "Find topic gaps and score topic demand against a niche.",
       "sources": [
         "layers/layer02_research/modules/niche_intelligence",
-        "layers/layer02_research/modules/topic_intelligence"
+        "layers/layer02_research/modules/topic_intelligence",
+        "layers/layer03_intelligence/modules/content_understanding/ambiguity_detector.py",
+        "layers/layer03_intelligence/modules/content_understanding/topic_hierarchy.py"
       ],
       "dependencies": [
         "AG01",
@@ -97,7 +100,9 @@
       "status": "planned",
       "owns": "Validate source provenance and evaluate explicit factual claims.",
       "sources": [
-        "layers/layer02_research/modules/fact_verification"
+        "layers/layer02_research/modules/fact_verification",
+        "layers/layer03_intelligence/modules/content_understanding/contradiction_detector.py",
+        "layers/layer03_intelligence/modules/content_understanding/confidence_calibrator.py"
       ],
       "dependencies": [
         "AG01"
@@ -110,7 +115,10 @@
       "owns": "Retrieve prior account research and prevent research-state duplication.",
       "sources": [
         "layers/layer02_research/modules/research_memory",
-        "layers/layer03_intelligence/modules/content_understanding/duplicate_detector.py"
+        "layers/layer03_intelligence/modules/content_understanding/duplicate_detector.py",
+        "layers/layer03_intelligence/modules/content_understanding/batch_processor.py",
+        "layers/layer03_intelligence/modules/content_understanding/embedding_engine.py",
+        "layers/layer03_intelligence/modules/content_understanding/semantic_clusterer.py"
       ],
       "dependencies": [
         "AG01",
@@ -357,7 +365,8 @@
       "owns": "Enforce tenant/workspace/brand/account authorization and secret-safe audit behavior.",
       "sources": [
         "layers/layer17_security",
-        "layers/layer14_enterprise_integration"
+        "layers/layer14_enterprise_integration",
+        "layers/layer01_core/modules/logger/decision_logger.py"
       ],
       "dependencies": []
     },
@@ -384,7 +393,8 @@
         "layers/layer15_async_runtime/modules/durable_execution/durable_execution.py",
         "layers/layer15_async_runtime/modules/task_queue",
         "layers/layer15_async_runtime/modules/worker_pool",
-        "layers/layer18_monitoring/modules/monitoring_engine"
+        "layers/layer18_monitoring/modules/monitoring_engine",
+        "layers/layer11_async_runtime/modules/event_loop_management"
       ],
       "dependencies": [
         "AG26"
@@ -398,12 +408,43 @@
       "sources": [
         "layers/layer21_deployment",
         "layers/layer22_documentation",
-        "layers/layer23_website_manager"
+        "layers/layer23_website_manager",
+        "layers/layer01_core/modules/logger/log_rotation.py"
       ],
       "dependencies": [
         "AG25",
         "AG26",
         "AG27"
+      ]
+    }
+  ],
+  "shared_components": [
+    {
+      "id": "SH01",
+      "name": "Shared layer interfaces and primitives",
+      "sources": [
+        "layers/shared"
+      ]
+    },
+    {
+      "id": "SH02",
+      "name": "Shared model-provider framework",
+      "sources": [
+        "layers/layer12_ai_foundation/modules/model_provider_framework"
+      ]
+    },
+    {
+      "id": "SH03",
+      "name": "Shared multi-model execution",
+      "sources": [
+        "layers/layer12_ai_foundation/modules/multi_model_intelligence"
+      ]
+    },
+    {
+      "id": "SH04",
+      "name": "Shared LLM manager and factory",
+      "sources": [
+        "layers/layer12_ai_foundation/modules/universal_llm_manager"
       ]
     }
   ]
