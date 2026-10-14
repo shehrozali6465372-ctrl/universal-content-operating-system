@@ -8,6 +8,7 @@ hosts before handing a topic to AG06.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from urllib.error import HTTPError, URLError
@@ -192,7 +193,7 @@ class GDELTContextResearchSource:
             raise ValueError("limit must be a positive integer")
 
         words = [
-            word for word in __import__("re").findall(r"[A-Za-z][A-Za-z0-9'-]*", topic_value)
+            word for word in re.findall(r"[A-Za-z][A-Za-z0-9'-]*", topic_value)
             if len(word) > 2 and word.casefold() not in {
                 "the", "and", "for", "with", "from", "into", "your", "best",
                 "top", "how", "why", "what", "when", "where", "this", "that",
@@ -231,7 +232,10 @@ class GDELTContextResearchSource:
                 host = (urlsplit(url).hostname or "").lower()
                 if host.startswith("www."):
                     host = host[4:]
-                if not host:
+                if not host or host in seen_hosts:
+                    # One representative sentence per publisher host is enough
+                    # for source diversity; same-host repeats must not crowd out
+                    # independent publishers in the bounded evidence pack.
                     continue
                 seen_hosts.add(host)
                 results.append(item)
