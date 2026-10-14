@@ -1,34 +1,32 @@
-# UAOM v1.0 - Frozen Architecture Index
+# UCOS 1 — Frozen Architecture Index
 
-**Model:** UCOS Agentic Operating Model (UAOM) v1.0  
+**Canonical architecture:** UCOS 1 (the frozen CEO + specialist workforce model)  
 **Freeze date:** 14 October 2026  
-**Status:** Design-frozen target architecture; implementation remains subject to CI and production certification gates.
+**Status:** Design-frozen. Runtime implementation and production certification remain separate gates.
 
-## The single model
+## Authority rule
 
-UAOM has one CEO/control plane and one workforce/operations plane. These are the two canonical views of the same architecture. They do not form separate products or competing orchestration brains.
+**This document and the two linked specifications are the sole authoritative architecture for UCOS 1.** Superseded architecture drafts and competing architecture proposals have been removed from this branch. Do not introduce another architecture in parallel. If a change is genuinely required, submit an Architecture Decision Record (ADR), compatibility/migration notes, threat review, tests, observability and rollback plan before changing the frozen design.
 
-1. [CEO Agent Architecture](UCOS_CEO_AGENT_ARCHITECTURE_V1.md) - Super Intelligence as the accountable goal owner, planner, router, evidence judge, learning decision-maker and operator console control plane.
-2. [Specialist Agents and System Guardian](UCOS_SPECIALIST_AGENTS_AND_SYSTEM_GUARDIAN_V1.md) - frozen 29-role workforce, standard contracts, platform publishers, System Guardian, telemetry/incident lifecycle, UI design and security/testing requirements.
+## The one architecture, in two views
 
-The PDFs delivered with this release are expanded visual reading editions of these two specifications. The Markdown files in this directory define the versioned source specification; a generated PDF alone does not certify code or services as deployed.
+1. [CEO / Super Intelligence Agent](UCOS_CEO_AGENT_ARCHITECTURE_V1.md) — accountable goal owner, planner, router, evidence judge, learning decision-maker and control-plane operator console.
+2. [Specialist Agents and System Guardian](UCOS_SPECIALIST_AGENTS_AND_SYSTEM_GUARDIAN_V1.md) — the 29-role workforce, shared contracts, platform publishers, live observability, incident/debugging lifecycle, UI design and security/testing requirements.
 
-## Architectural constants
+These are two views of the same UCOS 1 system, not separate products or competing brains. PDFs are reading editions; these Markdown specifications are the source of truth.
 
-- Preserve the 23 UCOS layers as logical capabilities during staged migration.
-- Preserve the seven-service deployment boundary. Logical agents are not one-microservice-per-agent.
-- One CEO (Super Intelligence Agent); specialists return bounded results and evidence.
-- Platform publishing agents are platform-based, while each run selects an exact authorized platform connection/account.
-- PostgreSQL is the canonical durable workflow ledger; Redis is never the only task/incident source of truth.
-- Every task has explicit identity scope, tools, acceptance criteria, cost/deadline limits and idempotency semantics.
-- External publication requires reconciliation and public-state verification; provider receipt alone is not proof of success.
-- System Guardian continuously correlates telemetry and preserves incidents, while an independent probe monitors Guardian/collector silence.
-- Live UI must show source and freshness, with LIVE / STALE / DEGRADED / NO DATA state. No mock values can be presented as production telemetry.
+## Frozen architectural constants
 
-## Freeze and change control
+- Preserve the existing 23 logical layers as capabilities; do not equate layers or agents with separate deployed microservices.
+- Preserve the seven-service deployment boundary.
+- One CEO agent coordinates specialist agents; specialists return bounded results and evidence.
+- Publisher agents are platform-based, with each run selecting an explicitly authorized account/connection.
+- PostgreSQL is the canonical durable workflow ledger; Redis must not be the sole source of durable task or incident state.
+- Each task has explicit identity scope, allowed tools, acceptance criteria, cost/deadline limits and idempotency semantics.
+- External publishing requires reconciliation and public-state verification; a provider receipt alone is not proof of public success.
+- System Guardian correlates telemetry and preserves incidents; an independent probe must detect Guardian/collector silence.
+- Live UI must display source and freshness with LIVE / STALE / DEGRADED / NO DATA states. Mock values must never be presented as production telemetry.
 
-The two specifications jointly define freeze ID UAOM-v1.0. A change to service boundaries, identity scope, task/result schemas, state transitions, publishing idempotency, telemetry correlation or Guardian remediation authority requires an Architecture Decision Record (ADR), compatibility and migration notes, threat review, tests, observability and rollback plan.
+## Production status is not implied by architecture freeze
 
-## Production certification is separate
-
-Design freeze is not production readiness. A production claim requires current CI evidence, the deployed commit/service version, applied database migrations, real provider authorization, live probes, a real end-to-end authorized run, external publication verification where relevant, incident/recovery drill and operator sign-off. The specs intentionally do not claim that every role or integration is already live.
+Architecture freeze does not certify the runtime as production-ready. Certification requires current CI evidence, deployed commit/service version, applied database migrations, real provider authorization, live probes, a real authorized end-to-end run, public verification where relevant, recovery drills and operator sign-off. Do not claim integrations, monitoring, agents or UI are live without current evidence.
