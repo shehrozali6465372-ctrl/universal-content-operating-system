@@ -5,6 +5,17 @@ from threading import RLock
 from typing import Any, Dict, List
 
 
+def parse_image_size(size: str) -> tuple[int, int]:
+    """Parse and validate a WIDTHxHEIGHT image size shared by all providers."""
+    try:
+        width, height = (int(part) for part in size.lower().split("x", 1))
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Image size must use WIDTHxHEIGHT notation") from None
+    if not (256 <= width <= 4096 and 256 <= height <= 4096):
+        raise ValueError("Image dimensions must be between 256 and 4096 pixels")
+    return width, height
+
+
 class ImageResponse:
     """Response from an image generation provider."""
     __slots__ = ("image_url", "image_data", "provider", "model",
