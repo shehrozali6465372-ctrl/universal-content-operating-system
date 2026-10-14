@@ -111,12 +111,11 @@ class LLMManager:
         )
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
-        if self._is_production_environment() and self._generator is None:
-            # Check before cache lookup as a process may have cached a development
-            # placeholder before its environment was switched to production.
+        if self._generator is None:
+            # Never let a development placeholder or cached placeholder masquerade
+            # as model execution. A caller must inject a real provider-backed generator.
             raise RuntimeError(
-                "LLMManager has no production generator; "
-                "refusing simulated AI output"
+                "LLMManager has no real AI generator; refusing simulated AI output"
             )
 
         request = LLMRequest(prompt, model, provider)
