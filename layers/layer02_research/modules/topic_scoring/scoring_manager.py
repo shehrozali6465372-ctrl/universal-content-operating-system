@@ -11,13 +11,12 @@ Central manager for topic scoring:
 - Health check
 """
 
-import json
-import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Dict, List, Optional
+
+from layers.shared.json_store import atomic_write_json, load_json_object
 
 from layers.layer02_research.modules.topic_scoring.scoring_engine import ScoringEngine, ScoringResult
 
@@ -141,35 +140,14 @@ class ScoringManager:
     def _save(self):
         if self._storage_path is None:
             return
-        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {
+        atomic_write_json(self._storage_path, {
             "version": 1,
             "saved_at": datetime.now(timezone.utc).isoformat(),
-            "results": {t: r.to_dict() for t, r in self._results.items()},
+            "results": {topic: result.to_dict() for topic, result in self._results.items()},
             "history": self._history[-50:],
-        }
-        payload = json.dumps(data, indent=2)
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=f".{self._storage_path.name}.",
-            suffix=".tmp",
-            dir=str(self._storage_path.parent),
-            text=True,
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(payload)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(tmp_name, self._storage_path)
-        finally:
-            if os.path.exists(tmp_name):
-                os.unlink(tmp_name)
+        })
 
     def _load(self):
-        if self._storage_path is None or not self._storage_path.exists():
-            return
-        try:
-            data = json.loads(self._storage_path.read_text())
-            self._history = data.get("history", [])
-        except (json.JSONDecodeError, KeyError):
-            pass
+        data = load_json_object(self._storage_path)
+        history = data.get("history", [])
+        self._history = history if isinstance(history, list) else []
