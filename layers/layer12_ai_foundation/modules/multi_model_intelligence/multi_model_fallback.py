@@ -19,25 +19,30 @@ class MultiModelFallback:
         available = [m for m in self.fallback_models if m not in failed_models]
         if not available:
             return None
+        if not callable(call_fn):
+            raise ValueError(
+                "call_fn must be a real provider callback; synthetic fallback responses are disabled"
+            )
 
         for model in available:
             try:
-                if call_fn:
-                    response = call_fn(prompt, model)
-                    if response.is_success:
-                        self._fallback_history.append({"model": model, "success": True})
-                        return response
-                else:
-                    response = ModelResponse(
-                        model=model, provider="fallback",
-                        content=f"Fallback response from {model}",
-                        confidence=0.6, latency_ms=200.0,
-                    )
+                response = call_fn(prompt, model)
+                if not isinstance(response, ModelResponse):
+                    raise TypeError("provider callback must return ModelResponse")
+                if response.is_success:
                     self._fallback_history.append({"model": model, "success": True})
                     return response
+                self._fallback_history.append({
+                    "model": model,
+                    "success": False,
+                    "error": response.error or "provider returned an unsuccessful response",
+                })
             except Exception as exc:
-                self._fallback_history.append({"model": model, "success": False,
-                                               "error": str(exc)})
+                self._fallback_history.append({
+                    "model": model,
+                    "success": False,
+                    "error": str(exc) or type(exc).__name__,
+                })
 
         return None
 
