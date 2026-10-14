@@ -4,10 +4,12 @@ from typing import Callable
 
 import pytest
 
+from layers.layer02_research.modules.research_orchestrator.parallel_executor import ParallelExecutor
 from layers.layer02_research.modules.research_orchestrator.workflow_engine import DEFAULT_RESEARCH_PIPELINE
 from layers.shared.agent_runtime import (
     AgentManifest, AgentRegistry, AgentResult, AgentRole, AgentRunStatus,
     AgentScope, AgentTask, ResearchAgent, SuperIntelligenceAgent,
+    build_default_research_agent,
 )
 
 MODULE_NAMES = tuple(name for name, _dependencies in DEFAULT_RESEARCH_PIPELINE)
@@ -65,6 +67,7 @@ def test_research_agent_manifest_declares_one_role_and_bounded_capabilities():
     assert manifest.role == AgentRole.RESEARCH
     assert "research:topic" in manifest.capabilities
     assert "layer02.research_pipeline" in manifest.required_tools
+    assert "layer11.integration_gateway.search" in manifest.required_tools
     assert manifest.version == "1.0.0"
 
 
@@ -83,10 +86,11 @@ def test_research_agent_runs_layer02_and_returns_source_evidence():
 
 
 def test_research_agent_does_not_claim_completion_without_source_urls():
-    agent = ResearchAgent({
+    functions = {
         name: (lambda **context: {"module": name, "findings": ["unsourced"], "confidence": 0.7})
         for name in MODULE_NAMES
-    })
+    }
+    agent = ResearchAgent(functions)
     result = agent.execute(agent.manifest(), sample_task())
     assert result.status == AgentRunStatus.PARTIAL, result.errors
     assert result.output["source_urls"] == []
@@ -117,6 +121,126 @@ def test_task_input_cannot_override_ceo_authorization_scope():
     assert observed[0]["tenant_id"] == "tenant-1"
     assert observed[0]["workspace_id"] == "workspace-1"
     assert observed[0]["brand_id"] == "brand-1"
+
+
+class FakeSearchGateway:
+    def __init__(self):
+        self.queries = []
+
+    def search(self, query, *, location=None):
+        self.queries.append(query)
+        slug = str(len(self.queries))
+        return {
+            "provider": "test-fixture-not-production",
+            "query": query,
+            "results": [
+                {
+                    "title": f"Source title {slug} - sensitive skin towels",
+                    "link": f"https://sources.example/article-{slug}",
+                    "snippet": f"Source-backed excerpt {slug} for sensitive skin towels.",
+                    "position": 1,
+                },
+                {
+                    "title": f"Second source title {slug}",
+                    "link": f"https://publisher.example/article-{slug}",
+                    "snippet": f"Another independently linked excerpt {slug}.",
+                    "position": 2,
+                },
+            ],
+        }
+
+
+def test_default_research_agent_wires_real_layer02_modules_to_injected_gateway():
+    gateway = FakeSearchGateway()
+    agent = build_default_research_agent(gateway_factory=lambda: gateway)
+    result = agent.execute(agent.manifest(), sample_task())
+
+    assert result.status == AgentRunStatus.COMPLETED, result.errors
+    assert len(gateway.queries) == 3
+    assert result.output["completed_modules"] == list(MODULE_NAMES)
+    assert len(result.output["source_urls"]) >= 6
+    assert result.output["module_results"]["topic_scoring"]["result"]["status"] == "market_score_unavailable"
+    assert all(source["url"].startswith("https://") for source in result.output["sources"])
+    # Provider result fixture is explicit for test provenance; production uses Layer 11.
+    assert result.output["module_results"]["trend_discovery"]["result"]["provider"] == "test-fixture-not-production"
+
+
+def test_default_research_agent_does_not_leak_scoped_memory_or_results_between_runs():
+    gateway = FakeSearchGateway()
+    agent = build_default_research_agent(gateway_factory=lambda: gateway)
+    first = agent.execute(agent.manifest(), sample_task(topic="first tenant topic"))
+    second_task = AgentTask(
+        goal_id="goal-research-2",
+        instruction="Research a separate topic",
+        capability="research:topic",
+        scope=AgentScope("tenant-2", "workspace-2", "brand-2"),
+        input_data={"topic": "second tenant topic", "niche": "technology"},
+    )
+    second = agent.execute(agent.manifest(), second_task)
+    assert first.status == AgentRunStatus.COMPLETED
+    assert second.status == AgentRunStatus.COMPLETED
+    assert second.output["scope"]["tenant_id"] == "tenant-2"
+    assert "first tenant topic" not in str(second.output["module_results"])
+    assert first.output["scope"]["tenant_id"] == "tenant-1"
+
+
+def test_parallel_executor_passes_only_prior_successful_wave_outputs():
+    executor = ParallelExecutor()
+    seen = {}
+
+    def first(**_context):
+        return {"value": "from first"}
+
+    def second(**context):
+        seen["second"] = context["upstream_results"]
+        return {"value": "from second"}
+
+    def third(**context):
+        seen["third"] = context["upstream_results"]
+        return {"value": "from third"}
+
+    results = executor.execute_all(
+        ["first", "second", "third"],
+        {"first": first, "second": second, "third": third},
+        {"first": [], "second": ["first"], "third": ["second"]},
+        {"topic": "example"},
+    )
+    assert results["third"].success
+    assert seen["second"] == {"first": {"value": "from first"}}
+    assert seen["third"] == {
+        "first": {"value": "from first"},
+        "second": {"value": "from second"},
+    }
+
+
+def test_parallel_executor_blocks_dependants_and_resets_cross_run_results():
+    executor = ParallelExecutor()
+    calls = []
+
+    def fail(**_context):
+        raise RuntimeError("provider down")
+
+    def dependent(**_context):
+        calls.append("dependent")
+        return {"value": "must not run"}
+
+    first = executor.execute_all(
+        ["source", "dependent"],
+        {"source": fail, "dependent": dependent},
+        {"source": [], "dependent": ["source"]},
+    )
+    assert not first["source"].success
+    assert not first["dependent"].success
+    assert "Blocked because required module" in first["dependent"].error
+    assert calls == []
+
+    second = executor.execute_all(
+        ["independent"],
+        {"independent": lambda: {"ok": True}},
+        {"independent": []},
+    )
+    assert set(second) == {"independent"}
+    assert executor.get_results().keys() == {"independent"}
 
 
 class OneTaskPlanner:
@@ -155,7 +279,7 @@ def test_ceo_delegates_to_research_agent_and_persists_verified_result():
         executor=research_agent, store=store,
     )
     report = ceo.run_goal(task.goal_id, "Research sensitive skin towels", sample_scope())
-    assert report["status"] == "completed", report
+    assert report["status"] == "completed"
     assert report["finished_tasks"] == 1
     assert report["results"][0]["agent_role"] == "research"
     assert any(event[0] == "finished" for event in store.events)

@@ -1,8 +1,8 @@
-"""Research specialist backed by the existing UCOS Layer 02 pipeline.
+"""Research specialist backed by UCOS Layer 02 and the real Layer 11 search gateway.
 
-Layer 02 remains the owner of research capabilities. This adapter does not copy
-or reimplement those modules. A concrete callable must be bound for every
-canonical workflow step; missing or unused bindings fail closed.
+The agent owns CEO-facing task validation and reporting. Research algorithms remain
+in Layer 02, while external search transport is delegated to the canonical Layer 11
+IntegrationGateway. Provider failures never fall back to generated/mock evidence.
 """
 from __future__ import annotations
 
@@ -33,7 +33,12 @@ def _is_http_url(value: Any) -> bool:
     if not isinstance(value, str) or not value.strip():
         return False
     parsed = urlparse(value.strip())
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    return (
+        parsed.scheme in {"http", "https"}
+        and bool(parsed.netloc)
+        and not parsed.username
+        and not parsed.password
+    )
 
 
 def _extract_source_urls(value: Any) -> tuple[str, ...]:
@@ -71,22 +76,71 @@ def _extract_source_urls(value: Any) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
-class ResearchAgent:
-    """Single CEO-facing entry point for the existing Layer 02 research workflow.
+def _summarize_sources(module_results: Mapping[str, Any], limit: int = 12) -> list[dict[str, str]]:
+    """Return a concise source list without treating arbitrary URLs as citations."""
+    sources: dict[str, dict[str, str]] = {}
+    for module_name, module_result in module_results.items():
+        if not isinstance(module_result, Mapping):
+            continue
+        payload = module_result.get("result")
+        if not isinstance(payload, Mapping):
+            continue
+        for source in payload.get("sources", []) or []:
+            if not isinstance(source, Mapping):
+                continue
+            url = source.get("url") or source.get("source_url") or source.get("link")
+            if not _is_http_url(url):
+                continue
+            normalized_url = url.strip()
+            entry = sources.setdefault(normalized_url, {
+                "url": normalized_url,
+                "title": str(source.get("title") or "Untitled source")[:300],
+                "snippet": str(source.get("snippet") or "")[:1000],
+                "provider": str(source.get("provider") or ""),
+            })
+            if not entry["provider"]:
+                entry["provider"] = module_name
+    return list(sources.values())[:limit]
 
-    module_functions must contain concrete callables for each step in
-    DEFAULT_RESEARCH_PIPELINE. Each receives the task's scoped context as keyword
-    arguments. A run is certified complete only when all workflow steps succeed
-    and outputs include real HTTP(S) source references.
+
+class ResearchAgent:
+    """One CEO-facing entry point for the existing Layer 02 research workflow.
+
+    Supply exactly one of:
+    - module_functions: explicit concrete Layer 02 callables; or
+    - module_functions_factory: task-scoped factory creating concrete callables.
+
+    Production callers should use build_default_research_agent(), which wires Layer
+    02 to Layer 11's real search gateway. Source adapters are invoked per task, so
+    module memory is task-scoped and cannot leak between tenants/workspaces/brands.
     """
 
     def __init__(
         self,
-        module_functions: Mapping[str, Callable[..., Any]],
+        module_functions: Mapping[str, Callable[..., Any]] | None = None,
         *,
+        module_functions_factory: Callable[[AgentTask], Mapping[str, Callable[..., Any]]] | None = None,
         planner_factory: Callable[[], PlannerManager] = PlannerManager,
         orchestrator_factory: Callable[[], OrchestratorManager] = OrchestratorManager,
     ) -> None:
+        if (module_functions is None) == (module_functions_factory is None):
+            raise ValueError("provide exactly one of module_functions or module_functions_factory")
+        self._module_functions = (
+            self._validate_module_functions(module_functions)
+            if module_functions is not None else None
+        )
+        if module_functions_factory is not None and not callable(module_functions_factory):
+            raise TypeError("module_functions_factory must be callable")
+        self._module_functions_factory = module_functions_factory
+        self._planner_factory = planner_factory
+        self._orchestrator_factory = orchestrator_factory
+
+    @staticmethod
+    def _validate_module_functions(
+        module_functions: Mapping[str, Callable[..., Any]] | None,
+    ) -> dict[str, Callable[..., Any]]:
+        if not isinstance(module_functions, Mapping):
+            raise TypeError("Layer 02 module functions must be a mapping")
         supplied = dict(module_functions)
         required = set(REQUIRED_RESEARCH_MODULES)
         missing = sorted(required - set(supplied))
@@ -101,9 +155,7 @@ class ResearchAgent:
         non_callables = sorted(name for name, func in supplied.items() if not callable(func))
         if non_callables:
             raise TypeError("Layer 02 module bindings must be callable: " + ", ".join(non_callables))
-        self._module_functions = supplied
-        self._planner_factory = planner_factory
-        self._orchestrator_factory = orchestrator_factory
+        return supplied
 
     def manifest(self) -> AgentManifest:
         """Return the canonical registered role for this implementation."""
@@ -111,7 +163,10 @@ class ResearchAgent:
             role=AgentRole.RESEARCH,
             capabilities=RESEARCH_CAPABILITIES,
             version=RESEARCH_AGENT_VERSION,
-            required_tools=("layer02.research_pipeline",),
+            required_tools=(
+                "layer02.research_pipeline",
+                "layer11.integration_gateway.search",
+            ),
         )
 
     def execute(self, agent: AgentManifest, task: AgentTask) -> AgentResult:
@@ -153,6 +208,13 @@ class ResearchAgent:
         })
 
         try:
+            module_functions = (
+                self._module_functions_factory(task)
+                if self._module_functions_factory is not None
+                else self._module_functions
+            )
+            module_functions = self._validate_module_functions(module_functions)
+
             planner = self._planner_factory()
             plan = planner.create_plan(
                 topic=topic,
@@ -166,24 +228,25 @@ class ResearchAgent:
             )
             pipeline_result = orchestrator.execute(
                 execution,
-                module_funcs=self._module_functions,
+                module_funcs=module_functions,
                 custom_context=context,
             )
             module_results = pipeline_result.module_results
             source_urls = _extract_source_urls(module_results)
+            source_summary = _summarize_sources(module_results)
             confidence = float(pipeline_result.overall_confidence)
             confidence = max(0.0, min(1.0, confidence))
             trace = AgentEvidence(
                 kind="layer02_execution_trace",
                 reference=f"layer02://research/{pipeline_result.execution_id}",
-                description="Layer 02 research workflow execution record.",
+                description="Task-scoped Layer 02 workflow execution record.",
                 confidence=confidence,
             )
             evidence = tuple(
                 AgentEvidence(
                     kind="source_url",
                     reference=url,
-                    description="Source URL returned by a Layer 02 research module.",
+                    description="HTTP(S) source reference returned by the configured Layer 11 search gateway.",
                 )
                 for url in source_urls
             ) + (trace,)
@@ -191,13 +254,20 @@ class ResearchAgent:
             output = {
                 "topic": topic,
                 "niche": niche,
+                "scope": {
+                    "tenant_id": task.scope.tenant_id,
+                    "workspace_id": task.scope.workspace_id,
+                    "brand_id": task.scope.brand_id,
+                },
                 "research_plan": plan.to_dict(),
                 "pipeline": pipeline_result.to_dict(),
                 "module_results": module_results,
                 "source_urls": list(source_urls),
+                "sources": source_summary,
                 "completed_modules": list(pipeline_result.completed_modules),
                 "failed_modules": list(pipeline_result.failed_modules),
                 "duration_seconds": pipeline_result.total_duration_sec,
+                "confidence_basis": "explicit module confidence only; zero means no module supplied a calibrated confidence",
             }
             errors = list(pipeline_result.error_summary)
             if pipeline_result.status == "failed" or not pipeline_result.completed_modules:
@@ -219,14 +289,15 @@ class ResearchAgent:
                 summary = (
                     f"Research completed for '{topic}' using "
                     f"{len(pipeline_result.completed_modules)} Layer 02 modules and "
-                    f"{len(source_urls)} distinct source URLs."
+                    f"{len(source_urls)} distinct source URLs. "
+                    "Source presence does not itself prove article reachability or claim accuracy."
                 )
             elif status == AgentRunStatus.FAILED:
                 summary = f"Research failed for '{topic}'; inspect module errors and execution trace."
             else:
                 summary = (
                     f"Research for '{topic}' is partial; "
-                    f"{len(source_urls)} verifiable source URLs were collected."
+                    f"{len(source_urls)} well-formed source URLs were collected."
                 )
 
             return AgentResult(
@@ -258,3 +329,26 @@ class ResearchAgent:
             summary="Research task was blocked by agent contract validation.",
             errors=(reason,),
         )
+
+
+def build_default_research_agent(
+    *,
+    gateway_factory: Callable[[], Any] | None = None,
+) -> ResearchAgent:
+    """Build the production Research Agent using UCOS Layer 11's real search gateway.
+
+    With no custom factory, Layer 11 uses Google News RSS without paid credentials,
+    or SerpAPI when UCOS_SERPAPI_API_KEY/SERPAPI_API_KEY is configured. All Layer 02
+    managers are instantiated per task; the CEO's durable goal store remains the
+    persistence authority for task outcomes.
+    """
+    def create_modules(task: AgentTask) -> Mapping[str, Callable[..., Any]]:
+        if gateway_factory is None:
+            from layers.layer11_async_runtime.modules.provider_integration.gateway import IntegrationGateway
+            gateway = IntegrationGateway()
+        else:
+            gateway = gateway_factory()
+        from .research_bindings import build_layer02_research_bindings
+        return build_layer02_research_bindings(task, gateway)
+
+    return ResearchAgent(module_functions_factory=create_modules)

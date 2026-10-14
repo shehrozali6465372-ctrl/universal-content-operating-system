@@ -1,58 +1,53 @@
-# UCOS Research Agent — implementation contract v1.0
+# UCOS Research Agent — implementation and operational contract v1.0
 
 **Owner:** CEO / Super Intelligence Agent  
 **Specialist:** Research Agent (AgentRole.RESEARCH)  
-**Existing implementation owner:** Layer 02 — Research Engine  
-**Status:** Implementation slice pushed for CI; production certification still requires real source-adapter wiring and deployment evidence.
+**Capability owner:** Layer 02 — Research Engine  
+**External search owner:** Layer 11 — IntegrationGateway  
+**Status:** Code and CI gate; production certification still requires live deployment/E2E evidence.
 
-## One agent, existing Layer 02 capabilities
+## Single-agent topology
 
 ~~~~mermaid
 flowchart TD
     CEO["CEO / Super Intelligence"] --> TASK["Scoped research task"]
-    TASK --> AGENT["Research Agent (single entry point)"]
+    TASK --> AGENT["One Research Agent"]
     AGENT --> PLAN["Layer 02 Research Planner"]
     PLAN --> ORCH["Layer 02 Research Orchestrator"]
-    ORCH --> TREND["Trend Discovery"]
-    ORCH --> TOPIC["Topic Intelligence"]
-    ORCH --> COMP["Competitor Analysis"]
-    ORCH --> AUD["Audience Research"]
-    ORCH --> KNOW["Knowledge Collector"]
-    ORCH --> FACT["Fact Verification"]
-    ORCH --> MEM["Research Memory"]
-    ORCH --> SCORE["Topic Scoring"]
-    TREND --> RESULT["Structured module results + source URLs"]
-    TOPIC --> RESULT
-    COMP --> RESULT
-    AUD --> RESULT
-    KNOW --> RESULT
-    FACT --> RESULT
-    MEM --> RESULT
-    SCORE --> RESULT
-    RESULT --> VERIFY["Research Agent validates provenance"]
-    VERIFY --> CEO
+    ORCH --> L11["Layer 11 IntegrationGateway"]
+    L11 --> SEARCH["Google News RSS or configured SerpAPI"]
+    SEARCH --> SOURCES["Actual source links, titles and snippets"]
+    SOURCES --> MODS["Existing Layer 02 research modules"]
+    MODS --> VERIFY["Source provenance + limitations"]
+    VERIFY --> LEDGER["CEO durable goal/task/evidence ledger (PostgreSQL)"]
 ~~~~
 
-This is one logical Research Agent using existing Layer 02 modules, not eight new agents and not a second research engine. Layer 02 remains the domain-capability owner; the agent owns CEO-facing delegation, scope propagation, status, evidence validation and result formatting.
+This is one specialist that uses the existing Layer 02 pipeline; it does not create a second research engine or eight new agents. The Research Agent's module bindings and in-memory manager instances are created per task. Durable task results belong to the CEO's injected PostgreSQL-backed goal/task store, not to cross-tenant process globals.
 
-## Execution contract
+## Real source execution
 
-- The agent accepts only the research role and one of its declared research capabilities.
-- Every task carries the CEO-assigned tenant/workspace/brand scope. User input cannot override those values.
-- All eight modules in the Layer 02 default workflow must be bound to concrete callable implementations. Missing or unused bindings fail at construction; no simulated provider or placeholder module is substituted.
-- The existing Layer 02 planner creates a research plan; the existing orchestrator runs its dependency-aware workflow.
-- Module outputs are returned in a JSON-safe form so findings and citation fields are available to the agent.
-- A module with no explicit confidence receives 0.0, not a fabricated confidence score.
-- A task is completed only when the workflow completes and outputs include well-formed HTTP(S) source references. Missing provenance yields partial status; URL syntax alone is not proof that a source is reachable or accurate. Execution errors are surfaced.
-- A layer02://research/... reference is an internal execution trace, never represented as an external source URL.
+- With no search API key, the Layer 11 gateway makes real HTTPS requests to Google News RSS. With `UCOS_SERPAPI_API_KEY` or `SERPAPI_API_KEY` configured, Layer 11 uses SerpAPI.
+- Missing network access, invalid provider responses, or an empty source list do not trigger generated/mock evidence. The workflow fails or reports partial status.
+- Source records include the provider, query, observed timestamp, title, snippet and returned URL.
+- URL format is validated; this is not an assertion that each article URL is reachable, accurate, or independently verified.
+- The existing Layer 02 fact checker uses lexical evidence matching and contradiction heuristics. Its output is marked preliminary and still requires editorial review.
+- Competitor search snippets are article/publisher samples only. Follower counts, engagement, demographics, revenue and conversions are not inferred or fabricated.
+- Since Layer 11 search returns sources rather than verified market-performance metrics, topic scoring reports `market_score_unavailable` and explains why instead of inventing a numeric score or publish recommendation.
+- Layer 02 manager indexes are task-local working state. Cross-run durability comes from the CEO's durable task/evidence persistence adapter.
 
-## Boundaries and cleanup
+## Security and isolation
 
-- Do not delete the 23 logical layers or Layer 02 modules: these are the existing capability implementations being reused by the Research Agent.
-- Do not add one deployment service per agent.
-- Do not mark an adapter production-ready until its real search/source-provider binding, durable storage path, and live evidence are verified.
-- The Research Agent is the only specialist implemented in this slice. Other specialist roles remain unimplemented pending separate scoped work.
+- Tenant/workspace/brand scope is derived from the CEO-issued `AgentTask`; user input cannot override it.
+- Each task receives fresh Layer 02 managers. The pipeline executor resets results before each run and only passes successful prior-wave outputs to dependent modules.
+- A failed dependency blocks downstream modules. Sibling modules in a parallel wave cannot read each other's partial results.
+- External retrieval is delegated to Layer 11; this agent does not implement a duplicate HTTP client.
 
-## Verification
+## Production acceptance gate
 
-Focused CI tests cover module-binding completeness, Layer 02 planner/orchestrator execution, source-provenance gating, failure propagation, scope isolation, and CEO delegation/persistence. Green unit tests alone do not certify live provider integration or production deployment.
+1. Focused Research Agent/runtime and Layer 02 regression tests pass on the exact commit.
+2. Real search provider smoke test produces live query/timestamp/source receipts.
+3. The CEO production goal/task/evidence store persists the full result to canonical PostgreSQL.
+4. Live task execution demonstrates scope isolation, dependency failure propagation, explicit provider outage behavior and no source/metric fabrication.
+5. Deployed service health and end-to-end evidence are attached to the exact production commit.
+
+Green CI alone does not satisfy live production acceptance.
