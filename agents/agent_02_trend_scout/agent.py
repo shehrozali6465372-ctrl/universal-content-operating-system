@@ -67,6 +67,9 @@ class TrendScoutAgent:
                 rejected.append({"index": str(index), "reason": "candidate_not_a_mapping"})
                 continue
             topic = str(candidate.get("topic") or candidate.get("title") or candidate.get("name") or "").strip()
+            if candidate.get("decision") != "READY_FOR_VERIFICATION":
+                rejected.append({"topic": topic or f"candidate_{index}", "reason": "upstream_candidate_not_ready_for_verification"})
+                continue
             topic_key = " ".join(topic.casefold().split())
             if not topic_key:
                 rejected.append({"index": str(index), "reason": "topic_missing"})
@@ -89,7 +92,7 @@ class TrendScoutAgent:
                     continue
                 url = str(item.get("url") or item.get("source_url") or "").strip()
                 title = str(item.get("title") or "").strip()
-                content = str(item.get("content") or item.get("text") or item.get("snippet") or "").strip()
+                content = str(item.get("content") or item.get("text") or item.get("snippet") or item.get("excerpt") or "").strip()
                 if not title or not content or len(content) < 20:
                     continue
                 try:
