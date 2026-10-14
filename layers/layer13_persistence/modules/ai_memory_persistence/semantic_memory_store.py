@@ -29,7 +29,7 @@ class SemanticMemoryStore(BaseMemoryStore):
                               top_k: int = 10) -> List[MemoryEntry]:
         scored = []
         for key, emb in self._embeddings.items():
-            score = self.cosine_similarity(query_embedding, emb)
+            score = cosine_similarity(query_embedding, emb)
             entry = self._store.get(key)
             if entry:
                 scored.append((entry, score))
