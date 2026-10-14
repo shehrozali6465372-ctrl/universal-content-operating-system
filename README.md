@@ -2,35 +2,26 @@
 
 **v6.0.0** — An account-isolated AI content creation, quality, monetization, publishing, analytics, and learning control plane.
 
-## Architecture
+## Frozen canonical architecture — UAOM v1.0
 
-UCOS is organized into **23 architectural layers**. The central control plane coordinates account selection, niche/topic strategy, verified affiliate evidence, content generation, quality/policy gates, media production, real platform publishing, analytics, and account-local learning.
+**Architecture freeze: 14 October 2026.** UCOS has one approved top-level architecture, defined by exactly these two canonical specifications:
 
-```text
-Layer 23 — Website Manager
-Layer 22 — Documentation
-Layer 21 — Deployment
-Layer 20 — Image Pipeline
-Layer 19 — Analytics Engine
-Layer 18 — Monitoring
-Layer 17 — Security
-Layer 16 — Database Engineering
-Layer 15 — Async Runtime
-Layer 14 — Enterprise Integration / Control Plane
-Layer 13 — Persistence
-Layer 12 — AI Foundation / Model Router
-Layer 11 — Async Runtime
-Layer 10 — Monetization
-Layer 9  — Self-Learning
-Layer 8  — Analytics
-Layer 7  — Publishing
-Layer 6  — Quality & Safety
-Layer 5  — Image Intelligence
-Layer 4  — Content Writing
-Layer 3  — AI Intelligence
-Layer 2  — Research & Scraping
-Layer 1  — Core System
-```
+1. [CEO Agent Architecture](docs/architecture/UCOS_CEO_AGENT_ARCHITECTURE_V1.md) — SIA/CEO control plane, goal/task contracts, seven service domains, persistence, security and production gates.
+2. [Specialist Agents + System Guardian](docs/architecture/UCOS_SPECIALIST_AGENTS_AND_SYSTEM_GUARDIAN_V1.md) — the 29 logical roles, capability contracts, routing, continuous diagnostics and incident response.
+
+These are two views of the **same** architecture, not alternatives. No other top-level architecture is approved. The existing 23 UCOS layers remain logical implementation/capability boundaries; they are not 23 deployed services. Deployments stay inside these seven service domains:
+
+1. API Gateway / Control Plane
+2. Content Service
+3. User / Identity Service
+4. Analytics Service
+5. Monetization Service
+6. AI Worker Service (Celery or equivalent)
+7. Scheduler Service
+
+PostgreSQL is the canonical durable workflow ledger. Redis is not authoritative task truth. All tool/provider calls are scoped and policy-gated. Every production completion claim requires real evidence; mocks and architecture documents cannot certify runtime readiness.
+
+**Truth status:** this freeze defines the target and acceptance gates. It does not claim all components are deployed, connected or production-certified. Production status requires live evidence tied to the exact deployed commit.
 
 ## Account isolation
 
