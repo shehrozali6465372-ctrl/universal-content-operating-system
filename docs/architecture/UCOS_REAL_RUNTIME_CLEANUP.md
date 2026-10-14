@@ -50,7 +50,7 @@ Agent source ownership for AG18 (Publishing Planner and Scheduler) and AG27 (Run
 1. `MultiModelExecutor.execute()` no longer fabricates `Response from {model}` as model output. A real provider callback is required, and late responses are not marked successful after the overall deadline.
 2. `AIPipeline.execute()` no longer creates `executed_<task>` output when no executor is supplied. A populated pipeline fails closed without an executor.
 3. `PipelineWiring._run_step()` requires a dictionary result; `None` cannot silently become a successful step. Skips must be explicit.
-4. `LLMManager` treats either `APP_ENV=production|prod` or `UCOS_ENV=production|prod` as production. It checks the absence of a real generator before consulting cache, so cached development placeholder output cannot bypass the production check. Production pricing validation uses the same environment check.
+4. `LLMManager` refuses to generate without an injected real provider-backed generator in every environment. The guard runs before cache lookup, so a cached development placeholder cannot masquerade as execution. Production pricing validation treats either `APP_ENV=production|prod` or `UCOS_ENV=production|prod` as production.
 
 ## CI acceptance gates
 
