@@ -200,3 +200,32 @@ def test_account_learning_ignores_unobserved_outcomes(tmp_path, monkeypatch):
     summary = store.performance_summary("acct-1")
     assert summary["observations"] == 1
     assert summary["analytics_known"] == 1
+
+
+def test_pipeline_step_does_not_treat_none_as_success():
+    from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import (
+        ContentRequest,
+        ContentResponse,
+        PipelineWiring,
+    )
+
+    response = ContentResponse(ContentRequest("runtime contract"))
+    wiring = PipelineWiring()
+    result = wiring._run_step(response, "test-step", lambda: None)
+
+    assert result is False
+    assert response.steps[0].status == "error"
+    assert "must return dict" in response.steps[0].error
+
+
+def test_pipeline_step_accepts_explicit_skip_only():
+    from layers.layer14_enterprise_integration.modules.master_orchestrator.pipeline_wiring import (
+        ContentRequest,
+        ContentResponse,
+        PipelineWiring,
+    )
+
+    response = ContentResponse(ContentRequest("runtime contract"))
+    wiring = PipelineWiring()
+    assert wiring._run_step(response, "test-skip", lambda: {"skipped": True, "reason": "disabled"})
+    assert response.steps[0].status == "skipped"
