@@ -50,7 +50,12 @@ jobs:
           pip install --break-system-packages -r requirements.txt
 
       - name: Compile
-        run: python -m compileall -q layers tests tools main.py
+        run: python -m compileall -q layers agents tests tools main.py
+
+      - name: Agent 01 contract gates
+        env:
+          APP_ENV: test
+        run: python -m pytest tests/agents/test_agent_01_research_discovery.py tests/agents/test_account_data_store_neon.py -q --tb=short
 
       - name: Layer 1 gate
         env:
