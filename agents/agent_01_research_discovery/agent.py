@@ -36,7 +36,7 @@ _HISTORY_COVERAGE = (
 )
 
 
-class ResearchAgent:
+class ResearchDiscoveryAgent:
     """One explicit entry point for account-scoped research decisions.
 
     Args:
