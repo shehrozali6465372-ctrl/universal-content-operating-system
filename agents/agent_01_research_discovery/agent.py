@@ -206,7 +206,13 @@ self, filename: str) -> str | None:
             else:
                 from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
 
-                rows = AccountDataStore(registry=self._get_registry()).get(
+                store = AccountDataStore(registry=self._get_registry())
+                production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
+                if production:
+                    baseline = store.bootstrap_legacy_store(self.account_id, "content")
+                    if baseline.get("status") != "complete":
+                        return [], False, "history_baseline_not_verified"
+                rows = store.get(
                     self.account_id, "content", "collection:execution_history", default=[]
                 )
             if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
