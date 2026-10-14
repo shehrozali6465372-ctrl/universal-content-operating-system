@@ -31,6 +31,11 @@ A repository-wide import/ownership scan identified 17 additional files under `la
 
 The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
 
+### Monitoring package consolidation
+
+- Removed seven monitoring modules that had no production imports or Guardian-agent ownership: the in-memory dashboard duplicate, duplicate error tracker, unnormalized performance scorer, unconnected profiler/tracer, incomplete resource probe, and in-memory usage analytics.
+- Kept the canonical monitoring engine, system monitor, metrics engine, health monitor, alert manager, and their focused tests. This avoids treating isolated in-memory utilities as live system monitoring.
+
 ### Provider and multi-model execution hardening
 
 - Removed 22 unconnected provider helper modules that were only tested in isolation and not used by the real provider factory/adapters. The provider base, factory/registry, and real HTTP-backed OpenAI, Claude, Gemini, DeepSeek, Grok, Mistral, Cohere, Ollama, and OpenRouter adapters remain.
