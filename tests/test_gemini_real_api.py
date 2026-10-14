@@ -125,3 +125,9 @@ class TestFullPipeline:
         assert not kh.is_available
         result = self.gemini.generate("test")
         assert "provider" in result
+
+
+def test_gemini_default_uses_current_stable_flash_model():
+    provider = GeminiProvider()
+    assert provider.get_stats()["default_model"] == "gemini-3.8-flash"
+    assert "gemini-3.8-flash" in provider.list_models()
