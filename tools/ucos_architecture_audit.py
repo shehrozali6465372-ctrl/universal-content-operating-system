@@ -259,11 +259,24 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     manifest_path = root / "agents" / "manifest.json"
     agents: list[dict[str, Any]] = []
     manifest_sources: list[tuple[str, str]] = []
+    shared_component_specs: list[dict[str, Any]] = []
     manifest_error = None
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             specs = manifest.get("agents", [])
+            shared_specs = manifest.get("shared_components", [])
+            for shared in shared_specs if isinstance(shared_specs, list) else []:
+                if not isinstance(shared, dict):
+                    continue
+                shared_id = str(shared.get("id", "")).strip()
+                shared_name = str(shared.get("name", "")).strip()
+                shared_sources = [str(s) for s in shared.get("sources", []) if isinstance(s, str)]
+                if not shared_id or not shared_sources:
+                    continue
+                shared_component_specs.append({"id": shared_id, "name": shared_name, "sources": shared_sources})
+                for source_ref in shared_sources:
+                    manifest_sources.append(("SHARED", source_ref))
             seen: set[str] = set()
             for spec in specs if isinstance(specs, list) else []:
                 if not isinstance(spec, dict):
@@ -295,6 +308,8 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
                 "entrypoints_missing": [
                     a["id"] for a in agents if a["entrypoint"] and not a["entrypoint_exists"]
                 ],
+                "shared_component_count": len(shared_component_specs),
+                "shared_component_ids": [component["id"] for component in shared_component_specs],
             }
         except (OSError, json.JSONDecodeError) as exc:
             manifest_error = f"{type(exc).__name__}: {exc}"
@@ -394,7 +409,11 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             continue
         owners = has_manifest_owner(path)
         test_importers = sorted(importers.get(path, set()) - production_importers.get(path, set()))
-        if test_importers:
+        if "SHARED" in owners:
+            candidate_class = "shared_infrastructure"
+        elif owners and test_importers:
+            candidate_class = "manifest_owned_tested_source"
+        elif test_importers:
             candidate_class = "tests_only_references"
         elif owners:
             candidate_class = "planned_agent_source"
