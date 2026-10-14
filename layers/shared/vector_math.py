@@ -14,3 +14,10 @@ def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
     if norm_a <= 0.0 or norm_b <= 0.0:
         return 0.0
     return dot / (norm_a * norm_b)
+
+
+def dot_product(a: Sequence[float], b: Sequence[float]) -> float:
+    """Return the dot product, or 0.0 for incompatible vector dimensions."""
+    if len(a) != len(b):
+        return 0.0
+    return sum(x * y for x, y in zip(a, b))
