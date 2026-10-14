@@ -50,7 +50,7 @@ jobs:
           pip install --break-system-packages -r requirements.txt
 
       - name: Compile
-        run: python -m compileall -q layers agents tests tools main.py
+        run: python -m compileall -q layers agents tests tools scripts main.py
 
       - name: Agent 01 contract gates
         env:
