@@ -396,6 +396,8 @@ class TestScoringManager:
         m1 = ScoringManager(storage_path=str(path))
         m1.score_topic("Test", "ai", {"trend": 7.0})
         assert path.exists()
+        m2 = ScoringManager(storage_path=str(path))
+        assert m2._history
 
     def test_no_storage(self):
         m = ScoringManager()
