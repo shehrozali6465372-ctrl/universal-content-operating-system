@@ -5758,12 +5758,22 @@ class TestAIPipeline:
         pipe = p.create("test", ["step1", "step2"])
         assert len(pipe.tasks) == 2
 
-    def test_execute(self):
+    def test_execute_fails_closed_without_executor(self):
         p = AIPipeline()
         pipe = p.create("test", ["step1", "step2"])
         result = p.execute(pipe.pipeline_id)
+        assert result["pipeline"]["status"] == "failed"
+        assert len(result["results"]) == 2
+        assert all(item["status"] == "failed" for item in result["results"])
+        assert all("refusing synthetic task output" in item["error"] for item in result["results"])
+
+    def test_execute_with_real_executor(self):
+        p = AIPipeline()
+        pipe = p.create("test", ["step1", "step2"])
+        result = p.execute(pipe.pipeline_id, lambda task: {"executed": task.name})
         assert result["pipeline"]["status"] == "completed"
         assert len(result["results"]) == 2
+        assert all(item["status"] == "completed" for item in result["results"])
 
     def test_execute_fail(self):
         p = AIPipeline()
