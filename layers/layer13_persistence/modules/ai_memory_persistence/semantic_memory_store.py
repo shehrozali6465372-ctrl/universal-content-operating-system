@@ -18,12 +18,6 @@ class SemanticMemoryStore(BaseMemoryStore):
         self._store[key] = entry
         return entry
 
-    def retrieve(self, key: str) -> Optional[MemoryEntry]:
-        entry = self._store.get(key)
-        if entry:
-            entry.access_count += 1
-        return entry
-
     def store_with_embedding(self, key: str, value: Any, embedding: List[float],
                               metadata: Dict[str, Any] = None) -> MemoryEntry:
         entry = self.store(key, value, metadata)
