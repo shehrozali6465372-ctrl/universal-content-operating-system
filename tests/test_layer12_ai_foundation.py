@@ -1,6 +1,8 @@
 """Tests for Layer 12 — Enterprise AI Foundation."""
 from __future__ import annotations
 
+import time
+
 import pytest
 
 # ─── Module 1: Universal LLM Manager ────────────────────────────────
@@ -2123,11 +2125,11 @@ class TestMultiModelStrategy:
 # ─── Executor ────────────────────────────────────────────────────────
 
 class TestMultiModelExecutor:
-    def test_execute(self):
+    def test_execute_requires_real_provider_callback(self):
         e = MultiModelExecutor()
-        results = e.execute("test", ["gpt-4o", "claude"])
-        assert len(results) == 2
-        assert e.execution_count == 1
+        with pytest.raises(ValueError, match="real provider callback"):
+            e.execute("test", ["gpt-4o", "claude"])
+        assert e.execution_count == 0
 
     def test_execute_with_callback(self):
         def fake(prompt, model):
@@ -2147,11 +2149,16 @@ class TestMultiModelExecutor:
         results = e.execute("test", ["gpt-4o"], call_fn=flaky)
         assert results[0].is_success
 
-    def test_timeout(self):
+    def test_timeout_does_not_return_late_provider_result_as_success(self):
+        def slow_provider(prompt, model):
+            time.sleep(0.01)
+            return ModelResponse(model=model, provider="test", content="late result", confidence=0.9)
+
         e = MultiModelExecutor(max_retries=0, timeout=0.001)
-        results = e.execute("test", ["gpt-4o"])
-        # May or may not timeout depending on speed, just check it returns
+        results = e.execute("test", ["gpt-4o"], call_fn=slow_provider)
         assert len(results) == 1
+        assert results[0].provider == "timeout"
+        assert not results[0].is_success
 
 
 # ─── Scheduler ───────────────────────────────────────────────────────
