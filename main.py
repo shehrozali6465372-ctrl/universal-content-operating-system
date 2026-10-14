@@ -81,8 +81,19 @@ def stats() -> Dict[str, Any]:
     return {"version": VERSION, "layers": len(LAYER_MAP), "database": db}
 
 def subsystem_status(name: str) -> Dict[str, Any]:
-    return {"subsystem": name, "status": "available", "verified": False,
-            "note": "Module availability only; external services/credentials are not claimed."}
+    """Report an unverified subsystem without implying that it is operational."""
+    normalized = name.strip().lower()
+    if not normalized:
+        raise ValueError("subsystem name must not be empty")
+    return {
+        "subsystem": normalized,
+        "status": "unverified",
+        "verified": False,
+        "note": (
+            "No live health probe is wired for this subsystem; availability, "
+            "credentials, and connectivity have not been verified."
+        ),
+    }
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
