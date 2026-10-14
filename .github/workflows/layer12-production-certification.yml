@@ -7,6 +7,7 @@ on:
       - "layers/layer12_ai_foundation/**"
       - "tests/test_layer12_ai_foundation.py"
       - "tests/test_layer12_production_contracts.py"
+      - "tests/test_gemini_real_api.py"
       - ".github/workflows/layer12-production-certification.yml"
       - "requirements.txt"
   pull_request:
@@ -56,6 +57,9 @@ jobs:
 
       - name: Layer 12 unit suite
         run: python -m pytest tests/test_layer12_ai_foundation.py -q --tb=short
+
+      - name: Gemini provider adapter regression
+        run: python -m pytest tests/test_gemini_real_api.py -q --tb=short
 
       - name: Layer 12 production-source lint
         run: |
