@@ -31,6 +31,14 @@ A repository-wide import/ownership scan identified 17 additional files under `la
 
 The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
 
+### Additional LLM and image-provider cleanup
+
+- Removed unreferenced LLM utility modules whose implementations only recorded in-memory lists, pretended a model was loaded, or duplicated the canonical model-router/response-selector behavior. Provider adapters, the canonical model router/key manager, LLM manager, and multi-model execution components remain.
+- Removed unreferenced Layer 12 exception-only files and a stale supported-model constants file after the dependency audit found no production callers, tests, or manifest ownership.
+- Removed the development-only synthetic response path from `LLMManager.generate()`. Every environment now requires an injected generator backed by a real provider; the guard runs before cache lookup. A regression test covers the development case.
+- Moved `MockImageProvider` to `tests_helpers/mock_image_provider.py`; production image-provider interfaces and real OpenRouter/Puter/Gemini adapters remain. Tests now import the mock from the test-only package.
+- Changed CLI subsystem status reporting so an unprobed subsystem is reported as `unverified`, not `available`. Added tests for the truthful status and empty-name validation.
+
 ## Runtime code intentionally retained
 
 The following execution paths remain in the repository:
