@@ -136,7 +136,10 @@ def run_import(
 
     try:
         from layers.layer07_publishing.modules.account_control.account_registry import AccountRegistry
-        from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
+        from layers.layer07_publishing.modules.account_control.account_data_store import (
+            AccountDataStore,
+            is_verified_history_baseline,
+        )
         from layers.layer17_security.modules.credential_resolver.credential_resolver import AccountCredentialResolver
 
         registry = AccountRegistry()
@@ -227,7 +230,7 @@ def run_import(
             confirmed=True,
         )
         saved_marker = store.history_baseline(account_id, "content")
-        if not isinstance(saved_marker, Mapping) or saved_marker.get("status") != "complete":
+        if not is_verified_history_baseline(saved_marker):
             raise PinterestHistoryImportError("history_baseline_readback_failed")
 
         return {
