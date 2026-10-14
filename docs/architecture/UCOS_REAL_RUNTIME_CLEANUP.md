@@ -31,6 +31,12 @@ A repository-wide import/ownership scan identified 17 additional files under `la
 
 The platform plugin manager's `MockPublisher` was referenced only by two test files and returned fabricated publication IDs, success states, and analytics. It was moved to `tests_helpers/mock_publisher.py`, both test imports were updated, and the production-package copy was removed. The real platform adapters and publishing gateway were not changed.
 
+### Persistence and vector-search deduplication
+
+- Moved the identical access-counting `retrieve()` implementation into `BaseMemoryStore`; 12 specialized stores now inherit one tested contract instead of maintaining duplicate methods.
+- Consolidated cosine similarity into `layers/shared/vector_math.py` and reused it from semantic memory, hybrid search, similarity search, and vector indexing.
+- Replaced `VectorIndex.rebuild()`'s unconditional success with a real validation/rebuild operation: inconsistent dimensions and non-finite values return failure; consistent vectors rebuild the flat index snapshot and refresh the dimension metadata.
+
 ### Monitoring package consolidation
 
 - Removed seven monitoring modules that had no production imports or Guardian-agent ownership: the in-memory dashboard duplicate, duplicate error tracker, unnormalized performance scorer, unconnected profiler/tracer, incomplete resource probe, and in-memory usage analytics.
