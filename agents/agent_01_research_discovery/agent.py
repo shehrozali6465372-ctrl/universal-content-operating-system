@@ -1,14 +1,18 @@
 """UCOS Agent 01: Research Discovery.
 
-This worker composes existing research components during the staged layer-to-agent migration. It does not publish content and
-never treats missing account history or missing evidence as a successful check.
+Owns one bounded responsibility: discover candidate topics, collect attributable
+web evidence, check the target account's known publication history, and store a
+research evidence pack for the next worker. Fact verification, scoring, writing,
+and publishing belong to separate agents and are not performed here.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 import re
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -17,61 +21,47 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from layers.layer02_research.modules.fact_verification.verification_manager import VerificationManager
-from layers.layer02_research.modules.knowledge_collector.knowledge_collector_manager import KnowledgeCollectorManager
-from layers.layer02_research.modules.research_memory.research_memory_manager import ResearchMemoryManager
-from layers.layer02_research.modules.research_planner.planner_manager import PlannerManager
-from layers.layer02_research.modules.topic_intelligence.topic_intel_manager import TopicIntelManager
-from layers.layer02_research.modules.topic_scoring.scoring_manager import ScoringManager
-from layers.layer02_research.modules.trend_discovery.trend_manager import TrendManager
-
 
 MAX_CANDIDATES = 20
 MAX_EVIDENCE_PER_CANDIDATE = 10
-MAX_CLAIMS_PER_CANDIDATE = 25
 MIN_INDEPENDENT_SOURCES = 2
-MIN_VERIFICATION_CONFIDENCE = 0.70
 _HISTORY_COVERAGE = (
-    "UCOS-managed account execution history only; posts made outside UCOS must be synced separately."
+    "UCOS-managed account history only; posts outside UCOS are included only after a verified import."
 )
 
 
 class ResearchDiscoveryAgent:
-    """One explicit entry point for account-scoped research decisions.
+    """Agent 01: gather research inputs and enforce account-local duplicate holds.
+
+    The worker has no imports from legacy Layer 02 research modules. Its only
+    built-in network source is the optional Tavily adapter; identity and durable
+    account state use UCOS's shared account-registry/data-store boundary.
 
     Args:
-        account_id: Required registered UCOS account. Every history read and
-            agent-owned state directory is scoped to this account.
+        account_id: Required registered, enabled UCOS account.
         account_resolver: Optional callable(account_id) -> account-like object.
-            The default resolves the account through UCOS AccountRegistry.
-        history_reader: Optional callable(account_id) -> list[dict]. The default
-            reads the account's own content.execution_history collection.
-        candidate_provider: Optional callable(account_id, niche, limit) -> candidates.
-            Without it, candidates come only from this account's stored topics
-            and configured TrendManager sources.
-        evidence_provider: Optional callable(topic, niche, limit) -> evidence records.
-            It must return source-backed evidence; the agent never fabricates sources.
-        result_writer: Optional callable(report). The default appends the report
-            to the account-local memory store.
-        storage_root: Optional durable root for Layer 02 manager state. Account IDs
-            are hashed before becoming directory names. If omitted, the registered
-            account workspace is used when the default AccountRegistry is active.
-        trend_sources: Optional mapping of source name to real fetch callback.
-        components: Optional dependency overrides for tests/application wiring.
-            Keys: trend_manager, topic_manager, knowledge_manager, verifier,
-            memory_manager, scoring_manager, planner_manager.
+        history_reader: Optional callable(account_id) -> list[dict], for isolated
+            tests or an explicitly wired history repository.
+        candidate_provider: Optional callable(account_id, niche, limit) -> sequence
+            of candidate mappings. Defaults to Tavily when TAVILY_API_KEY is set.
+        evidence_provider: Optional callable(topic, niche, limit) -> source records.
+            Defaults to Tavily when TAVILY_API_KEY is set.
+        result_writer: Optional durable report writer. Candidate evidence still
+            requires account_store or the local development state directory.
+        account_store: Optional account-scoped persistence facade override.
+        storage_root: Development/test state root only; forbidden in production.
 
-    Candidate records accept: topic/name/title, optional evidence list, optional
-    claims list, optional scores mapping, and optional draft_text. Each evidence
-    record needs a source and content/text/snippet. URLs are retained only when
-    they are valid HTTP(S) URLs.
+    Candidate records accept topic/name/title, optional evidence records, optional
+    draft_text, optional claims for the next agent, and optional source_relevance_score.
+    Evidence records require a source label, content/snippet, and a valid HTTP(S) URL.
 
-    A READY_FOR_WRITING_REVIEW result is a hand-off to the next UCOS stage, not
-    permission to publish. The publication pipeline retains its own gates.
+    READY_FOR_VERIFICATION means the topic/evidence pack may be handed to Agent 06.
+    It is neither a factual-verification result nor publish authorization.
     """
 
-    name = "research_agent"
-    version = "1.0.0"
+    name = "research_discovery"
+    agent_id = "AG01"
+    version = "1.1.0"
 
     def __init__(
         self,
@@ -82,10 +72,8 @@ class ResearchDiscoveryAgent:
         candidate_provider: Callable[[str, str, int], Sequence[Any]] | None = None,
         evidence_provider: Callable[[str, str, int], Sequence[Mapping[str, Any]]] | None = None,
         result_writer: Callable[[dict[str, Any]], Any] | None = None,
-        storage_root: str | os.PathLike[str] | None = None,
-        trend_sources: Mapping[str, Callable[..., Any]] | None = None,
-        components: Mapping[str, Any] | None = None,
         account_store: Any | None = None,
+        storage_root: str | os.PathLike[str] | None = None,
     ) -> None:
         self.account_id = str(account_id or "").strip()
         if not self.account_id:
@@ -98,23 +86,15 @@ class ResearchDiscoveryAgent:
         self._evidence_provider = evidence_provider
         self._result_writer = result_writer
         self._account_store_override = account_store
-        self._components_override = dict(components or {})
-        self._tavily_source = None
-        configured_trend_sources = dict(trend_sources or {})
-        if trend_sources is None and candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
+        self._source = None
+
+        if self._candidate_provider is None and os.environ.get("TAVILY_API_KEY", "").strip():
             from agents.agent_01_research_discovery.tavily_source import TavilyResearchSource
 
-            self._tavily_source = TavilyResearchSource.from_env()
-            configured_trend_sources["tavily"] = self._tavily_source.fetch_trends
+            self._source = TavilyResearchSource.from_env()
+            self._candidate_provider = self._source.discover_candidates
             if self._evidence_provider is None:
-                self._evidence_provider = self._tavily_source.fetch_evidence
-        self._source_status: dict[str, Any] = {
-            "status": "configured" if candidate_provider is not None or configured_trend_sources else "unconfigured",
-            "candidate_provider_configured": candidate_provider is not None,
-            "trend_sources_configured": bool(configured_trend_sources),
-            "trend_sources": sorted(str(name) for name in configured_trend_sources.keys()),
-            "tavily_configured_from_environment": self._tavily_source is not None,
-        }
+                self._evidence_provider = self._source.fetch_evidence
 
         account = self._resolve_account()
         if not bool(self._field(account, "enabled", True)):
@@ -132,36 +112,25 @@ class ResearchDiscoveryAgent:
         if self._storage_dir is not None:
             self._storage_dir.mkdir(parents=True, exist_ok=True)
 
-        override = self._components_override
-        self.trend_manager = override.get("trend_manager") or TrendManager(
-            self._path("trends.json")
-        )
-        self.topic_manager = override.get("topic_manager") or TopicIntelManager(
-            self._path("topics.json")
-        )
-        self.knowledge_manager = override.get("knowledge_manager") or KnowledgeCollectorManager(
-            self._path("knowledge.json")
-        )
-        self.verifier = override.get("verifier") or VerificationManager(
-            self._path("verification.json")
-        )
-        self.memory_manager = override.get("memory_manager") or ResearchMemoryManager(
-            self._path("research-memory.json")
-        )
-        self.scoring_manager = override.get("scoring_manager") or ScoringManager(
-            self._path("topic-scores.json")
-        )
-        self.planner_manager = override.get("planner_manager") or PlannerManager()
-
-        for source_name, fetch_fn in configured_trend_sources.items():
-            if callable(fetch_fn):
-                self.trend_manager.register_source(str(source_name), fetch_fn=fetch_fn)
+        self._source_status: dict[str, Any] = {
+            "status": "configured" if self._candidate_provider is not None else "unconfigured",
+            "provider": "tavily" if self._source is not None else (
+                "injected" if self._candidate_provider is not None else None
+            ),
+            "candidate_provider_configured": self._candidate_provider is not None,
+            "evidence_provider_configured": self._evidence_provider is not None,
+            "tavily_configured_from_environment": self._source is not None,
+        }
 
     @staticmethod
     def _field(obj: Any, name: str, default: Any = None) -> Any:
         if isinstance(obj, Mapping):
             return obj.get(name, default)
         return getattr(obj, name, default)
+
+    @staticmethod
+    def _is_production() -> bool:
+        return os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
 
     def _get_registry(self) -> Any:
         if self._registry is None:
@@ -171,27 +140,19 @@ class ResearchDiscoveryAgent:
         return self._registry
 
     def _resolve_account(self) -> Any:
-        if self._account_resolver is not None:
-            account = self._account_resolver(self.account_id)
-        else:
-            account = self._get_registry().get(self.account_id)
+        account = (
+            self._account_resolver(self.account_id)
+            if self._account_resolver is not None
+            else self._get_registry().get(self.account_id)
+        )
         if account is None:
             raise LookupError("unknown account_id")
         return account
 
-    def _account_data_store(self) -> Any:
-        """Return the one account-scoped persistence facade used by this worker."""
-        if self._account_store_override is not None:
-            return self._account_store_override
-        from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
-        return AccountDataStore(registry=self._get_registry())
-
     def _resolve_storage_dir(
         self, storage_root: str | os.PathLike[str] | None
     ) -> Path | None:
-        """Use local state only outside production; production state belongs in Neon."""
-        production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
-        if production:
+        if self._is_production():
             if storage_root is not None:
                 raise ValueError("storage_root is disabled in production; use L13 PostgreSQL/Neon")
             return None
@@ -203,127 +164,12 @@ class ResearchDiscoveryAgent:
             return self._get_registry().workspace_path(self.account_id) / "research_agent"
         return None
 
-    def _path(self, filename: str) -> str | None:
-        return str(self._storage_dir / filename) if self._storage_dir is not None else None
+    def _account_data_store(self) -> Any:
+        if self._account_store_override is not None:
+            return self._account_store_override
+        from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
 
-    def _has_durable_storage(self) -> bool:
-        """Fail closed unless a durable result store or explicit writer is available."""
-        if self._result_writer is not None or self._storage_dir is not None:
-            return True
-        production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
-        if not production:
-            return False
-        try:
-            self._account_data_store().get(
-                self.account_id, "memory", "research_agent_storage_probe", default=None
-            )
-            return True
-        except Exception:
-            return False
-
-    def _load_history(self) -> tuple[list[dict[str, Any]], bool, str | None]:
-        try:
-            if self._history_reader is not None:
-                rows = self._history_reader(self.account_id)
-            else:
-                store = self._account_data_store()
-                production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
-                if production:
-                    baseline = store.bootstrap_legacy_store(self.account_id, "content")
-                    if baseline.get("status") != "complete":
-                        return [], False, "history_baseline_not_verified"
-                rows = store.get(
-                    self.account_id, "content", "collection:execution_history", default=[]
-                )
-            if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
-                return [], False, "invalid_history_shape"
-            return [dict(row) for row in rows], True, None
-        except Exception:
-            # Do not expose database paths, SQL, or provider errors in the report.
-            return [], False, "history_reader_failed"
-
-    def _discover_candidates(self, limit: int) -> list[Any]:
-        if self._candidate_provider is not None:
-            self._source_status = {
-                "status": "configured",
-                "mode": "candidate_provider",
-                "candidate_provider_configured": True,
-                "trend_sources_configured": bool(self.trend_manager.list_sources()),
-            }
-            values = self._candidate_provider(self.account_id, self.niche, limit)
-            return list(values or [])[:limit]
-
-        found: list[Any] = []
-        try:
-            source_health = self.trend_manager.list_sources()
-            source_names = sorted(
-                str(item.get("name")) for item in source_health
-                if isinstance(item, Mapping) and item.get("name")
-            )
-            self._source_status = {
-                "status": "configured" if source_names else "unconfigured",
-                "mode": "trend_sources",
-                "candidate_provider_configured": False,
-                "trend_sources_configured": bool(source_names),
-                "trend_sources": source_names,
-            }
-            self.trend_manager.discover(category=self.niche)
-            refreshed_health = self.trend_manager.list_sources()
-            failed_sources = [
-                str(item.get("name"))
-                for item in refreshed_health
-                if isinstance(item, Mapping) and int(item.get("error_count") or 0) > 0
-            ]
-            if failed_sources and not any(
-                isinstance(item, Mapping) and int(item.get("fetch_count") or 0) > 0
-                for item in refreshed_health
-            ):
-                self._source_status = {
-                    **self._source_status,
-                    "status": "unavailable",
-                    "error_code": "trend_source_request_failed",
-                    "failed_sources": failed_sources,
-                }
-            for item in self.trend_manager.top_trends(category=self.niche, limit=limit):
-                row = dict(item)
-                row.setdefault("topic", row.get("keyword") or row.get("name") or row.get("title"))
-                found.append(row)
-        except Exception:
-            self._source_status = {
-                "status": "unavailable",
-                "mode": "trend_sources",
-                "candidate_provider_configured": False,
-                "trend_sources_configured": False,
-                "error_code": "trend_source_discovery_failed",
-            }
-
-        try:
-            stored_topics = self.topic_manager.get_top_topics(count=limit, niche=self.niche)
-            for item in stored_topics:
-                row = self._as_dict(item)
-                row.setdefault("topic", row.get("name") or row.get("title"))
-                found.append(row)
-            if found and self._source_status.get("status") == "unconfigured":
-                self._source_status = {
-                    **self._source_status,
-                    "status": "stored_topics_only",
-                    "note": "Candidates came from stored topic state, not a live research source.",
-                }
-        except Exception:
-            pass
-        return found[:limit]
-
-    @staticmethod
-    def _as_dict(value: Any) -> dict[str, Any]:
-        if isinstance(value, Mapping):
-            return dict(value)
-        method = getattr(value, "to_dict", None)
-        if callable(method):
-            result = method()
-            return dict(result) if isinstance(result, Mapping) else {}
-        if hasattr(value, "__dict__"):
-            return dict(vars(value))
-        return {}
+        return AccountDataStore(registry=self._get_registry())
 
     @staticmethod
     def _normalized(value: Any) -> str:
@@ -345,6 +191,16 @@ class ResearchDiscoveryAgent:
             pass
         return ""
 
+    @staticmethod
+    def _source_key(source: str, url: str) -> str:
+        if url:
+            host = (urlsplit(url).hostname or "").lower()
+            if host.startswith("www."):
+                host = host[4:]
+            if host:
+                return host
+        return re.sub(r"\s+", " ", source.casefold()).strip()
+
     def _normalize_evidence(self, values: Any) -> list[dict[str, str]]:
         if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
             return []
@@ -355,29 +211,69 @@ class ResearchDiscoveryAgent:
                 continue
             source = str(item.get("source") or item.get("source_name") or item.get("publisher") or "").strip()[:200]
             title = str(item.get("title") or item.get("name") or "").strip()[:300]
-            content = str(item.get("content") or item.get("text") or item.get("snippet") or "").strip()
-            content = content[:20000]
+            content = str(item.get("content") or item.get("text") or item.get("snippet") or "").strip()[:20000]
             url = self._safe_url(item.get("url") or item.get("source_url"))
-            # Production evidence needs a traceable HTTP(S) citation, not merely
-            # a source label supplied by an upstream caller.
-            if not source or not content or not url:
+            if not source or not title or not content or not url:
                 continue
             source_key = self._source_key(source, url)
             if source_key in seen:
                 continue
             seen.add(source_key)
-            normalized.append({"source": source, "title": title, "content": content, "url": url})
+            normalized.append({
+                "source": source,
+                "title": title,
+                "content": content,
+                "url": url,
+                "published_at": str(item.get("published_at") or item.get("published_date") or "")[:64],
+            })
         return normalized
 
-    @staticmethod
-    def _source_key(source: str, url: str) -> str:
-        if url:
-            host = (urlsplit(url).hostname or "").lower()
-            if host.startswith("www."):
-                host = host[4:]
-            if host:
-                return host
-        return re.sub(r"\s+", " ", source.casefold()).strip()
+    def _load_history(self) -> tuple[list[dict[str, Any]], bool, str | None]:
+        try:
+            if self._history_reader is not None:
+                rows = self._history_reader(self.account_id)
+            else:
+                store = self._account_data_store()
+                if self._is_production():
+                    if hasattr(store, "bootstrap_legacy_store"):
+                        baseline = store.bootstrap_legacy_store(self.account_id, "content")
+                    else:
+                        baseline = store.get(
+                            self.account_id, "memory", "history_baseline:content:v1", default=None
+                        )
+                    if not isinstance(baseline, Mapping) or baseline.get("status") != "complete":
+                        return [], False, "history_baseline_not_verified"
+                rows = store.get(
+                    self.account_id, "content", "collection:execution_history", default=[]
+                )
+            if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
+                return [], False, "invalid_history_shape"
+            return [dict(row) for row in rows], True, None
+        except Exception:
+            return [], False, "history_reader_failed"
+
+    def _discover_candidates(self, limit: int) -> list[Any]:
+        if self._candidate_provider is None:
+            self._source_status = {
+                **self._source_status,
+                "status": "unconfigured",
+                "error_code": "research_provider_not_configured",
+            }
+            return []
+        try:
+            candidates = self._candidate_provider(self.account_id, self.niche, limit)
+            self._source_status = {
+                **self._source_status,
+                "status": "configured",
+            }
+            return list(candidates or [])[:limit]
+        except Exception:
+            self._source_status = {
+                **self._source_status,
+                "status": "unavailable",
+                "error_code": "candidate_provider_failed",
+            }
+            return []
 
     def _match_history(
         self, topic: str, draft_text: str, history: list[dict[str, Any]]
@@ -419,219 +315,78 @@ class ResearchDiscoveryAgent:
                 }
         return None
 
-    def _collect_evidence(
-        self, topic: str, evidence: list[dict[str, str]], run_id: str, index: int
-    ) -> tuple[bool, list[str]]:
-        warnings: list[str] = []
-        production = os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}
-        durable_ok = True
-        for evidence_index, item in enumerate(evidence, 1):
-            try:
-                self.knowledge_manager.collect(
-                    title=item["title"] or topic[:300],
-                    content=item["content"],
-                    source=item["source"],
-                    source_url=item["url"],
-                    category=self.niche,
-                    keywords=[topic],
-                    tags=["research-agent", self.platform],
-                    clean=True,
-                    extract_metadata=True,
-                    dedup=True,
-                )
-            except Exception:
-                warnings.append("knowledge_manager_runtime_failed")
-                if not production:
-                    durable_ok = False
-            if production:
-                key_digest = hashlib.sha256(
-                    f"{self.account_id}|{topic}|{item['url']}".encode("utf-8")
-                ).hexdigest()[:24]
-                try:
-                    self._account_data_store().put(
-                        self.account_id,
-                        "memory",
-                        f"research_evidence:{key_digest}",
-                        {
-                            "topic": topic,
-                            "niche": self.niche,
-                            "source": item["source"],
-                            "title": item["title"],
-                            "url": item["url"],
-                            "content": item["content"],
-                            "run_id": run_id,
-                            "candidate_index": index,
-                            "evidence_index": evidence_index,
-                        },
-                    )
-                except Exception:
-                    durable_ok = False
-                    warnings.append("durable_evidence_store_failed")
-        return durable_ok, sorted(set(warnings))
-
-    def _verify_claims(
-        self, candidate: Mapping[str, Any], evidence: list[dict[str, str]]
-    ) -> list[dict[str, Any]]:
-        claims_raw = candidate.get("claims") or []
-        if isinstance(claims_raw, str):
-            claims_raw = [claims_raw]
-        if not isinstance(claims_raw, Sequence) or isinstance(claims_raw, (bytes, str)):
-            return []
-        evidence_texts = [
-            {"source": item["source"], "text": item["content"]}
-            for item in evidence
-        ]
-        results: list[dict[str, Any]] = []
-        for raw_claim in list(claims_raw)[:MAX_CLAIMS_PER_CANDIDATE]:
-            claim = str(raw_claim.get("claim") or raw_claim.get("text") or "") if isinstance(raw_claim, Mapping) else str(raw_claim or "")
-            claim = claim.strip()[:2000]
-            if not claim:
-                continue
-            try:
-                value = self.verifier.verify_claim(claim, evidence_texts)
-                status = str(getattr(value, "status", "") or self._as_dict(value).get("status") or "unknown").casefold()
-                confidence_result = getattr(value, "confidence_result", None)
-                confidence = getattr(confidence_result, "confidence", getattr(value, "confidence", 0.0))
-                try:
-                    confidence = float(confidence)
-                    if not math.isfinite(confidence):
-                        confidence = 0.0
-                    confidence = max(0.0, min(1.0, confidence))
-                except (TypeError, ValueError):
-                    confidence = 0.0
-                results.append({"claim": claim, "status": status, "confidence": round(confidence, 4)})
-            except Exception:
-                results.append({"claim": claim, "status": "verification_error", "confidence": 0.0})
-        return results
-
-    def _store_topic(self, topic: str, candidate: Mapping[str, Any], confidence: float) -> tuple[bool, str | None]:
-        scores = candidate.get("scores") if isinstance(candidate.get("scores"), Mapping) else {}
-        numeric = {}
-        for key, value in scores.items():
-            try:
-                number = float(value)
-                if math.isfinite(number):
-                    numeric[str(key)] = max(0.0, min(10.0, number))
-            except (TypeError, ValueError):
-                continue
-
-        topic_payload = {
-            "topic": topic,
-            "platform": self.platform,
-            "niche": self.niche,
-            "category": str(candidate.get("category") or self.niche),
-            "keywords": [str(k) for k in candidate.get("keywords", [])[:20]]
-                if isinstance(candidate.get("keywords", []), list) else [],
-            "supplied_scores": numeric,
-            "confidence_from_verified_claims": confidence,
-            "source_relevance_score": candidate.get("relevance_score"),
-            "status": "research_candidate",
-        }
+    def _has_durable_storage(self) -> bool:
+        if self._account_store_override is not None or self._storage_dir is not None:
+            return True
+        if not self._is_production():
+            return False
         try:
-            existing = self.topic_manager.get_topic_by_name(topic)
-            if existing is None:
-                self.topic_manager.add_topic(
-                    name=topic,
-                    niche=self.niche,
-                    category=topic_payload["category"],
-                    engagement_score=numeric.get("engagement_score", 0.0),
-                    audience_fit_score=numeric.get("audience_fit_score", 0.0),
-                    competition_score=numeric.get("competition_score", 0.0),
-                    keywords=topic_payload["keywords"],
-                    confidence=confidence,
-                    auto_categorize=True,
-                )
-            if os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}:
-                digest = hashlib.sha256(
-                    f"{self.niche.casefold()}|{self._normalized(topic)}".encode("utf-8")
-                ).hexdigest()[:32]
-                self._account_data_store().put(
-                    self.account_id, "memory", f"research_topic:{digest}", topic_payload
-                )
-            return True, None
+            self._account_data_store().get(
+                self.account_id, "memory", "research_agent_storage_probe", default=None
+            )
+            return True
         except Exception:
-            return False, "topic_store_failed"
+            return False
 
-    def _score_topic(self, topic: str, candidate: Mapping[str, Any], evidence: list[dict[str, str]]) -> dict[str, Any]:
-        scores = candidate.get("scores") if isinstance(candidate.get("scores"), Mapping) else {}
-        sanitized = {}
-        for key, value in scores.items():
-            try:
-                number = float(value)
-                if math.isfinite(number):
-                    sanitized[str(key)] = max(0.0, min(10.0, number))
-            except (TypeError, ValueError):
-                continue
+    def _write_state(self, key: str, payload: dict[str, Any]) -> None:
+        if self._account_store_override is not None or self._is_production():
+            self._account_data_store().put(self.account_id, "memory", key, payload)
+            return
+        if self._storage_dir is None:
+            raise RuntimeError("account-scoped local state is not configured")
+        safe_name = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        target = self._storage_dir / f"{safe_name}.json"
+        fd, temp_name = tempfile.mkstemp(prefix=f".{safe_name}.", suffix=".tmp", dir=str(self._storage_dir))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False, sort_keys=True, default=str)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, target)
+        finally:
+            if os.path.exists(temp_name):
+                os.unlink(temp_name)
 
-        references = [item["url"] or item["source"] for item in evidence]
-        required_dimensions = {
-            "trend", "audience", "competition", "knowledge",
-            "verification", "engagement", "freshness",
-        }
-        missing_dimensions = sorted(required_dimensions - set(sanitized))
-        if missing_dimensions:
-            # The existing scorer otherwise silently imputes 5/10 for missing
-            # dimensions. Agent 01 must not present these defaults as measured data.
-            source_relevance = candidate.get("relevance_score")
-            try:
-                source_relevance = float(source_relevance)
-                if not math.isfinite(source_relevance):
-                    source_relevance = None
-            except (TypeError, ValueError):
-                source_relevance = None
-            return {
-                "status": "not_scored_insufficient_signals",
-                "reason_code": "missing_required_scoring_dimensions",
-                "missing_dimensions": missing_dimensions,
-                "source_relevance_score": source_relevance,
-                "source_relevance_is_vendor_rank_only": source_relevance is not None,
-                "score_inputs_supplied": False,
-                "evidence_sources": len(references),
-            }
-
-        result = self.scoring_manager.score_topic(
-            topic, niche=self.niche, scores=sanitized, evidence=references
+    def _persist_candidate(
+        self, run_id: str, candidate_key: str, topic: str,
+        candidate: Mapping[str, Any], evidence: list[dict[str, str]],
+    ) -> None:
+        for index, item in enumerate(evidence, 1):
+            self._write_state(
+                f"research_evidence:{candidate_key}:{index}",
+                {
+                    "run_id": run_id,
+                    "topic": topic,
+                    "niche": self.niche,
+                    "platform": self.platform,
+                    **item,
+                },
+            )
+        self._write_state(
+            f"research_candidate:{candidate_key}",
+            {
+                "run_id": run_id,
+                "topic": topic,
+                "niche": self.niche,
+                "platform": self.platform,
+                "decision": "READY_FOR_VERIFICATION",
+                "source_relevance_score": candidate.get("source_relevance_score"),
+                "source_relevance_metric": "vendor_search_relevance_not_content_performance",
+                "evidence": [
+                    {"source": item["source"], "title": item["title"], "url": item["url"]}
+                    for item in evidence
+                ],
+                "claims_for_agent_06": candidate.get("claims") or [],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
-        data = self._as_dict(result)
-        if not data:
-            data = {
-                "topic": str(getattr(result, "topic", topic)),
-                "niche": str(getattr(result, "niche", self.niche)),
-                "overall_score": float(getattr(result, "overall_score", 0.0) or 0.0),
-                "recommendation": str(getattr(result, "recommendation", "unknown")),
-                "confidence": float(getattr(result, "confidence", 0.0) or 0.0),
-                "raw_scores": getattr(result, "raw_scores", {}),
-                "weighted_scores": getattr(result, "weighted_scores", {}),
-            }
-        data["status"] = "scored"
-        data["score_inputs_supplied"] = True
-        data["evidence_sources"] = len(references)
-        return data
-
-    def _plan_summary(self, topic: str) -> dict[str, Any] | None:
-        try:
-            plan = self.planner_manager.create_plan(topic=topic, niche=self.niche)
-            tasks = getattr(plan, "tasks", []) or []
-            return {
-                "plan_id": str(getattr(plan, "plan_id", "")),
-                "status": str(getattr(plan, "status", "ready")),
-                "task_count": len(tasks),
-                "execution_started": False,
-            }
-        except Exception:
-            return None
 
     def _persist_report(self, report: dict[str, Any]) -> None:
         payload = dict(report)
-        payload.pop("persistence", None)
         if self._result_writer is not None:
             self._result_writer(payload)
             return
-        from layers.layer07_publishing.modules.account_control.account_data_store import AccountDataStore
-
-        self._account_data_store().put(
-            self.account_id, "memory", f"research_agent_run:{payload['run_id']}", payload
-        )
+        self._write_state(f"research_agent_run:{payload['run_id']}", payload)
 
     def run(
         self,
@@ -639,19 +394,14 @@ class ResearchDiscoveryAgent:
         *,
         limit: int = 5,
     ) -> dict[str, Any]:
-        """Research candidates and return a conservative, JSON-serializable report.
-
-        No candidate is marked ready unless account history is readable, agent
-        state has an account-scoped durable path, at least two independent source
-        hosts/names support the topic, all supplied claims verify above threshold,
-        and required state/planning steps succeeded.
-        """
+        """Create a JSON evidence-pack report without verifying claims or publishing."""
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
-        limit = min(limit, MAX_CANDIDATES)
-        requested_limit = limit
-        if self._tavily_source is not None:
-            limit = min(limit, self._tavily_source.max_candidates_per_run)
+        requested_limit = min(limit, MAX_CANDIDATES)
+        limit = requested_limit
+        if self._source is not None:
+            limit = min(limit, self._source.max_candidates_per_run)
+
         run_id = str(uuid4())
         started = datetime.now(timezone.utc).isoformat()
         history, history_available, history_error = self._load_history()
@@ -661,34 +411,25 @@ class ResearchDiscoveryAgent:
             "coverage": _HISTORY_COVERAGE,
             "error_code": history_error,
         }
-
         warnings: list[str] = []
+
         if candidates is not None:
             self._source_status = {
+                **self._source_status,
                 "status": "caller_supplied",
                 "mode": "explicit_candidates",
-                "candidate_provider_configured": False,
-                "trend_sources_configured": False,
-                "evidence_must_still_be_verified": True,
             }
-        try:
-            candidate_values = list(candidates)[:limit] if candidates is not None else self._discover_candidates(limit)
-        except Exception:
-            candidate_values = []
-            warnings.append("candidate_provider_failed")
-            self._source_status = {
-                **self._source_status,
-                "status": "unavailable",
-                "error_code": "candidate_provider_failed",
-            }
-        if not candidate_values and candidates is None and self._source_status.get("status") == "unconfigured":
-            warnings.append("research_sources_unconfigured")
+            candidate_values = list(candidates)[:limit]
+        else:
+            candidate_values = self._discover_candidates(limit)
 
         results: list[dict[str, Any]] = []
         seen_in_batch: set[str] = set()
         for index, raw in enumerate(candidate_values, 1):
-            candidate = self._as_dict(raw) if not isinstance(raw, str) else {"topic": raw}
-            topic = str(candidate.get("topic") or candidate.get("name") or candidate.get("title") or candidate.get("keyword") or "").strip()[:500]
+            candidate = dict(raw) if isinstance(raw, Mapping) else (
+                {"topic": raw} if isinstance(raw, str) else {}
+            )
+            topic = str(candidate.get("topic") or candidate.get("name") or candidate.get("title") or "").strip()[:500]
             if not topic:
                 results.append({
                     "topic": "",
@@ -696,7 +437,6 @@ class ResearchDiscoveryAgent:
                     "reason_codes": ["topic_missing"],
                 })
                 continue
-
             normalized_topic = self._normalized(topic)
             if normalized_topic in seen_in_batch:
                 results.append({
@@ -708,16 +448,6 @@ class ResearchDiscoveryAgent:
                 continue
             seen_in_batch.add(normalized_topic)
 
-            evidence_raw = candidate.get("evidence") or []
-            evidence = self._normalize_evidence(evidence_raw)
-            if not evidence and self._evidence_provider is not None:
-                try:
-                    evidence = self._normalize_evidence(
-                        self._evidence_provider(topic, self.niche, MAX_EVIDENCE_PER_CANDIDATE)
-                    )
-                except Exception:
-                    warnings.append("evidence_provider_failed")
-
             if not history_available:
                 results.append({
                     "topic": topic,
@@ -727,121 +457,93 @@ class ResearchDiscoveryAgent:
                     "reason_codes": [history_error or "history_unknown"],
                     "duplicate": {"match_type": "unknown", "published": None},
                     "evidence_count": 0,
-                    "verification": {"status": "not_run", "claims_checked": 0, "results": []},
-                    "publishing": {"performed": False},
+                    "verification": {"status": "pending_agent_06", "claims_for_verification": 0},
+                    "persistence": {"candidate_state": "not_written", "evidence_state": "not_written"},
                 })
                 continue
 
             history_match = self._match_history(
                 topic, str(candidate.get("draft_text") or "")[:20000], history
             )
+            if history_match is not None:
+                if history_match["published"] is True:
+                    decision, reason = "BLOCK_DUPLICATE_PUBLISHED", history_match["match_type"]
+                elif history_match["published"] is False:
+                    decision, reason = "HOLD_PRIOR_GENERATION_REVIEW", "topic_or_content_seen_in_prior_ucos_run"
+                else:
+                    decision, reason = "HOLD_HISTORY_MATCH_STATUS_UNKNOWN", "matched_history_record_has_unknown_publish_status"
+                results.append({
+                    "topic": topic,
+                    "platform": self.platform,
+                    "niche": self.niche,
+                    "decision": decision,
+                    "reason_codes": [reason],
+                    "duplicate": history_match,
+                    "evidence_count": 0,
+                    "verification": {"status": "pending_agent_06", "claims_for_verification": 0},
+                    "persistence": {"candidate_state": "not_written", "evidence_state": "not_written"},
+                })
+                continue
 
-            claims = self._verify_claims(candidate, evidence)
-            valid_claims = len(claims)
-            contradicted = any(
-                item["status"] in {"contradicted", "contradiction", "false", "unsupported", "verification_error"}
-                for item in claims
-            )
-            all_verified = bool(claims) and all(
-                item["status"] == "verified" and item["confidence"] >= MIN_VERIFICATION_CONFIDENCE
-                for item in claims
-            )
-            verified_confidence = (
-                min((item["confidence"] for item in claims), default=0.0) if all_verified else 0.0
-            )
+            raw_evidence = candidate.get("evidence") or []
+            evidence = self._normalize_evidence(raw_evidence)
+            if len(evidence) < MIN_INDEPENDENT_SOURCES and self._evidence_provider is not None:
+                try:
+                    fetched = self._evidence_provider(topic, self.niche, MAX_EVIDENCE_PER_CANDIDATE)
+                    evidence = self._normalize_evidence(list(raw_evidence or []) + list(fetched or []))
+                except Exception:
+                    warnings.append("evidence_provider_failed")
 
-            score: dict[str, Any]
-            try:
-                score = self._score_topic(topic, candidate, evidence)
-            except Exception:
-                score = {"topic": topic, "score_inputs_supplied": False, "error_code": "scoring_failed"}
-                warnings.append("scoring_failed")
+            independent_count = len({self._source_key(item["source"], item["url"]) for item in evidence})
+            topic_digest = hashlib.sha256(
+                f"{self.account_id}|{self.niche.casefold()}|{normalized_topic}".encode("utf-8")
+            ).hexdigest()[:32]
+            persistence = {"candidate_state": "not_written", "evidence_state": "not_written"}
+            candidate_state_error = False
+            if independent_count >= MIN_INDEPENDENT_SOURCES and self._has_durable_storage():
+                try:
+                    self._persist_candidate(run_id, topic_digest, topic, candidate, evidence)
+                    persistence = {"candidate_state": "saved", "evidence_state": "saved"}
+                except Exception:
+                    candidate_state_error = True
+                    warnings.append("research_state_persistence_failed")
 
-            topic_stored, topic_error = self._store_topic(topic, candidate, verified_confidence)
-            if topic_error:
-                warnings.append(topic_error)
-
-            knowledge_stored, knowledge_warnings = self._collect_evidence(topic, evidence, run_id, index)
-            warnings.extend(knowledge_warnings)
-
-            memory_stored = True
-            try:
-                joined_evidence = "\n\n".join(
-                    f"Source: {item['source']}\nURL: {item['url']}\n{item['content']}"
-                    for item in evidence
-                )
-                digest = hashlib.sha256(f"{self.account_id}|{run_id}|{topic}".encode("utf-8")).hexdigest()[:24]
-                memory_content = joined_evidence or str(candidate.get("description") or "")
-                memory_summary = f"Research candidate for niche {self.niche}; decision pending."
-                memory_sources = "; ".join(item["source"] for item in evidence)
-                self.memory_manager.store_entry(
-                    entry_id=f"{run_id}-{digest}",
-                    title=topic,
-                    content=memory_content,
-                    summary=memory_summary,
-                    category=self.niche,
-                    tags=["research-agent", self.platform],
-                    source=memory_sources,
-                    keywords=[topic],
-                )
-                if os.environ.get("APP_ENV", "development").strip().lower() in {"production", "prod"}:
-                    self._account_data_store().put(
-                        self.account_id,
-                        "memory",
-                        f"research_memory:{run_id}:{digest}",
-                        {
-                            "entry_id": f"{run_id}-{digest}",
-                            "topic": topic,
-                            "niche": self.niche,
-                            "platform": self.platform,
-                            "title": topic,
-                            "content": memory_content[:60000],
-                            "summary": memory_summary,
-                            "source": memory_sources,
-                            "keywords": [topic],
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
-            except Exception:
-                memory_stored = False
-                warnings.append("research_memory_store_failed")
-
-            plan = self._plan_summary(topic)
-            duplicate = history_match
             reason_codes: list[str] = []
             if not self._has_durable_storage():
                 decision = "HOLD_RESEARCH_STORAGE_UNAVAILABLE"
                 reason_codes.append("account_scoped_storage_not_configured")
-            elif not history_available:
-                decision = "HOLD_HISTORY_UNAVAILABLE"
-                reason_codes.append(history_error or "history_unknown")
-            elif duplicate and duplicate["published"] is True:
-                decision = "BLOCK_DUPLICATE_PUBLISHED"
-                reason_codes.append(duplicate["match_type"])
-            elif duplicate and duplicate["published"] is False:
-                decision = "HOLD_PRIOR_GENERATION_REVIEW"
-                reason_codes.append("topic_or_content_seen_in_prior_ucos_run")
-            elif duplicate:
-                decision = "HOLD_HISTORY_MATCH_STATUS_UNKNOWN"
-                reason_codes.append("matched_history_record_has_unknown_publish_status")
-            elif not topic_stored or not knowledge_stored or not memory_stored:
-                decision = "HOLD_RESEARCH_STATE_PERSISTENCE_FAILED"
-                reason_codes.append("research_state_persistence_failed")
-            elif plan is None:
-                decision = "HOLD_RESEARCH_PLAN_FAILED"
-                reason_codes.append("research_plan_not_created")
-            elif len(evidence) < MIN_INDEPENDENT_SOURCES:
+            elif independent_count < MIN_INDEPENDENT_SOURCES:
                 decision = "NEEDS_MORE_EVIDENCE"
                 reason_codes.append("fewer_than_two_independent_sources")
-            elif contradicted:
-                decision = "BLOCK_CONTRADICTED_CLAIM"
-                reason_codes.append("one_or_more_claims_contradicted_or_verification_failed")
-            elif claims and not all_verified:
-                decision = "HUMAN_REVIEW_REQUIRED"
-                reason_codes.append("all_claims_not_verified_at_required_confidence")
+            elif candidate_state_error:
+                decision = "HOLD_RESEARCH_STATE_PERSISTENCE_FAILED"
+                reason_codes.append("research_evidence_pack_not_persisted")
             else:
-                decision = "READY_FOR_WRITING_REVIEW"
-                reason_codes.append("history_clear_evidence_and_claim_checks_passed")
+                decision = "READY_FOR_VERIFICATION"
+                reason_codes.append("history_clear_and_source_attributed_evidence_pack_ready_for_agent_06")
+
+            relevance = candidate.get("source_relevance_score")
+            try:
+                relevance = float(relevance)
+                if not math.isfinite(relevance):
+                    relevance = None
+                elif relevance < 0 or relevance > 1:
+                    # Tavily's relevance is in [0,1]; other providers can omit it.
+                    relevance = None
+            except (TypeError, ValueError):
+                relevance = None
+
+            claims = candidate.get("claims") or []
+            if isinstance(claims, str):
+                claims = [claims]
+            if not isinstance(claims, Sequence) or isinstance(claims, (str, bytes)):
+                claims = []
+            claims = [
+                str(item.get("claim") or item.get("text") or "").strip()[:2000]
+                if isinstance(item, Mapping) else str(item or "").strip()[:2000]
+                for item in list(claims)[:25]
+            ]
+            claims = [claim for claim in claims if claim]
 
             results.append({
                 "topic": topic,
@@ -849,39 +551,35 @@ class ResearchDiscoveryAgent:
                 "niche": self.niche,
                 "decision": decision,
                 "reason_codes": reason_codes,
-                "duplicate": duplicate or {"match_type": "no_match", "published": False},
+                "duplicate": {"match_type": "no_match", "published": False},
                 "evidence": [
                     {
                         "source": item["source"],
                         "title": item["title"],
                         "url": item["url"],
                         "excerpt": item["content"][:1600],
+                        "published_at": item["published_at"],
                     }
                     for item in evidence
                 ],
                 "evidence_count": len(evidence),
-                "independent_source_count": len({self._source_key(item["source"], item["url"]) for item in evidence}),
+                "independent_source_count": independent_count,
+                "source_relevance": {
+                    "value": relevance,
+                    "metric": "vendor_search_relevance_not_content_performance",
+                },
+                "claims_for_agent_06": claims,
                 "verification": {
-                    "status": (
-                        "verified" if all_verified else
-                        "contradicted_or_failed" if contradicted else
-                        "needs_review" if claims else "not_requested_topic_only"
-                    ),
-                    "claims_checked": valid_claims,
-                    "minimum_confidence": verified_confidence,
-                    "results": claims,
+                    "status": "pending_agent_06",
+                    "claims_for_verification": len(claims),
                 },
-                "score": score,
-                "research_plan": plan,
-                "persistence": {
-                    "topic_state": "saved" if topic_stored else "failed",
-                    "knowledge_state": "saved" if knowledge_stored else "failed",
-                    "research_memory": "saved" if memory_stored else "failed",
-                },
+                "next_agent": "AG06",
+                "persistence": persistence,
             })
 
         report: dict[str, Any] = {
             "agent": self.name,
+            "agent_id": self.agent_id,
             "agent_version": self.version,
             "run_id": run_id,
             "account_id": self.account_id,
@@ -905,11 +603,11 @@ class ResearchDiscoveryAgent:
             "effective_candidate_limit": limit,
             "candidate_limit_note": (
                 "Tavily runs are capped at five candidate topics to bound external API use."
-                if self._tavily_source is not None and requested_limit != limit else None
+                if self._source is not None and requested_limit != limit else None
             ),
             "candidates": results,
             "recommended_topic": next(
-                (item["topic"] for item in results if item.get("decision") == "READY_FOR_WRITING_REVIEW"),
+                (item["topic"] for item in results if item.get("decision") == "READY_FOR_VERIFICATION"),
                 None,
             ),
             "publishing": {"performed": False, "status": "not_requested"},
@@ -923,7 +621,7 @@ class ResearchDiscoveryAgent:
             report["persistence"] = {"status": "failed", "error_code": "result_writer_failed"}
             report["warnings"] = sorted(set(report["warnings"] + ["result_writer_failed"]))
             for item in report["candidates"]:
-                if item.get("decision") == "READY_FOR_WRITING_REVIEW":
+                if item.get("decision") == "READY_FOR_VERIFICATION":
                     item["decision"] = "HOLD_PERSISTENCE_UNAVAILABLE"
                     item["reason_codes"] = list(item["reason_codes"]) + ["research_report_not_persisted"]
             report["recommended_topic"] = None
