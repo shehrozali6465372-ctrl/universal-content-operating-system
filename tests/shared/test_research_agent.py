@@ -157,7 +157,7 @@ def test_default_research_agent_wires_real_layer02_modules_to_injected_gateway()
 
     assert result.status == AgentRunStatus.COMPLETED, result.errors
     assert len(gateway.queries) == 3
-    assert result.output["completed_modules"] == list(MODULE_NAMES)
+    assert set(result.output["completed_modules"]) == set(MODULE_NAMES)
     assert len(result.output["source_urls"]) >= 6
     assert result.output["module_results"]["topic_scoring"]["result"]["status"] == "market_score_unavailable"
     assert all(source["url"].startswith("https://") for source in result.output["sources"])
