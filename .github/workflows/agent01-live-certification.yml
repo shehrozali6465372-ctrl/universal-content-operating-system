@@ -44,6 +44,13 @@ jobs:
           echo "REAL_DATABASE_AND_ENCRYPTION_CONFIGURATION=CONFIGURED"
           echo "TAVILY is checked after authenticated history import; missing Tavily will block research without undoing history coverage."
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
       - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
