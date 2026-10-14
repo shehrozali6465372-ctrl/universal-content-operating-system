@@ -35,7 +35,7 @@ class TestFullPipeline:
 
     def test_ai_brain_to_gemini_flow(self):
         response = self.router.generate_text("What is artificial intelligence?")
-        assert response.provider in ("gemini", "gemini_simulated", "")
+        assert response.provider in ("gemini", "")
         assert response.content or response.metadata.get("error")
 
     def test_key_rotation_under_load(self):
@@ -55,10 +55,12 @@ class TestFullPipeline:
         response = self.router.generate_text(user_msg)
         assert response.content or response.metadata.get("error")
 
-    def test_simulated_when_no_network(self):
+    def test_synthetic_credentials_fail_closed_without_fabricated_output(self):
         result = self.gemini.generate("Hello")
-        assert "provider" in result
-        assert result.get("error") is not None or result.get("text") != ""
+        assert result["provider"] == "gemini"
+        assert result["error"]
+        assert result["text"] == ""
+        assert result["simulated"] is False
 
     def test_stats_comprehensive(self):
         self.gemini.generate("test1")
@@ -71,7 +73,8 @@ class TestFullPipeline:
         for _ in range(5):
             result = self.gemini.generate("test")
             response_str = str(result)
-            assert "FAKE_1111" not in response_str or "SIMULATED" in response_str
+            assert "FAKE_1111" not in response_str
+            assert result["simulated"] is False
 
     def test_multiple_providers_routing(self):
         def mock_gemini(request):
