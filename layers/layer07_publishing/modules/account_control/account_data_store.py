@@ -260,7 +260,7 @@ class AccountDataStore:
                 history_value = None
                 if history_row:
                     history_value = history_row[0] if not isinstance(history_row, dict) else history_row.get("value")
-                history_events = _decode(history_value, []) if history_value is not None else []
+                history_events = _decode(history_value, None) if history_value is not None else []
                 if not isinstance(history_events, list):
                     raise TypeError("account execution history is not a list")
 
