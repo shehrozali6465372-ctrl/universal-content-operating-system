@@ -40,14 +40,16 @@
     {
       "id": "AG02",
       "name": "Trend Scout Agent",
-      "status": "planned",
-      "owns": "Gather current trends from configured, attributable sources.",
+      "status": "implementation_in_progress",
+      "owns": "Rank recent trend signals from AG01's attributable evidence pack using publication recency and independent publisher-host diversity. Do not invent search-volume claims, verify facts, write content, or publish.",
       "sources": [
-        "layers/layer02_research/modules/trend_discovery"
+        "agents/agent_02_trend_scout/agent.py"
       ],
       "dependencies": [
         "AG01"
-      ]
+      ],
+      "output": "Evidence-backed ranked trend report with READY_FOR_SCORING handoff to AG08 only when each candidate has at least two independent publisher hosts with timezone-aware publication timestamps inside the configured window.",
+      "gate": "unit contracts, live AG01 evidence-pack compatibility, account isolation, CI, and live production smoke"
     },
     {
       "id": "AG03",
