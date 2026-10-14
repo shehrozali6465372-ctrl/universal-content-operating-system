@@ -33,6 +33,7 @@ class APIGateway:
     def __init__(self,host:str="127.0.0.1",port:int=8000):
         self._host=host; self._port=port; self._server=None; self._thread=None; self._running=False; self._request_count=0
         self._aios_nonces={}; self._aios_nonce_lock=threading.Lock()
+        self._agent01_active_accounts={}; self._agent01_active_lock=threading.Lock()
         self._register_routes()
     def _register_routes(self):
         self._routes={"GET /status":self._handle_status,"GET /heartbeat":self._handle_heartbeat,"GET /health":self._handle_health,"GET /healthz":self._handle_healthz,"GET /analytics":self._handle_analytics,"GET /history":self._handle_history,"GET /stats":self._handle_stats,"GET /accounts":self._handle_accounts,"POST /credentials/pinterest":self._handle_pinterest_credential_store,"POST /credentials/pinterest/revoke":self._handle_pinterest_credential_revoke,"POST /pinterest/operations":self._handle_pinterest_operation,"GET /credentials/pinterest":self._handle_pinterest_credentials,"POST /accounts":self._handle_account_create,"POST /generate":self._handle_generate,"POST /agents/AG01/research":self._handle_agent01_research,"POST /v1/jobs":self._handle_aios_job,"GET /templates":self._handle_templates,"GET /platforms":self._handle_platforms,"POST /tiktok/reconcile":self._handle_tiktok_reconcile,"POST /meta/discover":self._handle_meta_discover,"GET /meta/health":self._handle_meta_health,"POST /integrations/atoz/jobs":self._handle_atoz_job,"POST /affiliate/amazon/intake":self._handle_amazon_intake,"GET /affiliate/amazon/status":self._handle_amazon_browser_status,"POST /affiliate/amazon/search":self._handle_amazon_browser_search,"GET /browser/health":self._handle_browser_health,"POST /browser/tasks":self._handle_browser_task}
@@ -85,7 +86,8 @@ class APIGateway:
                 return False
             if str(payload.get("mode") or "").strip().lower() not in {"certification", "production"}:
                 return False
-            if not str(payload.get("account_id") or "").strip():
+            account_id = str(payload.get("account_id") or "").strip()
+            if not account_id:
                 return False
             root_key = os.getenv("UCOS_CREDENTIAL_ENCRYPTION_KEY", "").strip()
             timestamp = str(headers.get("X-UCOS-Agent01-Timestamp", ""))
@@ -114,6 +116,18 @@ class APIGateway:
                 if cache_key in self._aios_nonces:
                     return False
                 self._aios_nonces[cache_key] = now
+            # One live research request per account at a time. This prevents client
+            # retries after socket timeouts from spawning duplicate provider/Neon work.
+            with self._agent01_active_lock:
+                stale_accounts = [
+                    key for key, started in self._agent01_active_accounts.items()
+                    if now - started > 240
+                ]
+                for key in stale_accounts:
+                    self._agent01_active_accounts.pop(key, None)
+                if account_id in self._agent01_active_accounts:
+                    return False
+                self._agent01_active_accounts[account_id] = now
             return True
         except (ValueError, UnicodeDecodeError):
             return False
@@ -693,6 +707,10 @@ class APIGateway:
         except (LookupError,ValueError) as exc: return APIResponse(400,error=str(exc))
         except Exception as exc: return APIResponse(500,error=str(exc))
 
+    def _release_agent01_account(self, account_id: str) -> None:
+        with self._agent01_active_lock:
+            self._agent01_active_accounts.pop(str(account_id or "").strip(), None)
+
     def _handle_agent01_research(self,data):
         """Authenticated request path for the real, non-publishing AG01 research worker."""
         account_id=str(data.get("account_id") or "").strip()
@@ -714,6 +732,8 @@ class APIGateway:
             # Keep database/provider internals out of public API errors.
             logger.error("AG01 research dispatch failed: %s",type(exc).__name__)
             return APIResponse(status_code=500,error="AG01 research dispatch failed")
+        finally:
+            self._release_agent01_account(account_id)
     def _handle_templates(self,params):
         try:
             account_id,error=self._require_account(params)

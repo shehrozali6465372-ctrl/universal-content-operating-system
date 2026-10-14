@@ -71,7 +71,7 @@ def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str
             method="POST",
         )
         try:
-            with urlopen(request, timeout=15) as response:
+            with urlopen(request, timeout=180) as response:
                 status_code = int(getattr(response, "status", 200))
                 raw = response.read(1_000_000)
         except HTTPError as exc:
@@ -92,7 +92,36 @@ def _call_deployed_api_smoke(account_id: str, *, dispatch_mode: str) -> dict[str
                 "external_search_performed": False,
                 "content_published": False,
             }
-        except (URLError, TimeoutError, OSError):
+        except TimeoutError:
+            # The endpoint runs real research and Neon read-back; do not retry a
+            # timed-out POST because the first request may still be executing.
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_request_timeout",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        except URLError as exc:
+            if isinstance(getattr(exc, "reason", None), TimeoutError):
+                return {
+                    "status": "failed_live_smoke",
+                    "reason_code": "deployed_api_request_timeout",
+                    "request_path_verified": False,
+                    "external_search_performed": False,
+                    "content_published": False,
+                }
+            if attempt < 35:
+                time.sleep(5)
+                continue
+            return {
+                "status": "failed_live_smoke",
+                "reason_code": "deployed_api_unreachable",
+                "request_path_verified": False,
+                "external_search_performed": False,
+                "content_published": False,
+            }
+        except OSError:
             if attempt < 35:
                 time.sleep(5)
                 continue
