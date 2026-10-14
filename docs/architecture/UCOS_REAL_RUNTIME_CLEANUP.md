@@ -19,6 +19,10 @@ Each removed module appended the incoming payload to an in-memory `self._data` l
 
 The files were removed from the cleanup branch after narrowing agent ownership. The corresponding directories now retain only modules that have real, separately implemented behavior.
 
+A second pass removed another **73 dead Layer 11 scaffold files** across the same generated engine families plus `concurrent_execution`. These consisted of instance-local event/health/metric/report lists, “parallel queue/worker/scheduler” classes that only recorded payloads, duplicate generic exceptions, empty package markers, and model classes whose `to_dict()` used a malformed double-brace dictionary expression. The audit found no production imports or test-only importers for these paths; they were also absent from the narrowed agent ownership manifest and had no package re-exports or other in-repository path references.
+
+Across both passes, **154 Layer 11 scaffold files** were removed. The substantive execution implementation remains in the separate runtime/task-manager/provider-integration modules.
+
 ## Runtime code intentionally retained
 
 The following execution paths remain in the repository:
