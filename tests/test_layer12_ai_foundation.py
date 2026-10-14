@@ -358,6 +358,7 @@ class TestProviderBase:
         p = OpenAIProvider()
         assert p.validate_model("gpt-4o") is True
         assert p.validate_model("gpt-5.6-sol") is True
+        assert p.validate_model("gpt-4o-mini") is True
 
     def test_get_model_info(self):
         p = OpenAIProvider()
