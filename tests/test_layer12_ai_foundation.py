@@ -1686,11 +1686,10 @@ class TestMultiModelPolicy:
 # ─── Fallback ────────────────────────────────────────────────────────
 
 class TestMultiModelFallback:
-    def test_fallback(self):
+    def test_fallback_without_callback_fails_closed(self):
         f = MultiModelFallback()
-        resp = f.attempt_fallback("prompt", ["gpt-4o"])
-        assert resp is not None
-        assert resp.is_success
+        with pytest.raises(ValueError, match="real provider callback"):
+            f.attempt_fallback("prompt", ["gpt-4o"])
 
     def test_fallback_with_callback(self):
         def fake(prompt, model):
@@ -1704,10 +1703,12 @@ class TestMultiModelFallback:
         resp = f.attempt_fallback("p", ["gpt-4o"])
         assert resp is None  # gpt-4o in both fallback and failed list
 
-    def test_fallback_available(self):
+    def test_fallback_available_uses_real_callback(self):
         f = MultiModelFallback(fallback_models=["gpt-4o"])
-        resp = f.attempt_fallback("p", ["claude"])
-        assert resp is not None  # gpt-4o not in failed list
+        def call(prompt, model):
+            return ModelResponse(model=model, provider="test", content="real response")
+        resp = f.attempt_fallback("p", ["claude"], call_fn=call)
+        assert resp is not None and resp.is_success
     def test_no_available(self):
         f = MultiModelFallback(fallback_models=["gpt-4o"])
         resp = f.attempt_fallback("p", ["gpt-4o", "gpt-4o"])  # all failed
@@ -1719,8 +1720,10 @@ class TestMultiModelFallback:
 
     def test_history(self):
         f = MultiModelFallback()
-        f.attempt_fallback("p", [])
-        assert len(f.get_history()) >= 1
+        def fail(prompt, model):
+            raise RuntimeError("offline")
+        f.attempt_fallback("p", [], call_fn=fail)
+        assert f.get_history() == []
 
     def test_callback_error(self):
         def fail(prompt, model):
