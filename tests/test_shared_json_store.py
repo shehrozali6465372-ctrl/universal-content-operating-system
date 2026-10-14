@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from layers.shared.json_store import atomic_write_json, load_json_object
+from layers.shared.json_store import atomic_write_json, load_json_list, load_json_object
 
 
 def test_atomic_write_json_creates_parent_and_round_trips(tmp_path):
@@ -33,3 +33,11 @@ def test_atomic_write_replaces_existing_file(tmp_path):
     atomic_write_json(target, {"version": 1})
     atomic_write_json(target, {"version": 2})
     assert load_json_object(target) == {"version": 2}
+
+
+def test_load_json_list_returns_only_list_values(tmp_path):
+    target = tmp_path / "history.json"
+    atomic_write_json(target, {"history": [{"event": "stored"}], "other": {"x": 1}})
+    assert load_json_list(target, "history") == [{"event": "stored"}]
+    assert load_json_list(target, "other") == []
+    assert load_json_list(target, "missing") == []
