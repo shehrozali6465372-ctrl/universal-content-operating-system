@@ -230,10 +230,12 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     function_hashes: dict[str, list[dict[str, str]]] = defaultdict(list)
     for path, tree in parsed.items():
         rel = repo_relative(path, root)
-        if not is_test_source(rel) and path.name != "__init__.py":
+        if not is_test_source(rel):
             try:
                 raw = path.read_bytes()
-                if raw:
+                # Empty package markers are noise; non-empty __init__.py files still
+                # participate in duplicate detection because they may expose behavior.
+                if raw.strip():
                     hashes[hashlib.sha256(raw).hexdigest()].append(rel)
             except OSError:
                 pass
