@@ -6,6 +6,7 @@ manager and verifies that parallel account-event appends do not lose writes.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import os
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -25,13 +26,15 @@ class RegistryStub:
 
 def test_neon_account_store_round_trip_and_concurrent_append(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
+    if not (os.environ.get("POSTGRES_HOST") and os.environ.get("POSTGRES_DB")):
+        pytest.skip("PostgreSQL integration settings are not configured")
     database = PostgreSQLManager()
     try:
         if not database.initialize() or not database._postgresql_available:
-            pytest.skip("Disposable PostgreSQL service is unavailable")
+            pytest.fail("Configured PostgreSQL service did not initialize")
     except Exception as exc:
         database.close()
-        pytest.skip(f"Disposable PostgreSQL service could not initialize: {type(exc).__name__}")
+        pytest.fail(f"Configured PostgreSQL service could not initialize: {type(exc).__name__}")
 
     account_id = "agent01-test-" + uuid4().hex
     level = _account_level(account_id)
