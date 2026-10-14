@@ -228,3 +228,28 @@ def test_unowned_layer_gate_excludes_tested_and_manifest_owned_modules(tmp_path)
     assert {item["path"] for item in unowned_layer_modules(report)} == {
         "layers/layer01_core/unowned.py", "layers/layer01_core/shared.py"
     }
+
+def test_tests_helpers_are_not_counted_as_production_importers(tmp_path):
+    layer = tmp_path / "layers" / "layer01_core"
+    layer.mkdir(parents=True)
+    (layer / "__init__.py").write_text("", encoding="utf-8")
+    (layer / "helper.py").write_text(
+        "def value():\n    return 1\n", encoding="utf-8"
+    )
+    helpers = tmp_path / "tests_helpers"
+    helpers.mkdir()
+    (helpers / "mock.py").write_text(
+        "from layers.layer01_core.helper import value\n", encoding="utf-8"
+    )
+
+    report = build_report(tmp_path)
+    edge = next(
+        item for item in report["import_edges"]
+        if item["from"] == "tests_helpers/mock.py"
+        and item["to"] == "layers/layer01_core/helper.py"
+    )
+    assert edge["kind"] == "test"
+    assert not any(
+        item["from"] == "tests_helpers/mock.py"
+        for item in report["production_import_edges"]
+    )
