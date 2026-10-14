@@ -1723,7 +1723,9 @@ class TestMultiModelFallback:
         def fail(prompt, model):
             raise RuntimeError("offline")
         f.attempt_fallback("p", [], call_fn=fail)
-        assert f.get_history() == []
+        history = f.get_history()
+        assert len(history) == 2
+        assert all(item["success"] is False for item in history)
 
     def test_callback_error(self):
         def fail(prompt, model):
