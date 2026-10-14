@@ -89,3 +89,34 @@ def test_test_only_imports_do_not_count_as_production_ownership(tmp_path):
     assert candidate["test_only_importer_count"] == 1
     assert layer_info["files_with_static_inbound_imports"] >= 1
     assert layer_info["files_with_static_production_inbound_imports"] == 0
+
+
+def test_audit_flags_scaffold_that_claims_success_after_only_buffering(tmp_path):
+    layer = tmp_path / "layers" / "layer11_async_runtime"
+    layer.mkdir(parents=True)
+    (layer / "__init__.py").write_text("", encoding="utf-8")
+    (layer / "placeholder.py").write_text(
+        "class Placeholder:\n"
+        "    def __init__(self):\n"
+        "        self._data = []\n"
+        "    def process(self, data):\n"
+        "        self._data.append(data)\n"
+        "        return {'status': 'ok', 'processed': True}\n"
+        "    def response(self, model):\n"
+        "        return f'Response from {model}'\n",
+        encoding="utf-8",
+    )
+
+    report = build_report(tmp_path)
+    patterns = report["scaffold_success_patterns"]
+    assert any(
+        item["path"] == "layers/layer11_async_runtime/placeholder.py"
+        and item["pattern"] == "buffer_append_claims_processing_success"
+        for item in patterns
+    )
+    assert any(
+        item["path"] == "layers/layer11_async_runtime/placeholder.py"
+        and item["pattern"] == "fabricated_runtime_output_string"
+        for item in patterns
+    )
+    assert report["summary"]["scaffold_success_pattern_findings"] == 2
