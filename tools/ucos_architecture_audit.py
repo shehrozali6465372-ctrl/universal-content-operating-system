@@ -177,7 +177,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
     for folder in layer_dirs(root):
         layer_files = sorted(folder.rglob("*.py"))
         inbound = sum(1 for p in layer_files if importers.get(p))
-        layer_edges = [e for e in import_edges if e["from"].startswith(folder.name + "/") or e["from"] == folder.name]
+        layer_edges = [e for e in import_edges if e["from"].startswith(f"layers/{folder.name}/") or e["from"] == f"layers/{folder.name}"]
         cross_edges = [
             e for e in layer_edges
             if e["to"].split("/", 1)[0] != e["from"].split("/", 1)[0]
@@ -192,7 +192,7 @@ def build_report(root: Path = ROOT) -> dict[str, Any]:
             ),
             "cross_layer_import_edges_in": sum(
                 1 for e in import_edges
-                if e["to"].startswith(folder.name + "/") and e["from"].startswith("layers/")
+                if e["to"].startswith(f"layers/{folder.name}/") and e["from"].startswith("layers/")
                 and e["from"].split("/")[1] != folder.name
             ),
             "agent_manifest_owners": sorted({
