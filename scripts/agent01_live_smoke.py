@@ -2,7 +2,7 @@
 
 This command does not inject a fake provider or in-memory store. It refuses to
 perform external research until the target account, Neon/PostgreSQL pool, Tavily
-credential, and verified account-history baseline are available. It never publishes.
+provider, and verified account-history baseline are available. It never publishes.
 
 A pass is live-smoke evidence only, not a production certificate.
 """
@@ -75,7 +75,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
         }
 
     # Imports occur only after preflight so that missing history never triggers a
-    # real search. The agent uses its real Tavily adapter and real account store.
+    # real search. The agent uses its real selected provider and real account store.
     source = None
     try:
         from agents.agent_01_research_discovery import ResearchDiscoveryAgent
@@ -86,7 +86,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
         if getattr(agent, "_source", None) is None:
             return {
                 "status": "blocked",
-                "reason_code": "live_tavily_source_not_configured",
+                "reason_code": "live_research_source_not_configured",
                 "production_certified": False,
                 "external_search_performed": False,
                 "content_published": False,
@@ -123,7 +123,7 @@ def run_live_smoke(account_id: str) -> dict[str, Any]:
             and row.get("persistence", {}).get("evidence_state") == "saved"
         ]
         checks = {
-            "real_tavily_requests": {
+            "real_provider_requests": {
                 "status": "pass" if request_count > 0 else "fail",
                 "request_count": request_count,
             },
