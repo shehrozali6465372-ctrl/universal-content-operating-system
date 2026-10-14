@@ -28,7 +28,7 @@ class Database:
     _pool = object()
 
 
-def test_preflight_requires_key_and_verified_history_baseline():
+def test_preflight_uses_keyless_real_provider_and_requires_verified_history_baseline():
     report = run_preflight(
         "acct-1",
         registry=Registry(),
@@ -38,7 +38,7 @@ def test_preflight_requires_key_and_verified_history_baseline():
     )
 
     assert report["status"] == "blocked"
-    assert report["checks"]["tavily_api_key"]["status"] == "blocked"
+    assert report["checks"]["research_provider"]["status"] == "pass"\n    assert report["checks"]["research_provider"]["reason_code"] == "gdelt_keyless_fallback_selected"
     assert report["checks"]["history_baseline"]["status"] == "blocked"
     assert report["production_certified"] is False
     assert report["side_effects"] == {
