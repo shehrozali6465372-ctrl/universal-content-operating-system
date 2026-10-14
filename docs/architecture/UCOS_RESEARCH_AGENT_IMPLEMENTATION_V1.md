@@ -3,11 +3,11 @@
 **Owner:** CEO / Super Intelligence Agent  
 **Specialist:** Research Agent (AgentRole.RESEARCH)  
 **Existing implementation owner:** Layer 02 — Research Engine  
-**Status:** First implementation slice; production certification still requires live source adapters and deployment evidence.
+**Status:** Implementation slice pushed for CI; production certification still requires real source-adapter wiring and deployment evidence.
 
 ## One agent, existing Layer 02 capabilities
 
-\`\`\`mermaid
+~~~~mermaid
 flowchart TD
     CEO["CEO / Super Intelligence"] --> TASK["Scoped research task"]
     TASK --> AGENT["Research Agent (single entry point)"]
@@ -31,7 +31,7 @@ flowchart TD
     SCORE --> RESULT
     RESULT --> VERIFY["Research Agent validates provenance"]
     VERIFY --> CEO
-\`\`\`
+~~~~
 
 This is one logical Research Agent using existing Layer 02 modules, not eight new agents and not a second research engine. Layer 02 remains the domain-capability owner; the agent owns CEO-facing delegation, scope propagation, status, evidence validation and result formatting.
 
